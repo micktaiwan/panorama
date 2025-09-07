@@ -2,6 +2,7 @@ import React from 'react';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 
 export const Preferences = () => {
   const sub = useSubscribe('appPreferences');
@@ -18,10 +19,11 @@ export const Preferences = () => {
       <h2>Preferences</h2>
       <div className="formRow">
         <label>Files directory</label>
-        <input value={filesDir} onChange={(e) => setFilesDir(e.target.value)} placeholder="/path/to/filesDir" />
+        <InlineEditable value={filesDir} placeholder="/path/to/filesDir" onSubmit={(next) => setFilesDir(next)} fullWidth />
       </div>
       <div className="formRow">
-        <label><input type="checkbox" checked={devUrlMode} onChange={(e) => setDevUrlMode(e.target.checked)} /> Use Dev URL instead of bundled server (when available)</label>
+        <label>Use Dev URL instead of bundled server</label>
+        <InlineEditable as="select" value={devUrlMode ? 'yes' : 'no'} options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]} onSubmit={(next) => setDevUrlMode(next === 'yes')} />
       </div>
       <div style={{ marginTop: 12 }}>
         <button className="btn btn-primary" onClick={() => {
@@ -31,15 +33,15 @@ export const Preferences = () => {
       <h3 style={{ marginTop: 24 }}>Secrets</h3>
       <div className="formRow">
         <label>OpenAI API Key</label>
-        <input type="password" value={openaiApiKey} onChange={(e) => setOpenaiApiKey(e.target.value)} placeholder="sk-..." />
+        <InlineEditable value={openaiApiKey} placeholder="sk-..." onSubmit={(next) => setOpenaiApiKey(next)} fullWidth />
       </div>
       <div className="formRow">
         <label>Pennylane Base URL</label>
-        <input value={pennyBaseUrl} onChange={(e) => setPennyBaseUrl(e.target.value)} placeholder="https://app.pennylane.com/api/external/v2/" />
+        <InlineEditable value={pennyBaseUrl} placeholder="https://app.pennylane.com/api/external/v2/" onSubmit={(next) => setPennyBaseUrl(next)} fullWidth />
       </div>
       <div className="formRow">
         <label>Pennylane Token</label>
-        <input type="password" value={pennyToken} onChange={(e) => setPennyToken(e.target.value)} placeholder="token..." />
+        <InlineEditable value={pennyToken} placeholder="token..." onSubmit={(next) => setPennyToken(next)} fullWidth />
       </div>
     </div>
   );

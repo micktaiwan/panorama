@@ -2,6 +2,7 @@ import React from 'react';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import { navigateTo } from '/imports/ui/router.js';
 
 export const Onboarding = () => {
   const sub = useSubscribe('appPreferences');
@@ -12,7 +13,7 @@ export const Onboarding = () => {
   if (!ready) return <div>Loading…</div>;
   const save = () => {
     Meteor.call('appPreferences.update', { filesDir, onboardedAt: true }, () => {
-      // no-op; App will redirect away after reactive update
+      navigateTo({ name: 'preferences' });
     });
   };
   return (
