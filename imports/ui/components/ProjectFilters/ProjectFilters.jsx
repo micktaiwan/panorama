@@ -1,4 +1,5 @@
 import React from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './ProjectFilters.css';
 
 // Tri-state project filters: 1 include, -1 exclude, undefined neutral
@@ -55,14 +56,14 @@ export const ProjectFilters = ({ projects, storageKey = 'dashboard_proj_filters'
         const fullName = p.name || '(untitled project)';
         const label = fullName.length > 10 ? `${fullName.slice(0, 10)}` : fullName;
         return (
-          <button
-            key={p._id}
-            className={`projChip${cls}`}
-            onClick={() => toggle(p._id)}
-            title={`${fullName} — ${state === 1 ? 'Included' : state === -1 ? 'Excluded' : 'Neutral'}`}
-          >
-            {label}
-          </button>
+          <Tooltip key={p._id} content={fullName} placement="top">
+            <button
+              className={`projChip${cls}`}
+              onClick={() => toggle(p._id)}
+            >
+              {label}
+            </button>
+          </Tooltip>
         );
       })}
     </div>
