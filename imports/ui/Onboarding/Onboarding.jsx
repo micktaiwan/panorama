@@ -2,6 +2,7 @@ import React from 'react';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import './Onboarding.css';
 import { navigateTo } from '/imports/ui/router.js';
 
 export const Onboarding = () => {
@@ -21,13 +22,13 @@ export const Onboarding = () => {
       <h2>Welcome to Panorama</h2>
       <p>Choose where to store uploaded files on this machine:</p>
       <div>
-        <input value={filesDir || ''} onChange={(e) => setFilesDir(e.target.value)} placeholder="/path/to/filesDir" style={{ width: '100%' }} />
+        <input value={filesDir || ''} onChange={(e) => setFilesDir(e.target.value)} placeholder="/path/to/filesDir" className="onbInput" />
       </div>
-      <p style={{ marginTop: 12 }}>
+      <p className="onbNote">
         Qdrant (vector database) is required for semantic search. By default, Panorama expects a local instance at
         {' '}<code>http://localhost:6333</code>. You can change the Qdrant URL later in Preferences.
       </p>
-      <div style={{ marginTop: 12 }}>
+      <div className="onbActions">
         <button className="btn btn-primary" disabled={!filesDir} onClick={save}>Continue</button>
       </div>
     </div>
