@@ -37,6 +37,15 @@ const startArchiveJob = async (jobId) => {
   const { AlarmsCollection } = await import('/imports/api/alarms/collections');
   const { LinksCollection } = await import('/imports/api/links/collections');
   const { FilesCollection } = await import('/imports/api/files/collections');
+  const { TeamsCollection } = await import('/imports/api/teams/collections');
+  const { PeopleCollection } = await import('/imports/api/people/collections');
+  const { SituationsCollection } = await import('/imports/api/situations/collections');
+  const { SituationActorsCollection } = await import('/imports/api/situationActors/collections');
+  const { SituationNotesCollection } = await import('/imports/api/situationNotes/collections');
+  const { SituationQuestionsCollection } = await import('/imports/api/situationQuestions/collections');
+  const { SituationSummariesCollection } = await import('/imports/api/situationSummaries/collections');
+  const { BudgetLinesCollection } = await import('/imports/api/budget/collections');
+  const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
 
   await writeCollectionNdjson(gzip, 'projects', ProjectsCollection);
   await writeCollectionNdjson(gzip, 'tasks', TasksCollection);
@@ -46,6 +55,15 @@ const startArchiveJob = async (jobId) => {
   await writeCollectionNdjson(gzip, 'alarms', AlarmsCollection);
   await writeCollectionNdjson(gzip, 'links', LinksCollection);
   await writeCollectionNdjson(gzip, 'files', FilesCollection);
+  await writeCollectionNdjson(gzip, 'teams', TeamsCollection);
+  await writeCollectionNdjson(gzip, 'people', PeopleCollection);
+  await writeCollectionNdjson(gzip, 'situations', SituationsCollection);
+  await writeCollectionNdjson(gzip, 'situationActors', SituationActorsCollection);
+  await writeCollectionNdjson(gzip, 'situationNotes', SituationNotesCollection);
+  await writeCollectionNdjson(gzip, 'situationQuestions', SituationQuestionsCollection);
+  await writeCollectionNdjson(gzip, 'situationSummaries', SituationSummariesCollection);
+  await writeCollectionNdjson(gzip, 'budgetLines', BudgetLinesCollection);
+  await writeCollectionNdjson(gzip, 'appPreferences', AppPreferencesCollection);
 
   gzip.end();
   await new Promise((resolve, reject) => {
