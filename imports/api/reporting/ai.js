@@ -1,4 +1,5 @@
 import { Meteor } from 'meteor/meteor';
+import { getOpenAiApiKey } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 
 const windowKeyToMs = (key) => {
@@ -14,7 +15,7 @@ Meteor.methods({
     check(windowKey, String);
     if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
     if (userPrompt !== undefined && typeof userPrompt !== 'string') throw new Meteor.Error('invalid-arg', 'userPrompt must be a string');
-    const apiKey = Meteor.settings?.openai?.apiKey;
+    const apiKey = getOpenAiApiKey();
 
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     const { NotesCollection } = await import('/imports/api/notes/collections');

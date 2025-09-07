@@ -1,4 +1,5 @@
 import { Meteor } from 'meteor/meteor';
+import { getOpenAiApiKey } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import crypto from 'crypto';
 
@@ -44,7 +45,7 @@ const embedText = async (text) => {
   if (DEBUG) {
     return mockVectorFromText(text);
   }
-  const apiKey = Meteor.settings?.openai?.apiKey;
+  const apiKey = getOpenAiApiKey();
   if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
   try {
     const { default: fetch } = await import('node-fetch');

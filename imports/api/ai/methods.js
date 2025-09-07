@@ -1,4 +1,5 @@
 import { Meteor } from 'meteor/meteor';
+import { getOpenAiApiKey } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
@@ -50,7 +51,7 @@ Meteor.methods({
   async 'ai.textToTasksAnalyze'(inputText) {
     check(inputText, String);
 
-    const apiKey = Meteor.settings?.openai?.apiKey;
+    const apiKey = getOpenAiApiKey();
     if (!apiKey) {
       throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
     }
@@ -296,7 +297,7 @@ Meteor.methods({
 
     const prompt = buildPrompt({ project, lines });
 
-    const apiKey = Meteor.settings?.openai?.apiKey;
+    const apiKey = getOpenAiApiKey();
     if (!apiKey) {
       throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
     }
@@ -421,7 +422,7 @@ Meteor.methods({
 
     const prompt = buildCoachPrompt({ project, lines });
 
-    const apiKey = Meteor.settings?.openai?.apiKey;
+    const apiKey = getOpenAiApiKey();
     if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
     const { default: fetch } = await import('node-fetch');
 

@@ -1,4 +1,5 @@
 import { Meteor } from 'meteor/meteor';
+import { getOpenAiApiKey } from '/imports/api/_shared/config';
 import crypto from 'crypto';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
@@ -48,7 +49,7 @@ const mockVectorFromText = (text) => {
 
 export const embedText = async (text) => {
   if (DEBUG) return mockVectorFromText(text);
-  const apiKey = Meteor.settings?.openai?.apiKey;
+  const apiKey = getOpenAiApiKey();
   if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
   const { default: fetch } = await import('node-fetch');
   const payload = { model: 'text-embedding-3-small', input: String(text || '') };
