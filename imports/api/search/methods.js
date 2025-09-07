@@ -1,10 +1,10 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
+import { getOpenAiApiKey, getQdrantUrl } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import crypto from 'crypto';
 
 const getQdrantClient = async () => {
-  const url = Meteor.settings?.qdrantUrl;
+  const url = getQdrantUrl();
   if (!url) throw new Meteor.Error('config-missing', 'qdrantUrl missing in settings');
   const { QdrantClient } = await import('@qdrant/js-client-rest');
   return new QdrantClient({ url });
@@ -211,7 +211,7 @@ const runIndexJob = async (jobId) => {
 
 Meteor.methods({
   async 'qdrant.health'() {
-    const url = Meteor.settings?.qdrantUrl;
+    const url = getQdrantUrl();
     if (!url) throw new Meteor.Error('config-missing', 'qdrantUrl missing in settings');
     const client = await getQdrantClient();
     const name = COLLECTION();
