@@ -3,5 +3,7 @@
 .prefsRow { display: grid; grid-template-columns: 260px minmax(0,1fr); align-items: center; gap: 12px; padding: 6px 0; }
 .prefsLabel { color: var(--muted); }
 .prefsValue { min-width: 0; }
+.prefsPre { white-space: pre-wrap; }
+.prefsFooter { display: flex; justify-content: flex-end; margin-top: 16px; }
 
 
