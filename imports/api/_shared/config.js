@@ -14,4 +14,10 @@ export const getPennylaneConfig = () => {
   return { baseUrl, token };
 };
 
+export const getQdrantUrl = () => {
+  const pref = AppPreferencesCollection.findOne({});
+  const fromPrefs = pref?.qdrantUrl && pref.qdrantUrl.trim();
+  return fromPrefs || process.env.QDRANT_URL || Meteor.settings?.qdrantUrl || 'http://localhost:6333';
+};
+
 

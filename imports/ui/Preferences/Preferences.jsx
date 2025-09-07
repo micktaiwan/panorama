@@ -13,7 +13,8 @@ export const Preferences = () => {
   const [openaiApiKey, setOpenaiApiKey] = React.useState('');
   const [pennyBaseUrl, setPennyBaseUrl] = React.useState('');
   const [pennyToken, setPennyToken] = React.useState('');
-  React.useEffect(() => { if (pref) { setFilesDir(pref.filesDir || ''); setDevUrlMode(!!pref.devUrlMode); setOpenaiApiKey(pref.openaiApiKey || ''); setPennyBaseUrl(pref.pennylaneBaseUrl || ''); setPennyToken(pref.pennylaneToken || ''); } }, [pref && pref._id]);
+  const [qdrantUrl, setQdrantUrl] = React.useState('');
+  React.useEffect(() => { if (pref) { setFilesDir(pref.filesDir || ''); setDevUrlMode(!!pref.devUrlMode); setOpenaiApiKey(pref.openaiApiKey || ''); setPennyBaseUrl(pref.pennylaneBaseUrl || ''); setPennyToken(pref.pennylaneToken || ''); setQdrantUrl(pref.qdrantUrl || ''); } }, [pref && pref._id]);
   if (sub()) return <div>Loading…</div>;
   return (
     <div className="prefs">
@@ -29,6 +30,20 @@ export const Preferences = () => {
               onSubmit={(next) => {
                 setFilesDir(next);
                 Meteor.call('appPreferences.update', { filesDir: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Qdrant URL</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={qdrantUrl}
+              placeholder="(not set)"
+              fullWidth
+              onSubmit={(next) => {
+                setQdrantUrl(next);
+                Meteor.call('appPreferences.update', { qdrantUrl: next }, () => {});
               }}
             />
           </div>
