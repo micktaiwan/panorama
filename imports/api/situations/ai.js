@@ -5,10 +5,11 @@ import { PeopleCollection } from '/imports/api/people/collections';
 import { SituationQuestionsCollection } from '/imports/api/situationQuestions/collections';
 import { SituationNotesCollection } from '/imports/api/situationNotes/collections';
 import { SituationSummariesCollection } from '/imports/api/situationSummaries/collections';
+import { getOpenAiApiKey } from '/imports/api/_shared/config';
 import { buildKnownPeopleCatalog, buildRosterForQuestions, buildRosterForSummary, buildPriorBlock, buildNotesByActorBlock, extractActorsSchema, generateQuestionsSchema, toOneLine, logOpenAiPayload } from '/imports/api/situations/promptHelpers';
 
 const callOpenAi = async (system, user) => {
-  const apiKey = Meteor.settings?.openai?.apiKey;
+  const apiKey = getOpenAiApiKey();
   if (!apiKey) throw new Meteor.Error('missing-openai-key', 'OpenAI API key missing in settings');
   const { default: fetch } = await import('node-fetch');
   try {
@@ -57,7 +58,7 @@ Meteor.methods({
 
     const schema = extractActorsSchema;
 
-    const apiKey = Meteor.settings?.openai?.apiKey;
+    const apiKey = getOpenAiApiKey();
     if (!apiKey) throw new Meteor.Error('missing-openai-key', 'OpenAI API key missing in settings');
     const { default: fetch } = await import('node-fetch');
     const userContent = [
@@ -188,7 +189,7 @@ Meteor.methods({
 
     const schema = generateQuestionsSchema;
 
-    const apiKey = Meteor.settings?.openai?.apiKey;
+    const apiKey = getOpenAiApiKey();
     if (!apiKey) throw new Meteor.Error('missing-openai-key', 'OpenAI API key missing in settings');
     const { default: fetch } = await import('node-fetch');
     logOpenAiPayload('generateQuestions', system, user);

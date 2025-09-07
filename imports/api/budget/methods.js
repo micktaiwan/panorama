@@ -1,4 +1,5 @@
 import { Meteor } from 'meteor/meteor';
+import { getPennylaneConfig } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import { fetch } from 'meteor/fetch';
 import { BudgetLinesCollection, VendorsCacheCollection, VendorsIgnoreCollection } from './collections';
@@ -275,7 +276,7 @@ Meteor.methods({
     return { ok: 1, bulkUpdated: bulkCount };
   },
   async 'budget.testPennylaneApi'() {
-    const cfg = (Meteor.settings && Meteor.settings.pennylane) || {};
+    const cfg = getPennylaneConfig();
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '');
     const token = cfg.token || cfg.apiKey;
@@ -361,7 +362,7 @@ Meteor.methods({
     }
   },
   async 'budget.fetchPennylaneSupplierInvoices'(cursor, perPage, filters) {
-    const cfg = (Meteor.settings && Meteor.settings.pennylane) || {};
+    const cfg = getPennylaneConfig();
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '/');
     const token = cfg.token || cfg.apiKey;
@@ -466,7 +467,7 @@ Meteor.methods({
   },
   async 'budget.ensureVendors'(supplierIds) {
     if (!Array.isArray(supplierIds)) throw new Meteor.Error('invalid-args', 'supplierIds must be an array');
-    const cfg = (Meteor.settings && Meteor.settings.pennylane) || {};
+    const cfg = getPennylaneConfig();
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '/');
     const token = cfg.token || cfg.apiKey;
