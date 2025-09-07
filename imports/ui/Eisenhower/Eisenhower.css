@@ -1,0 +1,101 @@
+.eisenhowerPage { 
+  --eis-quadrant-height: 240px; 
+  --eis-gap-x: 24px; /* horizontal gap between quadrants */
+  --eis-gap-y: 32px; /* vertical gap between rows of quadrants */
+  --eis-header-gap: 20px; /* desired header-to-first-row spacing */
+}
+
+.eisenhowerPage h2 { 
+  margin-bottom: 12px; 
+}
+
+.eisenhower { 
+  margin-top: 32px; 
+  margin-bottom: 24px;
+}
+
+.eisenhowerGrid { 
+  display: grid; 
+  grid-template-columns: auto 1fr 1fr; 
+  grid-template-rows: auto var(--eis-quadrant-height) var(--eis-quadrant-height); 
+  row-gap: var(--eis-gap-y); 
+  column-gap: var(--eis-gap-x); 
+  align-items: start; 
+}
+
+/* Keep headers close to the first row regardless of big row gaps */
+.eisenhowerHeader { margin-bottom: calc(var(--eis-header-gap) - var(--eis-gap-y)); }
+
+.eisenhowerHeader { 
+  color: var(--muted); 
+  font-size: 12px; 
+  text-align: center; 
+}
+
+.eisenhowerRowHeader { 
+  color: var(--muted); 
+  font-size: 12px; 
+  writing-mode: vertical-rl; 
+  transform: rotate(180deg); 
+  text-align: center; 
+  padding: 4px 0; 
+}
+
+.eisenhowerQuadrant { 
+  border: 1px solid var(--border); 
+  border-radius: 6px; 
+  background: #10141b; 
+  padding: 8px; 
+  height: var(--eis-quadrant-height); 
+  display: flex; 
+  flex-direction: column; 
+}
+
+.eisenhowerQuadrant h4 { 
+  margin: 0 0 6px; 
+  padding: 4px 8px;
+  font-size: 12px; 
+  background: var(--border);
+  border-radius: 6px;
+}
+
+.eisenhowerList { 
+  list-style: none; 
+  padding: 0; 
+  margin: 0 0 0 10px; 
+  max-height: none; 
+  overflow: auto; 
+  flex: 1 1 auto; 
+  min-height: 0; 
+}
+
+.eisenhowerItem { 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  gap: 8px; 
+  padding: 4px 0; 
+  border-bottom: 1px solid rgba(255,255,255,0.04); 
+}
+
+.eisenhowerItem:last-child { 
+  border-bottom: none; 
+}
+
+.eisenhowerLeft { 
+  display: inline-flex; 
+  align-items: center; 
+  gap: 8px; 
+}
+
+.eisenhowerCheck { 
+  accent-color: #22c55e; 
+}
+
+.eisenhowerActions { 
+  display: flex; 
+  align-items: center; 
+  gap: 6px; 
+}
+
+/* Eisenhower toggles use global styles from client/main.css */

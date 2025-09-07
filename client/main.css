@@ -1,0 +1,176 @@
+html {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  padding: 0;
+  margin: 0;
+  font-family: sans-serif;
+}
+
+/* Design tokens */
+:root {
+  --bg: #0b0c10;
+  --panel: #15171c;
+  --text: #e5e7eb;
+  --muted: #9aa3b2;
+  --primary: #4f46e5;
+  --primary-600: #4338ca;
+  --danger: #ef4444;
+  --danger-600: #dc2626;
+  --success: #10b981;
+  --success-600: #059669;
+  --border: #23262d;
+  --radius: 8px;
+  --tooltip-bg: #1a1433;
+}
+
+html, body, #react-target {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure interactive elements always show the hand cursor */
+a { cursor: pointer; }
+button { cursor: pointer; }
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  padding-bottom: 32px;
+}
+
+/* Container width toggle */
+.container.w90 { max-width: 90%; }
+
+/* Panels and layout */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* Buttons */
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #1b1e26;
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:hover {
+  background: #20232b;
+}
+
+.btn-primary {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.btn-primary:hover {
+  background: var(--primary-600);
+}
+
+.btn-link {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+  color: var(--danger);
+}
+
+.btn.danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn.danger:hover {
+  background: var(--danger-600);
+}
+
+.btn.success {
+  border-color: var(--success);
+  background: var(--success);
+  color: #0b1a14;
+}
+
+.btn.success:hover {
+  background: var(--success-600);
+}
+
+/* Lists */
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Global: Eisenhower toggle pill used across components */
+.eisenhowerToggle {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #10141b;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  height: 22px;
+}
+.eisenhowerToggle:hover { background: #141923; color: var(--text); }
+.eisenhowerToggle.active { color: #22c55e; border-color: #134e23; background: #0f1a12; }
+
+li + li {
+  margin-top: 8px;
+}
+
+/* Utilities: shared deadline colors */
+.dueSoon { color: #f59e0b; }
+.dueNow { color: #ef4444; }
+
+/* Global utility */
+.muted { color: var(--muted); }
+
+/* Global scroll area styling */
+.scrollArea { overflow: auto; overscroll-behavior: contain; }
+.scrollArea { scrollbar-width: thin; scrollbar-color: #2a2f3a #12141a; }
+.scrollArea::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollArea::-webkit-scrollbar-track { background: #12141a; }
+.scrollArea::-webkit-scrollbar-thumb { background-color: #2a2f3a; border-radius: 8px; border: 2px solid #12141a; }
+
+/* Global select style */
+select,
+.select {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #1b1e26;
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+select:focus { outline: none; border-color: var(--primary); }

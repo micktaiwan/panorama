@@ -1,0 +1,154 @@
+.budgetPage h2 {
+  margin: 0 0 12px;
+}
+
+.budgetGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 980px) {
+  .budgetGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.budgetPage .muted {
+  color: var(--muted);
+}
+
+.previewTable { display: contents; }
+.budgetTable { display: contents; }
+
+.budgetToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.reportTable { display: contents; }
+
+.sectionActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 6px 0 8px;
+}
+
+.danger {
+  background: #7f1d1d;
+  border: 1px solid #b91c1c;
+  color: #fff;
+}
+.danger:hover {
+  background: #991b1b;
+}
+
+.sectionBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0 8px;
+}
+
+.tableMeta {
+  margin: 6px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.budgetSelect {
+  appearance: none;
+  background: #0e1420;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.budgetSelect:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
+  border-color: #3b82f6;
+}
+
+.budgetSearch {
+  min-width: 200px;
+  background: #0e1420;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.budgetSearch::placeholder { color: var(--muted); }
+.budgetSearch:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
+  border-color: #3b82f6;
+}
+
+.budgetTabs {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.budgetTabs a {
+  position: relative;
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid transparent;
+  padding: 8px 12px;
+  border-radius: 10px;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+.budgetTabs a.active {
+  color: var(--text);
+  background: #10141b;
+  border-color: #2a2f3a;
+  box-shadow: 0 0 0 1px #2a2f3a inset;
+}
+.budgetTabs a:hover {
+  background: #0e1420;
+  color: var(--text);
+}
+.budgetTabs a.active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -7px;
+  height: 2px;
+  border-radius: 2px;
+  background: #3b82f6;
+}
+
+.budgetPage .table th,
+.budgetPage .table td {
+  padding: 8px 12px;
+}
+.budgetPage .table th {
+  text-align: left;
+}
+
+.budgetPage .table tbody tr, .budgetPage table tbody tr {
+  transition: background 120ms ease;
+}
+.budgetPage .table tbody tr:hover, .budgetPage table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.budgetPage .scrollArea thead th {
+  position: sticky;
+  top: 0;
+  background: #0b0f17;
+  z-index: 1;
+}
+
+.inlineList {
+  display: inline-block;
+  max-width: 100%;
+}

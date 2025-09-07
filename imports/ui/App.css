@@ -1,0 +1,91 @@
+.homeActions {
+  margin-top: 16px;
+}
+
+.homeToolbar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+/* Removed split layout; Dashboard uses full width */
+
+.appFooter {
+  margin-top: 60px;
+  padding: 16px 0 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.footerNextAlarm {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Tighter top spacing for the main title */
+.container > h1 {
+  margin-top: 0;
+}
+
+.container > h1 a {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.favoritesBar {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.favChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #10141b;
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 12px;
+  user-select: none;
+  cursor: pointer;
+}
+.favChip:hover { background: #141923; }
+.favChip .star { color: #f59e0b; }
+
+.favChip.dragging { opacity: 0.6; cursor: grabbing; transform: scale(0.98); }
+.favChip.dropTarget { border-color: #f59e0b; box-shadow: 0 0 0 1px #f59e0b inset; }
+
+.appFooter a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.appFooter a:hover {
+  text-decoration: underline;
+}
+
+.appFooter .dot {
+  margin: 0 8px;
+}
+
+/* Export modal spacing */
+.exportModalBody { line-height: 1.6; }
+.exportModalBody p { margin: 0 0 10px; }
+.exportModalBody ul { margin: 8px 0 14px 18px; }
+.exportModalButtons { margin-top: 12px; display: flex; gap: 8px; }
+
+/* Export buttons */
+.btnJson { background: #1f4d1f; border: 1px solid #2f6a2f; color: #b6f0b6; }
+.btnJson:hover { background: #235624; }
+.btnArchive { background: #1b2550; border: 1px solid #2a3a7a; color: #cfe1ff; }
+.btnArchive:hover { background: #223066; }

@@ -1,0 +1,67 @@
+.inlineEditable {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+}
+
+.inlineEditable[data-as="select"]::after {
+  content: "▾";
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.inlineEditableInput {
+  min-width: 200px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1b1e26;
+  color: var(--text);
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.inlineEditable.fullWidth {
+  width: 100%;
+}
+
+/* Ensure view mode text can ellipsis inside flex parent */
+.inlineEditable .inlineEditableContent {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Multiline display for textarea (view mode): wrap and use comfortable line-height */
+.inlineEditable[data-as="textarea"] .inlineEditableContent {
+  display: block;
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: initial;
+  line-height: 1.6;
+}
+
+.inlineEditableSelect {
+  width: auto;
+  display: inline-block;
+  min-width: 0;
+  padding-right: 24px;
+  white-space: nowrap;
+}
+
+.inlineEditableInput:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--primary);
+}
+
+

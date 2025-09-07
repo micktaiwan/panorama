@@ -1,0 +1,267 @@
+.noteSessionGrid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr); /* fixed context column, flexible notes */
+  grid-template-rows: auto auto;
+  gap: 16px;
+}
+
+.noteSessionGrid > div {
+  min-height: 0; /* allow children to overflow/scroll inside grid cell */
+  min-width: 0;  /* allow grid items to shrink and not overflow horizontally */
+}
+
+.notesColumn {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 40vh; /* give more space for lines before scroll */
+}
+
+.notesList {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.notesList li { min-width: 0; }
+
+.noteLineRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto; /* number | content | actions */
+  align-items: start;
+  column-gap: 8px;
+}
+
+/* Ensure the content cell can wrap and does not force layout overflow */
+.noteLineRow > *:nth-child(2) { min-width: 0; }
+.noteLineRow .inlineEditable { min-width: 0; display: block; }
+.noteLineRow .inlineEditable .inlineEditableContent {
+  display: block;
+  white-space: normal;      /* override global nowrap from InlineEditable */
+  overflow: visible;        /* allow natural wrapping */
+  text-overflow: initial;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.noteLineNumber {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.noteLineActions { opacity: 0; transition: opacity .12s ease-in-out; }
+.noteLineRow:hover .noteLineActions { opacity: 1; }
+
+.noteInput {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1b1e26;
+  color: var(--text);
+}
+
+.noteInput:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--primary);
+}
+
+.coachBlock {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.coachBlock h3 {
+  margin: 12px 0 12px;
+  font-size: 1rem;
+}
+
+.aiSection {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.aiContent {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Card spacing when stacked inside AI content */
+.card + .card {
+  margin-top: 16px;
+}
+
+.aiMarkdown {
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1b1e26;
+  color: var(--text);
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 16px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Ensure code fences and inline code wrap instead of forcing horizontal scroll */
+.aiMarkdown pre,
+.aiMarkdown code {
+  white-space: pre-wrap; /* allow wrapping inside code blocks */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.mt8 {
+  margin-top: 8px;
+}
+
+/* Tighter vertical rhythm for markdown content */
+.aiMarkdown h1 {
+  font-size: 1.2rem;
+}
+
+.aiMarkdown h2 {
+  font-size: 1.1rem;
+}
+
+.aiMarkdown h3 {
+  font-size: 1rem;
+}
+
+.aiMarkdown p {
+  margin: 0;
+}
+
+.aiMarkdown ul,
+.aiMarkdown ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.aiMarkdown li {
+  margin: 0;
+}
+
+.aiMarkdown pre {
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: #10141b;
+}
+
+.aiHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.aiHeaderActions {
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+}
+
+.statusText { margin-left: 8px; font-size: 12px; color: var(--muted); }
+.statusSuccess { color: #10b981; }
+.statusError { color: #ef4444; }
+
+.ml8 {
+  margin-left: 8px;
+}
+
+.aiActions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.dangerLink {
+  background: transparent;
+  color: #ef4444;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sessionFooter {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Context column styling */
+.contextColumn {
+  position: static;
+  top: auto;
+}
+
+.contextSection + .contextSection {
+  margin-top: 16px;
+  max-width: 400px;
+}
+
+/* When container is in small width mode (no .w90), narrow the open-tasks block */
+.container:not(.w90) .noteSessionGrid .contextColumn .contextSection + .contextSection {
+  max-width: 240px;
+}
+
+/* Link-to-project section for standalone sessions */
+.linkProjectSection {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  background: #12141a;
+}
+
+.linkProjectSelect {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1b1e26;
+  color: var(--text);
+}
+
+.contextTitle {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.contextMeta { color: var(--muted); }
+
+.contextList {
+  list-style: disc;
+  padding-left: 18px;
+}
+
+.contextEmpty { color: var(--muted); font-style: italic; }
+
+/* Truncate items to a single line with ellipsis in context lists */
+.truncateOneLine {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tooltip preformatted content without inline styles */
+.tooltipPre {
+  margin: 0;
+  white-space: pre-wrap;
+  max-width: 420px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+

@@ -1,0 +1,246 @@
+.dashboardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.dashboardMeta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.taskList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.taskItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.taskItem.inProgress .inlineEditable,
+.taskItem.inProgress .inlineEditableInput {
+  color: var(--success);
+}
+
+.taskItem:last-child {
+  border-bottom: none;
+}
+
+.taskTitle {
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.taskTitle .inlineEditable {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dashboardTaskTitleInput.inlineEditableInput {
+  min-width: 280px;
+}
+
+.taskProjectCol {
+  display: inline-block;
+  width: 160px; /* fixed width for project column */
+  flex: 0 0 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.taskStatusCol {
+  display: inline-block;
+  width: 140px;
+  flex: 0 0 140px;
+}
+
+.taskProject {
+  color: var(--muted);
+  margin-right: 8px;
+}
+
+.taskProjectLink {
+  color: var(--muted);
+  margin-right: 8px;
+  text-decoration: none;
+}
+
+.taskProjectLink:hover {
+  text-decoration: underline;
+}
+
+/* Ensure visited links keep intended colors */
+.taskProjectLink:visited { color: var(--muted); }
+.sessionItem a { color: var(--text); text-decoration: none; }
+.sessionItem a:visited { color: var(--text); }
+
+.taskMeta {
+  font-size: 12px;
+  min-width: 220px;
+  text-align: right;
+}
+.taskRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.taskDeleteBtn {
+  padding: 4px 6px;
+}
+.taskClearDeadlineBtn { padding: 4px 6px; }
+
+.taskMetaDefault { 
+  color: var(--muted); 
+}
+
+.tasksStats { 
+  color: var(--muted); 
+  font-size: 12px; 
+  margin: 4px 0 16px; 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  flex-wrap: wrap;
+  border-bottom: 1px solid #444;
+  padding-bottom: 8px;
+}
+
+.tasksStats .statLabel { 
+  color: var(--muted); 
+}
+
+.tasksStats .statValue { 
+  color: var(--text); 
+  font-weight: 600; 
+  margin-left: 4px; 
+}
+
+.tasksStats .reopenLink { 
+  margin-left: auto; 
+  background: transparent; 
+  border: 1px solid var(--border); 
+  color: var(--muted); 
+  padding: 2px 6px; 
+  border-radius: 999px; 
+  font-size: 12px; 
+  cursor: pointer; 
+}
+
+.tasksStats .reopenLink:hover { 
+  color: var(--text); 
+}
+
+.recentDone { 
+  margin: 0 0 16px; 
+  padding: 24px; 
+  border: 1px solid #444; 
+  border-radius: 6px; 
+  background: #222; 
+  h3 { margin: 0 0 8px; }
+}
+.recentDone .recentDoneHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.recentDone .closeBtn { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 2px 6px; cursor: pointer; }
+.recentDone .closeBtn:hover { color: var(--text); }
+.recentDone .recentLabel { 
+  color: var(--muted); 
+  font-size: 16px; 
+  margin: 12px 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.recentDone .taskItem { 
+  border: 0;
+  padding: 1px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Project filter chips now live in imports/ui/components/ProjectFilters/ProjectFilters.css */
+
+.sessionList { 
+  list-style: none; 
+  padding: 0; 
+  margin: 0; 
+}
+
+.sessionItem { 
+  display: flex; 
+  align-items: center; 
+  padding: 8px 0; 
+  border-bottom: 1px solid var(--border); 
+}
+
+.sessionItem:last-child { 
+  border-bottom: none; 
+}
+
+.sessionMeta { 
+  color: var(--muted); 
+  font-size: 12px; 
+  margin-left: 6px; 
+}
+
+/* uses global utilities in client/main.css */
+
+/* Projects overview */
+.projectsOverview { margin: 12px 0 24px; }
+.projectsScroll { max-height: 360px; overflow: auto; margin-top: 8px; }
+.signalsStrip { display: flex; gap: 12px; margin-bottom: 12px; }
+.signalBox { background: #10141b; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+.signalLabel { color: var(--muted); font-size: 12px; }
+.signalValue { font-size: 18px; font-weight: 600; }
+
+.projectsTable { width: 100%; border-collapse: collapse; table-layout: auto; }
+.projectsTable thead th { position: sticky; top: 0; background: #0b0c10; z-index: 1; }
+.projectsTable th, .projectsTable td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.projectsTable th { color: var(--muted); font-weight: 500; text-align: left; }
+.projectsTable th.alignRight { text-align: right; }
+.projectsTable th.alignCenter { text-align: center; }
+.projectsTable .projName a { font-weight: 600; color: var(--text); text-decoration: none; }
+.projectsTable .projName a:visited { color: var(--text); }
+.projectsTable .projName a:hover { text-decoration: underline; }
+.projectsTable .projName { display: flex; align-items: center; gap: 6px; }
+.projectsTable .starBtn { appearance: none; border: none; background: transparent; cursor: pointer; color: var(--muted); padding: 0; }
+.projectsTable .starBtn .starIcon { width: 16px; height: 16px; fill: currentColor; }
+.projectsTable .starBtn.active { color: #f59e0b; }
+.projectsTable .starBtn:hover { color: #f59e0b; }
+.projFlag { display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
+.projectsTable .rowAction { color: var(--muted); }
+.projectsTable .dueSoon { color: #f59e0b; }
+.projectsTable .dueNow { color: #ef4444; }
+.projectsTable .dueLater { color: #22c55e; }
+.projectsTable tbody tr:nth-child(odd) { background: rgba(255,255,255,0.02); }
+.projectsTable tbody tr:hover { background: rgba(255,255,255,0.04); }
+.alignRight { text-align: right; }
+.alignCenter { text-align: center; }
+.statusBadge { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #1b1e26; }
+.statusBadge.active { background: #0f1a12; color: #22c55e; border-color: #13321f; }
+.statusBadge.blocked { background: #1a1212; color: #ef4444; border-color: #3a1a1a; }
+.riskBadge { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #1b1e26; }
+.riskBadge.low { color: #22c55e; }
+.riskBadge.medium { color: #f59e0b; }
+.riskBadge.high { color: #ef4444; }
+
+
+/* Scrollable tasks list */
+.tasksScroll { max-height: 480px; overflow: auto; margin-top: 8px; }
+
+
+/* Eisenhower Matrix styles moved to imports/ui/Eisenhower/Eisenhower.css */
+

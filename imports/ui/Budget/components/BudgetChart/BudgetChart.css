@@ -1,0 +1,12 @@
+.chart {
+  width: 100%;
+  height: 280px;
+  margin-top: 8px;
+  display: block;
+}
+.chart .bar { fill: #3b82f6; }
+.chart .axis { stroke: var(--border); }
+.chart text { fill: var(--muted); font-size: 10px; }
+.chart .grid { stroke: var(--border); opacity: 0.4; }
+
+

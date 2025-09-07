@@ -1,0 +1,291 @@
+.projectHeaderCard {
+  margin-bottom: 16px;
+  background: #333;
+}
+
+.projectHeaderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.projectTitle { margin: 0; }
+.toggleBtn { padding: 4px 8px; font-size: 12px; }
+.doneSection { margin-top: 16px; }
+.doneHeader { cursor: pointer; user-select: none; }
+.backBtn { padding: 4px 10px; font-size: 12px; }
+.tasksList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tasksList > li {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+
+.tasksList > li:last-child {
+  border-bottom: none;
+}
+.projectMeta {
+  margin-top: 12px;
+}
+
+.colorPickerInput {
+  vertical-align: middle;
+  margin-left: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.projectActions {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.projectActions button + button {
+  margin-left: 8px;
+}
+
+.tasksHeader {
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+
+.projectTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.starBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px;
+}
+
+.starBtn .starIcon { width: 20px; height: 20px; fill: currentColor; }
+.starBtn.active { color: #f59e0b; }
+.starBtn:hover { color: #f59e0b; }
+
+.projectDescription {
+  margin: 0 0 24px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.taskRow {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr); /* drag | content */
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+}
+
+.dragHandle { cursor: grab; color: var(--muted); user-select: none; }
+.dragHandle:active { cursor: grabbing; }
+
+.taskRow.inProgress .inlineEditable[data-as="select"],
+.taskRow.inProgress .inlineEditableSelect {
+  color: var(--success);
+}
+
+.taskRow .taskActions { opacity: 1; position: relative; z-index: 1; }
+
+/* Deadline clickable display */
+.deadlineDisplay {
+  color: var(--muted);
+  cursor: pointer;
+  min-width: 160px;
+}
+.deadlineDisplay:hover { text-decoration: underline; }
+.deadlineDisplay.dueSoon { color: #f59e0b; }
+.deadlineDisplay.dueNow { color: #ef4444; }
+.deadlineDisplay.dueLater { color: #22c55e; }
+
+/* Compact icon buttons for row actions */
+.iconButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.iconButton:hover { color: var(--text); background: #1b1e26; }
+
+/* Done state */
+.taskDone .titleCell { text-decoration: line-through; color: var(--muted); }
+
+/* Cells */
+.titleCell { overflow-wrap: anywhere; min-width: 0; }
+.titleCell .inlineEditable { display: block; white-space: normal; overflow: visible; text-overflow: initial; }
+/* Override global InlineEditable ellipsis inside project page titles */
+.titleCell .inlineEditableContent { white-space: normal; overflow: visible; text-overflow: initial; }
+.titleCell .inlineEditableInput { width: 100%; }
+.dragPlaceholder { visibility: hidden; }
+.taskRow input[type="checkbox"] { margin: 0; width: 16px; height: 16px; }
+.taskDndRow { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; column-gap: 12px; }
+.taskActions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+
+/* Eisenhower toggles use global styles from client/main.css */
+
+.doneMeta { color: var(--muted); font-size: 12px; }
+
+.deadlineInput {
+  width: auto;
+}
+
+/* uses global utilities in client/main.css */
+
+/* Notes list */
+.noteBlock {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  background: #1b1e26;
+}
+
+.noteBlockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.noteTitle {
+  margin: 6px 0 8px;
+}
+
+.noteTitleRow {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.noteTitle .inlineEditable {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.noteTitle .inlineEditableInput {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.noteTitleCollapsed {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.noteTitleCollapsed .caret { color: var(--muted); margin-right: 6px; }
+
+.caretButton {
+  padding: 0 4px;
+}
+
+.noteActions { display: inline-flex; gap: 6px; }
+
+.noteBlock + .noteBlock {
+  margin-top: 12px;
+}
+
+.noteMeta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+/* Larger textarea for editing project notes */
+.projectNoteTextarea.inlineEditableInput {
+  min-height: 220px;
+}
+
+.notePre {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+/* Compact done tasks header so it doesn't dominate the page */
+.doneSection .doneHeader {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  font-size: 0.95rem;
+}
+
+.doneSection {
+  margin-top: 32px;
+}
+
+/* Bottom-right delete placement */
+.projectDeleteFooter {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btnSmall { padding: 4px 8px; font-size: 12px; }
+
+/* Project links inline row */
+.projectLinksRow { 
+  display: grid; 
+  grid-template-columns: minmax(0, 1fr) auto; 
+  align-items: center; 
+  gap: 8px; 
+  margin: 8px 0 12px; 
+  background: #1b1e26;
+  padding: 12px;
+}
+
+.projectLinksList { 
+  list-style: none; 
+  padding: 0; 
+  margin: 0; 
+  display: inline-flex; 
+  gap: 6px; 
+  flex-wrap: nowrap; 
+  overflow-x: auto; 
+  align-items: center; 
+}
+
+.projectLinkItem { 
+  display: inline-flex; 
+  align-items: center; 
+}
+
+/* Visual separator between inline project links */
+.projectLinkItem + .projectLinkItem::before {
+  content: '|';
+  color: var(--muted);
+  margin: 0 6px;
+}
+
+/* Keep spacing consistent if files are interleaved or styled differently */
+.projectFileItem { 
+  display: inline-flex; 
+  align-items: center; 
+}
+.projectFileItem + .projectFileItem::before {
+  content: '|';
+  color: var(--muted);
+  margin: 0 6px;
+}
+
+.projectLinksActions { 
+  text-align: right; 
+}

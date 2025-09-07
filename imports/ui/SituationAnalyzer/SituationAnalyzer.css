@@ -1,0 +1,43 @@
+.situationAnalyzer { }
+.situationAnalyzer .headerRow { display: flex; align-items: center; gap: 8px; }
+.situationAnalyzer .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+.situationAnalyzer .col { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.situationAnalyzer .col + .col { margin-left: 0; }
+.situationAnalyzer .list { list-style: none; padding: 0; margin: 8px 0; }
+.situationAnalyzer .row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.situationAnalyzer .row.block { align-items: stretch; }
+.situationAnalyzer .row.block .noteActor { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.situationAnalyzer .noteHeader { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.situationAnalyzer .deleteNoteBtn { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; }
+.situationAnalyzer .deleteNoteBtn:hover { color: var(--text); }
+.situationAnalyzer .actorHeader { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.situationAnalyzer .actorInline { display: flex; align-items: center; gap: 6px; }
+.situationAnalyzer .actorInline a { color: var(--text); text-decoration: none; }
+.situationAnalyzer .actorInline a:hover { text-decoration: underline; }
+.situationAnalyzer .actorActions { display: flex; align-items: center; gap: 6px; }
+.situationAnalyzer .addNoteBtn { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; }
+.situationAnalyzer .addNoteBtn:hover { color: var(--text); }
+.situationAnalyzer .deleteActorBtn { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; }
+.situationAnalyzer .deleteActorBtn:hover { color: var(--text); }
+.situationAnalyzer .linkBtn { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; }
+.situationAnalyzer .linkBtn:hover { color: var(--text); }
+.situationAnalyzer .row:last-child { border-bottom: none; }
+.situationAnalyzer .dot { color: var(--muted); }
+.situationAnalyzer .card { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; margin-bottom: 8px; background: var(--panel); }
+.situationAnalyzer .cardHeader { font-weight: 600; margin-bottom: 6px; }
+.situationAnalyzer .situationSelect { margin-left: auto; }
+.situationAnalyzer .descBox { max-height: 500px; overflow: auto; }
+.situationAnalyzer .descTextarea { height: 100%; min-height: 140px; }
+.situationAnalyzer .questionsLines { display: flex; flex-direction: column; gap: 6px; }
+.situationAnalyzer .actionsRow { margin-top: 12px; margin-bottom: 12px; }
+.situationAnalyzer .questionItem { padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.situationAnalyzer .questionItem:last-child { border-bottom: none; }
+.situationAnalyzer .questionRow { display: flex; align-items: center; gap: 6px; }
+.situationAnalyzer .deleteQuestionBtn { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; margin-left: auto; }
+.situationAnalyzer .deleteQuestionBtn:hover { color: var(--text); }
+.situationAnalyzer .summaryText { white-space: pre-wrap; line-height: 1.6; }
+.situationAnalyzer .replyRow { margin-top: 4px; }
+.situationAnalyzer .questionRow .inlineEditable .inlineEditableContent { font-weight: 600; font-style: italic; }
+.situationAnalyzer .fieldRow { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 8px; }
+.situationAnalyzer .fieldLabel { margin: 0; }
+.situationAnalyzer .descLabel { display: block; margin-top: 12px; }

@@ -1,0 +1,489 @@
+import React, { useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useSubscribe, useFind } from 'meteor/react-meteor-data';
+import { ProjectsCollection } from '../../api/projects/collections';
+import { TasksCollection } from '../../api/tasks/collections';
+import { NoteSessionsCollection } from '../../api/noteSessions/collections';
+import { NotesCollection } from '../../api/notes/collections';
+import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
+import { Meteor } from 'meteor/meteor';
+import { navigateTo } from '../router.js';
+import './ProjectDetails.css';
+import { Card } from '../components/Card/Card.jsx';
+import { deadlineSeverity, timeAgo } from '../utils/date.js';
+import { InlineDate } from '../InlineDate/InlineDate.jsx';
+import { TaskRow } from '../components/TaskRow/TaskRow.jsx';
+import { createNewLink } from '../utils/links.js';
+import { LinksCollection } from '../../api/links/collections';
+import { LinkItem } from '../components/Link/Link.jsx';
+import { FilesCollection } from '../../api/files/collections';
+import { FileItem } from '../components/File/File.jsx';
+import { Tooltip } from '../components/Tooltip/Tooltip.jsx';
+import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
+import { Modal } from '../components/Modal/Modal.jsx';
+
+export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession }) => {
+  const loadProjects = useSubscribe('projects');
+  const loadTasks = useSubscribe('tasks');
+  const loadSessions = useSubscribe('noteSessions');
+  const loadNotes = useSubscribe('notes');
+  const loadLinks = useSubscribe('links.byProject', projectId);
+  const loadFiles = useSubscribe('files.byProject', projectId);
+
+  const project = useFind(() => ProjectsCollection.find({ _id: projectId }))[0];
+  const tasks = useFind(() => TasksCollection.find({ projectId }, { sort: { updatedAt: -1 } }));
+  const activeTasks = useMemo(() => {
+    const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
+    const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
+    return tasks
+      .filter(t => !['done','cancelled'].includes(t.status || 'todo'))
+      .sort((a, b) => {
+        const ad = toTime(a.deadline);
+        const bd = toTime(b.deadline);
+        if (ad !== bd) return ad - bd;
+        const as = statusRank(a.status || 'todo');
+        const bs = statusRank(b.status || 'todo');
+        if (as !== bs) return as - bs;
+        const ar = Number.isFinite(a.priorityRank) ? a.priorityRank : Number.POSITIVE_INFINITY;
+        const br = Number.isFinite(b.priorityRank) ? b.priorityRank : Number.POSITIVE_INFINITY;
+        if (ar !== br) return ar - br;
+        const ac = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return ac - bc;
+      });
+  }, [tasks]);
+  const doneTasks = useMemo(() => tasks
+    .filter(t => ['done','cancelled'].includes(t.status || 'todo'))
+    .sort((a,b) => new Date((b.statusChangedAt || 0)) - new Date((a.statusChangedAt || 0))), [tasks, tasks && tasks.map(t => t.status || '').join(','), projectId]);
+  // DnD setup for active tasks
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const [order, setOrder] = useState([]);
+  const activeTaskIds = useMemo(() => activeTasks.map(t => t._id), [activeTasks]);
+  React.useEffect(() => { setOrder(activeTaskIds); }, [activeTaskIds]);
+
+  const SortableRow = ({ task, children }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: task._id });
+    const style = { transform: CSS.Transform.toString(transform), transition };
+    return (
+      <li ref={setNodeRef} style={style} key={task._id} className={(task.status || 'todo') === 'done' ? 'taskDone' : ''}>
+        <div className={`taskRow${(task.status || 'todo') === 'in_progress' ? ' inProgress' : ''}`}>
+          <span className="dragHandle" {...attributes} {...listeners} title="Drag to reorder">≡</span>
+          {children}
+        </div>
+      </li>
+    );
+  };
+
+  const onDragEnd = (event) => {
+    const { active, over } = event;
+    if (!active || !over || active.id === over.id) return;
+    const oldIndex = order.indexOf(active.id);
+    const newIndex = order.indexOf(over.id);
+    const next = arrayMove(order, oldIndex, newIndex);
+    setOrder(next);
+    // Persist priorityRank compact (0..n)
+    next.forEach((id, idx) => { Meteor.call('tasks.update', id, { priorityRank: idx }); });
+  };
+  const [showDone, setShowDone] = useState(false);
+  const sessions = useFind(() => NoteSessionsCollection.find({ projectId }, { sort: { createdAt: -1 } }));
+  const notes = useFind(() => NotesCollection.find({ projectId }, { sort: { createdAt: -1 } }));
+  const links = useFind(() => LinksCollection.find({ projectId }, { sort: { createdAt: -1 } }));
+  const files = useFind(() => FilesCollection.find({ projectId }, { sort: { createdAt: -1 } }));
+  const [noteToDeleteId, setNoteToDeleteId] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const progress = useMemo(() => {
+    if (!tasks || tasks.length === 0) return 0;
+    const withProgress = tasks.filter(t => typeof t.progressPercent === 'number');
+    if (withProgress.length === 0) return 0;
+    return Math.round(withProgress.reduce((a, t) => a + t.progressPercent, 0) / withProgress.length);
+  }, [tasks]);
+
+  // Avoid brief loading flicker when switching projects; render with reactive data
+
+  if (!project) {
+    return (
+      <div>
+        <button onClick={onBack}>Back</button>
+        <div>Project not found.</div>
+      </div>
+    );
+  }
+
+  const createTask = (cb) => {
+    Meteor.call('tasks.insert', { projectId, title: 'New Task', deadline: null }, (err) => {
+      if (!err && typeof cb === 'function') cb();
+    });
+  };
+
+  const updateProjectName = (next) => {
+    Meteor.call('projects.update', projectId, { name: next });
+  };
+
+  const updateProjectDescription = (next) => {
+    Meteor.call('projects.update', projectId, { description: next });
+  };
+
+  const updateTaskTitle = (taskId, next) => {
+    Meteor.call('tasks.update', taskId, { title: next });
+  };
+
+  const updateTaskDeadline = (taskId, next) => {
+    const parsed = next ? new Date(next) : null;
+    Meteor.call('tasks.update', taskId, { deadline: parsed });
+  };
+
+  const removeTask = (taskId) => {
+    Meteor.call('tasks.remove', taskId);
+  };
+
+  const deleteProject = () => setShowDeleteModal(true);
+  const confirmDeleteProject = () => {
+    Meteor.call('projects.remove', projectId, (err) => {
+      setShowDeleteModal(false);
+      if (err) return;
+      if (typeof onBack === 'function') onBack();
+    });
+  };
+
+  const createNote = () => {
+    Meteor.call('notes.insert', { projectId, content: '' });
+  };
+
+  return (
+    <div>
+      <Card className="projectHeaderCard" title={null} actions={null}>
+        <div className="projectHeaderRow">
+          <button
+            className={`starBtn${project.isFavorite ? ' active' : ''}`}
+            title={project.isFavorite ? 'Unfavorite project' : 'Mark as favorite'}
+            onClick={() => {
+              const next = !project.isFavorite;
+              const modifier = next && (typeof project.favoriteRank === 'undefined' || project.favoriteRank === null)
+                ? { isFavorite: true, favoriteRank: Date.now() }
+                : { isFavorite: next };
+              Meteor.call('projects.update', projectId, modifier);
+            }}
+          >
+            <svg className="starIcon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+            </svg>
+          </button>
+          <h2 className="projectTitle">
+            <InlineEditable
+              value={project.name}
+              placeholder="(untitled project)"
+              onSubmit={updateProjectName}
+            />
+          </h2>
+        </div>
+        <div className="projectDescription">
+          <InlineEditable
+            value={project.description}
+            placeholder="(add a short description)"
+            onSubmit={updateProjectDescription}
+            as="textarea"
+          />
+        </div>
+        <div className="projectMeta">
+          Status: {
+            <InlineEditable
+              as="select"
+              value={project.status || ''}
+              options={[{ value: '', label: 'n/a' }, 'planned', 'active', 'blocked', 'done']}
+              onSubmit={(next) => {
+                Meteor.call('projects.update', projectId, { status: next || null });
+              }}
+            />
+          }
+          {" | "}
+          {project.targetDate ? 'Target: ' : null}
+          {
+            <InlineDate
+              value={project.targetDate}
+              onSubmit={(next) => {
+                const parsed = next ? new Date(next) : null;
+                Meteor.call('projects.update', projectId, { targetDate: parsed });
+              }}
+              placeholder="No target"
+            />
+          }
+          {project.targetDate ? (
+            <span className="muted"> · {timeAgo(project.targetDate)}</span>
+          ) : null}
+          {" | "}
+          Progress: {progress}%
+          {" | "}
+          Color: {
+            (() => {
+              const safeColor = (typeof project.colorLabel === 'string' && /^#[0-9a-fA-F]{6}$/.test(project.colorLabel)) ? project.colorLabel : '#6b7280';
+              return (
+                <input
+                  type="color"
+                  className="colorPickerInput"
+                  value={safeColor}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (typeof val === 'string' && /^#[0-9a-fA-F]{6}$/.test(val)) {
+                      Meteor.call('projects.update', projectId, { colorLabel: val });
+                    }
+                  }}
+                  title="Pick a label color"
+                />
+              );
+            })()
+          }
+        </div>
+      </Card>
+      {/* Links section */}
+      <div className="projectLinksRow">
+        <div className="projectLinksList">
+          {links.map((l, idx) => (
+            <span key={l._id} className="projectLinkItem">
+              <LinkItem link={l} startEditing={idx === 0 && (l.name === 'New Link')} hoverActions />
+            </span>
+          ))}
+          {links.length === 0 ? (
+            <span className="muted">No links yet</span>
+          ) : null}
+        </div>
+        <div className="projectLinksActions">
+          <button className="btn btn-primary" onClick={() => createNewLink(projectId)}>Add Link</button>
+        </div>
+      </div>
+
+      {/* Files section */}
+      <div className="projectLinksRow">
+        <div className="projectLinksList">
+          {files.map((f, idx) => (
+            <span key={f._id} className="projectFileItem">
+              <FileItem file={f} startEditing={false} hoverActions />
+            </span>
+          ))}
+          {files.length === 0 ? (
+            <span className="muted">No files yet</span>
+          ) : null}
+        </div>
+        <div className="projectLinksActions">
+          <label className="btn btn-primary">
+            Upload File
+            <input type="file" style={{ display: 'none' }} onChange={(e) => {
+              const file = e.target.files && e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                const base64 = String(reader.result || '').split(',').pop() || '';
+                const name = file.name.replace(/\.[^.]+$/, '');
+                Meteor.call('files.insert', { projectId, name, originalName: file.name, contentBase64: base64, mimeType: file.type }, () => {});
+              };
+              reader.readAsDataURL(file);
+              e.target.value = '';
+            }} />
+          </label>
+        </div>
+      </div>
+
+      <h3 className="tasksHeader">Tasks</h3>
+      <div className="projectActions">
+        <button className="btn btn-primary" onClick={createTask}>Add Task</button>
+      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+          <ul className="tasksList">
+            {order.map(id => {
+              const t = activeTasks.find(x => x._id === id);
+              if (!t) return null;
+              return (
+                <SortableRow key={t._id} task={t}>
+                  <TaskRow
+                    as="div"
+                    task={t}
+                    showProject={false}
+                    showStatusSelect
+                    showDeadline
+                    editableDeadline
+                    showClearDeadline
+                    showDelete
+                    showUrgentImportant
+                    inlineActions={false}
+                    titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
+                    onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                    onUpdateTitle={(next) => updateTaskTitle(t._id, next)}
+                    onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
+                    onClearDeadline={() => updateTaskDeadline(t._id, '')}
+                    onRemove={() => removeTask(t._id)}
+                    onToggleUrgent={(task) => Meteor.call('tasks.update', task._id, { isUrgent: !task.isUrgent })}
+                    onToggleImportant={(task) => Meteor.call('tasks.update', task._id, { isImportant: !task.isImportant })}
+                  />
+                </SortableRow>
+              );
+            })}
+          </ul>
+        </SortableContext>
+      </DndContext>
+
+      <h3 className="tasksHeader">Notes</h3>
+      <div className="projectActions">
+        <button className="btn btn-primary" onClick={createNote}>Add Note</button>
+        <button className="btn btn-primary ml8" onClick={() => onOpenNoteSession(projectId)}>New Note Session</button>
+      </div>
+      {notes.length === 0 ? (
+        <div>No notes yet.</div>
+      ) : (
+        <ul>
+          {notes.map(n => {
+            const headerTitleNode = (
+              <InlineEditable
+                value={n.title || ''}
+                placeholder="(untitled note)"
+                onSubmit={(next) => {
+                  const title = String(next || '').trim();
+                  Meteor.call('notes.update', n._id, { title });
+                }}
+                fullWidth
+              />
+            );
+            return (
+            <li key={n._id}>
+              <div className="noteBlock">
+                <Collapsible title={headerTitleNode}>
+                  <div className="noteBlockHeader">
+                    <div className="noteMeta">Created {timeAgo(n.createdAt)} · {new Date(n.createdAt).toLocaleString()}</div>
+                    <div className="noteActions" title="Actions">
+                      <Tooltip content="Delete note">
+                        <button className="iconButton" onClick={() => setNoteToDeleteId(n._id)}>🗑</button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                  {n.kind === 'aiSummary' ? (
+                    <InlineEditable
+                      as="textarea"
+                      value={n.content}
+                      placeholder="(empty)"
+                      startEditing={n.content === ''}
+                      selectAllOnFocus
+                      rows={12}
+                      inputClassName="projectNoteTextarea"
+                      onSubmit={(next) => {
+                        Meteor.call('notes.update', n._id, { content: next });
+                      }}
+                    />
+                  ) : (
+                    <InlineEditable
+                      as="textarea"
+                      value={n.content}
+                      placeholder="(empty)"
+                      startEditing={n.content === ''}
+                      selectAllOnFocus
+                      rows={12}
+                      inputClassName="projectNoteTextarea"
+                      onSubmit={(next) => {
+                        Meteor.call('notes.update', n._id, { content: next });
+                      }}
+                    />
+                  )}
+                </Collapsible>
+              </div>
+            </li>
+          );})}
+        </ul>
+      )}
+
+      <h3 className="tasksHeader">Note Sessions</h3>
+      {sessions.length === 0 ? (
+        <div>No sessions yet.</div>
+      ) : (
+        <ul>
+          {sessions.map(s => (
+            <li key={s._id}>
+              <button className="btn" onClick={() => navigateTo({ name: 'session', sessionId: s._id })}>
+                {s.name ? s.name : new Date(s.createdAt).toLocaleString()}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {doneTasks.length > 0 ? (
+        <div className="doneSection">
+          <h3 className="tasksHeader doneHeader">
+            <button className="btn-link" onClick={() => setShowDone(v => !v)} aria-expanded={showDone} aria-controls="doneTasksList">
+              {showDone ? '▼' : '▶'} Done tasks ({doneTasks.length})
+            </button>
+          </h3>
+          {showDone ? (
+            <ul id="doneTasksList" className="tasksList">
+              {doneTasks.map(t => (
+                <li key={t._id} className={(t.status || 'todo') === 'done' ? 'taskDone' : ''}>
+                  <TaskRow
+                    as="div"
+                    task={t}
+                    showProject={false}
+                    showStatusSelect
+                    showDeadline
+                    editableDeadline
+                    showClearDeadline={false}
+                    showDelete
+                    showUrgentImportant={false}
+                    inlineActions={false}
+                    titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
+                    onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                    onUpdateTitle={(next) => updateTaskTitle(t._id, next)}
+                    onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
+                    onRemove={() => removeTask(t._id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="projectDeleteFooter">
+        <button className="btn-link" onClick={() => navigateTo({ name: 'projectDelete', projectId })}>Delete Project…</button>
+      </div>
+      <Modal
+        open={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title={`Delete project ${project.name || '(untitled)'}`}
+        actions={[
+          <button key="cancel" className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>,
+          <button key="del" className="btn danger" onClick={confirmDeleteProject}>Delete</button>
+        ]}
+      >
+        <div>Delete this project and all its tasks and sessions? This cannot be undone.</div>
+      </Modal>
+
+      <Modal
+        open={!!noteToDeleteId}
+        onClose={() => setNoteToDeleteId(null)}
+        title="Delete note"
+        actions={[
+          <button key="cancel" className="btn" onClick={() => setNoteToDeleteId(null)}>Cancel</button>,
+          <button key="del" className="btn danger" onClick={() => {
+            const id = noteToDeleteId;
+            if (!id) return;
+            Meteor.call('notes.remove', id, (err) => {
+              setNoteToDeleteId(null);
+              if (err) {
+                console.error('notes.remove failed', err);
+              }
+            });
+          }}>Delete</button>
+        ]}
+      >
+        <div>This will permanently delete this note from the project.</div>
+      </Modal>
+    </div>
+  );
+};
+
+ProjectDetails.propTypes = {
+  projectId: PropTypes.string.isRequired,
+  onBack: PropTypes.func,
+  onOpenNoteSession: PropTypes.func,
+};
+
+

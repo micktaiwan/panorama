@@ -1,0 +1,123 @@
+.importLoadingNote {
+  margin-bottom: 8px;
+}
+
+.importTextarea {
+  width: 100%;
+}
+
+.importList {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.importProjectRow {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.importProjectName {
+  margin-right: 8px;
+}
+
+.importTaskRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.importTaskHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 6px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.importTaskHeaderCell {
+  line-height: 1;
+}
+
+.importTaskProjectCol {
+  width: 160px;
+  overflow: hidden;
+}
+
+.importTaskDueCol {
+  width: 150px;
+}
+
+.importTaskDueInput {
+  width: 100%;
+}
+
+.importTaskClearCol {
+  width: 120px;
+  text-align: right;
+}
+
+.importTaskProjectSelect {
+  width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.importTaskMainCol {
+  flex: 1;
+  min-width: 0;
+}
+
+.importTaskText {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.importTaskText .inlineEditable {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.importTaskText .inlineEditableInput {
+  width: 100%;
+  display: block;
+}
+
+.importTaskDeadline {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.importTaskActionsCol {
+  width: 120px;
+  text-align: right;
+}
+
+.importTaskActionsCol .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Icon buttons for compact row actions */
+.iconButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.iconButton:hover { color: var(--text); background: #1b1e26; }
+
+
