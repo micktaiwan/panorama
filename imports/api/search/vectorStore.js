@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
+import { getOpenAiApiKey, getQdrantUrl } from '/imports/api/_shared/config';
 import crypto from 'crypto';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
@@ -11,7 +11,7 @@ const DEBUG = false; // set true to avoid external embedding calls during dev
 let singletonClient = null;
 const getQdrantClient = async () => {
   if (singletonClient) return singletonClient;
-  const url = Meteor.settings?.qdrantUrl;
+  const url = getQdrantUrl();
   if (!url) throw new Meteor.Error('config-missing', 'qdrantUrl missing in settings');
   const { QdrantClient } = await import('@qdrant/js-client-rest');
   singletonClient = new QdrantClient({ url });

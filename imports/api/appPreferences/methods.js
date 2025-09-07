@@ -18,6 +18,7 @@ Meteor.methods({
       openaiApiKey: null,
       pennylaneBaseUrl: null,
       pennylaneToken: null,
+      qdrantUrl: null,
       settingsVersion: 1
     });
   },
@@ -30,6 +31,7 @@ Meteor.methods({
     if (typeof modifier.openaiApiKey === 'string') set.openaiApiKey = modifier.openaiApiKey.trim() || null;
     if (typeof modifier.pennylaneBaseUrl === 'string') set.pennylaneBaseUrl = modifier.pennylaneBaseUrl.trim() || null;
     if (typeof modifier.pennylaneToken === 'string') set.pennylaneToken = modifier.pennylaneToken.trim() || null;
+    if (typeof modifier.qdrantUrl === 'string') set.qdrantUrl = modifier.qdrantUrl.trim() || null;
     if (Number.isFinite(modifier.settingsVersion)) set.settingsVersion = modifier.settingsVersion;
     const doc = await AppPreferencesCollection.findOneAsync({});
     if (!doc) {
