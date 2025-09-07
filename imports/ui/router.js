@@ -6,7 +6,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'dashboard') return { name: 'home' };
   if (parts[0] === 'help') return { name: 'help' };
   if (parts[0] === 'alarms') return { name: 'alarms' };
-  if (parts[0] === 'qdrant') return { name: 'qdrant' };
+  // qdrant route removed; integrated into Preferences
   if (parts[0] === 'eisenhower') return { name: 'eisenhower' };
   if (parts[0] === 'links') return { name: 'links' };
   if (parts[0] === 'files') return { name: 'files' };
@@ -42,9 +42,6 @@ export const navigateTo = (route) => {
       break;
     case 'alarms':
       window.location.hash = '#/alarms';
-      break;
-    case 'qdrant':
-      window.location.hash = '#/qdrant';
       break;
     case 'eisenhower':
       window.location.hash = '#/eisenhower';

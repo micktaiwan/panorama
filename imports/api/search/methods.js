@@ -224,6 +224,14 @@ Meteor.methods({
         out.vectorSize = cfg?.size ?? cfg?.config?.size;
         out.distance = cfg?.distance ?? cfg?.config?.distance;
         out.status = info?.status;
+        // Attempt to fetch total number of points
+        try {
+          const cnt = await client.count(name, { exact: true });
+          // js-client may return { result: { count } } or { count }
+          out.count = (cnt?.result?.count ?? cnt?.count ?? 0);
+        } catch (eCnt) {
+          out.countError = eCnt?.message || String(eCnt);
+        }
       }
     } catch (e) {
       out.error = e?.message || String(e);

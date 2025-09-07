@@ -9,7 +9,6 @@ import './App.css';
 import { parseHashRoute, navigateTo } from '/imports/ui/router.js';
 import { ImportTasks } from '/imports/ui/ImportTasks/ImportTasks.jsx';
 import { Alarms } from '/imports/ui/Alarms/Alarms.jsx';
-import { QdrantPage } from '/imports/ui/Qdrant/QdrantPage.jsx';
 import { LinksPage } from '/imports/ui/Links/LinksPage.jsx';
 import { FilesPage } from '/imports/ui/Files/FilesPage.jsx';
 import { Eisenhower } from '/imports/ui/Eisenhower/Eisenhower.jsx';
@@ -298,11 +297,6 @@ function App() {
           <Alarms />
         </div>
       )}
-      {route.name === 'qdrant' && (
-        <div className="panel">
-          <QdrantPage />
-        </div>
-      )}
       {route.name === 'eisenhower' && (
         <div className="panel">
           <Eisenhower />
@@ -537,8 +531,7 @@ function App() {
           <span className="dot">·</span>
           <a href="#/import-tasks" onClick={(e) => { e.preventDefault(); goImportTasks(); }}>Import tasks</a>
           <span className="dot">·</span>
-          <a href="#/qdrant" onClick={(e) => { e.preventDefault(); goQdrant(); }}>Qdrant</a>
-          <span className="dot">·</span>
+          
           <a href="#/eisenhower" onClick={(e) => { e.preventDefault(); goEisenhower(); }}>Eisenhower</a>
           <span className="dot">·</span>
           <a href="#/budget" onClick={(e) => { e.preventDefault(); goBudget(); }}>Budget</a>

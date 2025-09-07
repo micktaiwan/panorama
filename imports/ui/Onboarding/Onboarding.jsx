@@ -23,6 +23,10 @@ export const Onboarding = () => {
       <div>
         <input value={filesDir || ''} onChange={(e) => setFilesDir(e.target.value)} placeholder="/path/to/filesDir" style={{ width: '100%' }} />
       </div>
+      <p style={{ marginTop: 12 }}>
+        Qdrant (vector database) is required for semantic search. By default, Panorama expects a local instance at
+        {' '}<code>http://localhost:6333</code>. You can change the Qdrant URL later in Preferences.
+      </p>
       <div style={{ marginTop: 12 }}>
         <button className="btn btn-primary" disabled={!filesDir} onClick={save}>Continue</button>
       </div>
