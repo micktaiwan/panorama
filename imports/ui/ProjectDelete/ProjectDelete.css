@@ -1,0 +1,32 @@
+.pdGrid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 6px;
+  column-gap: 16px;
+}
+
+.pdWarning {
+  border: 1px solid #ff4d4f;
+  background: #3a1214;
+  color: #fff0f0;
+  padding: 12px;
+  margin-top: 16px;
+}
+
+.pdWarning strong {
+  color: #ff7272;
+}
+
+.pdFooter {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pdConfirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+

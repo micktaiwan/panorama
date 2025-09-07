@@ -1,0 +1,148 @@
+import { Meteor } from 'meteor/meteor';
+import { check } from 'meteor/check';
+
+const windowKeyToMs = (key) => {
+  const k = String(key || '').toLowerCase();
+  if (k === '24h' || k === '24') return 24 * 60 * 60 * 1000;
+  if (k === '72h' || k === '72') return 72 * 60 * 60 * 1000;
+  if (k === '7d' || k === '7days' || k === 'last7days' || k === '7') return 7 * 24 * 60 * 60 * 1000;
+  return 24 * 60 * 60 * 1000; // default 24h
+};
+
+Meteor.methods({
+  async 'reporting.aiSummarizeWindow'(windowKey, projFilters, userPrompt) {
+    check(windowKey, String);
+    if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
+    if (userPrompt !== undefined && typeof userPrompt !== 'string') throw new Meteor.Error('invalid-arg', 'userPrompt must be a string');
+    const apiKey = Meteor.settings?.openai?.apiKey;
+
+    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+
+    const windowMs = windowKeyToMs(windowKey);
+    const since = new Date(Date.now() - windowMs);
+    const until = new Date();
+
+    const includeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === 1).map(([k]) => k));
+    const excludeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === -1).map(([k]) => k));
+    const projectSelector = { createdAt: { $gte: since } };
+    const taskSelector = { status: 'done', statusChangedAt: { $gte: since } };
+    const noteSelector = { createdAt: { $gte: since } };
+    if (excludeIds.size > 0 || includeIds.size > 0) {
+      const idCond = includeIds.size > 0 ? { $in: Array.from(includeIds) } : { $nin: Array.from(excludeIds) };
+      projectSelector._id = idCond;
+      taskSelector.projectId = idCond;
+      noteSelector.projectId = idCond;
+    }
+
+    const [projects, tasksDone, notes] = await Promise.all([
+      ProjectsCollection.find(projectSelector, { fields: { name: 1, createdAt: 1 } }).fetchAsync(),
+      TasksCollection.find(taskSelector, { fields: { title: 1, projectId: 1, statusChangedAt: 1 } }).fetchAsync(),
+      NotesCollection.find(noteSelector, { fields: { title: 1, content: 1, projectId: 1, createdAt: 1 } }).fetchAsync()
+    ]);
+
+    const rows = [];
+    const push = (type, whenIso, title, projectId) => rows.push({ type, whenIso, title, projectId });
+    for (const p of projects) push('project_created', new Date(p.createdAt).toISOString(), p.name || '(untitled project)', p._id);
+    for (const t of tasksDone) push('task_done', new Date(t.statusChangedAt).toISOString(), t.title || '(untitled task)', t.projectId || '');
+    for (const n of notes) push('note_created', new Date(n.createdAt).toISOString(), n.title || '(note)', n.projectId || '');
+
+    // Fallback: if no key or no rows, return a simple markdown rendering
+    if (!apiKey || rows.length === 0) {
+      if (!apiKey) {
+        console.log('[reporting.aiSummarizeWindow] Fallback: missing OpenAI API key. Returning simple markdown.');
+      }
+      if (rows.length === 0) {
+        console.log('[reporting.aiSummarizeWindow] Fallback: no activity rows for window', windowKey);
+      }
+      const header = `# Activity report — ${windowKey}`;
+      if (rows.length === 0) {
+        return { markdown: `${header}\n\n_No activity in the selected window._` };
+      }
+      const byType = rows.reduce((acc, r) => { (acc[r.type] ||= []).push(r); return acc; }, {});
+      const render = (title, arr) => (arr && arr.length > 0)
+        ? [`## ${title}`, '', ...arr.map(r => `- [${r.whenIso}] ${r.title}`)].join('\n')
+        : '';
+      const sections = [
+        render('Projects created', byType.project_created),
+        render('Tasks completed', byType.task_done),
+        render('Notes added', byType.note_created)
+      ].filter(Boolean).join('\n\n');
+      return { markdown: `${header}\n\n${sections}` };
+    }
+
+    const defaultSystem = [
+      'You are an assistant that writes concise CTO activity reports for executive leadership.',
+      'Audience: CEO. Objective: inform leadership with a strategic, factual weekly-style update.',
+      'Style: high-level; include details only when they clarify a decision or risk.',
+      'You receive structured activity items (projects/tasks/notes) and FULL TEXT excerpts of notes.',
+      'Do not invent facts; rely only on provided content. Output clean Markdown only.'
+    ].join(' ');
+    const itemsBlock = rows.map(r => `- [${r.whenIso}] (${r.type}) ${r.title}${r.projectId ? ` {projectId:${r.projectId}}` : ''}`).join('\n');
+    const toOneLine = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+    const MAX_NOTE_CHARS = 800;
+    const notesBlock = (notes || [])
+      .filter(n => typeof n.content === 'string' && n.content.trim())
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map(n => {
+        const title = toOneLine(n.title || '');
+        const body = toOneLine(n.content).slice(0, MAX_NOTE_CHARS);
+        const iso = new Date(n.createdAt).toISOString();
+        return `### ${title || 'Note'} — ${iso}${n.projectId ? ` {projectId:${n.projectId}}` : ''}\n${body}`;
+      })
+      .join('\n\n');
+
+    const defaultUser = [
+      `Period: ${since.toISOString()} → ${until.toISOString()}`,
+      'Activities (chronological, newest first):',
+      itemsBlock,
+      '',
+      'Notes content (latest first; full text excerpts):',
+      notesBlock || '(none)',
+      '',
+      'Write a short report for the CEO. Organize by theme or project as appropriate. Use bullet points. Sections:',
+      '- Highlights (top 3–6 bullets; major advances, outcomes)',
+      '- Projects created',
+      '- Tasks completed',
+      '- Notes added (if meaningful insights emerged)',
+      '- Analysis, Risks, Meeting Topics',
+      '',
+      'Guidance for the last section:',
+      '- Analysis: what materially progressed or was achieved (reference tasks/notes when needed).',
+      '- Risks: concrete blockers, uncertainties, or deadlines at risk with brief rationale.',
+      '- Meeting Topics: 3–6 crisp bullets for the next leadership meeting (decisions needed, dependencies, follow-ups).',
+      '- Prioritize what matters; avoid generic statements. Prefer action-oriented wording.',
+      'Keep bullets compact. If a section is empty, omit it. Indicate provenance (task done, note) when helpful.'
+    ].join('\n');
+
+    const system = userPrompt && userPrompt.trim() ? userPrompt : defaultSystem;
+    const user = userPrompt && userPrompt.trim() ? `${itemsBlock}\n\n${notesBlock}` : defaultUser;
+
+    console.log('[reporting.aiSummarizeWindow] System prompt:', system);
+    console.log('[reporting.aiSummarizeWindow] User prompt:', user);
+    console.log('[reporting.aiSummarizeWindow] Rows count:', rows.length, 'Window:', windowKey, 'Period:', since.toISOString(), '→', until.toISOString());
+
+    const { default: fetch } = await import('node-fetch');
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'o4-mini',
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ]
+      })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Meteor.Error('openai-failed', errText);
+    }
+    const data = await resp.json();
+    const markdown = data.choices?.[0]?.message?.content || '';
+    return { markdown };
+  }
+});
+
+

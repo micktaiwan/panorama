@@ -1,0 +1,27 @@
+.card {
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1b1e26;
+  color: var(--text);
+  width: 100%;
+  max-width: 100%;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+}

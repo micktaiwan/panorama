@@ -1,0 +1,9 @@
+.filePill { display: inline-flex; align-items: center; gap: 4px; }
+.fileAnchor { color: var(--text); text-decoration: none; }
+.fileAnchor:hover { text-decoration: underline; }
+.fileBadge { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 2px; padding: 0 4px; line-height: 16px; height: 16px; }
+.fileActions { display: inline-flex; gap: 3px; margin-left: 3px; }
+.hoverHideActions .fileActions { display: none; }
+.hoverHideActions:hover .fileActions { display: inline-flex; }
+.fileIconAnchor { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; background: #10141b; color: var(--text); text-decoration: none; }
+.fileIconAnchor:hover { background: #141923; }

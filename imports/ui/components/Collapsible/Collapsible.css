@@ -1,0 +1,14 @@
+.collapsible {}
+
+.collapsibleHeader { appearance: none; border: none; background: transparent; color: var(--text); padding: 4px 0; display: flex; align-items: center; gap: 6px; width: 100%; }
+.collapsibleTitle { font-weight: 700; font-size: 1.1rem; }
+.collapsibleToggleBtn { margin-left: auto; font-size: 0.9rem; color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 8px; cursor: pointer; }
+.collapsibleToggleBtn:hover { color: var(--text); background: var(--panel); }
+
+.collapsibleHeader:focus { outline: 1px dashed var(--primary); outline-offset: 2px; }
+
+.collapsibleCaret { color: var(--muted); }
+
+.collapsiblePanel { margin-top: 6px; }
+
+

@@ -1,0 +1,67 @@
+.timeAgoHighlight {
+  color: #edcf6c;
+  padding: 0 4px;
+}
+
+.alarmsForm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.testBar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.testHint { color: var(--muted); font-size: 12px; }
+
+.alarmsTable { width: 100%; border-collapse: collapse; }
+.alarmsTable td, .alarmsTable th { padding: 10px 8px; }
+.alarmsTable tr:hover { background: rgba(255,255,255,0.03); }
+.colCenter { text-align: center; }
+.colRight { text-align: right; }
+.colNext { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.colTitle { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.colRecurrence { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.rowActions { display: inline-flex; gap: 8px; }
+.btnSecondary { background: transparent; border: 1px solid var(--border); }
+
+.badge { display: inline-block; padding: 2px 6px; border-radius: 999px; font-size: 12px; }
+.badgeSuccess { background: #1f4d1f; color: #b6f0b6; }
+.badgeMuted { background: #383838; color: #cfcfcf; }
+.textMuted { color: var(--muted); }
+
+.rowDone .colTitle,
+.rowDone .colNext,
+.rowDone .colRecurrence {
+  color: var(--muted);
+}
+.rowDone .timeAgoHighlight {
+  color: var(--muted);
+}
+
+.afInput {
+  height: 40px;
+  line-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.afTitle { flex: 1 1 auto; min-width: 100px; }
+.afDate { width: 160px; }
+.afTime { width: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.afSelect { width: 120px; line-height: normal; height: 40px; padding-right: 24px; cursor: pointer; }
+.afSelect::-ms-expand { display: none; }
+.afSelect:focus { outline: 2px solid var(--primary); }
+.afCreate { height: 40px; }
+
+.afInput:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 0;
+}
+
+.afInput::placeholder { color: rgba(255,255,255,0.6); }
+
+.afInput:disabled { opacity: 0.6; cursor: not-allowed; }

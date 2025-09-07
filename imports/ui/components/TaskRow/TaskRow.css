@@ -1,0 +1,57 @@
+.taskRowC { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); width: 100%; }
+.taskRowC.withProject { grid-template-columns: 160px 1fr auto; }
+.taskRowC.smallText { font-size: 12px; padding: 4px 0; gap: 8px; }
+.taskRowC.smallText .inlineEditable, .taskRowC.smallText .inlineEditableInput { font-size: 12px; }
+.taskRowC.withProject.smallText { grid-template-columns: 120px minmax(0, 1fr) max-content; }
+.taskRowC.inlineActions.withProject.smallText { grid-template-columns: 120px 1fr; }
+.taskRowC.inlineActions .taskRight { display: none; }
+.taskRowC:last-child { border-bottom: none; }
+.taskLeft { display: inline-flex; align-items: center; gap: 8px; }
+.taskMain { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.taskMain.noStatus { grid-template-columns: minmax(0, 1fr); }
+.taskRowC .taskMain.noStatus { grid-template-columns: minmax(0, 1fr); }
+.taskRowC.smallText .taskMain.noStatus { grid-template-columns: minmax(0, 1fr); }
+.taskMain.inline { display: grid; grid-template-columns: 140px 1fr; }
+.taskMain.inline.noStatus { grid-template-columns: 1fr; }
+.taskTitleArea { display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.taskRowC.smallText .taskTitleArea { gap: 6px; }
+.taskTitleArea .inlineEditable { display: block; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; width: 100%; min-width: 0; }
+.taskTitleArea .inlineEditable.inProgress, .taskRowTitle.inProgress { color: var(--success); }
+.taskTitleArea .inlineEditableInput { width: 100%; }
+.taskInlineActions { display: inline-flex; align-items: center; gap: 6px; }
+.taskInlineActions .eisenhowerToggle { padding: 0 8px; height: 22px; line-height: 20px; }
+.taskRowC.smallText .taskInlineActions .eisenhowerToggle { padding: 0 6px; height: 20px; line-height: 18px; font-size: 11px; }
+.taskRowC.smallText .taskMain { grid-template-columns: 120px 1fr; gap: 6px; }
+.taskStatusCol { display: inline-block; width: 140px; flex: 0 0 140px; }
+.taskRowC.smallText .taskStatusCol { width: 120px; }
+.taskRowTitle.inlineEditableInput { width: 100%; }
+.taskRight { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; justify-content: flex-end; }
+.taskRowC.smallText .taskRight { gap: 6px; }
+.taskRowC.smallText .taskRight { gap: 6px; }
+.taskMeta { font-size: 12px; }
+.taskMetaDefault { color: var(--muted); }
+/* Severity colors reused for titles */
+.taskRowC .dueSoon, .taskRowC .inlineEditable.dueSoon .inlineEditableContent { color: #f59e0b; }
+.taskRowC .dueNow, .taskRowC .inlineEditable.dueNow .inlineEditableContent { color: #ef4444; }
+.taskRowC .dueLater, .taskRowC .inlineEditable.dueLater .inlineEditableContent { color: #22c55e; }
+
+/* Increase specificity to win over InlineEditable base color on some pages */
+.taskRowC .taskTitleArea .inlineEditable.dueSoon { color: #f59e0b; }
+.taskRowC .taskTitleArea .inlineEditable.dueNow { color: #ef4444; }
+.taskRowC .taskTitleArea .inlineEditable.dueLater { color: #22c55e; }
+
+/* Ensure title text reflects severity even with InlineEditable default color */
+.taskRowC .inlineEditable.dueSoon .inlineEditableContent { color: #f59e0b; }
+.taskRowC .inlineEditable.dueNow .inlineEditableContent { color: #ef4444; }
+.taskRowC .inlineEditable.dueLater .inlineEditableContent { color: #22c55e; }
+/* Also color the wrapper to beat inherited colors */
+.taskRowC .inlineEditable.dueSoon { color: #f59e0b; }
+.taskRowC .inlineEditable.dueNow { color: #ef4444; }
+.taskRowC .inlineEditable.dueLater { color: #22c55e; }
+.taskCheck { width: 16px; height: 16px; margin: 0; accent-color: #22c55e; }
+.taskProjectLink { color: var(--muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; max-width: 160px; }
+.taskRowC.smallText .taskProjectLink { max-width: 120px; }
+.taskProjectLink:hover { text-decoration: underline; }
+.projFlag { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
+
+/* Eisenhower toggles use global styles from client/main.css */

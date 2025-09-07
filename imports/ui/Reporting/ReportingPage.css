@@ -1,0 +1,14 @@
+.reportingPage { }
+.reportingToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.reportingContent { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--panel); }
+.reportingSection + .reportingSection { margin-top: 16px; }
+.reportingList { list-style: none; padding: 0; margin: 0; }
+.reportingList li { display: grid; grid-template-columns: 220px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.reportingList li:last-child { border-bottom: none; }
+.reportingList .when { color: var(--muted); }
+.reportingList .title { }
+.reportingActions { margin-top: 12px; }
+
+.aiSummaryActions { display: flex; justify-content: flex-end; margin: 8px 0; }
+.aiSummary { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--panel); white-space: pre-wrap; max-height: 360px; margin-top: 12px; }
+

@@ -1,0 +1,6 @@
+.helpList {
+  margin: 8px 0 16px;
+}
+.helpList li { margin: 6px 0; }
+.muted { color: var(--muted); }
+
