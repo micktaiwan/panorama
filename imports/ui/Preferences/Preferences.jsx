@@ -3,6 +3,7 @@ import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
+import './Preferences.css';
 
 export const Preferences = () => {
   const sub = useSubscribe('appPreferences');
@@ -15,33 +16,84 @@ export const Preferences = () => {
   React.useEffect(() => { if (pref) { setFilesDir(pref.filesDir || ''); setDevUrlMode(!!pref.devUrlMode); setOpenaiApiKey(pref.openaiApiKey || ''); setPennyBaseUrl(pref.pennylaneBaseUrl || ''); setPennyToken(pref.pennylaneToken || ''); } }, [pref && pref._id]);
   if (sub()) return <div>Loading…</div>;
   return (
-    <div>
+    <div className="prefs">
       <h2>Preferences</h2>
-      <div className="formRow">
-        <label>Files directory</label>
-        <InlineEditable value={filesDir} placeholder="/path/to/filesDir" onSubmit={(next) => setFilesDir(next)} fullWidth />
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Files directory</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={filesDir}
+              placeholder="/path/to/filesDir"
+              fullWidth
+              onSubmit={(next) => {
+                setFilesDir(next);
+                Meteor.call('appPreferences.update', { filesDir: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Use Dev URL instead of bundled server</div>
+          <div className="prefsValue">
+            <InlineEditable
+              as="select"
+              value={devUrlMode ? 'yes' : 'no'}
+              options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]}
+              onSubmit={(next) => {
+                const v = next === 'yes';
+                setDevUrlMode(v);
+                Meteor.call('appPreferences.update', { devUrlMode: v }, () => {});
+              }}
+            />
+          </div>
+        </div>
       </div>
-      <div className="formRow">
-        <label>Use Dev URL instead of bundled server</label>
-        <InlineEditable as="select" value={devUrlMode ? 'yes' : 'no'} options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]} onSubmit={(next) => setDevUrlMode(next === 'yes')} />
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <button className="btn btn-primary" onClick={() => {
-          Meteor.call('appPreferences.update', { filesDir, devUrlMode, openaiApiKey, pennylaneBaseUrl: pennyBaseUrl, pennylaneToken: pennyToken }, () => {});
-        }}>Save</button>
-      </div>
-      <h3 style={{ marginTop: 24 }}>Secrets</h3>
-      <div className="formRow">
-        <label>OpenAI API Key</label>
-        <InlineEditable value={openaiApiKey} placeholder="sk-..." onSubmit={(next) => setOpenaiApiKey(next)} fullWidth />
-      </div>
-      <div className="formRow">
-        <label>Pennylane Base URL</label>
-        <InlineEditable value={pennyBaseUrl} placeholder="https://app.pennylane.com/api/external/v2/" onSubmit={(next) => setPennyBaseUrl(next)} fullWidth />
-      </div>
-      <div className="formRow">
-        <label>Pennylane Token</label>
-        <InlineEditable value={pennyToken} placeholder="token..." onSubmit={(next) => setPennyToken(next)} fullWidth />
+
+      <h3>Secrets</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">OpenAI API Key</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={openaiApiKey}
+              placeholder="(not set)"
+              fullWidth
+              onSubmit={(next) => {
+                setOpenaiApiKey(next);
+                Meteor.call('appPreferences.update', { openaiApiKey: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Pennylane Base URL</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={pennyBaseUrl}
+              placeholder="(not set)"
+              fullWidth
+              onSubmit={(next) => {
+                setPennyBaseUrl(next);
+                Meteor.call('appPreferences.update', { pennylaneBaseUrl: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Pennylane Token</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={pennyToken}
+              placeholder="(not set)"
+              fullWidth
+              onSubmit={(next) => {
+                setPennyToken(next);
+                Meteor.call('appPreferences.update', { pennylaneToken: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
