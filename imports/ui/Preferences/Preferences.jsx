@@ -24,7 +24,7 @@ export const Preferences = () => {
   if (sub()) return <div>Loading…</div>;
   return (
     <div className="prefs">
-      <h2>Preferences <a href="#/onboarding" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'onboarding' }); }} className="ml8">(Open onboarding)</a></h2>
+      <h2>Preferences</h2>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Files directory</div>
@@ -162,8 +162,11 @@ export const Preferences = () => {
       >
         <p>This will drop and recreate the collection, then reindex all documents.</p>
       </Modal>
+      <div className="prefsFooter">
+        <a href="#/onboarding" className="btn-link" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'onboarding' }); }}>Open Onboarding</a>
+      </div>
     </div>
   );
-};
+}
 
 
