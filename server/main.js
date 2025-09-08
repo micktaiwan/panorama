@@ -57,6 +57,9 @@ import '/imports/api/situationQuestions/methods';
 import '/imports/api/situationSummaries/collections';
 import '/imports/api/situationSummaries/publications';
 import '/imports/api/situationSummaries/methods';
+import '/imports/api/errors/collections';
+import '/imports/api/errors/publications';
+import '/imports/api/errors/methods';
 
 Meteor.startup(() => {
   // Place server-side initialization here as your app grows.

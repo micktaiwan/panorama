@@ -1,5 +1,6 @@
 import { Meteor } from 'meteor/meteor';
 import { getOpenAiApiKey, getQdrantUrl } from '/imports/api/_shared/config';
+import { ErrorsCollection } from '/imports/api/errors/collections';
 import crypto from 'crypto';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
@@ -60,24 +61,55 @@ export const embedText = async (text) => {
   });
   if (!res.ok) {
     const txt = await res.text();
-    throw new Meteor.Error('openai-failed', txt);
+    const err = new Meteor.Error('openai-failed', txt);
+    try {
+      await ErrorsCollection.insertAsync({
+        kind: 'vectorization',
+        message: 'OpenAI embeddings HTTP error',
+        context: { status: res.status, statusText: res.statusText, payloadModel: payload.model },
+        createdAt: new Date(),
+      });
+    } catch (e) { console.error('[errors][log] failed to record openai-failed', e); }
+    throw err;
   }
   const data = await res.json();
   const vec = data?.data?.[0]?.embedding;
   if (!Array.isArray(vec) || vec.length !== VECTOR_SIZE()) {
-    throw new Meteor.Error('openai-invalid', `Invalid embedding vector length ${Array.isArray(vec) ? vec.length : typeof vec}`);
+    const err = new Meteor.Error('openai-invalid', `Invalid embedding vector length ${Array.isArray(vec) ? vec.length : typeof vec}`);
+    try {
+      await ErrorsCollection.insertAsync({
+        kind: 'vectorization',
+        message: 'Invalid embedding vector length',
+        context: { length: Array.isArray(vec) ? vec.length : null },
+        createdAt: new Date(),
+      });
+    } catch (e) { console.error('[errors][log] failed to record openai-invalid', e); }
+    throw err;
   }
   return vec;
 };
 
 export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = null, extraPayload = {} }) => {
   const client = await getQdrantClient();
-  const vector = await embedText(text);
-  const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), ...extraPayload };
-  if (projectId) payload.projectId = projectId;
-  if (sessionId) payload.sessionId = sessionId;
-  const pointId = toPointId(kind, id);
-  await client.upsert(COLLECTION(), { points: [{ id: pointId, vector: Array.from(vector), payload }] });
+  try {
+    const vector = await embedText(text);
+    const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), ...extraPayload };
+    if (projectId) payload.projectId = projectId;
+    if (sessionId) payload.sessionId = sessionId;
+    const pointId = toPointId(kind, id);
+    await client.upsert(COLLECTION(), { points: [{ id: pointId, vector: Array.from(vector), payload }] });
+  } catch (e) {
+    // Log and swallow to prevent data loss on primary writes
+    try {
+      await ErrorsCollection.insertAsync({
+        kind: 'vectorization',
+        message: e?.message || String(e),
+        context: { kind, id, hasProjectId: !!projectId, hasSessionId: !!sessionId },
+        createdAt: new Date(),
+      });
+    } catch (_e) { console.error('[errors][log] failed to record vectorization error', _e); }
+    throw e;
+  }
 };
 
 export const deleteDoc = async (kind, id) => {
