@@ -136,6 +136,7 @@ Meteor.methods({
         projectId: raw.projectId ? String(raw.projectId) : undefined,
         invoiceId: raw.invoiceId ? String(raw.invoiceId) : undefined,
         invoiceNumber: raw.invoiceNumber ? String(raw.invoiceNumber) : undefined,
+        publicFileUrl: raw.publicFileUrl ? String(raw.publicFileUrl) : (raw.public_file_url ? String(raw.public_file_url) : undefined),
         analyticsCategory: raw.analyticsCategory ? String(raw.analyticsCategory) : undefined,
         analyticsWeight: Number.isFinite(Number(raw.analyticsWeight)) ? Number(raw.analyticsWeight) : undefined,
         sourceRef: raw.sourceRef ? String(raw.sourceRef) : undefined,

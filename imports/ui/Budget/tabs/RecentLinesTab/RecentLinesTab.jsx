@@ -6,6 +6,9 @@ import { fmtDisplay, fmtCopyNoCents, fmtDisplayNoCents } from '/imports/ui/Budge
 //
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 import { Meteor } from 'meteor/meteor';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+
+const isPdfPublicUrl = (url) => String(url || '').toLowerCase().includes('/public/invoice/pdf');
 
 export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter, onDeptChange, teamFilter, onTeamChange, setToast }) => {
   const totalDisplayed = rows.reduce((acc, r) => acc + (Number(r.amountCents || 0)), 0);
@@ -70,7 +73,29 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
                 {rows.slice(0, 200).map((r) => (
                   <tr key={`${r._id}`}>
                     <td>{r.date}</td>
-                    <td>{r.vendor || ''}</td>
+                    <td>
+                      {r.publicFileUrl ? (
+                        <Tooltip
+                          placement="right"
+                          size="large"
+                          content={(
+                            <span style={{ display: 'block', maxWidth: 760 }}>
+                              {isPdfPublicUrl(r.publicFileUrl) ? (
+                                <object data={r.publicFileUrl} type="application/pdf" width="720" height="960">
+                                  <a href={r.publicFileUrl} target="_blank" rel="noreferrer">Open document</a>
+                                </object>
+                              ) : (
+                                <img src={r.publicFileUrl} alt="preview" style={{ maxWidth: '720px', maxHeight: '960px' }} />
+                              )}
+                            </span>
+                          )}
+                        >
+                          <span>{r.vendor || '—'}</span>
+                        </Tooltip>
+                      ) : (
+                        r.vendor || '—'
+                      )}
+                    </td>
                     <td>{r.category || r.autoCategory || ''}</td>
                     <td>{r.department || 'tech'}</td>
                     <td>{fmtDisplay(r.amountCents)}</td>

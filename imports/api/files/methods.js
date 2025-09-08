@@ -13,8 +13,8 @@ import { AppPreferencesCollection } from '/imports/api/appPreferences/collection
 // 2. Environment variable PANORAMA_FILES_DIR
 // 3. Meteor settings filesDir
 // 4. Default directory in the user's home directory named 'PanoramaFiles'
-const getStorageDir = () => {
-  const pref = AppPreferencesCollection.findOne({});
+const getStorageDir = async () => {
+  const pref = await AppPreferencesCollection.findOneAsync({});
   const fromPrefs = pref && typeof pref.filesDir === 'string' && pref.filesDir.trim() ? pref.filesDir.trim() : null;
   const base = fromPrefs || process.env.PANORAMA_FILES_DIR || (Meteor.settings?.filesDir) || path.join(os.homedir(), 'PanoramaFiles');
   if (!fs.existsSync(base)) {
@@ -34,7 +34,7 @@ Meteor.methods({
     check(mimeType, Match.Maybe(String));
     const cleanName = sanitizeName(name);
     if (!cleanName) throw new Meteor.Error('invalid-name', 'File name is required');
-    const storageDir = getStorageDir();
+    const storageDir = await getStorageDir();
     const uniqueId = Random.id();
     const safeOriginal = String(originalName || '').replace(/[^a-zA-Z0-9._-]+/g, '_');
     const storedFileName = `${cleanName}__${uniqueId}__${safeOriginal}`;
@@ -71,7 +71,8 @@ Meteor.methods({
     const f = await FilesCollection.findOneAsync({ _id: fileId });
     if (f && f.storedFileName) {
       try {
-        const p = path.join(getStorageDir(), f.storedFileName);
+        const storageDir = await getStorageDir();
+        const p = path.join(storageDir, f.storedFileName);
         if (fs.existsSync(p)) await fs.promises.unlink(p);
       } catch (e) {
         console.error('files.remove unlink failed', e);
