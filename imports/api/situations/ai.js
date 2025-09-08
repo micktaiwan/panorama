@@ -103,12 +103,14 @@ Meteor.methods({
       if (!personId && !name) continue;
       let resolvedPersonId = personId;
       let displayName = name;
+      let companyRole = '';
       if (!resolvedPersonId) {
         const np = normalize(name);
         const existingP = await PeopleCollection.findOneAsync({ normalizedName: np });
         if (existingP) {
           resolvedPersonId = existingP._id;
           displayName = [existingP.name || '', existingP.lastName || ''].filter(Boolean).join(' ').trim() || (existingP.name || '');
+          companyRole = existingP.role || '';
         } else {
           // create People
           const pId = await PeopleCollection.insertAsync({ name, normalizedName: np, aliases: [], role: '', email: '', notes: '', createdAt: now, updatedAt: now });
@@ -117,11 +119,23 @@ Meteor.methods({
         }
       } else {
         const p = await PeopleCollection.findOneAsync({ _id: resolvedPersonId });
-        if (p) displayName = [p.name || '', p.lastName || ''].filter(Boolean).join(' ').trim() || (p.name || '');
+        if (p) {
+          displayName = [p.name || '', p.lastName || ''].filter(Boolean).join(' ').trim() || (p.name || '');
+          companyRole = p.role || '';
+        }
       }
       const existingByPid = await SituationActorsCollection.findOneAsync({ situationId, personId: resolvedPersonId });
-      if (existingByPid) await SituationActorsCollection.updateAsync({ _id: existingByPid._id }, { $set: { name: displayName, situationRole, updatedAt: now } });
-      else await SituationActorsCollection.insertAsync({ situationId, personId: resolvedPersonId, name: displayName, situationRole, createdAt: now, updatedAt: now });
+      if (existingByPid) {
+        const setObj = { updatedAt: now };
+        // Always refresh company role snapshot; do not overwrite name or existing situationRole
+        setObj.role = companyRole;
+        if (!existingByPid.situationRole) {
+          setObj.situationRole = situationRole;
+        }
+        await SituationActorsCollection.updateAsync({ _id: existingByPid._id }, { $set: setObj });
+      } else {
+        await SituationActorsCollection.insertAsync({ situationId, personId: resolvedPersonId, name: displayName, role: companyRole, situationRole, createdAt: now, updatedAt: now });
+      }
     }
     return true;
   },
