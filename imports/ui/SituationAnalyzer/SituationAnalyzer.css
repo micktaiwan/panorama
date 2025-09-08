@@ -1,4 +1,3 @@
-.situationAnalyzer { }
 .situationAnalyzer .headerRow { display: flex; align-items: center; gap: 8px; }
 .situationAnalyzer .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
 .situationAnalyzer .col { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
@@ -24,7 +23,9 @@
 .situationAnalyzer .row:last-child { border-bottom: none; }
 .situationAnalyzer .dot { color: var(--muted); }
 .situationAnalyzer .card { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; margin-bottom: 8px; background: var(--panel); }
-.situationAnalyzer .cardHeader { font-weight: 600; margin-bottom: 6px; }
+.situationAnalyzer .cardHeader { font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
+.situationAnalyzer .copyQuestionsBtn { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; }
+.situationAnalyzer .copyQuestionsBtn:hover { color: var(--text); }
 .situationAnalyzer .situationSelect { margin-left: auto; }
 .situationAnalyzer .descBox { max-height: 500px; overflow: auto; }
 .situationAnalyzer .descTextarea { height: 100%; min-height: 140px; }
