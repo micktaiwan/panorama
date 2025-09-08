@@ -30,10 +30,9 @@ export const Collapsible = ({
   return (
     <div className={`collapsible ${open ? 'open' : 'closed'}${className ? ` ${className}` : ''}`}>
       <div className="collapsibleHeader" aria-expanded={open ? 'true' : 'false'} aria-controls={`collapsible-panel-${id}`}>
-        {title ? <span className="collapsibleTitle">{title}</span> : null}
         <button
           type="button"
-          className="collapsibleToggleBtn"
+          className="collapsibleToggleBtn left"
           onClick={toggle}
           aria-label={open ? 'Collapse' : 'Expand'}
           aria-controls={`collapsible-panel-${id}`}
@@ -41,6 +40,7 @@ export const Collapsible = ({
         >
           {open ? toggleTextOpen : toggleTextClosed}
         </button>
+        {title ? <span className="collapsibleTitle">{title}</span> : null}
       </div>
       <div id={`collapsible-panel-${id}`} className="collapsiblePanel" hidden={!open}>
         {children}
