@@ -6,7 +6,7 @@ import os from 'os';
 import { WebApp } from 'meteor/webapp';
 import { Random } from 'meteor/random';
 import { FilesCollection } from './collections';
-import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import { AppPreferencesCollection } from '../appPreferences/collections';
 
 // The order of preference for determining the storage directory is:
 // 1. User-defined directory from AppPreferencesCollection
@@ -15,7 +15,7 @@ import { AppPreferencesCollection } from '/imports/api/appPreferences/collection
 // 4. Default directory in the user's home directory named 'PanoramaFiles'
 const getStorageDir = async () => {
   const pref = await AppPreferencesCollection.findOneAsync({});
-  const fromPrefs = pref && typeof pref.filesDir === 'string' && pref.filesDir.trim() ? pref.filesDir.trim() : null;
+  const fromPrefs = pref?.filesDir && typeof pref.filesDir === 'string' && pref.filesDir.trim() ? pref.filesDir.trim() : null;
   const base = fromPrefs || process.env.PANORAMA_FILES_DIR || (Meteor.settings?.filesDir) || path.join(os.homedir(), 'PanoramaFiles');
   if (!fs.existsSync(base)) {
     fs.mkdirSync(base, { recursive: true });
@@ -69,7 +69,7 @@ Meteor.methods({
   async 'files.remove'(fileId) {
     check(fileId, String);
     const f = await FilesCollection.findOneAsync({ _id: fileId });
-    if (f && f.storedFileName) {
+    if (f?.storedFileName) {
       try {
         const storageDir = await getStorageDir();
         const p = path.join(storageDir, f.storedFileName);
@@ -89,11 +89,11 @@ Meteor.methods({
 });
 
 // HTTP route to serve stored files
-WebApp.connectHandlers.use((req, res, next) => {
+WebApp.connectHandlers.use(async (req, res, next) => {
   if (!req.url.startsWith('/files/')) return next();
   const name = decodeURIComponent(req.url.replace('/files/', '').split('?')[0]);
   if (!name) { res.statusCode = 400; res.end('Bad request'); return; }
-  const storageDir = getStorageDir();
+  const storageDir = await getStorageDir();
   const p = path.join(storageDir, name);
   if (!fs.existsSync(p)) { res.statusCode = 404; res.end('Not found'); return; }
   try {
