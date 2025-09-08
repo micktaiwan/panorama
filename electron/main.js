@@ -1,4 +1,4 @@
-const { app, BrowserWindow, nativeImage, Menu, screen } = require('electron');
+const { app, BrowserWindow, nativeImage, Menu, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -28,7 +28,7 @@ function saveWindowState(win) {
       bounds,
       isMaximized: win.isMaximized(),
       isFullScreen: win.isFullScreen(),
-      displayId: display ? display.id : undefined
+      displayId: display?.id
     };
     fs.writeFileSync(getWindowStateFilePath(), JSON.stringify(state, null, 2), 'utf-8');
   } catch (error) {
@@ -56,7 +56,7 @@ function clampBoundsToWorkArea(bounds, workArea) {
 }
 
 function validateBounds(savedState) {
-  if (!savedState || !savedState.bounds) return null;
+  if (!savedState?.bounds) return null;
   const savedBounds = savedState.bounds;
   const displays = screen.getAllDisplays();
   const targetDisplay =
@@ -70,6 +70,45 @@ function validateBounds(savedState) {
 
   // Otherwise, clamp the saved bounds to the target display's work area
   return clampBoundsToWorkArea(savedBounds, targetDisplay.workArea);
+}
+
+function showLoadingWindow(parent) {
+  const loading = new BrowserWindow({
+    width: 360,
+    height: 140,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    parent,
+    modal: true,
+    show: true,
+    title: 'Loading...',
+    webPreferences: { sandbox: true }
+  });
+  const html = `<!doctype html><html><head><meta charset="utf-8" />
+  <title>Loading</title>
+  <style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#fff;color:#333} .spinner{width:22px;height:22px;border:3px solid #eee;border-top-color:#999;border-radius:50%;animation:spin 1s linear infinite;margin-right:10px}@keyframes spin{to{transform:rotate(360deg)}}</style></head>
+  <body><div class="spinner"></div><div>Loading...</div></body></html>`;
+  loading.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  return loading;
+}
+
+function handleFileDownloadAndOpen(win, url) {
+  const loading = showLoadingWindow(win);
+  const ses = win.webContents.session;
+  const closeLoading = () => { if (!loading.isDestroyed()) loading.close(); };
+  ses.once('will-download', (event, item) => {
+    const filename = item.getFilename();
+    const savePath = path.join(app.getPath('downloads'), filename);
+    item.setSavePath(savePath);
+    item.once('done', (_evt, state) => {
+      closeLoading();
+      if (state === 'completed') {
+        shell.openPath(savePath);
+      }
+    });
+  });
+  win.webContents.downloadURL(url);
 }
 
 function createWindow(savedState) {
@@ -103,6 +142,16 @@ function createWindow(savedState) {
 
   const win = new BrowserWindow(windowOptions);
   win.loadURL('http://localhost:3000');
+
+  // Intercept popups/new windows to handle app file links gracefully
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    const isAppFile = /\/files\//.test(url);
+    if (isAppFile) {
+      handleFileDownloadAndOpen(win, url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
 
   if (savedState) {
     if (savedState.isFullScreen) {
@@ -167,6 +216,31 @@ app.whenReady().then(() => {
     {
       label: 'View',
       submenu: [
+        {
+          label: 'Back',
+          accelerator: 'CmdOrCtrl+Left',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow();
+            const wc = win?.webContents;
+            const nh = wc?.navigationHistory;
+            if (nh?.canGoBack()) {
+              nh.goBack();
+            }
+          }
+        },
+        {
+          label: 'Forward',
+          accelerator: 'CmdOrCtrl+Right',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow();
+            const wc = win?.webContents;
+            const nh = wc?.navigationHistory;
+            if (nh?.canGoForward()) {
+              nh.goForward();
+            }
+          }
+        },
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
