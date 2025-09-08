@@ -11,6 +11,8 @@ import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
 import { PeopleCollection } from '/imports/api/people/collections';
+import { writeClipboard } from '/imports/ui/utils/clipboard.js';
+import { setNotifyHandler } from '/imports/ui/utils/notify.js';
 
 export const SituationAnalyzer = () => {
   const [selectedSituationId, setSelectedSituationId] = useState(() => {
@@ -56,6 +58,11 @@ export const SituationAnalyzer = () => {
   const [selectedPersonId, setSelectedPersonId] = useState('');
 
   const current = situations.find(s => s._id === currentId) || null;
+
+  useEffect(() => {
+    setNotifyHandler((t) => setToast(t));
+    return () => setNotifyHandler(null);
+  }, []);
 
   const addSituation = () => {
     Meteor.call('situations.insert', { title: 'New Situation' }, (err, res) => {
@@ -279,7 +286,25 @@ export const SituationAnalyzer = () => {
               const actor = actors.find(a => a._id === q.actorId);
               return (
                 <div key={q._id} className="card">
-                  <div className="cardHeader">{actor ? actor.name : '(unknown actor)'}</div>
+                  <div className="cardHeader">
+                    <span>{actor ? actor.name : '(unknown actor)'}</span>
+                    <button
+                      className="copyQuestionsBtn"
+                      aria-label="Copy questions"
+                      title="Copy questions"
+                      onClick={() => {
+                        const lines = (Array.isArray(q.questions) ? q.questions : [])
+                          .map(item => (typeof item === 'string' ? item : (item && item.q) || ''))
+                          .map(s => String(s || '').trim())
+                          .filter(Boolean)
+                          .map(s => `- ${s}`)
+                          .join('\n');
+                        if (lines) writeClipboard(lines);
+                      }}
+                    >
+                      📋
+                    </button>
+                  </div>
                   <div className="questionsLines">
                     {(q.questions || []).map((item, idx) => (
                       <div key={idx} className="questionItem">
