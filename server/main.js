@@ -60,6 +60,7 @@ import '/imports/api/situationSummaries/methods';
 import '/imports/api/errors/collections';
 import '/imports/api/errors/publications';
 import '/imports/api/errors/methods';
+import '/imports/api/chat/methods';
 
 Meteor.startup(() => {
   // Place server-side initialization here as your app grows.
