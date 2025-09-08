@@ -33,6 +33,7 @@ import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 
 function App() {
   const [route, setRoute] = useState(parseHashRoute());
@@ -559,6 +560,7 @@ function App() {
           <a href="#/width" onClick={(e) => { e.preventDefault(); setWide(v => !v); }}>{wide ? 'Width: 90%' : 'Width: 1100px'}</a>
         </span>
       </footer>
+      <ChatWidget />
     </div>
   );
 }
