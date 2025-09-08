@@ -11,3 +11,6 @@ Provide a global AI chat interface that can be used to ask questions about the w
 - AI: use OpenAI Chat Completions API (`model: o4-mini`).
 - use Qdrant for vector search.
 - Follow the same client pattern for OpenAI usage as other features
+- the agent should be able to perform actions (create projects, tasks, notes, etc.)
+  - implement function calling with OpenAI.
+  - the agent should always confirm actions with the user
