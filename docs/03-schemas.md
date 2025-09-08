@@ -9,7 +9,7 @@ It is a high‑level reference; see code for full details and validation.
   - `_id`, `name`, `description`, `status`, `targetDate`, `progressPercent`,
     `riskLevel`, `createdAt`, `updatedAt`.
 - Tasks (`tasks`)
-  - `_id`, `projectId`, `title`, `status`, `dueDate`, `estimate`, `actual`,
+  - `_id`, `projectId`, `title`, `status`, `deadline`, `estimate`, `actual`,
     `progressPercent`, `statusChangedAt`, `updatedAt`.
 - Notes (`notes`)
   - `_id`, `projectId`, `title`, `content`, `createdAt`.

@@ -12,6 +12,8 @@ export const Help = () => {
         <li><strong>Click on deadline</strong> — edit with datepicker; <strong>Esc</strong> cancels; <strong>Enter</strong> validates</li>
         <li><strong>Alarm modal</strong> — <strong>1</strong> snooze +5m, <strong>2</strong> +10m, <strong>3</strong> +15m, <strong>Esc</strong> dismiss</li>
         <li><strong>Global search</strong> — <strong>⌘K</strong> (macOS) / <strong>Ctrl+K</strong> (Windows/Linux) opens the search anywhere</li>
+        <li><strong>AI Chat</strong> — <strong>⌘D</strong> toggle open/close, <strong>⌘⇧D</strong> toggle docked sidebar</li>
+        <li><strong>Help bubble</strong> — <strong>⌘H</strong> toggle help bubble (bottom-left)</li>
         <li><strong>Back navigation</strong> — <strong>⌘ + ←</strong> (macOS) / <strong>Ctrl + ←</strong> (Windows/Linux) goes back to previous page</li>
         <li><strong>Forward navigation</strong> — <strong>⌘ + →</strong> (macOS) / <strong>Ctrl + →</strong> (Windows/Linux) goes forward to next page</li>
       </ul>

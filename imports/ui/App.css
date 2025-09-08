@@ -89,3 +89,14 @@
 .btnJson:hover { background: #235624; }
 .btnArchive { background: #1b2550; border: 1px solid #2a3a7a; color: #cfe1ff; }
 .btnArchive:hover { background: #223066; }
+
+/* Reserve space for docked chat (right sidebar) */
+body.withDockedChat .container {
+  padding-right: 380px; /* fallback for small screens */
+}
+
+@media (min-width: 1200px) {
+  body.withDockedChat .container {
+    padding-right: 560px; /* matches ChatWidget docked width cap */
+  }
+}
