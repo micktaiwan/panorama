@@ -25,6 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
+import { setNotifyHandler } from '/imports/ui/utils/notify.js';
 import { formatDateTime, timeUntilPrecise } from '/imports/ui/utils/date.js';
 import { SearchBar } from '/imports/ui/components/Search/SearchBar.jsx';
 import { SearchResults } from '/imports/ui/components/Search/SearchResults.jsx';
@@ -40,6 +41,11 @@ function App() {
   const alarms = useTracker(() => AlarmsCollection.find({}, { sort: { nextTriggerAt: 1 } }).fetch(), [ready]);
   const [activeAlarmId, setActiveAlarmId] = useState(null);
   const [toast, setToast] = useState(null);
+  // Wire global notify to page-level toast
+  useEffect(() => {
+    setNotifyHandler((t) => setToast(t));
+    return () => setNotifyHandler(null);
+  }, []);
   const [exportOpen, setExportOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState(() => {
