@@ -9,7 +9,7 @@
   padding: 10px 12px;
   display: inline-flex;
   align-items: center;
-  z-index: 1100;
+  z-index: 10050; /* above ChatWidget (9999) */
 }
 
 .notify.info { border-color: var(--primary); }
@@ -17,4 +17,9 @@
 .notify.success { border-color: #10b981; }
 
 .ml8 { margin-left: 8px; }
+
+/* When the chat is docked, move the toast to the left of the sidebar */
+body.withDockedChat .notify {
+  right: calc(min(38vw, 560px) + 16px);
+}
 

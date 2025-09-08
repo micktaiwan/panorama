@@ -103,6 +103,15 @@
   border: 1px solid #ff7070;
 }
 
+.ChatWidget__message--status .ChatWidget__bubble {
+  background: transparent;
+  border: 1px dashed #334155;
+}
+.ChatWidget__message--status .ChatWidget__content {
+  color: #9aa3b2;
+  font-style: italic;
+}
+
 .ChatWidget__bubble {
   max-width: 80%;
   padding: 8px 10px;
@@ -128,12 +137,31 @@
   gap: 8px;
 }
 
+.ChatWidget__sourcesBlock { margin-top: 6px; }
+.ChatWidget__toggleCitations {
+  background: transparent;
+  border: none;
+  color: #93c5fd;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.ChatWidget__toggleCitations:hover { text-decoration: underline; }
+
 .ChatWidget__citation {
   font-size: 12px;
   color: #93c5fd;
   text-decoration: none;
+  background: transparent;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 2px 6px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
-.ChatWidget__citation:hover { text-decoration: underline; }
+.ChatWidget__citation:hover { text-decoration: underline; border-color: #0b5fff; }
+.ChatWidget__citation:focus-visible { outline: 2px solid #0b5fff; outline-offset: 2px; }
 
 .ChatWidget__composer {
   display: flex;

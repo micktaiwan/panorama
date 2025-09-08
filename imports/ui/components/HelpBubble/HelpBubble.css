@@ -1,0 +1,50 @@
+.HelpBubble__root {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 9998;
+}
+
+.HelpBubble__fab {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  border: none;
+  background: #475569;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.HelpBubble__panel {
+  position: absolute;
+  left: 0;
+  bottom: 56px;
+  width: min(92vw, 600px);
+  max-height: min(75vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+.HelpBubble__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #0b1220;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.HelpBubble__title { font-weight: 600; }
+.HelpBubble__close { background: transparent; border: none; color: #cbd5e1; font-size: 20px; cursor: pointer; }
+
+.HelpBubble__content { padding: 12px; overflow-y: auto; }
+
+

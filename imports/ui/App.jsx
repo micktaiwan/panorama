@@ -34,6 +34,7 @@ import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
+import HelpBubble from '/imports/ui/components/HelpBubble/HelpBubble.jsx';
 
 function App() {
   const [route, setRoute] = useState(parseHashRoute());
@@ -561,6 +562,7 @@ function App() {
         </span>
       </footer>
       <ChatWidget />
+      <HelpBubble />
     </div>
   );
 }
