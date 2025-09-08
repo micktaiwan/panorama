@@ -94,6 +94,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession }) => {
   const files = useFind(() => FilesCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const [noteToDeleteId, setNoteToDeleteId] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [cleaningNoteIds, setCleaningNoteIds] = useState({});
+  const [undoAvailable, setUndoAvailable] = useState({});
 
   const progress = useMemo(() => {
     if (!tasks || tasks.length === 0) return 0;
@@ -353,6 +355,51 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession }) => {
                   <div className="noteBlockHeader">
                     <div className="noteMeta">Created {timeAgo(n.createdAt)} · {new Date(n.createdAt).toLocaleString()}</div>
                     <div className="noteActions" title="Actions">
+                      <Tooltip content="Clean note (AI)">
+                        <button
+                          className="btn"
+                          disabled={!!cleaningNoteIds[n._id]}
+                          onClick={() => {
+                            const key = `note:original:${n._id}`;
+                            const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
+                            const hadBackup = !!has;
+                            if (!hadBackup && typeof window !== 'undefined') {
+                              sessionStorage.setItem(key, n.content || '');
+                            }
+                            setCleaningNoteIds(prev => ({ ...prev, [n._id]: true }));
+                            Meteor.call('ai.cleanNote', n._id, (err) => {
+                              setCleaningNoteIds(prev => ({ ...prev, [n._id]: false }));
+                              if (err) {
+                                console.error('ai.cleanNote failed', err);
+                                if (!hadBackup && typeof window !== 'undefined') {
+                                  sessionStorage.removeItem(key);
+                                }
+                                setUndoAvailable(prev => ({ ...prev, [n._id]: false }));
+                                return;
+                              }
+                              setUndoAvailable(prev => ({ ...prev, [n._id]: true }));
+                            });
+                          }}
+                        >{cleaningNoteIds[n._id] ? 'Cleaning…' : 'Clean'}</button>
+                      </Tooltip>
+                      <Tooltip content="Undo last clean">
+                        <button
+                          className="btn ml8"
+                          disabled={!undoAvailable[n._id]}
+                          onClick={() => {
+                            const key = `note:original:${n._id}`;
+                            const original = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
+                            if (!original) {
+                              setUndoAvailable(prev => ({ ...prev, [n._id]: false }));
+                              return;
+                            }
+                            Meteor.call('notes.update', n._id, { content: original }, () => {
+                              if (typeof window !== 'undefined') sessionStorage.removeItem(key);
+                              setUndoAvailable(prev => ({ ...prev, [n._id]: false }));
+                            });
+                          }}
+                        >Undo</button>
+                      </Tooltip>
                       <Tooltip content="Delete note">
                         <button className="iconButton" onClick={() => setNoteToDeleteId(n._id)}>🗑</button>
                       </Tooltip>

@@ -540,6 +540,72 @@ Meteor.methods({
       coachPrompt: prompt
     } });
     return { coachQuestions, ideasCount: ideas.length, answersCount: answers.length };
+  },
+  async 'ai.cleanNote'(noteId) {
+    check(noteId, String);
+
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const note = await NotesCollection.findOneAsync({ _id: noteId });
+    if (!note) throw new Meteor.Error('not-found', 'Note not found');
+
+    const apiKey = getOpenAiApiKey();
+    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+
+    const original = typeof note.content === 'string' ? note.content : '';
+    if (!original.trim()) {
+      // Nothing to clean; no-op
+      return { content: original };
+    }
+
+    const { default: fetch } = await import('node-fetch');
+
+    const system = 'You clean and normalize note text without summarizing or translating.';
+    const instructions = [
+      'This is a note. Remove emojis. Remove formatting, but keep a text format with titles if needed.',
+      'Keep conversation flow and names if it is a conversation.',
+      'Do not lose content, do not summarize.',
+      'Keep the same language as the original note.'
+    ].join(' ');
+    const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
+
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'o4-mini',
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ]
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('[ai.cleanNote] OpenAI request failed', { status: resp.status, statusText: resp.statusText, body: errText });
+      throw new Meteor.Error('openai-failed', errText);
+    }
+
+    const data = await resp.json();
+    const cleaned = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? String(data.choices[0].message.content) : '';
+
+    // Persist cleaned content
+    await NotesCollection.updateAsync(noteId, { $set: { content: cleaned, updatedAt: new Date() } });
+
+    // Update search vector and project updatedAt
+    try {
+      const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
+      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+      await upsertDoc({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null });
+      if (next && next.projectId) {
+        const { ProjectsCollection } = await import('/imports/api/projects/collections');
+        await ProjectsCollection.updateAsync(next.projectId, { $set: { updatedAt: new Date() } });
+      }
+    } catch (e) {
+      console.error('[ai.cleanNote] post-update side effects failed', e);
+    }
+
+    return { content: cleaned };
   }
 });
 

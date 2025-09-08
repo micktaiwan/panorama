@@ -16,6 +16,7 @@ import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Card } from '/imports/ui/components/Card/Card.jsx';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { notify } from '/imports/ui/utils/notify.js';
 
 export const NoteSession = ({ sessionId, onBack }) => {
   const [inputValue, setInputValue] = useState('');
@@ -78,8 +79,22 @@ export const NoteSession = ({ sessionId, onBack }) => {
   const onCommitLine = () => {
     const content = inputValue.trim();
     if (content.length === 0) return;
-    Meteor.call('noteLines.insert', { sessionId, content });
-    setInputValue('');
+    const prev = inputValue;
+    Meteor.call('noteLines.insert', { sessionId, content }, (err, res) => {
+      if (err) {
+        // If vectorization failed, we keep the input but inform the user that data was saved
+        if (err && err.error === 'vectorization-failed' && err.details && err.details.insertedId) {
+          notify({ message: 'Saved, but search indexing failed.', kind: 'warning' });
+          setInputValue('');
+          return;
+        }
+        console.error('noteLines.insert failed', err);
+        notify({ message: 'Failed to save note line. Data kept. Check connection.', kind: 'error' });
+        setInputValue(prev);
+        return;
+      }
+      setInputValue('');
+    });
     inputRef.current?.focus();
   };
 
@@ -203,7 +218,19 @@ export const NoteSession = ({ sessionId, onBack }) => {
                 value={l.content}
                 placeholder="(empty)"
                 onSubmit={(next) => {
-                  Meteor.call('noteLines.update', l._id, { content: next });
+                  const oldVal = l.content;
+                  Meteor.call('noteLines.update', l._id, { content: next }, (err, res) => {
+                    if (err) {
+                      if (err && err.error === 'vectorization-failed') {
+                        notify({ message: 'Updated, but search indexing failed.', kind: 'warning' });
+                      } else {
+                        console.error('noteLines.update failed', err);
+                        notify({ message: 'Failed to update line. Keeping previous value.', kind: 'error' });
+                        Meteor.call('noteLines.update', l._id, { content: oldVal });
+                        return;
+                      }
+                    }
+                  });
                 }}
               />
                 <span className="noteLineActions">
@@ -211,7 +238,17 @@ export const NoteSession = ({ sessionId, onBack }) => {
                     className="iconButton"
                     title="Delete line"
                     onClick={() => {
-                      Meteor.call('noteLines.remove', l._id);
+                      Meteor.call('noteLines.remove', l._id, (err, res) => {
+                        if (err) {
+                          if (err && err.error === 'search-delete-failed') {
+                            notify({ message: 'Deleted, but search index cleanup failed.', kind: 'warning' });
+                          } else {
+                            console.error('noteLines.remove failed', err);
+                            notify({ message: 'Failed to delete line.', kind: 'error' });
+                            return;
+                          }
+                        }
+                      });
                     }}
                   >
                     🗑
