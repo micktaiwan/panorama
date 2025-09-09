@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { buildTasksSelector, mapToolCallsForChatCompletions, buildOverdueSelector, buildByProjectSelector, buildFilterSelector } from '/imports/api/chat/helpers.js';
+import { buildTasksSelector, mapToolCallsForChatCompletions, buildOverdueSelector, buildByProjectSelector, buildFilterSelector, buildProjectByNameSelector, bindArgsWithMemory, capToolCalls, evaluateStopWhen } from '/imports/api/chat/helpers.js';
 
 describe('chat tools helpers (server)', function () {
   it('buildTasksSelector: dueBefore only → matches Date or YYYY-MM-DD', function () {
@@ -41,6 +41,35 @@ describe('chat tools helpers (server)', function () {
   it('buildFilterSelector: builds from simple filters', function () {
     const sel = buildFilterSelector({ projectId: ' p1 ', status: ' todo ', tag: ' errands ' });
     if (sel.projectId !== 'p1' || sel.status !== 'todo' || sel.tags !== 'errands') throw new Error('invalid filter selector');
+  });
+
+  it('buildProjectByNameSelector: builds case-insensitive exact match regex', function () {
+    const sel = buildProjectByNameSelector(' My Project ');
+    if (!sel || !sel.name || !sel.name.$regex || sel.name.$options !== 'i') throw new Error('invalid project-by-name selector');
+    if (!String(sel.name.$regex).startsWith('^')) throw new Error('regex should anchor start');
+  });
+
+  it('bindArgsWithMemory: injects projectId into chat_tasksByProject when missing', function () {
+    const args = bindArgsWithMemory('chat_tasksByProject', {}, { projectId: 'abc' });
+    if (args.projectId !== 'abc') throw new Error('binding failed');
+  });
+
+  it('capToolCalls: truncates toolCalls to 5 items', function () {
+    const calls = Array.from({ length: 10 }).map((_, i) => ({ id: 'c' + i }));
+    const capped = capToolCalls(calls, 5);
+    if (!Array.isArray(capped) || capped.length !== 5) throw new Error('capping failed');
+  });
+
+  it('evaluateStopWhen: lists.tasks non-empty passes; wildcard lists.* passes; ids.projectId truthy passes', function () {
+    const memory = {
+      lists: { tasks: [{ title: 'A' }], projects: [] },
+      ids: { projectId: 'p1' },
+      entities: {}
+    };
+    if (!evaluateStopWhen(['lists.tasks'], memory)) throw new Error('lists.tasks should pass');
+    if (!evaluateStopWhen(['lists.*'], memory)) throw new Error('lists.* should pass');
+    if (!evaluateStopWhen(['ids.projectId'], memory)) throw new Error('ids.projectId should pass');
+    if (evaluateStopWhen(['entities.note'], memory)) throw new Error('entities.note should fail');
   });
 });
 
