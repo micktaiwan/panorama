@@ -96,57 +96,29 @@ const clampText = (s, max = 300) => {
   return str.slice(0, max - 1) + '…';
 };
 
-// Evaluate artifact-based stop conditions (dot-paths, basic wildcards)
-const evaluateStopWhen = (have, memory) => {
-  if (!Array.isArray(have) || have.length === 0) return false;
-  const mem = memory || {};
-  const getPath = (obj, path) => {
-    const parts = String(path || '').split('.');
-    let cur = obj;
-    for (let i = 0; i < parts.length; i += 1) {
-      const k = parts[i];
-      if (!cur || typeof cur !== 'object') return undefined;
-      cur = cur[k];
-    }
-    return cur;
-  };
-  const checkOne = (expr) => {
-    const key = String(expr || '').trim();
-    if (!key) return false;
-    if (key === 'lists.*') {
-      const lists = mem.lists || {};
-      return Object.values(lists).some((v) => Array.isArray(v) && v.length > 0);
-    }
-    if (key.startsWith('lists.')) {
-      const arr = getPath(mem, key);
-      return Array.isArray(arr) && arr.length > 0;
-    }
-    if (key === 'entities.*') {
-      const ents = mem.entities || {};
-      return Object.values(ents).some((v) => !!v);
-    }
-    if (key.startsWith('entities.')) {
-      return !!getPath(mem, key);
-    }
-    if (key === 'ids.*') {
-      const ids = mem.ids || {};
-      return Object.values(ids).some((v) => !!v);
-    }
-    if (key.startsWith('ids.')) {
-      return !!getPath(mem, key);
-    }
-    // Legacy compat shortcuts
-    if (key === 'lists.tasks') return Array.isArray(mem.tasks) && mem.tasks.length > 0;
-    if (key === 'ids.projectId') return !!mem.projectId;
-    const val = getPath(mem, key);
-    if (Array.isArray(val)) return val.length > 0;
-    return !!val;
-  };
-  // All conditions must be satisfied
-  return have.every(checkOne);
-};
+// evaluateStopWhen is imported from helpers.js - see buildTasksSelector import above
 
 // Dispatch table for tool execution (generic executor)
+// Tool schemas with required arguments and metadata
+const TOOL_SCHEMAS = {
+  chat_tasks: { required: [], readOnly: true },
+  chat_overdue: { required: [], readOnly: true },
+  chat_tasksByProject: { required: ['projectId'], readOnly: true },
+  chat_tasksFilter: { required: [], readOnly: true },
+  chat_projectsList: { required: [], readOnly: true },
+  chat_projectByName: { required: ['name'], readOnly: true },
+  chat_semanticSearch: { required: ['query'], readOnly: true },
+  chat_collectionQuery: { required: ['collection'], readOnly: true },
+  chat_notesByProject: { required: ['projectId'], readOnly: true },
+  chat_noteSessionsByProject: { required: ['projectId'], readOnly: true },
+  chat_noteLinesBySession: { required: ['sessionId'], readOnly: true },
+  chat_linksByProject: { required: ['projectId'], readOnly: true },
+  chat_peopleList: { required: [], readOnly: true },
+  chat_teamsList: { required: [], readOnly: true },
+  chat_filesByProject: { required: ['projectId'], readOnly: true },
+  chat_alarmsList: { required: [], readOnly: true }
+};
+
 const TOOL_HANDLERS = {
   async chat_tasks(args, memory) {
     const { TasksCollection } = await import('/imports/api/tasks/collections');
@@ -158,7 +130,8 @@ const TOOL_HANDLERS = {
     if (!('status' in selector)) selector.status = { $ne: 'done' };
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    // Remove internal IDs from UI responses
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
     if (memory) {
       memory.tasks = tasks || [];
       memory.lists = memory.lists || {};
@@ -173,7 +146,8 @@ const TOOL_HANDLERS = {
     const selector = buildOverdueSelector(nowIso);
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    // Remove internal IDs from UI responses
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
     if (memory) {
       memory.tasks = tasks || [];
       memory.lists = memory.lists || {};
@@ -187,12 +161,13 @@ const TOOL_HANDLERS = {
     const selector = buildByProjectSelector(args && args.projectId);
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+    // Remove internal IDs from UI responses
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
     if (memory && Array.isArray(tasks)) {
       memory.tasks = tasks;
       memory.lists = memory.lists || {};
-      memory.lists.tasks = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+      memory.lists.tasks = mapped;
     }
-    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
     return { output: JSON.stringify({ tasks: mapped, total: mapped.length }) };
   },
   async chat_tasksFilter(args, memory) {
@@ -201,7 +176,8 @@ const TOOL_HANDLERS = {
     const selector = buildFilterSelector(args || {});
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    // Remove internal IDs from UI responses
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
     if (memory) {
       memory.tasks = tasks || [];
       memory.lists = memory.lists || {};
@@ -212,6 +188,7 @@ const TOOL_HANDLERS = {
   async chat_projectsList(args, memory) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+    // Remove internal IDs from UI responses
     const compact = (projects || []).map(p => ({ name: clampText(p.name || ''), description: clampText(p.description || '') }));
     if (memory) {
       memory.lists = memory.lists || {};
@@ -224,12 +201,14 @@ const TOOL_HANDLERS = {
     const selector = buildProjectByNameSelector(args && args.name);
     const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
     if (proj && proj._id && memory) {
-      memory.projectId = proj._id; // legacy
-      memory.projectName = proj.name || null; // legacy
+      // Standardize on new generic memory structure
       memory.ids = memory.ids || {};
       memory.ids.projectId = proj._id;
       memory.entities = memory.entities || {};
       memory.entities.project = { name: proj.name || '', description: proj.description || '' };
+      // Keep legacy for backward compatibility during transition
+      memory.projectId = proj._id;
+      memory.projectName = proj.name || null;
     }
     const out = proj ? { name: clampText(proj.name || ''), description: clampText(proj.description || '') } : null;
     return { output: JSON.stringify({ project: out }) };
@@ -382,6 +361,49 @@ const TOOL_HANDLERS = {
   }
 };
 
+// Generic step executor with timeout and retry logic
+const executeStep = async (step, memory, callId, retries = 3) => {
+  const tool = String(step.tool || '');
+  const { bindArgsWithMemory } = await import('/imports/api/chat/helpers');
+  const args = bindArgsWithMemory(tool, step.args || {}, memory);
+  
+  // Check required arguments
+  const schema = TOOL_SCHEMAS[tool];
+  if (schema) {
+    const missing = (schema.required || []).filter(k => {
+      const v = args[k];
+      return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+    });
+    if (missing.length > 0) {
+      throw new Error(`Missing required arguments for ${tool}: ${missing.join(', ')}`);
+    }
+  }
+  
+  // Execute with retry logic
+  let lastError;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const result = await runTool(tool, args, memory);
+      return {
+        tool_call_id: callId || `call_${Date.now()}`,
+        output: result.output || '{}'
+      };
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries - 1) {
+        console.warn(`[executeStep] ${tool} attempt ${attempt + 1} failed, retrying:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000)); // exponential backoff
+      }
+    }
+  }
+  
+  console.error(`[executeStep] ${tool} failed after ${retries} attempts:`, lastError.message);
+  return {
+    tool_call_id: callId || `call_${Date.now()}`,
+    output: JSON.stringify({ error: lastError?.message || String(lastError) })
+  };
+};
+
 const runTool = async (toolName, args, memory) => {
   const fn = TOOL_HANDLERS[toolName];
   if (!fn) throw new Error(`Unknown tool: ${toolName}`);
@@ -429,8 +451,7 @@ Meteor.methods({
     const history = Array.isArray(payload?.history) ? payload.history : [];
     if (!query) throw new Meteor.Error('bad-request', 'query is required');
 
-    // Semantic search (RAG) disabled before planner to reduce tokens during tests.
-    // This will be reintroduced as a first-class tool the planner can call when needed.
+    // Semantic search available as chat_semanticSearch tool when planner needs it
     const sources = [];
 
     const system = buildSystemPrompt();
@@ -465,7 +486,7 @@ Meteor.methods({
             type: 'object',
             additionalProperties: false,
             properties: {
-              tool: { type: 'string', enum: ['chat_tasks', 'chat_overdue', 'chat_tasksByProject', 'chat_tasksFilter', 'chat_projectsList', 'chat_projectByName', 'chat_notesByProject', 'chat_noteSessionsByProject', 'chat_noteLinesBySession', 'chat_linksByProject', 'chat_peopleList', 'chat_teamsList', 'chat_filesByProject', 'chat_alarmsList'] },
+              tool: { type: 'string', enum: Object.keys(TOOL_SCHEMAS) },
               args: {
                 type: 'object',
                 additionalProperties: false,
@@ -477,7 +498,12 @@ Meteor.methods({
                   tag: { type: 'string' },
                   name: { type: 'string' },
                   sessionId: { type: 'string' },
-                  enabled: { type: 'boolean' }
+                  enabled: { type: 'boolean' },
+                  query: { type: 'string' },
+                  limit: { type: 'number' },
+                  collection: { type: 'string' },
+                  where: { type: 'object' },
+                  select: { type: 'array', items: { type: 'string' } }
                 }
               }
             },
@@ -502,22 +528,42 @@ Meteor.methods({
       'Use chat_tasksByProject when a project id is specified.',
       'If the user names a project, first call chat_projectByName, then call chat_tasksByProject. You may omit projectId in the second step; the runtime will bind it from the previous result.',
       'Use chat_tasksFilter for status/tag filters.',
-      'Optionally include stopWhen.have to declare completion artifacts (e.g., lists.tasks, ids.projectId).',
+      'Use chat_semanticSearch for finding relevant documents by content.',
+      'IMPORTANT: Include stopWhen.have to avoid unnecessary steps. Examples: ["lists.tasks"] after getting tasks, ["ids.projectId"] after finding project, ["lists.*"] when any list is populated.',
+      'Leverage variable binding: use {"var":"ids.projectId"} to reference previously found IDs.',
       'Output JSON only that matches the schema. Keep at most 5 steps.'
     ].join(' ');
     const plannerMessages = [
-      { role: 'system', content: `${buildSystemPrompt()} Allowed tools: chat_tasks, chat_overdue, chat_tasksByProject, chat_tasksFilter, chat_projectsList, chat_projectByName, chat_notesByProject, chat_noteSessionsByProject, chat_noteLinesBySession, chat_linksByProject, chat_peopleList, chat_teamsList, chat_filesByProject, chat_alarmsList. ${plannerPrompt}` },
+      { role: 'system', content: `${buildSystemPrompt()} Allowed tools: ${Object.keys(TOOL_SCHEMAS).join(', ')}. ${plannerPrompt}` },
       { role: 'user', content: user }
     ];
-    const plannerResp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'o4-mini',
-        messages: plannerMessages,
-        response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } }
-      })
-    });
+    // Add timeout to planner call
+    const plannerController = new AbortController();
+    const plannerTimeoutId = setTimeout(() => plannerController.abort(), 30000);
+    
+    let plannerResp;
+    try {
+      plannerResp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'o4-mini',
+          messages: plannerMessages,
+          response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } }
+        }),
+        signal: plannerController.signal
+      });
+      clearTimeout(plannerTimeoutId);
+    } catch (plannerError) {
+      clearTimeout(plannerTimeoutId);
+      if (plannerError.name === 'AbortError') {
+        console.error('[chat.ask][planner] timeout after 30s');
+        await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning timed out. Falling back to auto tools.', error: true, createdAt: new Date() });
+        plannerResp = { ok: false };
+      } else {
+        throw plannerError;
+      }
+    }
     let planned = null;
     let stopArtifacts = [];
     if (plannerResp.ok) {
@@ -554,18 +600,18 @@ Meteor.methods({
     if (execSteps && execSteps.length > 0) {
       await ChatsCollection.insertAsync({ role: 'assistant', content: 'Executing plan…', isStatus: true, createdAt: new Date() });
       const toolResults = [];
-      // Simple per-request working memory to support chaining between steps
-      const memory = { projectId: null, projectName: null, tasks: [] };
-      const bindArgs = (toolName, rawArgs) => {
-        const a = { ...(rawArgs || {}) };
-        if (toolName === 'chat_tasksByProject') {
-          if ((!a.projectId || String(a.projectId).trim() === '') && memory.projectId) {
-            a.projectId = memory.projectId;
-          }
-        }
-        return a;
+      // Generic working memory structure
+      const memory = { 
+        ids: {},
+        entities: {},
+        lists: {},
+        params: {},
+        errors: [],
+        // Legacy fields for backward compatibility
+        projectId: null, projectName: null, tasks: []
       };
       // Early stop based on declared artifacts before executing steps
+      const { evaluateStopWhen } = await import('/imports/api/chat/helpers');
       if (evaluateStopWhen(stopArtifacts, memory)) {
         // Nothing to do; synthesize empty response promptly
         await ChatsCollection.insertAsync({ role: 'assistant', content: 'No data to retrieve.', isStatus: true, createdAt: new Date() });
@@ -574,189 +620,171 @@ Meteor.methods({
         return { text: 'Done.', citations };
       }
       const MAX_STEPS = 5;
-      const REQUIRED_ARGS = {
-        chat_tasksByProject: ['projectId'],
-        chat_projectByName: ['name']
-      };
       let replanned = false;
       for (let i = 0; i < Math.min(execSteps.length, MAX_STEPS); i += 1) {
         const step = execSteps[i] || {};
-        const tool = String(step.tool || '');
-        const args = bindArgs(tool, step.args || {});
-        // Minimal generic missing-arg check for known required args
-        const required = REQUIRED_ARGS[tool] || [];
-        const missing = required.filter((k) => {
-          const v = args && args[k];
-          return (v === undefined || v === null || (typeof v === 'string' && v.trim() === ''));
-        });
-        if (missing.length > 0 && !replanned) {
-          // Re-plan once with memory snapshot
-          await ChatsCollection.insertAsync({ role: 'assistant', content: 'Re-planning…', isStatus: true, createdAt: new Date() });
-          const mem = {
-            projectId: memory.projectId || null,
-            projectName: memory.projectName || null,
-            tasksCount: Array.isArray(memory.tasks) ? memory.tasks.length : 0,
-            lastTool: tool,
-            missingArgs: missing
-          };
-          const replanMessages = [
-            { role: 'system', content: `${buildSystemPrompt()} Allowed tools: chat_tasks, chat_overdue, chat_tasksByProject, chat_tasksFilter, chat_projectsList, chat_projectByName. ${plannerPrompt}` },
-            { role: 'user', content: user + '\n\nMemory snapshot:\n' + safeStringify(mem) }
-          ];
-          const respRe = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({ model: 'o4-mini', messages: replanMessages, response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } } })
-          });
-          if (respRe.ok) {
-            const pdata2 = await respRe.json();
-            const ptext2 = pdata2?.choices?.[0]?.message?.content || '';
-            try {
-              const planned2 = JSON.parse(ptext2);
-              const steps2 = Array.isArray(planned2?.steps) ? planned2.steps : [];
-              // Execute the re-planned steps with remaining budget
-              const remain = Math.max(0, MAX_STEPS - i);
-              for (let j = 0; j < Math.min(steps2.length, remain); j += 1) {
-                const step2 = steps2[j] || {};
-                const tool2 = String(step2.tool || '');
-                const args2 = bindArgs(tool2, step2.args || {});
-                if (tool2 === 'chat_tasks') {
-                  try {
-                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasks…', isStatus: true, createdAt: new Date() });
-                    const { TasksCollection } = await import('/imports/api/tasks/collections');
-                    const { buildTasksSelector } = await import('/imports/api/chat/helpers');
-                    const normArgs = { ...args2 };
-                    if (!normArgs.dueBefore) normArgs.dueBefore = computeTomorrowEndOfDayISO();
-                    if (normArgs.status) delete normArgs.status;
-                    const selector = buildTasksSelector(normArgs);
-                    if (!('status' in selector)) selector.status = { $ne: 'done' };
-                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-                  } catch (e) {
-                    console.error('[chat.ask][replan][chat_tasks] exec failed', e);
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-                  }
-                } else if (tool2 === 'chat_overdue') {
-                  try {
-                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_overdue…', isStatus: true, createdAt: new Date() });
-                    const { TasksCollection } = await import('/imports/api/tasks/collections');
-                    const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
-                    const nowIso = (args2 && typeof args2.now === 'string' && args2.now.trim()) ? args2.now : new Date().toISOString();
-                    const selector = buildOverdueSelector(nowIso);
-                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-                  } catch (e) {
-                    console.error('[chat.ask][replan][chat_overdue] exec failed', e);
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-                  }
-                } else if (tool2 === 'chat_tasksByProject') {
-                  try {
-                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasksByProject…', isStatus: true, createdAt: new Date() });
-                    const { TasksCollection } = await import('/imports/api/tasks/collections');
-                    const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
-                    const selector = buildByProjectSelector(args2 && args2.projectId);
-                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-                    memory.tasks = tasks;
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-                  } catch (e) {
-                    console.error('[chat.ask][replan][chat_tasksByProject] exec failed', e);
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-                  }
-                } else if (tool2 === 'chat_tasksFilter') {
-                  try {
-                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasksFilter…', isStatus: true, createdAt: new Date() });
-                    const { TasksCollection } = await import('/imports/api/tasks/collections');
-                    const { buildFilterSelector } = await import('/imports/api/chat/helpers');
-                    const selector = buildFilterSelector(args2 || {});
-                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-                  } catch (e) {
-                    console.error('[chat.ask][replan][chat_tasksFilter] exec failed', e);
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-                  }
-                } else if (tool2 === 'chat_projectsList') {
-                  try {
-                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_projectsList…', isStatus: true, createdAt: new Date() });
-                    const { ProjectsCollection } = await import('/imports/api/projects/collections');
-                    const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
-                    const compact = (projects || []).map(p => ({ id: p._id, name: p.name || '', description: p.description || '' }));
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ projects: compact }) });
-                  } catch (e) {
-                    console.error('[chat.ask][replan][chat_projectsList] exec failed', e);
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-                  }
-                } else if (tool2 === 'chat_projectByName') {
-                  try {
-                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_projectByName…', isStatus: true, createdAt: new Date() });
-                    const { ProjectsCollection } = await import('/imports/api/projects/collections');
-                    const selector = buildProjectByNameSelector(args2 && args2.name);
-                    const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
-                    if (proj && proj._id) {
-                      memory.projectId = proj._id;
-                      memory.projectName = proj.name || null;
-                    }
-                    const out = proj ? { id: proj._id, name: proj.name || '', description: proj.description || '' } : null;
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ project: out }) });
-                  } catch (e) {
-                    console.error('[chat.ask][replan][chat_projectByName] exec failed', e);
-                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-                  }
-                }
-              }
-            } catch (e) {
-              console.error('[chat.ask][replan] parse failed', e);
-            }
-          } else {
-            const errTextRe = await respRe.text();
-            console.error('[chat.ask][replan] OpenAI failed', { status: respRe.status, statusText: respRe.statusText, body: errTextRe });
-          }
-          replanned = true;
-          break;
-        }
+        
         try {
-          await ChatsCollection.insertAsync({ role: 'assistant', content: `Running tool: ${tool}…`, isStatus: true, createdAt: new Date() });
-          const res = await runTool(tool, args, memory);
-          const outStr = res.output || '{}';
-          toolResults.push({ tool_call_id: `call_${i+1}`, output: outStr });
+          // Try to execute the step
+          await ChatsCollection.insertAsync({ role: 'assistant', content: `Running tool: ${step.tool}…`, isStatus: true, createdAt: new Date() });
+          const result = await executeStep(step, memory, `call_${i+1}`);
+          toolResults.push(result);
+          
+          // Log output metadata
           try {
-            const parsed = JSON.parse(outStr);
+            const parsed = JSON.parse(result.output || '{}');
             const keys = Object.keys(parsed || {});
             const total = typeof parsed.total === 'number' ? parsed.total : undefined;
-            console.log('[chat.ask][planner][tool output]', { tool, keys, total, length: outStr.length });
+            console.log('[chat.ask][planner][tool output]', { tool: step.tool, keys, total, length: (result.output || '').length });
           } catch (eLog) {
-            console.error('[chat.ask][planner][tool output] parse failed', { tool, length: outStr.length });
+            console.error('[chat.ask][planner][tool output] parse failed', { tool: step.tool, length: (result.output || '').length });
           }
-        } catch (e) {
-          console.error(`[chat.ask][planner][${tool}] exec failed`, e);
-          toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+          
+        } catch (stepError) {
+          // Handle missing arguments with re-planning
+          if (stepError.message.includes('Missing required arguments') && !replanned) {
+            // Re-plan once with memory snapshot
+            await ChatsCollection.insertAsync({ role: 'assistant', content: 'Re-planning…', isStatus: true, createdAt: new Date() });
+            const mem = {
+              ids: memory.ids || {},
+              entities: memory.entities || {},
+              lists: memory.lists || {},
+              lastTool: step.tool,
+              error: stepError.message,
+              // Legacy fields
+              projectId: memory.projectId || null,
+              projectName: memory.projectName || null,
+              tasksCount: Array.isArray(memory.tasks) ? memory.tasks.length : 0
+            };
+            const replanMessages = [
+              { role: 'system', content: `${buildSystemPrompt()} Allowed tools: ${Object.keys(TOOL_SCHEMAS).join(', ')}. ${plannerPrompt}` },
+              { role: 'user', content: user + '\n\nMemory snapshot:\n' + safeStringify(mem) }
+            ];
+            
+            // Add timeout to fetch call
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            
+            try {
+              const respRe = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({ model: 'o4-mini', messages: replanMessages, response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } } }),
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              if (respRe.ok) {
+                const pdata2 = await respRe.json();
+                const ptext2 = pdata2?.choices?.[0]?.message?.content || '';
+                try {
+                  const planned2 = JSON.parse(ptext2);
+                  const steps2 = Array.isArray(planned2?.steps) ? planned2.steps : [];
+                  
+                  // Execute the re-planned steps with remaining budget using generic executor
+                  const remain = Math.max(0, MAX_STEPS - i);
+                  for (let j = 0; j < Math.min(steps2.length, remain); j += 1) {
+                    try {
+                      const replanResult = await executeStep(steps2[j], memory, `call_re_${j+1}`);
+                      toolResults.push(replanResult);
+                    } catch (replanError) {
+                      console.error('[chat.ask][replan] step failed', replanError);
+                      toolResults.push({ 
+                        tool_call_id: `call_re_${j+1}`, 
+                        output: JSON.stringify({ error: replanError?.message || String(replanError) }) 
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.error('[chat.ask][replan] parse failed', e);
+                }
+              } else {
+                const errTextRe = await respRe.text();
+                console.error('[chat.ask][replan] OpenAI failed', { status: respRe.status, statusText: respRe.statusText, body: errTextRe });
+              }
+            } catch (fetchError) {
+              clearTimeout(timeoutId);
+              if (fetchError.name === 'AbortError') {
+                console.error('[chat.ask][replan] timeout after 30s');
+              } else {
+                console.error('[chat.ask][replan] fetch failed', fetchError);
+              }
+            }
+            replanned = true;
+            break;
+          } else {
+            // Re-throw non-replannable errors
+            console.error(`[chat.ask][planner][${step.tool}] exec failed`, stepError);
+            toolResults.push({ 
+              tool_call_id: `call_${i+1}`, 
+              output: JSON.stringify({ error: stepError?.message || String(stepError) }) 
+            });
+          }
         }
-        // Generic early stop removed in favor of declarative stopWhen (future). Keep only MAX_STEPS cap.
+        
+        // Check for early termination based on stopWhen artifacts
+        const { evaluateStopWhen } = await import('/imports/api/chat/helpers');
+        if (evaluateStopWhen(stopArtifacts, memory)) {
+          console.log('[chat.ask][planner] Early termination - stopWhen condition met');
+          break;
+        }
       }
+      
+      console.log(`[chat.ask][planner] Executed ${toolResults.length} tools, replanned: ${replanned}`);
+      
       // Synthesis via Chat Completions using only tool results
       await ChatsCollection.insertAsync({ role: 'assistant', content: 'Synthesizing…', isStatus: true, createdAt: new Date() });
-      const assistantToolCallMsg = { role: 'assistant', tool_calls: toolResults.map((tr, idx) => ({ id: `call_${idx+1}`, type: 'function', function: { name: execSteps[idx]?.tool || 'chat_tasks', arguments: JSON.stringify(execSteps[idx]?.args || {}) } })) };
+      const assistantToolCallMsg = { 
+        role: 'assistant', 
+        tool_calls: toolResults.map((tr, idx) => ({
+          id: tr.tool_call_id || `call_${idx+1}`, 
+          type: 'function', 
+          function: { 
+            name: execSteps[idx]?.tool || toolResults[idx]?.tool_call_id?.includes('re_') ? 'replan_tool' : 'chat_tasks', 
+            arguments: JSON.stringify(execSteps[idx]?.args || {}) 
+          } 
+        }))
+      };
       const toolMsgs = toolResults.map(tr => ({ role: 'tool', tool_call_id: tr.tool_call_id, content: tr.output }));
       const synthSys = "You are Panorama's assistant. Compose the final answer using ONLY the tool results. Include all items and the total count. Be concise. Do NOT show internal IDs (task or project). Show only human-readable fields (title, status, deadline).";
-      const synthUser = 'Summarize the tasks found without showing any internal IDs.';
+      const synthUser = `Answer the user's question: "${query}" using only the provided tool results.`;
       const cmplMessages = [ { role: 'system', content: synthSys }, { role: 'user', content: synthUser }, assistantToolCallMsg, ...toolMsgs ];
-      const resp2 = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model: 'o4-mini', messages: cmplMessages })
-      });
+      
+      // Add timeout to synthesis call
+      const synthController = new AbortController();
+      const synthTimeoutId = setTimeout(() => synthController.abort(), 30000);
+      
+      let resp2;
+      try {
+        resp2 = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, 
+          body: JSON.stringify({ model: 'o4-mini', messages: cmplMessages }),
+          signal: synthController.signal
+        });
+        clearTimeout(synthTimeoutId);
+      } catch (synthError) {
+        clearTimeout(synthTimeoutId);
+        if (synthError.name === 'AbortError') {
+          throw new Meteor.Error('openai-timeout', 'Synthesis request timed out after 30 seconds');
+        }
+        throw synthError;
+      }
       if (!resp2.ok) {
         const errText2 = await resp2.text();
         console.error('[chat.ask][planner] final synthesis failed', { status: resp2.status, statusText: resp2.statusText, body: errText2 });
-        throw new Meteor.Error('openai-failed', errText2);
+        throw new Meteor.Error('openai-failed', `Synthesis failed (${resp2.status}): ${errText2}`);
       }
       const data2 = await resp2.json();
       let text = data2?.choices?.[0]?.message?.content || '';
       try {
-        console.log('[chat.ask][planner] Output length:', (text || '').length);
-        console.log('[chat.ask][planner] Output:', text);
-      } catch (e) { console.error('[chat.ask][planner] log failed', e); }
+        console.log('[chat.ask][planner] Synthesis complete:', { 
+          outputLength: (text || '').length, 
+          toolCount: toolResults.length,
+          replanned 
+        });
+      } catch (e) { 
+        console.error('[chat.ask][planner] log failed', e); 
+      }
       const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
       // The client already persisted the user message for correct ordering; persist only assistant.
       await ChatsCollection.insertAsync({ role: 'assistant', content: text, citations, createdAt: new Date() });
