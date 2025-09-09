@@ -133,6 +133,30 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Global navigation shortcuts: Back/Forward with Cmd/Ctrl + Left/Right
+  useEffect(() => {
+    const onNavKeys = (e) => {
+      const target = e.target;
+      const tag = (target?.tagName || '').toLowerCase();
+      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+      if (isEditable) return;
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const hasMod = isMac ? e.metaKey : e.ctrlKey;
+      if (!hasMod) return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        window.history.back();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        window.history.forward();
+      }
+    };
+    window.addEventListener('keydown', onNavKeys);
+    return () => window.removeEventListener('keydown', onNavKeys);
+  }, []);
+
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem('global_search_q', searchQ || '');
