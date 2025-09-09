@@ -61,3 +61,84 @@ export const buildFilterSelector = (filters = {}) => {
 };
 
 
+// Build a selector to find a project by name (case-insensitive; trims input).
+// Uses a case-insensitive regex. For accent-insensitive needs, consider storing a normalizedName field.
+export const buildProjectByNameSelector = (rawName) => {
+  const name = String(rawName || '').trim();
+  if (!name) return {};
+  try {
+    // Escape regex special chars in user-provided name
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return { name: { $regex: `^${escaped}$`, $options: 'i' } };
+  } catch (_e) {
+    return { name };
+  }
+};
+
+// Generic binding helper: inject arguments from memory when missing.
+// Minimal support: inject ids.projectId for chat_tasksByProject
+export const bindArgsWithMemory = (toolName, rawArgs, memory) => {
+  const args = { ...(rawArgs || {}) };
+  const mem = memory || {};
+  if (toolName === 'chat_tasksByProject') {
+    const has = args && typeof args.projectId === 'string' && args.projectId.trim();
+    if (!has && mem && mem.projectId) {
+      args.projectId = mem.projectId;
+    }
+  }
+  return args;
+};
+
+// Cap tool-calls list to a maximum length (default 5)
+export const capToolCalls = (toolCalls, max = 5) => {
+  const arr = Array.isArray(toolCalls) ? toolCalls : [];
+  const m = Number(max);
+  const limit = Number.isFinite(m) && m > 0 ? m : 5;
+  return arr.slice(0, limit);
+};
+
+// Evaluate artifact-based stop conditions with dot-path and basic wildcards
+export const evaluateStopWhen = (have, memory) => {
+  if (!Array.isArray(have) || have.length === 0) return false;
+  const mem = memory || {};
+  const getPath = (obj, path) => {
+    const parts = String(path || '').split('.');
+    let cur = obj;
+    for (let i = 0; i < parts.length; i += 1) {
+      const k = parts[i];
+      if (!cur || typeof cur !== 'object') return undefined;
+      cur = cur[k];
+    }
+    return cur;
+  };
+  const checkOne = (expr) => {
+    const key = String(expr || '').trim();
+    if (!key) return false;
+    if (key === 'lists.*') {
+      const lists = mem.lists || {};
+      return Object.values(lists).some((v) => Array.isArray(v) && v.length > 0);
+    }
+    if (key.startsWith('lists.')) {
+      const arr = getPath(mem, key);
+      return Array.isArray(arr) && arr.length > 0;
+    }
+    if (key === 'entities.*') {
+      const ents = mem.entities || {};
+      return Object.values(ents).some((v) => !!v);
+    }
+    if (key.startsWith('entities.')) {
+      return !!getPath(mem, key);
+    }
+    if (key === 'ids.*') {
+      const ids = mem.ids || {};
+      return Object.values(ids).some((v) => !!v);
+    }
+    if (key.startsWith('ids.')) {
+      return !!getPath(mem, key);
+    }
+    return !!getPath(mem, key);
+  };
+  return have.every(checkOne);
+};
+
+

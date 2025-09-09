@@ -11,7 +11,7 @@ import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { LinksCollection } from '/imports/api/links/collections';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { embedText } from '/imports/api/search/vectorStore';
-import { buildTasksSelector, buildOverdueSelector, buildByProjectSelector, buildFilterSelector } from '/imports/api/chat/helpers';
+import { buildTasksSelector, buildOverdueSelector, buildByProjectSelector, buildFilterSelector, buildProjectByNameSelector } from '/imports/api/chat/helpers';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
 
@@ -90,6 +90,253 @@ const safeStringify = (value) => {
   try { return JSON.stringify(value, null, 2); } catch (e) { console.error('[chat.ask] JSON stringify failed', e); return '[unstringifiable]'; }
 };
 
+const clampText = (s, max = 300) => {
+  const str = String(s || '');
+  if (str.length <= max) return str;
+  return str.slice(0, max - 1) + '…';
+};
+
+// Evaluate artifact-based stop conditions (dot-paths, basic wildcards)
+const evaluateStopWhen = (have, memory) => {
+  if (!Array.isArray(have) || have.length === 0) return false;
+  const mem = memory || {};
+  const getPath = (obj, path) => {
+    const parts = String(path || '').split('.');
+    let cur = obj;
+    for (let i = 0; i < parts.length; i += 1) {
+      const k = parts[i];
+      if (!cur || typeof cur !== 'object') return undefined;
+      cur = cur[k];
+    }
+    return cur;
+  };
+  const checkOne = (expr) => {
+    const key = String(expr || '').trim();
+    if (!key) return false;
+    if (key === 'lists.*') {
+      const lists = mem.lists || {};
+      return Object.values(lists).some((v) => Array.isArray(v) && v.length > 0);
+    }
+    if (key.startsWith('lists.')) {
+      const arr = getPath(mem, key);
+      return Array.isArray(arr) && arr.length > 0;
+    }
+    if (key === 'entities.*') {
+      const ents = mem.entities || {};
+      return Object.values(ents).some((v) => !!v);
+    }
+    if (key.startsWith('entities.')) {
+      return !!getPath(mem, key);
+    }
+    if (key === 'ids.*') {
+      const ids = mem.ids || {};
+      return Object.values(ids).some((v) => !!v);
+    }
+    if (key.startsWith('ids.')) {
+      return !!getPath(mem, key);
+    }
+    // Legacy compat shortcuts
+    if (key === 'lists.tasks') return Array.isArray(mem.tasks) && mem.tasks.length > 0;
+    if (key === 'ids.projectId') return !!mem.projectId;
+    const val = getPath(mem, key);
+    if (Array.isArray(val)) return val.length > 0;
+    return !!val;
+  };
+  // All conditions must be satisfied
+  return have.every(checkOne);
+};
+
+// Dispatch table for tool execution (generic executor)
+const TOOL_HANDLERS = {
+  async chat_tasks(args, memory) {
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const { buildTasksSelector } = await import('/imports/api/chat/helpers');
+    const normArgs = { ...(args || {}) };
+    if (!normArgs.dueBefore) normArgs.dueBefore = computeTomorrowEndOfDayISO();
+    if (normArgs.status) delete normArgs.status;
+    const selector = buildTasksSelector(normArgs);
+    if (!('status' in selector)) selector.status = { $ne: 'done' };
+    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
+    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    if (memory) {
+      memory.tasks = tasks || [];
+      memory.lists = memory.lists || {};
+      memory.lists.tasks = mapped;
+    }
+    return { output: JSON.stringify({ tasks: mapped, total: mapped.length }) };
+  },
+  async chat_overdue(args, memory) {
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
+    const nowIso = (args && typeof args.now === 'string' && args.now.trim()) ? args.now : new Date().toISOString();
+    const selector = buildOverdueSelector(nowIso);
+    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
+    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    if (memory) {
+      memory.tasks = tasks || [];
+      memory.lists = memory.lists || {};
+      memory.lists.tasks = mapped;
+    }
+    return { output: JSON.stringify({ tasks: mapped, total: mapped.length }) };
+  },
+  async chat_tasksByProject(args, memory) {
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
+    const selector = buildByProjectSelector(args && args.projectId);
+    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
+    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+    if (memory && Array.isArray(tasks)) {
+      memory.tasks = tasks;
+      memory.lists = memory.lists || {};
+      memory.lists.tasks = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    }
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    return { output: JSON.stringify({ tasks: mapped, total: mapped.length }) };
+  },
+  async chat_tasksFilter(args, memory) {
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const { buildFilterSelector } = await import('/imports/api/chat/helpers');
+    const selector = buildFilterSelector(args || {});
+    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
+    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+    const mapped = (tasks || []).map(t => ({ title: clampText(t.title || ''), projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    if (memory) {
+      memory.tasks = tasks || [];
+      memory.lists = memory.lists || {};
+      memory.lists.tasks = mapped;
+    }
+    return { output: JSON.stringify({ tasks: mapped, total: mapped.length }) };
+  },
+  async chat_projectsList(args, memory) {
+    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+    const compact = (projects || []).map(p => ({ name: clampText(p.name || ''), description: clampText(p.description || '') }));
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.projects = compact;
+    }
+    return { output: JSON.stringify({ projects: compact, total: compact.length }) };
+  },
+  async chat_projectByName(args, memory) {
+    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    const selector = buildProjectByNameSelector(args && args.name);
+    const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
+    if (proj && proj._id && memory) {
+      memory.projectId = proj._id; // legacy
+      memory.projectName = proj.name || null; // legacy
+      memory.ids = memory.ids || {};
+      memory.ids.projectId = proj._id;
+      memory.entities = memory.entities || {};
+      memory.entities.project = { name: proj.name || '', description: proj.description || '' };
+    }
+    const out = proj ? { name: clampText(proj.name || ''), description: clampText(proj.description || '') } : null;
+    return { output: JSON.stringify({ project: out }) };
+  },
+  async chat_semanticSearch(args, memory) {
+    const limit = Math.max(1, Math.min(50, Number(args && args.limit) || 8));
+    const q = String(args && args.query || '').trim();
+    const url = getQdrantUrl();
+    const client = new QdrantClient({ url });
+    const vector = await embedQuery(q);
+    const searchRes = await client.search(COLLECTION(), { vector, limit, with_payload: true });
+    const items = Array.isArray(searchRes) ? searchRes : (searchRes?.result || []);
+    const out = [];
+    for (let i = 0; i < items.length; i += 1) {
+      const p = items[i]?.payload || {};
+      const prev = await fetchPreview(p.kind, p.docId);
+      out.push({ kind: p.kind, id: p.docId, title: prev.title, url: prev.url || null, score: items[i]?.score || 0 });
+    }
+    try {
+      const topScores = out.slice(0, 2).map(r => Number(r.score) || 0);
+      console.log('[chat.ask][chat_semanticSearch] meta:', { query: clampText(q, 120), limit, total: out.length, topScores });
+    } catch (_e) { /* noop */ }
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.searchResults = out;
+    }
+    return { output: JSON.stringify({ results: out, total: out.length }) };
+  }
+  ,
+  async chat_notesByProject(args, memory) {
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const projectId = String(args && args.projectId || '').trim();
+    const notes = await NotesCollection.find({ projectId }, { fields: { title: 1 } }).fetchAsync();
+    const mapped = (notes || []).map(n => ({ title: clampText(n.title || '') }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.notes = mapped; }
+    return { output: JSON.stringify({ notes: mapped, total: mapped.length }) };
+  }
+  ,
+  async chat_noteSessionsByProject(args, memory) {
+    const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
+    const projectId = String(args && args.projectId || '').trim();
+    const sessions = await NoteSessionsCollection.find({ projectId }, { fields: { name: 1 } }).fetchAsync();
+    const mapped = (sessions || []).map(s => ({ name: clampText(s.name || '') }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.noteSessions = mapped; }
+    return { output: JSON.stringify({ sessions: mapped, total: mapped.length }) };
+  }
+  ,
+  async chat_noteLinesBySession(args, memory) {
+    const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
+    const sessionId = String(args && args.sessionId || '').trim();
+    const lines = await NoteLinesCollection.find({ sessionId }, { fields: { content: 1 } }).fetchAsync();
+    const mapped = (lines || []).map(l => ({ content: clampText(l.content || '') }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.noteLines = mapped; }
+    return { output: JSON.stringify({ lines: mapped, total: mapped.length }) };
+  }
+  ,
+  async chat_linksByProject(args, memory) {
+    const { LinksCollection } = await import('/imports/api/links/collections');
+    const projectId = String(args && args.projectId || '').trim();
+    const links = await LinksCollection.find({ projectId }, { fields: { name: 1, url: 1 } }).fetchAsync();
+    const mapped = (links || []).map(l => ({ name: clampText(l.name || ''), url: l.url || null }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.links = mapped; }
+    return { output: JSON.stringify({ links: mapped, total: mapped.length }) };
+  }
+  ,
+  async chat_peopleList(args, memory) {
+    const { PeopleCollection } = await import('/imports/api/people/collections');
+    const people = await PeopleCollection.find({}, { fields: { name: 1 } }).fetchAsync();
+    const mapped = (people || []).map(p => ({ name: clampText(p.name || '') }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.people = mapped; }
+    return { output: JSON.stringify({ people: mapped, total: mapped.length }) };
+  }
+  ,
+  async chat_teamsList(args, memory) {
+    const { TeamsCollection } = await import('/imports/api/teams/collections');
+    const teams = await TeamsCollection.find({}, { fields: { name: 1 } }).fetchAsync();
+    const mapped = (teams || []).map(t => ({ name: clampText(t.name || '') }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.teams = mapped; }
+    return { output: JSON.stringify({ teams: mapped, total: mapped.length }) };
+  }
+  ,
+  async chat_filesByProject(args, memory) {
+    const { FilesCollection } = await import('/imports/api/files/collections');
+    const projectId = String(args && args.projectId || '').trim();
+    const files = await FilesCollection.find({ projectId }, { fields: { name: 1 } }).fetchAsync();
+    const mapped = (files || []).map(f => ({ name: clampText(f.name || '') }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.files = mapped; }
+    return { output: JSON.stringify({ files: mapped, total: mapped.length }) };
+  }
+  ,
+  async chat_alarmsList(args, memory) {
+    const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+    const enabled = (typeof (args && args.enabled) === 'boolean') ? args.enabled : undefined;
+    const sel = (typeof enabled === 'boolean') ? { enabled } : {};
+    const alarms = await AlarmsCollection.find(sel, { fields: { title: 1 } }).fetchAsync();
+    const mapped = (alarms || []).map(a => ({ title: clampText(a.title || '') }));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.alarms = mapped; }
+    return { output: JSON.stringify({ alarms: mapped, total: mapped.length }) };
+  }
+};
+
+const runTool = async (toolName, args, memory) => {
+  const fn = TOOL_HANDLERS[toolName];
+  if (!fn) throw new Error(`Unknown tool: ${toolName}`);
+  return fn(args, memory);
+};
+
 const computeTomorrowEndOfDayISO = () => {
   const now = new Date();
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -102,26 +349,14 @@ const EXECUTE_PLANNER_STEPS = true;
 
 // Build a clearer, human-readable plan based on the user query + planned steps
 const buildReadablePlan = (rawQuery, plannedSteps) => {
-  const q = String(rawQuery || '').toLowerCase();
   const lines = [];
-  // Heuristics from common phrasings
-  if (/overdue|retard/.test(q)) lines.push('Overdue tasks (<= now)');
-  if (/tomorrow|demain/.test(q)) lines.push('Tasks due by tomorrow 23:59');
-  const projectMatch = /project\s+([\w-]{6,})/i.exec(rawQuery || '');
-  if (projectMatch && projectMatch[1]) lines.push(`Tasks for project ${projectMatch[1]}`);
-  const tagQuoted = /tag(?:ged)?[^"\n]*"([^"]+)"/i.exec(rawQuery || '');
-  const tagBare = !tagQuoted && /tag\s+([\w-]{2,})/i.exec(rawQuery || '');
-  if (tagQuoted && tagQuoted[1]) lines.push(`Tasks with tag "${tagQuoted[1]}"`);
-  else if (tagBare && tagBare[1]) lines.push(`Tasks with tag "${tagBare[1]}"`);
-  // Fallback to planned tool names when heuristics found nothing
-  if (lines.length === 0 && Array.isArray(plannedSteps) && plannedSteps.length > 0) {
+  if (Array.isArray(plannedSteps) && plannedSteps.length > 0) {
     for (let i = 0; i < plannedSteps.length; i += 1) {
       const s = plannedSteps[i] || {};
-      const argsStr = safeStringify(s.args || {});
-      lines.push(`${s.tool || 'tool'} ${argsStr}`.trim());
+      lines.push(String(s.tool || 'tool'));
     }
   }
-  if (lines.length === 0) return 'Plan: (empty)';
+  if (lines.length === 0) return '';
   return ['Plan:', ...lines.map((t, idx) => `${idx + 1}. ${t}`)].join('\n');
 };
 
@@ -133,20 +368,7 @@ const fmtYmd = (iso) => {
 
 const labelForToolStep = (tool, args = {}) => {
   const t = String(tool || '');
-  if (t === 'chat_overdue') return 'Overdue tasks (<= now)';
-  if (t === 'chat_tasks') {
-    const ymd = args && args.dueBefore ? fmtYmd(args.dueBefore) : 'tomorrow 23:59';
-    return `Tasks due before ${ymd}`;
-  }
-  if (t === 'chat_tasksByProject') return 'Tasks for selected project';
-  if (t === 'chat_tasksFilter') {
-    const bits = [];
-    if (args && args.status) bits.push(`status=${args.status}`);
-    if (args && args.tag) bits.push(`tag=${args.tag}`);
-    if (args && args.projectId) bits.push(`projectId=${args.projectId}`);
-    return bits.length > 0 ? `Tasks filtered by ${bits.join(', ')}` : 'Tasks (no filters)';
-  }
-  return t || 'Tasks';
+  return t || 'step';
 };
 
 
@@ -156,20 +378,9 @@ Meteor.methods({
     const history = Array.isArray(payload?.history) ? payload.history : [];
     if (!query) throw new Meteor.Error('bad-request', 'query is required');
 
-    // Vector search (RAG)
-    const url = getQdrantUrl();
-    const client = new QdrantClient({ url });
-    const vector = await embedQuery(query);
-    const searchRes = await client.search(COLLECTION(), { vector, limit: 8, with_payload: true });
-    const items = Array.isArray(searchRes) ? searchRes : (searchRes?.result || []);
+    // Semantic search (RAG) disabled before planner to reduce tokens during tests.
+    // This will be reintroduced as a first-class tool the planner can call when needed.
     const sources = [];
-    for (let i = 0; i < items.length; i += 1) {
-      const p = items[i]?.payload || {};
-      const docId = p.docId || null;
-      if (!docId) continue;
-      const prev = await fetchPreview(p.kind, p.docId);
-      sources.push({ id: docId, kind: p.kind, title: prev.title, text: prev.text, url: prev.url || null, projectId: p.projectId || null, sessionId: p.sessionId || null, score: items[i]?.score });
-    }
 
     const system = buildSystemPrompt();
     const contextBlock = makeContextBlock(sources.map(s => ({ kind: s.kind, title: s.title, text: s.text, id: s.id })));
@@ -203,7 +414,7 @@ Meteor.methods({
             type: 'object',
             additionalProperties: false,
             properties: {
-              tool: { type: 'string', enum: ['chat_tasks', 'chat_overdue', 'chat_tasksByProject', 'chat_tasksFilter'] },
+              tool: { type: 'string', enum: ['chat_tasks', 'chat_overdue', 'chat_tasksByProject', 'chat_tasksFilter', 'chat_projectsList', 'chat_projectByName', 'chat_notesByProject', 'chat_noteSessionsByProject', 'chat_noteLinesBySession', 'chat_linksByProject', 'chat_peopleList', 'chat_teamsList', 'chat_filesByProject', 'chat_alarmsList'] },
               args: {
                 type: 'object',
                 additionalProperties: false,
@@ -212,11 +423,21 @@ Meteor.methods({
                   projectId: { type: 'string' },
                   status: { type: 'string' },
                   now: { type: 'string' },
-                  tag: { type: 'string' }
+                  tag: { type: 'string' },
+                  name: { type: 'string' },
+                  sessionId: { type: 'string' },
+                  enabled: { type: 'boolean' }
                 }
               }
             },
             required: ['tool', 'args']
+          }
+        },
+        stopWhen: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            have: { type: 'array', maxItems: 5, items: { type: 'string' } }
           }
         }
       },
@@ -227,12 +448,14 @@ Meteor.methods({
       'Choose only from the allowed tools and provide precise arguments.',
       'Use chat_overdue for overdue items (<= now).',
       'Use chat_tasks with dueBefore for deadlines (e.g., tomorrow).',
-      'Use chat_tasksByProject when a project is specified.',
+      'Use chat_tasksByProject when a project id is specified.',
+      'If the user names a project, first call chat_projectByName, then call chat_tasksByProject. You may omit projectId in the second step; the runtime will bind it from the previous result.',
       'Use chat_tasksFilter for status/tag filters.',
+      'Optionally include stopWhen.have to declare completion artifacts (e.g., lists.tasks, ids.projectId).',
       'Output JSON only that matches the schema. Keep at most 5 steps.'
     ].join(' ');
     const plannerMessages = [
-      { role: 'system', content: `${buildSystemPrompt()} Allowed tools: chat_tasks. ${plannerPrompt}` },
+      { role: 'system', content: `${buildSystemPrompt()} Allowed tools: chat_tasks, chat_overdue, chat_tasksByProject, chat_tasksFilter, chat_projectsList, chat_projectByName, chat_notesByProject, chat_noteSessionsByProject, chat_noteLinesBySession, chat_linksByProject, chat_peopleList, chat_teamsList, chat_filesByProject, chat_alarmsList. ${plannerPrompt}` },
       { role: 'user', content: user }
     ];
     const plannerResp = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -245,6 +468,7 @@ Meteor.methods({
       })
     });
     let planned = null;
+    let stopArtifacts = [];
     if (plannerResp.ok) {
       const pdata = await plannerResp.json();
       const ptext = pdata?.choices?.[0]?.message?.content || '';
@@ -254,12 +478,15 @@ Meteor.methods({
         try {
           const steps = Array.isArray(planned?.steps) ? planned.steps : [];
           const hasExplicit = steps && steps.length > 0;
+          stopArtifacts = Array.isArray(planned?.stopWhen?.have) ? planned.stopWhen.have : [];
           let human = buildReadablePlan(query, steps);
           if (hasExplicit) {
             const lines = steps.map((s, idx) => `${idx + 1}. ${labelForToolStep(s.tool, s.args)}`);
             human = ['Plan:', ...lines].join('\n');
           }
+          if (human) {
           await ChatsCollection.insertAsync({ role: 'assistant', content: human, isStatus: true, createdAt: new Date() });
+          }
         } catch (ePlan) { console.error('[chat.ask] persist plan failed', ePlan); }
       } catch (e) {
         console.error('[chat.ask][planner] parse failed', e);
@@ -276,74 +503,178 @@ Meteor.methods({
     if (execSteps && execSteps.length > 0) {
       await ChatsCollection.insertAsync({ role: 'assistant', content: 'Executing plan…', isStatus: true, createdAt: new Date() });
       const toolResults = [];
-      for (let i = 0; i < Math.min(execSteps.length, 5); i += 1) {
-        const step = execSteps[i] || {};
-        const tool = String(step.tool || '');
-        const args = step.args || {};
-        if (tool === 'chat_tasks') {
-          try {
-            await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasks…', isStatus: true, createdAt: new Date() });
-            const { TasksCollection } = await import('/imports/api/tasks/collections');
-            const { buildTasksSelector } = await import('/imports/api/chat/helpers');
-            const normArgs = { ...args };
-            // Respect planner-provided dueBefore; default only if missing
-            if (!normArgs.dueBefore) normArgs.dueBefore = computeTomorrowEndOfDayISO();
-            // Keep Panorama default: exclude completed unless explicitly requested (planner doesn't set it today)
-            if (normArgs.status) delete normArgs.status;
-            const selector = buildTasksSelector(normArgs);
-            if (!('status' in selector)) selector.status = { $ne: 'done' };
-            console.log('[chat.ask][planner][chat_tasks] selector:', safeStringify(selector));
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-            const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-          } catch (e) {
-            console.error('[chat.ask][planner][chat_tasks] exec failed', e);
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-          }
-        } else if (tool === 'chat_overdue') {
-          try {
-            await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_overdue…', isStatus: true, createdAt: new Date() });
-            const { TasksCollection } = await import('/imports/api/tasks/collections');
-            const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
-            const nowIso = (args && typeof args.now === 'string' && args.now.trim()) ? args.now : new Date().toISOString();
-            const selector = buildOverdueSelector(nowIso);
-            console.log('[chat.ask][planner][chat_overdue] selector:', safeStringify(selector));
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-            const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-          } catch (e) {
-            console.error('[chat.ask][planner][chat_overdue] exec failed', e);
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-          }
-        } else if (tool === 'chat_tasksByProject') {
-          try {
-            await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasksByProject…', isStatus: true, createdAt: new Date() });
-            const { TasksCollection } = await import('/imports/api/tasks/collections');
-            const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
-            const selector = buildByProjectSelector(args && args.projectId);
-            console.log('[chat.ask][planner][chat_tasksByProject] selector:', safeStringify(selector));
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-            const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-          } catch (e) {
-            console.error('[chat.ask][planner][chat_tasksByProject] exec failed', e);
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
-          }
-        } else if (tool === 'chat_tasksFilter') {
-          try {
-            await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasksFilter…', isStatus: true, createdAt: new Date() });
-            const { TasksCollection } = await import('/imports/api/tasks/collections');
-            const { buildFilterSelector } = await import('/imports/api/chat/helpers');
-            const selector = buildFilterSelector(args || {});
-            console.log('[chat.ask][planner][chat_tasksFilter] selector:', safeStringify(selector));
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
-            const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
-          } catch (e) {
-            console.error('[chat.ask][planner][chat_tasksFilter] exec failed', e);
-            toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+      // Simple per-request working memory to support chaining between steps
+      const memory = { projectId: null, projectName: null, tasks: [] };
+      const bindArgs = (toolName, rawArgs) => {
+        const a = { ...(rawArgs || {}) };
+        if (toolName === 'chat_tasksByProject') {
+          if ((!a.projectId || String(a.projectId).trim() === '') && memory.projectId) {
+            a.projectId = memory.projectId;
           }
         }
+        return a;
+      };
+      // Early stop based on declared artifacts before executing steps
+      if (evaluateStopWhen(stopArtifacts, memory)) {
+        // Nothing to do; synthesize empty response promptly
+        await ChatsCollection.insertAsync({ role: 'assistant', content: 'No data to retrieve.', isStatus: true, createdAt: new Date() });
+        const citations = [];
+        await ChatsCollection.insertAsync({ role: 'assistant', content: 'Done.', citations, createdAt: new Date() });
+        return { text: 'Done.', citations };
+      }
+      const MAX_STEPS = 5;
+      const REQUIRED_ARGS = {
+        chat_tasksByProject: ['projectId'],
+        chat_projectByName: ['name']
+      };
+      let replanned = false;
+      for (let i = 0; i < Math.min(execSteps.length, MAX_STEPS); i += 1) {
+        const step = execSteps[i] || {};
+        const tool = String(step.tool || '');
+        const args = bindArgs(tool, step.args || {});
+        // Minimal generic missing-arg check for known required args
+        const required = REQUIRED_ARGS[tool] || [];
+        const missing = required.filter((k) => {
+          const v = args && args[k];
+          return (v === undefined || v === null || (typeof v === 'string' && v.trim() === ''));
+        });
+        if (missing.length > 0 && !replanned) {
+          // Re-plan once with memory snapshot
+          await ChatsCollection.insertAsync({ role: 'assistant', content: 'Re-planning…', isStatus: true, createdAt: new Date() });
+          const mem = {
+            projectId: memory.projectId || null,
+            projectName: memory.projectName || null,
+            tasksCount: Array.isArray(memory.tasks) ? memory.tasks.length : 0,
+            lastTool: tool,
+            missingArgs: missing
+          };
+          const replanMessages = [
+            { role: 'system', content: `${buildSystemPrompt()} Allowed tools: chat_tasks, chat_overdue, chat_tasksByProject, chat_tasksFilter, chat_projectsList, chat_projectByName. ${plannerPrompt}` },
+            { role: 'user', content: user + '\n\nMemory snapshot:\n' + safeStringify(mem) }
+          ];
+          const respRe = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ model: 'o4-mini', messages: replanMessages, response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } } })
+          });
+          if (respRe.ok) {
+            const pdata2 = await respRe.json();
+            const ptext2 = pdata2?.choices?.[0]?.message?.content || '';
+            try {
+              const planned2 = JSON.parse(ptext2);
+              const steps2 = Array.isArray(planned2?.steps) ? planned2.steps : [];
+              // Execute the re-planned steps with remaining budget
+              const remain = Math.max(0, MAX_STEPS - i);
+              for (let j = 0; j < Math.min(steps2.length, remain); j += 1) {
+                const step2 = steps2[j] || {};
+                const tool2 = String(step2.tool || '');
+                const args2 = bindArgs(tool2, step2.args || {});
+                if (tool2 === 'chat_tasks') {
+                  try {
+                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasks…', isStatus: true, createdAt: new Date() });
+                    const { TasksCollection } = await import('/imports/api/tasks/collections');
+                    const { buildTasksSelector } = await import('/imports/api/chat/helpers');
+                    const normArgs = { ...args2 };
+                    if (!normArgs.dueBefore) normArgs.dueBefore = computeTomorrowEndOfDayISO();
+                    if (normArgs.status) delete normArgs.status;
+                    const selector = buildTasksSelector(normArgs);
+                    if (!('status' in selector)) selector.status = { $ne: 'done' };
+                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
+                  } catch (e) {
+                    console.error('[chat.ask][replan][chat_tasks] exec failed', e);
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+                  }
+                } else if (tool2 === 'chat_overdue') {
+                  try {
+                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_overdue…', isStatus: true, createdAt: new Date() });
+                    const { TasksCollection } = await import('/imports/api/tasks/collections');
+                    const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
+                    const nowIso = (args2 && typeof args2.now === 'string' && args2.now.trim()) ? args2.now : new Date().toISOString();
+                    const selector = buildOverdueSelector(nowIso);
+                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
+                  } catch (e) {
+                    console.error('[chat.ask][replan][chat_overdue] exec failed', e);
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+                  }
+                } else if (tool2 === 'chat_tasksByProject') {
+                  try {
+                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasksByProject…', isStatus: true, createdAt: new Date() });
+                    const { TasksCollection } = await import('/imports/api/tasks/collections');
+                    const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
+                    const selector = buildByProjectSelector(args2 && args2.projectId);
+                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+                    memory.tasks = tasks;
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
+                  } catch (e) {
+                    console.error('[chat.ask][replan][chat_tasksByProject] exec failed', e);
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+                  }
+                } else if (tool2 === 'chat_tasksFilter') {
+                  try {
+                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_tasksFilter…', isStatus: true, createdAt: new Date() });
+                    const { TasksCollection } = await import('/imports/api/tasks/collections');
+                    const { buildFilterSelector } = await import('/imports/api/chat/helpers');
+                    const selector = buildFilterSelector(args2 || {});
+                    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+                    const tasks = await TasksCollection.find(selector, fields).fetchAsync();
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ tasks: tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null })) }) });
+                  } catch (e) {
+                    console.error('[chat.ask][replan][chat_tasksFilter] exec failed', e);
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+                  }
+                } else if (tool2 === 'chat_projectsList') {
+                  try {
+                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_projectsList…', isStatus: true, createdAt: new Date() });
+                    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+                    const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+                    const compact = (projects || []).map(p => ({ id: p._id, name: p.name || '', description: p.description || '' }));
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ projects: compact }) });
+                  } catch (e) {
+                    console.error('[chat.ask][replan][chat_projectsList] exec failed', e);
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+                  }
+                } else if (tool2 === 'chat_projectByName') {
+                  try {
+                    await ChatsCollection.insertAsync({ role: 'assistant', content: 'Running tool: chat_projectByName…', isStatus: true, createdAt: new Date() });
+                    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+                    const selector = buildProjectByNameSelector(args2 && args2.name);
+                    const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
+                    if (proj && proj._id) {
+                      memory.projectId = proj._id;
+                      memory.projectName = proj.name || null;
+                    }
+                    const out = proj ? { id: proj._id, name: proj.name || '', description: proj.description || '' } : null;
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ project: out }) });
+                  } catch (e) {
+                    console.error('[chat.ask][replan][chat_projectByName] exec failed', e);
+                    toolResults.push({ tool_call_id: `call_re_${j+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('[chat.ask][replan] parse failed', e);
+            }
+          } else {
+            const errTextRe = await respRe.text();
+            console.error('[chat.ask][replan] OpenAI failed', { status: respRe.status, statusText: respRe.statusText, body: errTextRe });
+          }
+          replanned = true;
+          break;
+        }
+        try {
+          await ChatsCollection.insertAsync({ role: 'assistant', content: `Running tool: ${tool}…`, isStatus: true, createdAt: new Date() });
+          const res = await runTool(tool, args, memory);
+          toolResults.push({ tool_call_id: `call_${i+1}`, output: res.output || '{}' });
+        } catch (e) {
+          console.error(`[chat.ask][planner][${tool}] exec failed`, e);
+          toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
+        }
+        // Generic early stop removed in favor of declarative stopWhen (future). Keep only MAX_STEPS cap.
       }
       // Synthesis via Chat Completions using only tool results
       await ChatsCollection.insertAsync({ role: 'assistant', content: 'Synthesizing…', isStatus: true, createdAt: new Date() });
@@ -363,9 +694,8 @@ Meteor.methods({
       const data2 = await resp2.json();
       let text = data2?.choices?.[0]?.message?.content || '';
       try {
-        const snippet = String(text).slice(0, 400);
-        console.log('[chat.ask][planner] Output length:', text.length);
-        console.log('[chat.ask][planner] Output snippet:', snippet);
+        console.log('[chat.ask][planner] Output length:', (text || '').length);
+        console.log('[chat.ask][planner] Output:', text);
       } catch (e) { console.error('[chat.ask][planner] log failed', e); }
       const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
       // The client already persisted the user message for correct ordering; persist only assistant.
@@ -427,6 +757,53 @@ Meteor.methods({
           }
         }
       }
+      ,
+      {
+        type: 'function',
+        name: 'chat_projectsList',
+        description: 'List projects (name, description). Use for project discovery or selection.',
+        parameters: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {}
+        }
+      },
+      {
+        type: 'function',
+        name: 'chat_projectByName',
+        description: 'Fetch a single project by its name (case-insensitive). Use when the user names a project.',
+        parameters: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string', description: 'Project name (case-insensitive match)' }
+          },
+          required: ['name']
+        }
+      },
+      {
+        type: 'function',
+        name: 'chat_semanticSearch',
+        description: 'Semantic search over workspace items (projects, tasks, notes, links). Returns top matches with titles and optional URLs.',
+        parameters: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            query: { type: 'string', description: 'User query for semantic retrieval' },
+            limit: { type: 'number', description: 'Max results (default 8)' }
+          },
+          required: ['query']
+        }
+      },
+      { type: 'function', name: 'chat_notesByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
+      { type: 'function', name: 'chat_noteSessionsByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
+      { type: 'function', name: 'chat_noteLinesBySession', parameters: { type: 'object', additionalProperties: false, properties: { sessionId: { type: 'string' } }, required: ['sessionId'] } },
+      { type: 'function', name: 'chat_linksByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
+      { type: 'function', name: 'chat_peopleList', parameters: { type: 'object', additionalProperties: false, properties: {} } },
+      { type: 'function', name: 'chat_teamsList', parameters: { type: 'object', additionalProperties: false, properties: {} } },
+      { type: 'function', name: 'chat_filesByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
+      { type: 'function', name: 'chat_alarmsList', parameters: { type: 'object', additionalProperties: false, properties: { enabled: { type: 'boolean' } } } },
+      
     ];
     const firstPayload = {
       model: 'o4-mini',
@@ -473,7 +850,8 @@ Meteor.methods({
       name: tc?.function?.name || tc?.name || '',
       arguments: (() => { try { return typeof tc?.function?.arguments === 'string' ? JSON.parse(tc.function.arguments) : (tc?.arguments || {}); } catch (_e) { return {}; } })()
     })) : [];
-    const toolCalls = (toolCallsFromOutput.length > 0 ? toolCallsFromOutput : toolCallsTop);
+    const toolCallsAll = (toolCallsFromOutput.length > 0 ? toolCallsFromOutput : toolCallsTop);
+    const toolCalls = toolCallsAll.slice(0, 5);
     console.log('[chat.ask] Tool calls extracted:', safeStringify(toolCalls));
     let text = data?.output_text || (Array.isArray(outputArray) ? outputArray.map(p => p?.content?.[0]?.text || '').join('') : '') || '';
 
@@ -547,6 +925,56 @@ Meteor.methods({
             toolResults.push({ tool_call_id: call.id || 'chat_tasksFilter', output: JSON.stringify({ error: e?.message || String(e) }) });
             console.error('[chat.ask][chat_tasksFilter] execution error:', e?.message || e);
           }
+        } else if (call.name === 'chat_projectsList') {
+          try {
+            const { ProjectsCollection } = await import('/imports/api/projects/collections');
+            const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+            const compact = (projects || []).map(p => ({ id: p._id, name: p.name || '', description: p.description || '' }));
+            toolResults.push({ tool_call_id: call.id || 'chat_projectsList', output: JSON.stringify({ projects: compact }) });
+          } catch (e) {
+            toolResults.push({ tool_call_id: call.id || 'chat_projectsList', output: JSON.stringify({ error: e?.message || String(e) }) });
+            console.error('[chat.ask][chat_projectsList] execution error:', e?.message || e);
+          }
+        } else if (call.name === 'chat_projectByName') {
+          try {
+            const { ProjectsCollection } = await import('/imports/api/projects/collections');
+            const selector = buildProjectByNameSelector(call.arguments && call.arguments.name);
+            const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
+            const out = proj ? { id: proj._id, name: proj.name || '', description: proj.description || '' } : null;
+            toolResults.push({ tool_call_id: call.id || 'chat_projectByName', output: JSON.stringify({ project: out }) });
+          } catch (e) {
+            toolResults.push({ tool_call_id: call.id || 'chat_projectByName', output: JSON.stringify({ error: e?.message || String(e) }) });
+            console.error('[chat.ask][chat_projectByName] execution error:', e?.message || e);
+          }
+        } else if (call.name === 'chat_semanticSearch') {
+          try {
+            const limit = Math.max(1, Math.min(50, Number(call.arguments && call.arguments.limit) || 8));
+            const q = String(call.arguments && call.arguments.query || '').trim();
+            const url = getQdrantUrl();
+            const client = new QdrantClient({ url });
+            const vector = await embedQuery(q);
+            const searchRes = await client.search(COLLECTION(), { vector, limit, with_payload: true });
+            const items = Array.isArray(searchRes) ? searchRes : (searchRes?.result || []);
+            const out = [];
+            for (let i = 0; i < items.length; i += 1) {
+              const p = items[i]?.payload || {};
+              const prev = await fetchPreview(p.kind, p.docId);
+              out.push({ kind: p.kind, id: p.docId, title: prev.title, url: prev.url || null, score: items[i]?.score || 0 });
+            }
+            try {
+              const topScores = out.slice(0, 2).map(r => Number(r.score) || 0);
+              console.log('[chat.ask][chat_semanticSearch] meta:', {
+                query: clampText(q, 120),
+                limit,
+                total: out.length,
+                topScores
+              });
+            } catch (_e) { /* noop */ }
+            toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ results: out, total: out.length }) });
+          } catch (e) {
+            toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ error: e?.message || String(e) }) });
+            console.error('[chat.ask][chat_semanticSearch] execution error:', e?.message || e);
+          }
         }
       }
       // Final synthesis call via Chat Completions (stable tool result protocol)
@@ -566,7 +994,7 @@ Meteor.methods({
         tool_calls: mappedCalls.map(c => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.args } }))
       };
       const toolMsgs = toolResults.map(tr => ({ role: 'tool', tool_call_id: idMap.get(tr.tool_call_id) || mappedCalls[0]?.id || 'call_0', content: tr.output || '{}' }));
-      const synthesisGuidance = 'Use ONLY the tool results; include ALL tasks (do not sample). List them as bullets with titles, and include the total count.';
+      const synthesisGuidance = 'Use ONLY the tool results; list all returned items with concise human-friendly fields and include total counts where applicable. Do NOT show internal IDs.';
       const cmplMessages = [
         { role: 'system', content: system + ' ' + synthesisGuidance },
         { role: 'user', content: user },
@@ -588,9 +1016,8 @@ Meteor.methods({
       text = data2?.choices?.[0]?.message?.content || '';
     }
     try {
-      const snippet = String(text).slice(0, 400);
-      console.log('[chat.ask] Output length:', text.length);
-      console.log('[chat.ask] Output snippet:', snippet);
+      console.log('[chat.ask] Output length:', (text || '').length);
+      console.log('[chat.ask] Output:', text);
     } catch (_e) { /* noop */ }
     const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
 
