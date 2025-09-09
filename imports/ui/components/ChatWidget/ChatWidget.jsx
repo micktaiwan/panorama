@@ -25,16 +25,7 @@ export default function ChatWidget() {
     return localStorage.getItem('chat_docked') === '1';
   });
   const [messages, setMessages] = useState(initialMessages);
-  const [input, setInput] = useState(() => 
-    [
-      'Test retrieval tools:',
-      '1) Overdue tasks as of now.',
-      '2) Tasks due by tomorrow 23:59.',
-      '3) Tasks for project ohBBbfHHtqj4vRcpP.',
-      '4) Tasks filtered by tag "ideas" and status todo.',
-      'For each section: list bullets (title, status, deadline) and include the total count. If none, say "none".'
-    ].join('\n')
-  );
+  const [input, setInput] = useState(() => "");
   const [isSending, setIsSending] = useState(false);
   const [pending, setPending] = useState([]); // local, not yet persisted
   const [expandedCitations, setExpandedCitations] = useState(() => new Set());

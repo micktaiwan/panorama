@@ -57,6 +57,16 @@ export const buildFilterSelector = (filters = {}) => {
   if (filters.projectId) sel.projectId = String(filters.projectId).trim();
   if (filters.status) sel.status = String(filters.status).trim();
   if (filters.tag) sel.tags = String(filters.tag).trim();
+  if (typeof filters.important !== 'undefined') {
+    const v = (typeof filters.important === 'string') ? filters.important.trim().toLowerCase() : filters.important;
+    if (v === true || v === 'true' || v === '1') sel.isImportant = true;
+    if (v === false || v === 'false' || v === '0') sel.isImportant = false;
+  }
+  if (typeof filters.urgent !== 'undefined') {
+    const v = (typeof filters.urgent === 'string') ? filters.urgent.trim().toLowerCase() : filters.urgent;
+    if (v === true || v === 'true' || v === '1') sel.isUrgent = true;
+    if (v === false || v === 'false' || v === '0') sel.isUrgent = false;
+  }
   return sel;
 };
 
@@ -139,6 +149,78 @@ export const evaluateStopWhen = (have, memory) => {
     return !!getPath(mem, key);
   };
   return have.every(checkOne);
+};
+
+// Generic registry: allowed fields per collection for read-only queries
+export const FIELD_ALLOWLIST = {
+  tasks: ['title', 'status', 'deadline', 'projectId', 'isUrgent', 'isImportant', 'tags', 'createdAt', 'updatedAt'],
+  projects: ['name', 'description', 'createdAt', 'updatedAt'],
+  notes: ['projectId', 'title', 'content', 'createdAt', 'updatedAt'],
+  noteSessions: ['projectId', 'name', 'createdAt', 'updatedAt'],
+  noteLines: ['sessionId', 'content', 'createdAt', 'updatedAt'],
+  links: ['projectId', 'name', 'url', 'createdAt', 'updatedAt'],
+  people: ['name', 'createdAt', 'updatedAt'],
+  teams: ['name', 'createdAt', 'updatedAt'],
+  files: ['projectId', 'name', 'createdAt', 'updatedAt'],
+  alarms: ['title', 'enabled', 'when', 'createdAt', 'updatedAt']
+};
+
+// Map collection name to lists.* memory key
+export const getListKeyForCollection = (collection) => {
+  const c = String(collection || '').trim();
+  const map = {
+    tasks: 'tasks',
+    projects: 'projects',
+    notes: 'notes',
+    noteSessions: 'noteSessions',
+    noteLines: 'noteLines',
+    links: 'links',
+    people: 'people',
+    teams: 'teams',
+    files: 'files',
+    alarms: 'alarms'
+  };
+  return map[c] || c;
+};
+
+// Compile a safe where object (mini-DSL) into a Mongo selector using allowlist
+// Supported ops: eq, ne, lt, lte, gt, gte, in, nin, and/or (arrays)
+export const compileWhere = (collection, where = {}) => {
+  const allowed = FIELD_ALLOWLIST[String(collection)];
+  const isAllowedField = (f) => Array.isArray(allowed) && allowed.includes(String(f));
+  const compileNode = (node) => {
+    if (!node || typeof node !== 'object') return {};
+    const sel = {};
+    // Logical operators
+    if (Array.isArray(node.and)) {
+      sel.$and = node.and.map(compileNode).filter(Boolean);
+    }
+    if (Array.isArray(node.or)) {
+      sel.$or = node.or.map(compileNode).filter(Boolean);
+    }
+    // Field comparisons
+    Object.keys(node).forEach((k) => {
+      if (k === 'and' || k === 'or') return;
+      if (!isAllowedField(k)) return;
+      const v = node[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const ops = {};
+        if (Object.prototype.hasOwnProperty.call(v, 'eq')) ops.$eq = v.eq;
+        if (Object.prototype.hasOwnProperty.call(v, 'ne')) ops.$ne = v.ne;
+        if (Object.prototype.hasOwnProperty.call(v, 'lt')) ops.$lt = v.lt;
+        if (Object.prototype.hasOwnProperty.call(v, 'lte')) ops.$lte = v.lte;
+        if (Object.prototype.hasOwnProperty.call(v, 'gt')) ops.$gt = v.gt;
+        if (Object.prototype.hasOwnProperty.call(v, 'gte')) ops.$gte = v.gte;
+        if (Object.prototype.hasOwnProperty.call(v, 'in')) ops.$in = Array.isArray(v.in) ? v.in : [v.in];
+        if (Object.prototype.hasOwnProperty.call(v, 'nin')) ops.$nin = Array.isArray(v.nin) ? v.nin : [v.nin];
+        if (Object.keys(ops).length > 0) sel[k] = ops;
+      } else {
+        sel[k] = v;
+      }
+    });
+    return sel;
+  };
+  return compileNode(where);
 };
 
 

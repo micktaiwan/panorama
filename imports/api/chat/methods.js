@@ -11,7 +11,7 @@ import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { LinksCollection } from '/imports/api/links/collections';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { embedText } from '/imports/api/search/vectorStore';
-import { buildTasksSelector, buildOverdueSelector, buildByProjectSelector, buildFilterSelector, buildProjectByNameSelector } from '/imports/api/chat/helpers';
+import { buildTasksSelector, buildOverdueSelector, buildByProjectSelector, buildFilterSelector, buildProjectByNameSelector, compileWhere, getListKeyForCollection, FIELD_ALLOWLIST } from '/imports/api/chat/helpers';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
 
@@ -257,6 +257,57 @@ const TOOL_HANDLERS = {
       memory.lists.searchResults = out;
     }
     return { output: JSON.stringify({ results: out, total: out.length }) };
+  }
+  ,
+  async chat_collectionQuery(args, memory) {
+    const collection = String(args && args.collection || '').trim();
+    const where = args && args.where ? args.where : {};
+    const select = Array.isArray(args && args.select) ? args.select.filter(f => FIELD_ALLOWLIST[collection]?.includes(f)) : [];
+    const selector = compileWhere(collection, where);
+    let cursor;
+    if (collection === 'tasks') {
+      const { TasksCollection } = await import('/imports/api/tasks/collections');
+      cursor = TasksCollection;
+    } else if (collection === 'projects') {
+      const { ProjectsCollection } = await import('/imports/api/projects/collections');
+      cursor = ProjectsCollection;
+    } else if (collection === 'notes') {
+      const { NotesCollection } = await import('/imports/api/notes/collections');
+      cursor = NotesCollection;
+    } else if (collection === 'noteSessions') {
+      const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
+      cursor = NoteSessionsCollection;
+    } else if (collection === 'noteLines') {
+      const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
+      cursor = NoteLinesCollection;
+    } else if (collection === 'links') {
+      const { LinksCollection } = await import('/imports/api/links/collections');
+      cursor = LinksCollection;
+    } else if (collection === 'people') {
+      const { PeopleCollection } = await import('/imports/api/people/collections');
+      cursor = PeopleCollection;
+    } else if (collection === 'teams') {
+      const { TeamsCollection } = await import('/imports/api/teams/collections');
+      cursor = TeamsCollection;
+    } else if (collection === 'files') {
+      const { FilesCollection } = await import('/imports/api/files/collections');
+      cursor = FilesCollection;
+    } else if (collection === 'alarms') {
+      const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+      cursor = AlarmsCollection;
+    } else {
+      throw new Error('Unsupported collection');
+    }
+    const fields = select.length > 0 ? Object.fromEntries(select.map(f => [f, 1])) : undefined;
+    const limit = Math.min(200, Math.max(1, Number(args && args.limit) || 50));
+    const docs = await cursor.find(selector, { fields }).limit(limit).fetchAsync();
+    const key = getListKeyForCollection(collection);
+    const list = Array.isArray(docs) ? docs : [];
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists[key] = list;
+    }
+    return { output: JSON.stringify({ [key]: list, total: list.length }) };
   }
   ,
   async chat_notesByProject(args, memory) {
@@ -669,7 +720,16 @@ Meteor.methods({
         try {
           await ChatsCollection.insertAsync({ role: 'assistant', content: `Running tool: ${tool}…`, isStatus: true, createdAt: new Date() });
           const res = await runTool(tool, args, memory);
-          toolResults.push({ tool_call_id: `call_${i+1}`, output: res.output || '{}' });
+          const outStr = res.output || '{}';
+          toolResults.push({ tool_call_id: `call_${i+1}`, output: outStr });
+          try {
+            const parsed = JSON.parse(outStr);
+            const keys = Object.keys(parsed || {});
+            const total = typeof parsed.total === 'number' ? parsed.total : undefined;
+            console.log('[chat.ask][planner][tool output]', { tool, keys, total, length: outStr.length });
+          } catch (eLog) {
+            console.error('[chat.ask][planner][tool output] parse failed', { tool, length: outStr.length });
+          }
         } catch (e) {
           console.error(`[chat.ask][planner][${tool}] exec failed`, e);
           toolResults.push({ tool_call_id: `call_${i+1}`, output: JSON.stringify({ error: e?.message || String(e) }) });
@@ -803,6 +863,7 @@ Meteor.methods({
       { type: 'function', name: 'chat_teamsList', parameters: { type: 'object', additionalProperties: false, properties: {} } },
       { type: 'function', name: 'chat_filesByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
       { type: 'function', name: 'chat_alarmsList', parameters: { type: 'object', additionalProperties: false, properties: { enabled: { type: 'boolean' } } } },
+      { type: 'function', name: 'chat_collectionQuery', description: 'Generic read-only query across collections with a validated where DSL. Use to filter items by fields.', parameters: { type: 'object', additionalProperties: false, properties: { collection: { type: 'string' }, where: { type: 'object' }, select: { type: 'array', items: { type: 'string' } }, limit: { type: 'number' }, sort: { type: 'object' } }, required: ['collection'] } },
       
     ];
     const firstPayload = {
