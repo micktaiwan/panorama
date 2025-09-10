@@ -16,6 +16,8 @@ export const Help = () => {
         <li><strong>Help bubble</strong> — <strong>⌘H</strong> toggle help bubble (bottom-left)</li>
         <li><strong>Back navigation</strong> — <strong>⌘ + ←</strong> (macOS) / <strong>Ctrl + ←</strong> (Windows/Linux) goes back to previous page</li>
         <li><strong>Forward navigation</strong> — <strong>⌘ + →</strong> (macOS) / <strong>Ctrl + →</strong> (Windows/Linux) goes forward to next page</li>
+        <li><strong>Reset zoom</strong> — <strong>⌘⇧0</strong> (macOS) / <strong>Ctrl+Shift+0</strong> (Windows/Linux)</li>
+        <li><strong>Toggle fullscreen</strong> — <strong>⌘⇧9</strong> (macOS) / <strong>Ctrl+Shift+9</strong> (Windows/Linux)</li>
       </ul>
       <p className="muted">This page should be updated whenever a new shortcut is added.</p>
     </div>

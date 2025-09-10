@@ -3,14 +3,12 @@ import { getOpenAiApiKey, getQdrantUrl } from '/imports/api/_shared/config';
 import { ErrorsCollection } from '/imports/api/errors/collections';
 import crypto from 'crypto';
 
-const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
-const VECTOR_SIZE = () => Number(Meteor.settings?.qdrantVectorSize || 1536);
-const DISTANCE = () => String(Meteor.settings?.qdrantDistance || 'Cosine');
-
-const DEBUG = false; // set true to avoid external embedding calls during dev
+export const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
+export const VECTOR_SIZE = () => Number(Meteor.settings?.qdrantVectorSize || 1536);
+export const DISTANCE = () => String(Meteor.settings?.qdrantDistance || 'Cosine');
 
 let singletonClient = null;
-const getQdrantClient = async () => {
+export const getQdrantClient = async () => {
   if (singletonClient) return singletonClient;
   const url = getQdrantUrl();
   if (!url) throw new Meteor.Error('config-missing', 'qdrantUrl missing in settings');
@@ -30,26 +28,7 @@ export const makePreview = (text, max = 180) => {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 };
 
-const mockVectorFromText = (text) => {
-  const size = VECTOR_SIZE();
-  const s = String(text || '');
-  let h1 = 2166136261, h2 = 16777619; // FNV-ish mix
-  for (let i = 0; i < s.length; i += 1) {
-    const c = s.charCodeAt(i);
-    h1 ^= c; h1 = (h1 * 16777619) >>> 0;
-    h2 ^= (c << (i % 13)); h2 = (h2 * 1099511627) >>> 0;
-  }
-  const out = new Array(size);
-  let x = h1 ^ h2;
-  for (let i = 0; i < size; i += 1) {
-    x = (x * 1664525 + 1013904223) >>> 0;
-    out[i] = ((x & 0xffff) / 65535) - 0.5;
-  }
-  return out;
-};
-
 export const embedText = async (text) => {
-  if (DEBUG) return mockVectorFromText(text);
   const apiKey = getOpenAiApiKey();
   if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
   const { default: fetch } = await import('node-fetch');
@@ -89,9 +68,17 @@ export const embedText = async (text) => {
   return vec;
 };
 
+let collectionEnsured = false;
+const ensureCollectionIfNeeded = async () => {
+  if (collectionEnsured) return;
+  await ensureCollection();
+  collectionEnsured = true;
+};
+
 export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = null, extraPayload = {} }) => {
   const client = await getQdrantClient();
   try {
+    await ensureCollectionIfNeeded();
     const vector = await embedText(text);
     const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), ...extraPayload };
     if (projectId) payload.projectId = projectId;
@@ -99,7 +86,7 @@ export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = 
     const pointId = toPointId(kind, id);
     await client.upsert(COLLECTION(), { points: [{ id: pointId, vector: Array.from(vector), payload }] });
   } catch (e) {
-    // Log and swallow to prevent data loss on primary writes
+    // Log and rethrow to let callers decide how to handle indexing failures
     try {
       await ErrorsCollection.insertAsync({
         kind: 'vectorization',
@@ -132,9 +119,107 @@ export const ensureCollection = async () => {
   const client = await getQdrantClient();
   try {
     await client.createCollection(COLLECTION(), { vectors: { size: VECTOR_SIZE(), distance: DISTANCE() } });
-  } catch (_e) {
-    // probably exists; ignore
+  } catch (e) {
+    const status = e && (e.response?.status || e.status);
+    const msg = e && (e.response?.data || e.message || String(e));
+    const isExists = (status === 409) || (String(msg || '').toLowerCase().includes('exist'));
+    if (isExists) return; // collection already exists; benign
+    throw e;
   }
+};
+
+// Split text into paragraph-based chunks with overlap
+export const splitIntoChunks = (text, minChars = 800, maxChars = 1200, overlap = 150) => {
+  const clean = String(text || '').replace(/\r\n/g, '\n');
+  const rawParas = clean.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  const pieces = [];
+  // Helper: split a long string into segments <= maxChars with overlap
+  const splitLong = (s) => {
+    const out = [];
+    let start = 0;
+    while (start < s.length) {
+      const end = Math.min(s.length, start + maxChars);
+      out.push(s.slice(start, end));
+      if (end >= s.length) break;
+      start = Math.max(0, end - overlap);
+    }
+    return out;
+  };
+  // First, ensure paragraphs themselves are not oversized
+  for (const para of rawParas) {
+    if (para.length <= maxChars) pieces.push(para);
+    else splitLong(para).forEach(x => pieces.push(x));
+  }
+  // Pack paragraphs into chunks aiming for min..max
+  const chunks = [];
+  let buf = '';
+  for (const p of pieces) {
+    if (!buf) { buf = p; continue; }
+    const nextLen = buf.length + 1 + p.length;
+    if (nextLen <= maxChars) {
+      buf = `${buf}\n${p}`;
+    } else {
+      // finalize current buffer
+      chunks.push(buf);
+      // start next; consider overlap from end of buf
+      const tail = buf.slice(Math.max(0, buf.length - overlap));
+      buf = tail ? `${tail}\n${p}` : p;
+      if (buf.length > maxChars) {
+        // if still too long (rare), split
+        splitLong(buf).forEach(x => chunks.push(x));
+        buf = '';
+      }
+    }
+  }
+  if (buf) chunks.push(buf);
+  // Merge very small trailing chunk back if possible
+  if (chunks.length >= 2 && chunks[chunks.length - 1].length < Math.min(400, minChars)) {
+    const last = chunks.pop();
+    const prev = chunks.pop();
+    const merged = `${prev}\n${last}`;
+    if (merged.length <= maxChars) chunks.push(merged);
+    else { chunks.push(prev); chunks.push(last); }
+  }
+  return chunks;
+};
+
+// Upsert multiple chunks for one logical document
+export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessionId = null, extraPayload = {}, minChars = 800, maxChars = 1200, overlap = 150 }) => {
+  const client = await getQdrantClient();
+  await ensureCollectionIfNeeded();
+  const chunks = splitIntoChunks(text, minChars, maxChars, overlap);
+  const points = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    try {
+      const chunk = chunks[i];
+      const vector = await embedText(chunk);
+      const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(chunk), chunkIndex: i, ...extraPayload };
+      if (projectId) payload.projectId = projectId;
+      if (sessionId) payload.sessionId = sessionId;
+      const pointId = toPointId(kind, `${id}#${i}`);
+      points.push({ id: pointId, vector: Array.from(vector), payload });
+    } catch (e) {
+      try {
+        await ErrorsCollection.insertAsync({
+          kind: 'vectorization',
+          message: e?.message || String(e),
+          context: { kind, id, chunkIndex: i, hasProjectId: !!projectId, hasSessionId: !!sessionId },
+          createdAt: new Date(),
+        });
+      } catch (_e) { console.error('[errors][log] failed to record chunk vectorization error', _e); }
+    }
+  }
+  if (points.length === 0) {
+    throw new Meteor.Error('vectorization-failed', 'No chunks could be embedded');
+  }
+  await client.upsert(COLLECTION(), { points });
+};
+
+// Delete all points for a logical document by payload.docId
+export const deleteByDocId = async (kind, id) => {
+  const client = await getQdrantClient();
+  const docId = `${kind}:${id}`;
+  await client.delete(COLLECTION(), { filter: { must: [{ key: 'docId', match: { value: docId } }] } });
 };
 
 

@@ -90,13 +90,16 @@
 .btnArchive { background: #1b2550; border: 1px solid #2a3a7a; color: #cfe1ff; }
 .btnArchive:hover { background: #223066; }
 
+/* Ensure container padding does not increase overall width */
+.container { box-sizing: border-box; }
+
 /* Reserve space for docked chat (right sidebar) */
 body.withDockedChat .container {
-  padding-right: 380px; /* fallback for small screens */
+  padding-right: calc(min(38vw, 560px));
 }
 
 @media (min-width: 1200px) {
   body.withDockedChat .container {
-    padding-right: 560px; /* matches ChatWidget docked width cap */
+    padding-right: 560px; /* explicit cap on very wide screens */
   }
 }

@@ -44,6 +44,8 @@ export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onT
             <select className="budgetSelect" value={filter} onChange={(e) => onFilterChange(e.target.value)}>
               <option value="all">All</option>
               <option value="techOnly">Tech</option>
+              <option value="product">Product</option>
+              <option value="other">Other</option>
               <option value="parked">Parked</option>
               <option value="review">To review</option>
             </select>

@@ -1,11 +1,13 @@
 import React from 'react';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
-import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
-import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
+import { AppPreferencesCollection } from '../../api/appPreferences/collections';
+import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import './Preferences.css';
-import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
-import { navigateTo } from '/imports/ui/router.js';
+import { Modal } from '../components/Modal/Modal.jsx';
+import { navigateTo } from '../router.js';
+import { Notify } from '../components/Notify/Notify.jsx';
+import { playBeep } from '../utils/sound.js';
 
 export const Preferences = () => {
   const sub = useSubscribe('appPreferences');
@@ -20,7 +22,53 @@ export const Preferences = () => {
   const [checking, setChecking] = React.useState(false);
   const [indexing, setIndexing] = React.useState(false);
   const [confirmIndex, setConfirmIndex] = React.useState(false);
-  React.useEffect(() => { if (pref) { setFilesDir(pref.filesDir || ''); setDevUrlMode(!!pref.devUrlMode); setOpenaiApiKey(pref.openaiApiKey || ''); setPennyBaseUrl(pref.pennylaneBaseUrl || ''); setPennyToken(pref.pennylaneToken || ''); setQdrantUrl(pref.qdrantUrl || ''); } }, [pref && pref._id]);
+  // indexJob: { jobId, total, processed, upserts, errors, done }
+  const [indexJob, setIndexJob] = React.useState(null);
+  // toast: { message, kind }
+  const [toast, setToast] = React.useState(null);
+
+  const pollIndexStatus = React.useCallback((jobId) => {
+    Meteor.call('qdrant.indexStatus', jobId, (e2, st) => {
+      if (e2 || !st) {
+        setIndexing(false);
+        setIndexJob(null);
+        setHealth({ error: e2?.reason || e2?.message || 'status failed' });
+        setToast({ message: `Index status failed: ${e2?.reason || e2?.message || 'unknown error'}`, kind: 'error' });
+        return;
+      }
+      setIndexJob({ ...st, jobId });
+      if (st.done) {
+        setIndexing(false);
+        setToast({ message: 'Index rebuild completed', kind: 'success' });
+        Meteor.call('qdrant.health', (e3, r3) => setHealth(e3 ? { error: e3?.reason || e3?.message || String(e3) } : r3));
+      } else {
+        setTimeout(() => pollIndexStatus(jobId), 800);
+      }
+    });
+  }, []);
+
+  const startRebuild = React.useCallback(() => {
+    setIndexing(true);
+    Meteor.call('qdrant.indexStart', (err, res) => {
+      if (err || !res) {
+        setIndexing(false);
+        setHealth({ error: err?.reason || err?.message || 'start failed' });
+        setToast({ message: `Index start failed: ${err?.reason || err?.message || 'unknown error'}`, kind: 'error' });
+        return;
+      }
+      setIndexJob({ jobId: res.jobId, total: res.total, processed: 0, upserts: 0, errors: 0, done: false });
+      pollIndexStatus(res.jobId);
+    });
+  }, [pollIndexStatus]);
+  React.useEffect(() => {
+    if (!pref) return;
+    setFilesDir(pref.filesDir || '');
+    setDevUrlMode(!!pref.devUrlMode);
+    setOpenaiApiKey(pref.openaiApiKey || '');
+    setPennyBaseUrl(pref.pennylaneBaseUrl || '');
+    setPennyToken(pref.pennylaneToken || '');
+    setQdrantUrl(pref.qdrantUrl || '');
+  }, [pref?._id]);
   if (sub()) return <div>Loading…</div>;
   return (
     <div className="prefs">
@@ -117,6 +165,31 @@ export const Preferences = () => {
         </div>
       </div>
 
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Display</div>
+          <div className="prefsValue">
+            <button
+              className="btn"
+              onClick={() => {
+                if (window.electron?.resetZoom) {
+                  window.electron.resetZoom();
+                  setToast({ message: 'Zoom reset to 100%', kind: 'success' });
+                } else {
+                  const isElectron = typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent || '');
+                  const msg = isElectron
+                    ? 'Zoom reset not available yet. Please restart the app to enable it.'
+                    : 'Zoom reset not available in browser';
+                  setToast({ message: msg, kind: 'error' });
+                }
+              }}
+            >
+              Reset zoom (100%)
+            </button>
+          </div>
+        </div>
+      </div>
+
       <h3>Qdrant</h3>
       <div className="prefsSection">
         <div className="prefsRow">
@@ -127,8 +200,25 @@ export const Preferences = () => {
               Meteor.call('qdrant.health', (err, res) => { setChecking(false); setHealth(err ? { error: err?.reason || err?.message || String(err) } : res); });
             }}>{checking ? 'Checking…' : 'Check health'}</button>
             <button className="btn ml8" disabled={indexing} onClick={() => setConfirmIndex(true)}>{indexing ? 'Indexing…' : 'Rebuild index'}</button>
+            <button className="btn ml8" onClick={() => {
+              playBeep(0.5);
+              setToast({ message: 'Test beep played', kind: 'success' });
+            }}>Test audio</button>
           </div>
         </div>
+        {indexJob ? (
+          <div className="prefsRow">
+            <div className="prefsLabel">Index progress</div>
+            <div className="prefsValue">
+              <div className="progressBar" aria-label="Indexing progress">
+                <div className="progressBarFill" style={{ width: `${Math.min(100, Math.round(((indexJob.processed || 0) / Math.max(1, indexJob.total || 0)) * 100))}%` }} />
+              </div>
+              <div className="progressText">
+                {`${indexJob.processed || 0}/${indexJob.total || 0} processed · ${indexJob.upserts || 0} upserts · ${indexJob.errors || 0} errors`}
+              </div>
+            </div>
+          </div>
+        ) : null}
         {health ? (
           <div className="prefsRow">
             <div className="prefsLabel" />
@@ -143,25 +233,19 @@ export const Preferences = () => {
         title="Rebuild Qdrant index?"
         actions={[
           <button key="cancel" className="btn" onClick={() => setConfirmIndex(false)}>Cancel</button>,
-          <button key="ok" className="btn" onClick={() => {
-            setConfirmIndex(false);
-            setIndexing(true);
-            Meteor.call('qdrant.indexStart', (err, res) => {
-              if (err || !res) { setIndexing(false); setHealth({ error: err?.reason || err?.message || 'start failed' }); return; }
-              const poll = () => {
-                Meteor.call('qdrant.indexStatus', res.jobId, (e2, st) => {
-                  if (e2 || !st) { setIndexing(false); setHealth({ error: e2?.reason || e2?.message || 'status failed' }); return; }
-                  if (st.done) { setIndexing(false); Meteor.call('qdrant.health', (e3, r3) => setHealth(e3 ? { error: e3?.reason || e3?.message || String(e3) } : r3)); }
-                  else setTimeout(poll, 800);
-                });
-              };
-              poll();
-            });
-          }}>Rebuild</button>
+          <button key="ok" className="btn" onClick={() => { setConfirmIndex(false); startRebuild(); }}>Rebuild</button>
         ]}
       >
         <p>This will drop and recreate the collection, then reindex all documents.</p>
       </Modal>
+      {toast ? (
+        <Notify
+          message={toast.message}
+          kind={toast.kind}
+          onClose={() => setToast(null)}
+          durationMs={toast.kind === 'error' ? 5000 : 3000}
+        />
+      ) : null}
       <div className="prefsFooter">
         <a href="#/onboarding" className="btn-link" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'onboarding' }); }}>Open Onboarding</a>
       </div>

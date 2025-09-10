@@ -7,8 +7,8 @@
     "dev:meteor": "meteor run --settings settings.json",
     "dev:meteor:raw": "meteor run --raw-logs --settings settings.json",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
-    "dev:desktop": "concurrently -n meteor,electron -c blue,green \"npm:dev:meteor\" \"npm:dev:electron\"",
-    "dev:desktop:raw": "concurrently -n meteor,electron -c blue,green \"npm:dev:meteor:raw\" \"npm:dev:electron\"",
+    "dev:desktop": "concurrently -k -n meteor,electron -c blue,green \"npm:dev:meteor\" \"npm:dev:electron\"",
+    "dev:desktop:raw": "concurrently -k -n meteor,electron -c blue,green \"npm:dev:meteor:raw\" \"npm:dev:electron\"",
     "test": "meteor test --once --driver-package meteortesting:mocha"
   },
   "dependencies": {

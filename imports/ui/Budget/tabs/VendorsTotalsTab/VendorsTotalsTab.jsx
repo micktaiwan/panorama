@@ -29,6 +29,8 @@ export const VendorsTotalsTab = ({ rows, filter, teamFilter, sort, dateRange, se
             <select className="budgetSelect" value={filter} onChange={(e) => onFilterChange(e.target.value)}>
               <option value="all">All</option>
               <option value="techOnly">Tech</option>
+              <option value="product">Product</option>
+              <option value="other">Other</option>
               <option value="parked">Parked</option>
               <option value="review">To review</option>
             </select>
@@ -146,6 +148,32 @@ export const VendorsTotalsTab = ({ rows, filter, teamFilter, sort, dateRange, se
                       }}
                     >
                       Tech
+                    </button>
+                    <button
+                      className="btn ml8"
+                      onClick={() => {
+                        if (!t.sampleId) { setToast({ message: 'No sample line', kind: 'error' }); return; }
+                        Meteor.call('budget.setDepartment', t.sampleId, 'product', (err, res) => {
+                          if (err) { console.error('budget.setDepartment failed', err); setToast({ message: 'Mark product failed', kind: 'error' }); return; }
+                          const n = (res && res.bulkUpdated) ? Number(res.bulkUpdated) : 0;
+                          setToast({ message: n > 0 ? `Marked ${n + 1} lines as Product for ${t.vendor}` : `Marked 1 line as Product for ${t.vendor}`, kind: 'success' });
+                        });
+                      }}
+                    >
+                      Product
+                    </button>
+                    <button
+                      className="btn ml8"
+                      onClick={() => {
+                        if (!t.sampleId) { setToast({ message: 'No sample line', kind: 'error' }); return; }
+                        Meteor.call('budget.setDepartment', t.sampleId, 'other', (err, res) => {
+                          if (err) { console.error('budget.setDepartment failed', err); setToast({ message: 'Mark other failed', kind: 'error' }); return; }
+                          const n = (res && res.bulkUpdated) ? Number(res.bulkUpdated) : 0;
+                          setToast({ message: n > 0 ? `Marked ${n + 1} lines as Other for ${t.vendor}` : `Marked 1 line as Other for ${t.vendor}`, kind: 'success' });
+                        });
+                      }}
+                    >
+                      Other
                     </button>
                     {['lemapp','sre','data','pony','cto'].map((teamKey) => (
                       <button

@@ -564,7 +564,8 @@ Meteor.methods({
       'This is a note. Remove emojis. Remove formatting, but keep a text format with titles if needed.',
       'Keep conversation flow and names if it is a conversation.',
       'Do not lose content, do not summarize.',
-      'Keep the same language as the original note.'
+      'Keep the same language as the original note.',
+      'You can fix spelling errors.'
     ].join(' ');
     const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
 

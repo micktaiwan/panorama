@@ -19,6 +19,8 @@ export const BudgetFilters = ({
           <select className="budgetSelect" value={departmentValue} onChange={(e) => onDepartmentChange && onDepartmentChange(e.target.value)}>
             <option value="all">All</option>
             <option value="techOnly">Tech</option>
+            <option value="product">Product</option>
+            <option value="other">Other</option>
             <option value="parked">Parked</option>
             <option value="review">To review</option>
           </select>

@@ -85,17 +85,51 @@ export const buildProjectByNameSelector = (rawName) => {
   }
 };
 
-// Generic binding helper: inject arguments from memory when missing.
-// Minimal support: inject ids.projectId for chat_tasksByProject
+// Generic path resolver for {var:'path'} syntax
+const resolveVariable = (value, memory) => {
+  if (typeof value === 'object' && value !== null && value.var) {
+    const path = String(value.var).split('.');
+    let current = memory;
+    for (const segment of path) {
+      if (!current || typeof current !== 'object') return undefined;
+      current = current[segment];
+    }
+    return current;
+  }
+  return value;
+};
+
+// Generic binding helper: inject arguments from memory when missing
+// Supports {var:'ids.projectId'} syntax and legacy memory.projectId fallback
 export const bindArgsWithMemory = (toolName, rawArgs, memory) => {
   const args = { ...(rawArgs || {}) };
   const mem = memory || {};
-  if (toolName === 'chat_tasksByProject') {
-    const has = args && typeof args.projectId === 'string' && args.projectId.trim();
-    if (!has && mem && mem.projectId) {
-      args.projectId = mem.projectId;
-    }
+  
+  // Process all args for variable resolution
+  Object.keys(args).forEach(key => {
+    args[key] = resolveVariable(args[key], mem);
+  });
+  
+  // Generic fallbacks for common missing arguments
+  if (toolName === 'chat_tasksByProject' && !args.projectId) {
+    args.projectId = mem.ids?.projectId || mem.projectId;
   }
+  if (toolName === 'chat_notesByProject' && !args.projectId) {
+    args.projectId = mem.ids?.projectId || mem.projectId;
+  }
+  if (toolName === 'chat_noteSessionsByProject' && !args.projectId) {
+    args.projectId = mem.ids?.projectId || mem.projectId;
+  }
+  if (toolName === 'chat_noteLinesBySession' && !args.sessionId) {
+    args.sessionId = mem.ids?.sessionId || mem.sessionId;
+  }
+  if (toolName === 'chat_linksByProject' && !args.projectId) {
+    args.projectId = mem.ids?.projectId || mem.projectId;
+  }
+  if (toolName === 'chat_filesByProject' && !args.projectId) {
+    args.projectId = mem.ids?.projectId || mem.projectId;
+  }
+  
   return args;
 };
 

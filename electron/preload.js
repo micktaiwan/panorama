@@ -1,7 +1,8 @@
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
-  // Fill with IPC helpers later
+  resetZoom: () => ipcRenderer.invoke('view:resetZoom'),
+  toggleFullscreen: () => ipcRenderer.invoke('view:toggleFullscreen')
 });
 
 

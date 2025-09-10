@@ -293,7 +293,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
             >
               {isCoaching ? 'Asking…' : 'Ask Coach'}
             </button>
-            <Tooltip content="Clear previous coach questions for this session" placement="top">
+            <Tooltip content="Clear coach items (questions, ideas, answers) for this session" placement="top">
               <button
                 className="btn ml8"
                 onClick={() => {
