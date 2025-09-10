@@ -225,7 +225,7 @@ export default function ChatWidget() {
             </div>
           </div>
 
-          <div className="ChatWidget__messages" ref={scrollRef}>
+          <div className="ChatWidget__messages scrollArea" ref={scrollRef}>
             {hasMessages ? (
               renderList.map((m) => (
                 <div key={m.id} className={`ChatWidget__message ChatWidget__message--${m.role} ${m.error ? 'ChatWidget__message--error' : ''}${m.isStatus ? ' ChatWidget__message--status' : ''}`}>

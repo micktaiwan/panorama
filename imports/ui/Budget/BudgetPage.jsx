@@ -16,7 +16,7 @@ import { CheckTab } from '/imports/ui/Budget/tabs/CheckTab/CheckTab.jsx';
 import { TeamsTab } from '/imports/ui/Budget/tabs/TeamsTab/TeamsTab.jsx';
 import { ImportTab } from '/imports/ui/Budget/tabs/ImportTab/ImportTab.jsx';
 import { ImportSettings } from '/imports/ui/Budget/tabs/ImportSettings/ImportSettings.jsx';
-import { filterByQuery, applyDepartmentFilter, applyTeamFilter, filterByDateRange } from '/imports/ui/Budget/utils/filters.js';
+import { filterByQuery, applyDepartmentFilter, applyTeamFilter, filterByDateRange, applyCurrencyFilter } from '/imports/ui/Budget/utils/filters.js';
 import { useBudgetData } from '/imports/ui/Budget/hooks/useBudgetData.js';
 import { setNotifyHandler } from '/imports/ui/utils/notify.js';
 
@@ -61,6 +61,7 @@ export const BudgetPage = () => {
   const [vendorsMonthlyDateRange, setVendorsMonthlyDateRange] = useState('all');
   const [searchCheck, setSearchCheck] = useState('');
   const [teamsDateRange, setTeamsDateRange] = useState('all');
+  const [currencyFilter, setCurrencyFilter] = useState('all');
 
   const { allLines } = useBudgetData(departmentFilter);
 
@@ -122,10 +123,11 @@ export const BudgetPage = () => {
   const rowsRecent = useMemo(() => {
     let r = applyDepartmentFilter(allLines, departmentFilter);
     r = applyTeamFilter(r, teamFilter);
+    r = applyCurrencyFilter(r, currencyFilter);
     r = filterByQuery(r, searchRecent);
     // Ensure most recent first by date desc (string ISO or date)
     return r.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || (Number(b.importedAt || 0) - Number(a.importedAt || 0)));
-  }, [allLines, departmentFilter, teamFilter, searchRecent]);
+  }, [allLines, departmentFilter, teamFilter, currencyFilter, searchRecent]);
 
   
 
@@ -290,6 +292,8 @@ export const BudgetPage = () => {
             onDeptChange={setDepartmentFilter}
             teamFilter={teamFilter}
             onTeamChange={setTeamFilter}
+            currencyFilter={currencyFilter}
+            onCurrencyChange={setCurrencyFilter}
             setToast={setToast}
           />
         )}

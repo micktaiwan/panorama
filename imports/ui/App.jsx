@@ -35,10 +35,13 @@ import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 import HelpBubble from '/imports/ui/components/HelpBubble/HelpBubble.jsx';
+import { playBeep } from '/imports/ui/utils/sound.js';
 
 function App() {
   const [route, setRoute] = useState(parseHashRoute());
   useAlarmScheduler();
+  // Play a short beep at app startup
+  useEffect(() => { playBeep(0.4); }, []);
   const ready = useTracker(() => Meteor.subscribe('alarms.mine').ready(), []);
   const alarms = useTracker(() => AlarmsCollection.find({}, { sort: { nextTriggerAt: 1 } }).fetch(), [ready]);
   const [activeAlarmId, setActiveAlarmId] = useState(null);
@@ -122,9 +125,9 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (e) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const metaK = (isMac && e.metaKey && e.key.toLowerCase() === 'k') || (!isMac && e.ctrlKey && e.key.toLowerCase() === 'k');
-      if (metaK) {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (hasMod && key === 'k') {
         e.preventDefault();
         setSearchOpen(true);
       }
@@ -141,8 +144,7 @@ function App() {
       const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
       if (isEditable) return;
 
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const hasMod = isMac ? e.metaKey : e.ctrlKey;
+      const hasMod = e.metaKey || e.ctrlKey;
       if (!hasMod) return;
 
       if (e.key === 'ArrowLeft') {
@@ -541,7 +543,7 @@ function App() {
           onActiveChange={setSearchActiveIdx}
           stale={searchDirty}
         />
-        <p className="muted">Tip: {navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘K' : 'Ctrl+K'} to open this anywhere.</p>
+        <p className="muted">Tip: ⌘K / Ctrl+K to open this anywhere.</p>
       </Modal>
       <footer className="appFooter">
         <span>Panorama — get a clear view of your projects</span>

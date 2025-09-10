@@ -11,7 +11,9 @@ export const filterByQuery = (rows, query) => {
 export const applyDepartmentFilter = (rows, departmentFilter) => {
   if (departmentFilter === 'parked') return rows.filter((r) => r.department === 'parked');
   if (departmentFilter === 'techOnly') return rows.filter((r) => r.department === 'tech');
-  if (departmentFilter === 'review') return rows.filter((r) => !r.department || !['tech','parked'].includes(r.department));
+  if (departmentFilter === 'product') return rows.filter((r) => r.department === 'product');
+  if (departmentFilter === 'other') return rows.filter((r) => r.department === 'other');
+  if (departmentFilter === 'review') return rows.filter((r) => !r.department || !['tech','parked','product','other'].includes(r.department));
   return rows;
 };
 
@@ -28,6 +30,13 @@ export const applyTeamFilter = (rows, teamFilter) => {
 
 export const getAllowedTeams = () => ALLOWED_TEAMS.slice();
 
+
+export const applyCurrencyFilter = (rows, currencyFilter) => {
+  if (currencyFilter === 'all') return rows;
+  const currency = String(currencyFilter || '').toUpperCase();
+  if (!currency) return rows;
+  return rows.filter((r) => (r.currency || 'EUR').toUpperCase() === currency);
+};
 
 export const filterByDateRange = (rows, range) => {
   const r = String(range || 'all');

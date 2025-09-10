@@ -1,4 +1,5 @@
-const { app, BrowserWindow, nativeImage, Menu, screen, shell } = require('electron');
+const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain } = require('electron');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require('path');
 const fs = require('fs');
 
@@ -178,6 +179,19 @@ function createWindow(savedState) {
 app.whenReady().then(() => {
   app.setName('Panorama');
 
+  // Configure custom About panel (macOS)
+  if (process.platform === 'darwin') {
+    const aboutIconPath = path.join(__dirname, 'assets', 'icon.icns');
+    app.setAboutPanelOptions({
+      applicationName: 'Panorama',
+      applicationVersion: app.getVersion(),
+      version: `Electron ${process.versions.electron}`,
+      credits: 'Panorama — Personal knowledge, notes, tasks and reporting toolkit.',
+      iconPath: aboutIconPath,
+      copyright: '© 2025 Panorama'
+    });
+  }
+
   const isMac = process.platform === 'darwin';
   const savedWindowState = loadWindowState();
   const template = [
@@ -245,11 +259,11 @@ app.whenReady().then(() => {
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'resetZoom' },
+        { role: 'resetZoom', accelerator: 'CmdOrCtrl+Shift+0' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
         { type: 'separator' },
-        { role: 'togglefullscreen' }
+        { role: 'togglefullscreen', accelerator: 'CmdOrCtrl+Shift+9' }
       ]
     },
     {
@@ -280,6 +294,16 @@ app.whenReady().then(() => {
     }
   }
   createWindow(savedWindowState);
+});
+
+ipcMain.handle('view:resetZoom', () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) win.webContents.setZoomLevel(0);
+});
+
+ipcMain.handle('view:toggleFullscreen', () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) win.setFullScreen(!win.isFullScreen());
 });
 
 app.on('window-all-closed', () => {

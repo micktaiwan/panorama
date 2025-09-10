@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import './Search.css';
 import { navigateTo } from '/imports/ui/router.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import { Meteor } from 'meteor/meteor';
 import { LinksCollection } from '/imports/api/links/collections';
 
@@ -153,6 +154,11 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
                   {icon}
                   {r.kind}
                 </span>
+                {r.projectName ? (
+                  <Tooltip content={r.projectName} placement="top">
+                    <span className="searchProject">{r.projectName}</span>
+                  </Tooltip>
+                ) : null}
                 <span className={`searchText${isDone ? ' muted' : ''}`}>{r.text || r.id}</span>
               </div>
             <div className="taskRight"><div className="taskMeta taskMetaDefault">{typeof r.score === 'number' ? r.score.toFixed(3) : r.score}</div></div>

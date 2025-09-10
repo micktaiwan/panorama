@@ -10,7 +10,7 @@ import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 
 const isPdfPublicUrl = (url) => String(url || '').toLowerCase().includes('/public/invoice/pdf');
 
-export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter, onDeptChange, teamFilter, onTeamChange, setToast }) => {
+export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter, onDeptChange, teamFilter, onTeamChange, currencyFilter, onCurrencyChange, setToast }) => {
   const totalDisplayed = rows.reduce((acc, r) => acc + (Number(r.amountCents || 0)), 0);
   return (
     <div className="panel">
@@ -22,6 +22,8 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
             <select className="budgetSelect" value={departmentFilter} onChange={(e) => onDeptChange(e.target.value)}>
               <option value="all">All</option>
               <option value="techOnly">Tech</option>
+              <option value="product">Product</option>
+              <option value="other">Other</option>
               <option value="parked">Parked</option>
               <option value="review">To review</option>
             </select>
@@ -38,6 +40,16 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
               <option value="review">To review</option>
             </select>
           </label>
+          <label>
+            <span className="mr4">Currency:</span>
+            <select className="budgetSelect" value={currencyFilter} onChange={(e) => onCurrencyChange(e.target.value)}>
+              <option value="all">All currencies</option>
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
+              <option value="GBP">GBP</option>
+              <option value="CAD">CAD</option>
+            </select>
+          </label>
           <input className="budgetSearch" placeholder="Search vendor" value={search} onChange={(e) => onSearchChange(e.target.value)} />
         </BudgetToolbar>
       </div>
@@ -48,6 +60,28 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
           const res = await writeClipboard(text);
           setToast({ message: res.message, kind: res.kind });
         }}>Copy</button>
+        <button className="btn ml8" onClick={async () => {
+          // Group by vendor and calculate totals
+          const vendorTotals = {};
+          rows.forEach(r => {
+            const vendor = r.vendor && String(r.vendor).trim();
+            if (vendor) {
+              if (!vendorTotals[vendor]) {
+                vendorTotals[vendor] = 0;
+              }
+              vendorTotals[vendor] += Number(r.amountCents || 0);
+            }
+          });
+          
+          // Sort vendors by total amount DESC
+          const sortedVendors = Object.entries(vendorTotals)
+            .sort(([,a], [,b]) => b - a)
+            .map(([vendor, total]) => `${vendor}\t${fmtDisplayNoCents(total)}`);
+          
+          const text = sortedVendors.join('\n');
+          const res = await writeClipboard(text);
+          setToast({ message: `${res.message} (${sortedVendors.length} unique vendors with totals)`, kind: res.kind });
+        }}>Copy Vendors</button>
       </div>
       {rows && rows.length > 0 ? (
         <>
@@ -173,6 +207,8 @@ RecentLinesTab.propTypes = {
   onDeptChange: PropTypes.func.isRequired,
   teamFilter: PropTypes.string.isRequired,
   onTeamChange: PropTypes.func.isRequired,
+  currencyFilter: PropTypes.string.isRequired,
+  onCurrencyChange: PropTypes.func.isRequired,
   setToast: PropTypes.func.isRequired,
 };
 

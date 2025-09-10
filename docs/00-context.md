@@ -1,109 +1,78 @@
-# Project Context
+## Overview — Light Context
 
-Related docs:
+Useful Links:
 
 - [Roadmap](./01-roadmap.md)
 - [Tech notes](./02-tech-notes.md)
 - [Feature: text2task](./10-feature-text2task.md)
 
-## Panorama Project
+This document provides a quick overview. The code is the main documentation and the only source of truth.
 
-- Codename: **Panorama**.
-- Goal: Build a project management tool that provides a global overview of
-  all lempire/lemlist projects and responsibilities across teams.
-- lemlist (without uppercase) is a Sales Engagement Platform (SEP). Panorama is an internal CTO tool to keep clarity on what matters and to track progress.
+## Objective & Scope
 
-## Users and Roles
+- Global view of lemlist projects and team responsibilities
+- Track tasks, risks, and progress; capture meeting notes
+- On-demand AI summaries/coaching to identify next steps
+- Local-only MVP, keyboard-first, list/detail views (no Kanban)
 
-- Primary user: CTO (multi-team scope: Dev, Data, SRE, DevOps, etc.).
-- Secondary users: none for MVP; team leads may be added later.
+## User
 
-## Problem Statement
+- Primary: CTO (multi-team scope). Other roles possible later.
 
-- Need for a clear, hierarchical overview (projects → tasks) without Kanban.
-- Consolidate meeting notes and decisions per project.
-- Generate automatic AI summaries to surface what matters and next steps.
-- need for a clear dashboard to track progress and status of projects
+## Problem to Solve
 
-## Objectives
+- Clear hierarchy (Projects → Tasks) without boards
+- Centralize notes/decisions by project
+- Quickly see signals (blockers, deadlines, staleness)
 
-- Maintain a trustworthy overview of active projects and personal/pro work.
-- Track tasks with deadlines, progress percentage, status, and risk.
-- Capture notes in meetings and summarize on-demand with AI.
-- Keep people context organized via in‑app Teams (MVP) and, later, in sync via lemlist team users.
+## Goals
 
-## MVP Scope (Local-only to start)
+- Reliable portfolio of ongoing work (personal and teams)
+- Tasks with deadlines, status, progress, and risk
+- Quick note-taking; on-demand AI synthesis
+- People context via in-app Teams
 
-- Manual data entry for Projects, Tasks, and Notes.
-- No external automations initially. Optional cron jobs may later compute
-  progress and produce a daily recap.
-- English UI. No Kanban view; focus on list and detail pages.
-- Three-pane note-taking interface: Context | Notes | AI (keyboard-first).
-- AI summarization and coaching are on-demand (not automatic per keystroke).
+## MVP (local-only)
 
-### Initial Data Model
+- Manual CRUD: Projects, Tasks, Notes
+- UI in English; lists/details
+- Notes in 3 panels: Context | Notes | AI (keyboard-first)
+- No initial automations; potential cron/daily recap later
 
-- Project: id, name, description, priority, status (planned/active/blocked/done),
-  startDate, targetDate, progressPercent, riskLevel, links (Notion/GitHub),
-  updatedAt.
-- Task: id, projectId, title, status, dueDate, estimate, actual, progressPercent,
-  notes, updatedAt.
-- Note: id, projectId, content, createdAt, aiSummary.
-- NoteSession: id, projectId (optional), createdAt.
-- NoteLine: id, sessionId, content, createdAt.
+## Data Model (concise)
 
-### Views
+- Project: name, description, priority, status, dates, progress, risk, links
+- Task: projectId, title, status, dueDate, estimate/actual, progress, notes
+- Note: projectId, content, createdAt, aiSummary
+- NoteSession/NoteLine: container session + lines for quick entry
 
-- Dashboard: high-level stats and signals (e.g., blockers, stale updates,
-  upcoming deadlines).
-- Projects list: compact table with key fields (status, progress, targetDate,
-  risk).
-- Project details: overview, tasks, notes with AI summary.
-- Note Session: two-column layout (Context | Notes) with AI section below the notes.
+## Main Views
 
-## Integrations
+- Dashboard: key signals (blockers, deadlines, staleness)
+- Projects list: compact table
+- Project details: overview, tasks, notes + AI synthesis
+- Note Session: Context | Notes | AI
 
-- Lemlist API: acceptable later; not used in MVP.
-- Notion: future import of projects and tasks (no integration in MVP).
+## AI & Search
 
-## Automation and Notifications (Later)
+- On-demand summary and coaching (a few high-signal questions)
+- Context: project metadata + recent note lines
+- Optional Vector DB later if needed
 
-- Optional cron jobs to compute progress and produce daily recaps.
-- In-app daily recap view first; email digests may come later.
+## Automation (later)
 
-## UX Guidelines
+- Optional cron for progress and daily recap; first in-app then email
 
-- English UI copy. Prioritize clarity and dense information over boards.
-- Hierarchical navigation: Projects → Tasks → Notes.
-- Keyboard-first navigation. Enter commits a line; Shift+Enter for newline.
-- Optional inline tags (e.g., #risk, #decision) are nice-to-have, not priority.
+## UX Principles
 
-## Tech Notes
+- Clarity > boards; dense and scannable lists
+- Hierarchical navigation; keyboard-first (Enter = commit, Shift+Enter = newline)
 
-- Stack: Meteor + React (local-only, not intended for deployment).
-- Data: local Meteor Mongo. Secrets (lemlist token) via Meteor settings file.
-- LLM: cloud acceptable.
+## Tech (high level)
 
-## Note Sessions and AI
+- Stack: Meteor + React, local Mongo
+- Secrets via Meteor settings; LLM possible in cloud
 
-- On-demand AI: user triggers summarization and coach questions.
-- Context assembly: combine project metadata and the most recent note lines;
-  start with recency and lightweight heuristics.
-- Vector database: optional later. If context exceeds token limits, consider a
-  small embedding index to retrieve relevant lines.
-- Coach: ask up to three high-signal questions (scope, dependencies, deadlines,
-  next steps). Keep noise low; user can dismiss/snooze.
-- Sessions: one session per meeting.
-- Lifecycle: after recap is finalized and tasks/risks are created and
-   validated by the user, delete the session lines to keep streams clean.
-- Standalone sessions: a note session can start without a project and be
-   linked to a project later.
+## Meta
 
-## Meta actions
-
-- user can have a prompt that says: create a new project and scaffold some tasks for this project
-
-## Developer Guidelines
-
-- Follow "Ship value fast": build an MVP quickly.
-- For inter-service data (e.g., team users), use the lemlist API.
+- Prompt idea: "Create a new project and outline some tasks."

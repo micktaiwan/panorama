@@ -1,78 +1,9 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey, getQdrantUrl } from '/imports/api/_shared/config';
+import { getQdrantUrl } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
-import crypto from 'crypto';
+import { getQdrantClient, COLLECTION, VECTOR_SIZE, DISTANCE, embedText, makePreview, toPointId, splitIntoChunks } from './vectorStore';
 
-const getQdrantClient = async () => {
-  const url = getQdrantUrl();
-  if (!url) throw new Meteor.Error('config-missing', 'qdrantUrl missing in settings');
-  const { QdrantClient } = await import('@qdrant/js-client-rest');
-  return new QdrantClient({ url });
-};
-
-const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
-const VECTOR_SIZE = () => Number(Meteor.settings?.qdrantVectorSize || 1536);
-
-// DEBUG mode
-// Why: During local development/tests we want to avoid network calls and costs to external
-// embedding providers (e.g., OpenAI) and keep the indexer fast/deterministic. When
-// Meteor.settings.qdrantDebug !== false (default: true), we generate a deterministic
-// pseudo‑embedding from the text content. Set qdrantDebug=false in settings.json to
-// call the real embeddings API.
-const DEBUG = false;
-
-const mockVectorFromText = (text) => {
-  const size = VECTOR_SIZE();
-  const s = String(text || '');
-  let h1 = 2166136261, h2 = 16777619; // FNV-ish mix
-  for (let i = 0; i < s.length; i += 1) {
-    const c = s.charCodeAt(i);
-    h1 ^= c; h1 = (h1 * 16777619) >>> 0;
-    h2 ^= (c << (i % 13)); h2 = (h2 * 1099511627) >>> 0;
-  }
-  const out = new Array(size);
-  let x = h1 ^ h2;
-  for (let i = 0; i < size; i += 1) {
-    // simple LCG
-    x = (x * 1664525 + 1013904223) >>> 0;
-    // map to [-0.5, 0.5]
-    out[i] = ((x & 0xffff) / 65535) - 0.5;
-  }
-  return out;
-};
-
-const embedText = async (text) => {
-  if (DEBUG) {
-    return mockVectorFromText(text);
-  }
-  const apiKey = getOpenAiApiKey();
-  if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
-  try {
-    const { default: fetch } = await import('node-fetch');
-    const payload = { model: 'text-embedding-3-small', input: String(text || '') };
-    const res = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      console.error('[qdrant.embedText] OpenAI embeddings failed', { status: res.status, statusText: res.statusText, body: txt });
-      throw new Meteor.Error('openai-failed', txt);
-    }
-    const data = await res.json();
-    const vec = data?.data?.[0]?.embedding;
-    if (!Array.isArray(vec) || vec.length !== VECTOR_SIZE()) {
-      console.error('[qdrant.embedText] Invalid vector length', { got: Array.isArray(vec) ? vec.length : typeof vec, expected: VECTOR_SIZE() });
-      throw new Meteor.Error('openai-invalid', 'Invalid embedding vector');
-    }
-    return vec;
-  } catch (e) {
-    console.error('[qdrant.embedText] Unexpected error', e);
-    if (e instanceof Meteor.Error) throw e;
-    throw new Meteor.Error('embed-failed', e?.message || String(e));
-  }
-};
+// primitives are imported from './vectorStore'
 
 // In-memory LRU cache for query vectors
 const VECTOR_CACHE_MAX = 2000;
@@ -138,7 +69,11 @@ const collectDocs = async () => {
   const tasks = await TasksCollection.find({}, { fields: { title: 1, projectId: 1 } }).fetchAsync();
   tasks.forEach(t => pushDoc(t._id, t.projectId, 'task', t.title || ''));
   const notes = await NotesCollection.find({}, { fields: { content: 1, projectId: 1, title: 1 } }).fetchAsync();
-  notes.forEach(n => pushDoc(n._id, n.projectId, 'note', `${n.title || ''} ${n.content || ''}`));
+  notes.forEach(n => {
+    const base = `${n.title || ''} ${n.content || ''}`;
+    const chunks = splitIntoChunks(base);
+    chunks.forEach((chunk, i) => pushDoc(n._id, n.projectId, 'note', chunk, { chunkIndex: i }));
+  });
   const sessions = await NoteSessionsCollection.find({}, { fields: { aiSummary: 1, projectId: 1, name: 1 } }).fetchAsync();
   sessions.forEach(s => pushDoc(s._id, s.projectId, 'session', `${s.name || ''} ${s.aiSummary || ''}`));
   const lines = await NoteLinesCollection.find({}, { fields: { content: 1, sessionId: 1 } }).fetchAsync();
@@ -150,11 +85,7 @@ const collectDocs = async () => {
   return docs;
 };
 
-const toDeterministicUuid = (s) => {
-  const hex = crypto.createHash('sha1').update(String(s || '')).digest('hex');
-  // format as UUID v5-like: 8-4-4-4-12
-  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
-};
+// use toPointId(kind, id) from vectorStore for point ids
 
 const runIndexJob = async (jobId) => {
   const client = await getQdrantClient();
@@ -173,14 +104,13 @@ const runIndexJob = async (jobId) => {
       try {
         const vector = await embedText(d.content);
         if (Array.isArray(vector) && vector.length === vectorSize) {
-          const makePreview = (text, max = 180) => {
-            const s = String(text || '').replace(/\s+/g, ' ').trim();
-            return s.length > max ? `${s.slice(0, max - 1)}…` : s;
-          };
           const payload = { kind: d.kind, docId: d.id, preview: makePreview(d.content) };
           if (d.projectId) payload.projectId = d.projectId;
           if (d.meta && d.meta.sessionId) payload.sessionId = d.meta.sessionId;
-          const pointId = toDeterministicUuid(d.id);
+          if (d.meta && typeof d.meta.chunkIndex === 'number') payload.chunkIndex = d.meta.chunkIndex;
+          const rawId = String(d.id || '').split(':').pop();
+          const uniqueRaw = (d.meta && typeof d.meta.chunkIndex === 'number') ? `${rawId}#${d.meta.chunkIndex}` : rawId;
+          const pointId = toPointId(d.kind, uniqueRaw);
           points.push({ id: pointId, vector: Array.from(vector), payload });
         }
       } catch (e) {
@@ -258,7 +188,7 @@ Meteor.methods({
         } catch (e) {
           // if it doesn't exist, ignore
         }
-        await client.createCollection(COLLECTION(), { vectors: { size: VECTOR_SIZE(), distance: (Meteor.settings?.qdrantDistance || 'Cosine') } });
+        await client.createCollection(COLLECTION(), { vectors: { size: VECTOR_SIZE(), distance: DISTANCE() } });
       } catch (e) {
         console.error('[qdrant.indexStart] drop+create failed', e);
       }
@@ -338,6 +268,7 @@ Meteor.methods({
         return t.length > max ? `${t.slice(0, max - 1)}…` : t;
       };
       let status = null;
+      let projectName = null;
       if (p.kind === 'task' && p.docId) {
         try {
           const id = String(p.docId).split(':').pop();
@@ -348,10 +279,20 @@ Meteor.methods({
           status = null;
         }
       }
+      if (p.projectId) {
+        try {
+          const { ProjectsCollection } = await import('/imports/api/projects/collections');
+          const proj = await ProjectsCollection.findOneAsync({ _id: p.projectId }, { fields: { name: 1 } });
+          projectName = proj?.name || null;
+        } catch (_e) {
+          projectName = null;
+        }
+      }
       return {
         score: it?.score,
         kind: p.kind,
         projectId: p.projectId || null,
+        projectName,
         id: p.docId || null,
         sessionId: p.sessionId || null,
         text: norm(text),

@@ -58,7 +58,17 @@ Meteor.methods({
   async 'noteSessions.clearCoach'(sessionId) {
     check(sessionId, String);
     const ses = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
-    const res = await NoteSessionsCollection.updateAsync(sessionId, { $unset: { coachQuestions: 1, coachQuestionsJson: 1, coachAt: 1 }, $set: { updatedAt: new Date() } });
+    const res = await NoteSessionsCollection.updateAsync(sessionId, {
+      $unset: {
+        coachQuestions: 1,
+        coachQuestionsJson: 1,
+        coachIdeasJson: 1,
+        coachAnswersJson: 1,
+        coachAt: 1,
+        coachPrompt: 1
+      },
+      $set: { updatedAt: new Date() }
+    });
     if (ses && ses.projectId) {
       await ProjectsCollection.updateAsync(ses.projectId, { $set: { updatedAt: new Date() } });
     }

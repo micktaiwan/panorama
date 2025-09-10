@@ -9,7 +9,9 @@ export const useBudgetData = (departmentFilter) => {
     let selector = {};
     if (departmentFilter === 'parked') selector = { department: 'parked' };
     else if (departmentFilter === 'techOnly') selector = { department: 'tech' };
-    else if (departmentFilter === 'review') selector = { $or: [ { department: { $exists: false } }, { department: { $nin: ['tech', 'parked'] } } ] };
+    else if (departmentFilter === 'product') selector = { department: 'product' };
+    else if (departmentFilter === 'other') selector = { department: 'other' };
+    else if (departmentFilter === 'review') selector = { $or: [ { department: { $exists: false } }, { department: { $nin: ['tech', 'parked', 'product', 'other'] } } ] };
     return BudgetLinesCollection.find(selector, { sort: { date: -1, importedAt: -1 } }).fetch();
   }, [linesReady, departmentFilter]);
 
