@@ -1,4 +1,6 @@
 import React from 'react';
+import PropTypes from 'prop-types';
+import { InlineDate } from '/imports/ui/InlineDate/InlineDate.jsx';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 
 export const PeopleTable = ({ people, teams, onUpdate, onToggleLeft, onDelete, highlightId }) => {
@@ -10,8 +12,10 @@ export const PeopleTable = ({ people, teams, onUpdate, onToggleLeft, onDelete, h
           <th>Last name</th>
           <th>Role</th>
           <th>Team</th>
+          <th>Subteam</th>
           <th>Email</th>
           <th>Aliases</th>
+          <th>Arrival</th>
           <th>Left</th>
           <th className="actionsCol">Actions</th>
         </tr>
@@ -29,11 +33,44 @@ export const PeopleTable = ({ people, teams, onUpdate, onToggleLeft, onDelete, h
               <InlineEditable value={p.role || ''} placeholder="role" onSubmit={(v) => onUpdate(p._id, { role: v })} fullWidth />
             </td>
             <td>
+              {(() => {
+                const teamIdToName = new Map((teams || []).map(t => [String(t._id), String(t.name || '').toLowerCase()]));
+                const tech = (teams || []).find(t => String(t.name || '').toLowerCase() === 'tech');
+                const techTeamId = tech ? String(tech._id) : '';
+                const isTechGroup = (id) => {
+                  const nm = teamIdToName.get(String(id)) || '';
+                  return nm === 'tech' || nm === 'sre/devops' || nm === 'data';
+                };
+                const value = isTechGroup(p.teamId) && techTeamId ? techTeamId : (p.teamId || '');
+                const options = [{ value: '', label: '(no team)' }]
+                  .concat((teams || [])
+                    .filter(t => {
+                      const nm = String(t.name || '').toLowerCase();
+                      return nm !== 'sre/devops' && nm !== 'data';
+                    })
+                    .map(t => ({ value: t._id, label: t.name || '' }))
+                  );
+                return (
+                  <InlineEditable
+                    as="select"
+                    value={value}
+                    options={options}
+                    onSubmit={(v) => onUpdate(p._id, { teamId: v || undefined })}
+                  />
+                );
+              })()}
+            </td>
+            <td>
               <InlineEditable
                 as="select"
-                value={p.teamId || ''}
-                options={[{ value: '', label: '(no team)' }].concat((teams || []).map(t => ({ value: t._id, label: t.name || '' })))}
-                onSubmit={(v) => onUpdate(p._id, { teamId: v || undefined })}
+                value={String(p.subteam || '')}
+                options={[
+                  { value: '', label: '(no subteam)' },
+                  { value: 'sre', label: 'SRE' },
+                  { value: 'devops', label: 'DevOps' },
+                  { value: 'data', label: 'Data' }
+                ]}
+                onSubmit={(v) => onUpdate(p._id, { subteam: v || undefined })}
               />
             </td>
             <td className={!p.email ? 'emptyCell' : ''}>
@@ -45,6 +82,13 @@ export const PeopleTable = ({ people, teams, onUpdate, onToggleLeft, onDelete, h
                 placeholder="aliases (comma-separated)"
                 onSubmit={(v) => onUpdate(p._id, { aliases: String(v || '').split(',').map(s => s.trim()).filter(Boolean) })}
                 fullWidth
+              />
+            </td>
+            <td>
+              <InlineDate
+                value={p.arrivalDate}
+                onSubmit={(v) => onUpdate(p._id, { arrivalDate: v || undefined })}
+                placeholder="no date"
               />
             </td>
             <td>
@@ -60,4 +104,13 @@ export const PeopleTable = ({ people, teams, onUpdate, onToggleLeft, onDelete, h
   );
 };
 
+
+PeopleTable.propTypes = {
+  people: PropTypes.array.isRequired,
+  teams: PropTypes.array,
+  onUpdate: PropTypes.func,
+  onToggleLeft: PropTypes.func,
+  onDelete: PropTypes.func,
+  highlightId: PropTypes.string,
+};
 

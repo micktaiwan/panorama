@@ -140,7 +140,7 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
             }
             return (
             <li
-              key={r.id || `${r.kind}:${idx}`}
+              key={`${r.id || `${r.kind}:${idx}`}:${idx}`}
               className={`taskItem clickable${activeIdx === idx ? ' active' : ''}${isDone ? ' done' : ''}`}
               role="button"
               tabIndex={0}

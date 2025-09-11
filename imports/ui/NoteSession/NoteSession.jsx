@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { useSingle } from '/imports/ui/hooks/useSingle.js';
@@ -36,7 +39,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
   const loadNotes = useSubscribe('notes');
 
   const session = useSingle(() => NoteSessionsCollection.find({ _id: sessionId }));
-  const lines = useFind(() => NoteLinesCollection.find({ sessionId }, { sort: { createdAt: 1 } }));
+  const lines = useFind(() => NoteLinesCollection.find({ sessionId }, { sort: { lineRank: 1, createdAt: 1 } }));
   // Always call useFind in the same order; use a neutral selector when no projectId
   // Resolve project reactively by ID to avoid any cursor mishaps.
   const project = useDoc(() => (session && session.projectId ? ProjectsCollection.findOne({ _id: session.projectId }) : null));
@@ -56,6 +59,47 @@ export const NoteSession = ({ sessionId, onBack }) => {
   ), [pid]);
 
   const hasLines = Array.isArray(lines) && lines.length > 0;
+
+  // Drag-and-drop state for note lines ordering
+  const [order, setOrder] = useState([]);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 5 } }));
+
+  // Keep a stable order: by lineRank if set, otherwise by createdAt
+  useEffect(() => {
+    const sorted = [...(lines || [])];
+    sorted.sort((a, b) => {
+      const ar = Number.isFinite(a.lineRank) ? a.lineRank : Number.POSITIVE_INFINITY;
+      const br = Number.isFinite(b.lineRank) ? b.lineRank : Number.POSITIVE_INFINITY;
+      if (ar !== br) return ar - br;
+      const at = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+      const bt = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+      return at - bt;
+    });
+    setOrder(sorted.map(l => l._id));
+  }, [JSON.stringify((lines || []).map(l => [l._id, Number.isFinite(l.lineRank) ? l.lineRank : 'x', (l.createdAt && new Date(l.createdAt).getTime()) || 0].join(':')))]);
+
+  const SortableLine = ({ line, index, children }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: line._id });
+    const style = { transform: CSS.Transform.toString(transform), transition };
+    return (
+      <li ref={setNodeRef} style={style} key={line._id}>
+        <div className="noteLineRow">
+          <span className="noteLineNumber dragHandle" title="Drag to reorder" {...attributes} {...listeners}>L{index + 1}</span>
+          {children}
+        </div>
+      </li>
+    );
+  };
+
+  const onDragEnd = (event) => {
+    const { active, over } = event;
+    if (!active || !over || active.id === over.id) return;
+    const oldIndex = order.indexOf(active.id);
+    const newIndex = order.indexOf(over.id);
+    const next = arrayMove(order, oldIndex, newIndex);
+    setOrder(next);
+    next.forEach((id, idx) => { Meteor.call('noteLines.update', id, { lineRank: idx }); });
+  };
 
   const mdToPlain = (markdown) => {
     if (!markdown) return '';
@@ -209,55 +253,60 @@ export const NoteSession = ({ sessionId, onBack }) => {
           />
         </div>
         <h3>Notes</h3>
-        <ul className="notesList scrollArea" ref={notesListRef}>
-          {lines.map((l, idx) => (
-            <li key={l._id}>
-              <div className="noteLineRow">
-                <span className="noteLineNumber">L{idx + 1}</span>
-              <InlineEditable
-                value={l.content}
-                placeholder="(empty)"
-                onSubmit={(next) => {
-                  const oldVal = l.content;
-                  Meteor.call('noteLines.update', l._id, { content: next }, (err, res) => {
-                    if (err) {
-                      if (err && err.error === 'vectorization-failed') {
-                        notify({ message: 'Updated, but search indexing failed.', kind: 'warning' });
-                      } else {
-                        console.error('noteLines.update failed', err);
-                        notify({ message: 'Failed to update line. Keeping previous value.', kind: 'error' });
-                        Meteor.call('noteLines.update', l._id, { content: oldVal });
-                        return;
-                      }
-                    }
-                  });
-                }}
-              />
-                <span className="noteLineActions">
-                  <button
-                    className="iconButton"
-                    title="Delete line"
-                    onClick={() => {
-                      Meteor.call('noteLines.remove', l._id, (err, res) => {
-                        if (err) {
-                          if (err && err.error === 'search-delete-failed') {
-                            notify({ message: 'Deleted, but search index cleanup failed.', kind: 'warning' });
-                          } else {
-                            console.error('noteLines.remove failed', err);
-                            notify({ message: 'Failed to delete line.', kind: 'error' });
-                            return;
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={order} strategy={verticalListSortingStrategy}>
+            <ul className="notesList scrollArea" ref={notesListRef}>
+              {order.map((id, idx) => {
+                const l = (lines || []).find(x => x._id === id);
+                if (!l) return null;
+                return (
+                  <SortableLine key={l._id} line={l} index={idx}>
+                    <InlineEditable
+                      value={l.content}
+                      placeholder="(empty)"
+                      onSubmit={(next) => {
+                        const oldVal = l.content;
+                        Meteor.call('noteLines.update', l._id, { content: next }, (err, res) => {
+                          if (err) {
+                            if (err && err.error === 'vectorization-failed') {
+                              notify({ message: 'Updated, but search indexing failed.', kind: 'warning' });
+                            } else {
+                              console.error('noteLines.update failed', err);
+                              notify({ message: 'Failed to update line. Keeping previous value.', kind: 'error' });
+                              Meteor.call('noteLines.update', l._id, { content: oldVal });
+                              return;
+                            }
                           }
-                        }
-                      });
-                    }}
-                  >
-                    🗑
-                  </button>
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
+                        });
+                      }}
+                    />
+                    <span className="noteLineActions">
+                      <button
+                        className="iconButton"
+                        title="Delete line"
+                        onClick={() => {
+                          Meteor.call('noteLines.remove', l._id, (err, res) => {
+                            if (err) {
+                              if (err && err.error === 'search-delete-failed') {
+                                notify({ message: 'Deleted, but search index cleanup failed.', kind: 'warning' });
+                              } else {
+                                console.error('noteLines.remove failed', err);
+                                notify({ message: 'Failed to delete line.', kind: 'error' });
+                                return;
+                              }
+                            }
+                          });
+                        }}
+                      >
+                        🗑
+                      </button>
+                    </span>
+                  </SortableLine>
+                );
+              })}
+            </ul>
+          </SortableContext>
+        </DndContext>
         <input
           ref={inputRef}
           value={inputValue}

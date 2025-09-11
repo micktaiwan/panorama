@@ -213,21 +213,54 @@ Meteor.methods({
       await BudgetLinesCollection.updateAsync({ _id: lineId }, { $set: { department: dep, updatedAt: now } });
     }
 
-    // Bulk update all lines with the same vendor
+    // If we park, also park all lines with the same vendor that are not yet parked
     let bulkCount = 0;
-    const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
-    if (base) {
-      const selector = {
-        _id: { $ne: lineId }
-      };
-      const vendor = (base.vendor || '').trim();
-      if (vendor) selector.vendor = vendor; else selector.vendor = { $exists: false };
-      
-      if (dep === 'parked') {
+    if (dep === 'parked') {
+      const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
+      if (base) {
+        const selector = {
+          _id: { $ne: lineId },
+          department: { $ne: 'parked' }
+        };
+        const vendor = (base.vendor || '').trim();
+        if (vendor) selector.vendor = vendor; else selector.vendor = { $exists: false };
         const res = await BudgetLinesCollection.rawCollection().updateMany(selector, { $set: { department: 'parked', updatedAt: now }, $unset: { team: '' } });
         bulkCount = res && (res.modifiedCount || 0);
-      } else {
-        const res = await BudgetLinesCollection.rawCollection().updateMany(selector, { $set: { department: dep, updatedAt: now } });
+      }
+    } else if (dep === 'tech') {
+      const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
+      if (base) {
+        const selector = {
+          _id: { $ne: lineId },
+          department: { $ne: 'parked' }
+        };
+        const vendor = (base.vendor || '').trim();
+        if (vendor) selector.vendor = vendor; else selector.vendor = { $exists: false };
+        const res = await BudgetLinesCollection.rawCollection().updateMany(selector, { $set: { department: 'tech', updatedAt: now } });
+        bulkCount = res && (res.modifiedCount || 0);
+      }
+    } else if (dep === 'product') {
+      const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
+      if (base) {
+        const selector = {
+          _id: { $ne: lineId },
+          department: { $ne: 'parked' }
+        };
+        const vendor = (base.vendor || '').trim();
+        if (vendor) selector.vendor = vendor; else selector.vendor = { $exists: false };
+        const res = await BudgetLinesCollection.rawCollection().updateMany(selector, { $set: { department: 'product', updatedAt: now } });
+        bulkCount = res && (res.modifiedCount || 0);
+      }
+    } else if (dep === 'other') {
+      const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
+      if (base) {
+        const selector = {
+          _id: { $ne: lineId },
+          department: { $ne: 'parked' }
+        };
+        const vendor = (base.vendor || '').trim();
+        if (vendor) selector.vendor = vendor; else selector.vendor = { $exists: false };
+        const res = await BudgetLinesCollection.rawCollection().updateMany(selector, { $set: { department: 'other', updatedAt: now } });
         bulkCount = res && (res.modifiedCount || 0);
       }
     }
@@ -254,11 +287,12 @@ Meteor.methods({
     // Set on target line and mark as tech
     await BudgetLinesCollection.updateAsync({ _id: lineId }, { $set: { team: t, department: 'tech', updatedAt: now } });
 
-    // Bulk apply to similar lines (same vendor)
+    // Bulk apply to similar lines (same vendor), skipping parked
     const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
     if (!base) return { ok: 1, bulkUpdated: 0 };
     const selector = {
-      _id: { $ne: lineId }
+      _id: { $ne: lineId },
+      department: { $ne: 'parked' }
     };
     const vendor = (base.vendor || '').trim();
     if (vendor) selector.vendor = vendor; else selector.vendor = { $exists: false };
@@ -527,9 +561,6 @@ Meteor.methods({
 // Last updates (changelog-based) fetch
 Meteor.methods({
   async 'budget.fetchPennylaneLastUpdates'(startDate, perPage) {
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] fetchPennylaneLastUpdates CALLED', { startDate, perPage });
-    
     const cfg = (Meteor.settings && Meteor.settings.pennylane) || {};
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '/');
@@ -558,43 +589,15 @@ Meteor.methods({
     if (sd) qp.set('start_date', sd);
 
     const url = `${baseUrl}changelogs/supplier_invoices?${qp.toString()}`;
-    
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] fetchPennylaneLastUpdates STEP 1 - Fetching changelogs');
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] REQUEST URL:', url);
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] REQUEST HEADERS:', headers);
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] REQUEST PARAMS:', { startDate, perPage, processedStartDate: sd });
-    
     const res = await fetch(url, { method: 'GET', headers });
-    
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] RESPONSE STATUS:', res.status, res.statusText);
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] RESPONSE HEADERS:', Object.fromEntries(res.headers.entries()));
-    
     if (!res.ok) {
       const body = await res.text();
-      // eslint-disable-next-line no-console
-      console.error('[budget][server] ERROR RESPONSE BODY:', body);
       throw new Meteor.Error('pennylane-error', `HTTP ${res.status}`, { status: res.status, body });
     }
-    
     const body = await res.json();
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] RESPONSE BODY (changelogs):', JSON.stringify(body, null, 2));
-    
     const changeItems = Array.isArray(body && body.items) ? body.items : [];
     const ids = Array.from(new Set(changeItems.map((x) => x && x.id).filter(Boolean)));
-    
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] EXTRACTED IDS:', ids);
-    
     if (ids.length === 0) {
-      // eslint-disable-next-line no-console
-      console.log('[budget][server] NO IDS FOUND - returning empty result');
       return { items: [], next_cursor: body && body.next_cursor };
     }
 
@@ -603,36 +606,12 @@ Meteor.methods({
     qp2.set('limit', String(ids.length));
     qp2.set('filter', JSON.stringify([{ field: 'id', operator: 'in', value: ids }]));
     const url2 = `${baseUrl}supplier_invoices?${qp2.toString()}`;
-    
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] fetchPennylaneLastUpdates STEP 2 - Fetching details');
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] REQUEST URL2:', url2);
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] REQUEST PARAMS2:', { limit: ids.length, filter: JSON.stringify([{ field: 'id', operator: 'in', value: ids }]) });
-    
     const res2 = await fetch(url2, { method: 'GET', headers });
-    
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] RESPONSE2 STATUS:', res2.status, res2.statusText);
-    
     if (!res2.ok) {
       const body2 = await res2.text();
-      // eslint-disable-next-line no-console
-      console.error('[budget][server] ERROR RESPONSE2 BODY:', body2);
       throw new Meteor.Error('pennylane-error', `HTTP ${res2.status}`, { status: res2.status, body: body2 });
     }
-    
     const body2 = await res2.json();
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] RESPONSE2 BODY (details) - item count:', (body2 && body2.items && body2.items.length) || 0);
-    // eslint-disable-next-line no-console
-    console.dir(body2, { depth: null, maxArrayLength: null });
-    
-    const result = { items: Array.isArray(body2 && body2.items) ? body2.items : [], next_cursor: body && body.next_cursor };
-    // eslint-disable-next-line no-console
-    console.log('[budget][server] fetchPennylaneLastUpdates FINAL RESULT:', { itemCount: result.items.length, next_cursor: result.next_cursor });
-    
-    return result;
+    return { items: Array.isArray(body2 && body2.items) ? body2.items : [], next_cursor: body && body.next_cursor };
   }
 });

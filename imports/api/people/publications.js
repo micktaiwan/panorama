@@ -13,6 +13,8 @@ Meteor.publish('people.all', function () {
       notes: 1,
       left: 1,
       teamId: 1,
+      arrivalDate: 1,
+      subteam: 1,
       createdAt: 1,
       updatedAt: 1
     }
