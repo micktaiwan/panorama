@@ -20,9 +20,13 @@ Meteor.methods({
     const now = new Date();
     const normalizedName = normalize(name);
     const left = !!fields.left;
+    const subteam = typeof fields.subteam === 'string' ? fields.subteam.trim() : '';
     const teamId = fields.teamId ? String(fields.teamId) : undefined;
+    const arrivalDate = fields.arrivalDate ? new Date(fields.arrivalDate) : undefined;
     const doc = { name, lastName, normalizedName, aliases, role, email, notes, left, createdAt: now, updatedAt: now };
     if (teamId) doc.teamId = teamId;
+    if (subteam) doc.subteam = subteam;
+    if (arrivalDate && !isNaN(arrivalDate.getTime())) doc.arrivalDate = arrivalDate;
     const _id = await PeopleCollection.insertAsync(doc);
     return _id;
   },
@@ -45,6 +49,14 @@ Meteor.methods({
     if ('teamId' in fields) {
       if (fields.teamId) updates.teamId = String(fields.teamId);
       else unset.teamId = 1;
+    }
+    if ('subteam' in fields) {
+      const st = typeof fields.subteam === 'string' ? fields.subteam.trim() : '';
+      if (st) updates.subteam = st; else unset.subteam = 1;
+    }
+    if ('arrivalDate' in fields) {
+      const d = fields.arrivalDate ? new Date(fields.arrivalDate) : null;
+      if (d && !isNaN(d.getTime())) updates.arrivalDate = d; else unset.arrivalDate = 1;
     }
     updates.updatedAt = new Date();
     const modifier = { $set: updates };

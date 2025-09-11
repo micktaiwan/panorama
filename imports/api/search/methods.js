@@ -299,7 +299,20 @@ Meteor.methods({
         status
       };
     }));
-    return { results: out, cachedVector: !!cached, cacheSize: vectorCache.size };
+    // Deduplicate logical documents (same id) by keeping the best score
+    const bestById = new Map();
+    for (const r of out) {
+      const key = r && r.id ? String(r.id) : null;
+      if (!key) { continue; }
+      const score = Number(r.score);
+      const prev = bestById.get(key);
+      if (!prev || (Number.isFinite(score) && score > (Number(prev?.score) || -Infinity))) {
+        bestById.set(key, r);
+      }
+    }
+    const deduped = (bestById.size > 0 ? Array.from(bestById.values()) : out)
+      .sort((a, b) => (Number(b?.score) || 0) - (Number(a?.score) || 0));
+    return { results: deduped, cachedVector: !!cached, cacheSize: vectorCache.size };
   }
 });
 

@@ -29,6 +29,7 @@ import { setNotifyHandler } from '/imports/ui/utils/notify.js';
 import { formatDateTime, timeUntilPrecise } from '/imports/ui/utils/date.js';
 import { SearchBar } from '/imports/ui/components/Search/SearchBar.jsx';
 import { SearchResults } from '/imports/ui/components/Search/SearchResults.jsx';
+import { SearchTypeFilters } from '/imports/ui/components/Search/SearchTypeFilters.jsx';
 import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
@@ -57,12 +58,21 @@ function App() {
     return typeof localStorage !== 'undefined' ? (localStorage.getItem('global_search_q') || '') : '';
   });
   const [searchResults, setSearchResults] = useState([]);
+  const [searchFiltered, setSearchFiltered] = useState([]);
   const [searchCached, setSearchCached] = useState(false);
   const [searchCacheSize, setSearchCacheSize] = useState(0);
   const [searchLastKey, setSearchLastKey] = useState('');
   const [searchDirty, setSearchDirty] = useState(false);
   const [searchActiveIdx, setSearchActiveIdx] = useState(-1);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [typeFilters, setTypeFilters] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('search_type_filters_v1');
+      if (raw) { try { return JSON.parse(raw) || {}; } catch (_e) {} }
+    }
+    return {};
+  });
+  const [typeCounts, setTypeCounts] = useState({});
   const suppressRef = useRef(new Set());
 
   // Preferences
@@ -179,6 +189,33 @@ function App() {
       setSearchDirty(false);
     });
   };
+
+  // Derive counts and filtered list whenever results or filters change
+  useEffect(() => {
+    const counts = { project: 0, task: 0, note: 0, link: 0, file: 0, session: 0 };
+    for (const r of (searchResults || [])) {
+      const k = r?.kind;
+      if (k && Object.prototype.hasOwnProperty.call(counts, k)) counts[k] += 1;
+    }
+    setTypeCounts(counts);
+
+    const hasInclude = Object.values(typeFilters).some(v => v === 1);
+    const filtered = (searchResults || []).filter(r => {
+      const k = r?.kind;
+      const st = typeFilters[k];
+      if (hasInclude) return st === 1;
+      return st === -1 ? false : true;
+    });
+    setSearchFiltered(filtered);
+    // Reset active index if now out of range
+    setSearchActiveIdx(idx => (idx >= 0 && idx < filtered.length ? idx : -1));
+  }, [JSON.stringify(searchResults), JSON.stringify(typeFilters)]);
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      try { localStorage.setItem('search_type_filters_v1', JSON.stringify(typeFilters)); } catch (_e) {}
+    }
+  }, [JSON.stringify(typeFilters)]);
 
   useEffect(() => {
     if (searchOpen && String(searchQ).trim() && searchResults.length === 0) {
@@ -535,8 +572,13 @@ function App() {
             }
           }}
         />
+        <SearchTypeFilters
+          value={typeFilters}
+          onChange={setTypeFilters}
+          counts={typeCounts}
+        />
         <SearchResults
-          results={searchResults}
+          results={searchFiltered}
           onAfterNavigate={(idx) => { setSearchActiveIdx(idx ?? -1); setSearchOpen(false); }}
           keyboardNav={true}
           activeIdx={searchActiveIdx}

@@ -30,6 +30,7 @@
   grid-template-columns: 44px minmax(0, 1fr) auto; /* number | content | actions */
   align-items: start;
   column-gap: 8px;
+  border-radius: 6px;
 }
 
 /* Ensure the content cell can wrap and does not force layout overflow */
@@ -42,6 +43,11 @@
   text-overflow: initial;
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+/* Hover highlight for note lines */
+.noteLineRow:hover {
+  background: #141923;
 }
 
 .noteLineNumber {

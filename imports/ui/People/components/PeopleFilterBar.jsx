@@ -1,8 +1,9 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { notify } from '/imports/ui/utils/notify.js';
 
-export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilter, onTeamFilterChange, teams, count = 0 }) => {
+export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilter, onTeamFilterChange, subteamFilter, onSubteamFilterChange, teams, count = 0, onCopy }) => {
   return (
     <div className="peopleToolbar">
       <button className="btn btn-primary" onClick={onNewPerson}>New person</button>
@@ -10,11 +11,18 @@ export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilte
       <select className="peopleFilter" value={teamFilter} onChange={(e) => onTeamFilterChange(e.target.value)}>
         <option value="">All teams</option>
         <option value="__none__">No team</option>
-        {(teams || []).map(t => (
+        {(teams || []).filter(t => (t.name || '').toLowerCase() === 'tech').map(t => (
           <option key={t._id} value={t._id}>{t.name || ''}</option>
         ))}
       </select>
+      <select className="peopleFilter" value={subteamFilter} onChange={(e) => onSubteamFilterChange(e.target.value)}>
+        <option value="">All subteams</option>
+        <option value="sre">SRE</option>
+        <option value="devops">DevOps</option>
+        <option value="data">Data</option>
+      </select>
       <span className="ml8" aria-live="polite">{count} shown</span>
+      <button className="btn ml8" onClick={onCopy}>Copy</button>
       <label className="btn ml8">
         Import JSON
         <input
@@ -51,4 +59,17 @@ export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilte
   );
 };
 
+
+PeopleFilterBar.propTypes = {
+  onNewPerson: PropTypes.func,
+  filter: PropTypes.string,
+  onFilterChange: PropTypes.func,
+  teamFilter: PropTypes.string,
+  onTeamFilterChange: PropTypes.func,
+  subteamFilter: PropTypes.string,
+  onSubteamFilterChange: PropTypes.func,
+  teams: PropTypes.array,
+  count: PropTypes.number,
+  onCopy: PropTypes.func,
+};
 

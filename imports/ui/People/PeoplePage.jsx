@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
 import { useTracker } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { PeopleCollection } from '/imports/api/people/collections';
@@ -9,9 +10,10 @@ import { PeopleFilterBar } from '/imports/ui/People/components/PeopleFilterBar.j
 import { TeamsTable } from '/imports/ui/People/components/TeamsTable.jsx';
 import { Collapsible } from '/imports/ui/components/Collapsible/Collapsible.jsx';
 import { PeopleTable } from '/imports/ui/People/components/PeopleTable.jsx';
-import { loadPeopleFilters, savePeopleTeamFilter, savePeopleTextFilter } from '/imports/ui/People/filters.js';
+import { loadPeopleFilters, savePeopleTeamFilter, savePeopleTextFilter, savePeopleSubteamFilter } from '/imports/ui/People/filters.js';
 import { useRowHighlight } from '/imports/ui/hooks/useRowHighlight.js';
 import { useHashHighlight } from '/imports/ui/hooks/useHashHighlight.js';
+import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 import './PeoplePage.css';
 
 export const PeoplePage = ({ highlightId: externalHighlightId }) => {
@@ -34,6 +36,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
   const [personDeleteId, setPersonDeleteId] = useState(null);
   const [filter, setFilter] = useState(() => loadPeopleFilters().text);
   const [teamFilter, setTeamFilter] = useState(() => loadPeopleFilters().team);
+  const [subteamFilter, setSubteamFilter] = useState(() => loadPeopleFilters().subteam);
   const deepLinkId = useHashHighlight('people', '#/people');
   const [highlightId, setHighlightId] = useState(deepLinkId || null);
   useEffect(() => {
@@ -43,6 +46,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
   const normalize = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
   useEffect(() => { savePeopleTextFilter(filter || ''); }, [filter]);
   useEffect(() => { savePeopleTeamFilter(teamFilter || ''); }, [teamFilter]);
+  useEffect(() => { savePeopleSubteamFilter(subteamFilter || ''); }, [subteamFilter]);
   const filtered = useMemo(() => {
     const f = normalize(filter.trim());
     const base = people.filter(p => {
@@ -54,9 +58,35 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       const inNotes = normalize(p.notes || '').includes(f);
       return inName || inLast || inRole || inEmail || inAliases || inNotes;
     });
-    if (!teamFilter) return base;
-    if (teamFilter === '__none__') return base.filter(p => !p.teamId);
-    return base.filter(p => String(p.teamId || '') === teamFilter);
+    let afterTeam = base;
+    if (teamFilter) {
+      if (teamFilter === '__none__') {
+        afterTeam = base.filter(p => !p.teamId);
+      } else {
+        // Merge Tech with SRE/DevOps and Data
+        const teamIdToName = new Map((teams || []).map(t => [String(t._id), String(t.name || '').toLowerCase()]));
+        const selectedName = teamIdToName.get(String(teamFilter));
+        const techGroup = new Set(['tech', 'sre/devops', 'data']);
+        if (selectedName && selectedName === 'tech') {
+          afterTeam = base.filter(p => techGroup.has(teamIdToName.get(String(p.teamId || '')) || ''));
+        } else {
+          afterTeam = base.filter(p => String(p.teamId || '') === teamFilter);
+        }
+      }
+    }
+    if (subteamFilter) {
+      const sub = String(subteamFilter).toLowerCase();
+      const teamIdToName = new Map((teams || []).map(t => [String(t._id), String(t.name || '').toLowerCase()]));
+      return afterTeam.filter(p => {
+        const personSub = String(p.subteam || '').toLowerCase();
+        if (personSub) return personSub === sub;
+        const teamName = teamIdToName.get(String(p.teamId || '')) || '';
+        if (sub === 'data') return teamName === 'data';
+        if (sub === 'sre' || sub === 'devops') return teamName === 'sre/devops';
+        return false;
+      });
+    }
+    return afterTeam;
   }, [
     JSON.stringify(people.map(p => [
       p._id,
@@ -67,10 +97,14 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       (p.aliases || []).join('|'),
       p.notes,
       p.left,
-      p.teamId
+      p.teamId,
+      p.arrivalDate,
+      p.subteam
     ])),
     filter,
-    teamFilter
+    teamFilter,
+    subteamFilter,
+    JSON.stringify((teams || []).map(t => [t._id, t.name]))
   ]);
   const sorted = useMemo(() => {
     const list = Array.isArray(filtered) ? filtered.slice() : [];
@@ -95,8 +129,23 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
     p.role,
     p.email,
     (p.aliases || []).join('|'),
-    p.notes
+    p.notes,
+    p.arrivalDate,
+    p.subteam
   ]))]);
+  const handleCopy = async () => {
+    const teamNameById = new Map((teams || []).map(t => [String(t._id), t.name || '']));
+    const header = 'First name\tLast name\tRole\tTeam\tEmail\tAliases\tArrival\tLeft';
+    const lines = (sorted || []).map(p => {
+      const teamName = p.teamId ? (teamNameById.get(String(p.teamId)) || '') : '';
+      const aliases = Array.isArray(p.aliases) ? p.aliases.join(', ') : '';
+      const arrival = p.arrivalDate ? new Date(p.arrivalDate).toISOString().slice(0,10) : '';
+      const left = p.left ? 'yes' : '';
+      return `${p.name || ''}\t${p.lastName || ''}\t${p.role || ''}\t${teamName}\t${p.email || ''}\t${aliases}\t${arrival}\t${left}`;
+    });
+    const text = [header, ...lines].join('\n');
+    await writeClipboard(text);
+  };
   return (
     <div className="peoplePage">
       <h2>People</h2>
@@ -177,9 +226,13 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
         onFilterChange={setFilter}
         teamFilter={teamFilter}
         onTeamFilterChange={setTeamFilter}
+        subteamFilter={subteamFilter}
+        onSubteamFilterChange={setSubteamFilter}
         teams={teams}
         count={sorted.length}
+        onCopy={handleCopy}
       />
+      <div className="tableMeta">Displayed: {sorted.length}</div>
       <PeopleTable
         people={sorted}
         teams={teams}
@@ -219,4 +272,8 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
 };
 
 
+
+PeoplePage.propTypes = {
+  highlightId: PropTypes.string,
+};
 
