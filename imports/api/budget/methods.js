@@ -402,11 +402,27 @@ Meteor.methods({
     if (cursor) qp.set('cursor', String(cursor));
     // Optional date range filters via `filter` param (array of {field,operator,value})
     if (filters && typeof filters === 'object') {
-      const from = filters.date_from || filters.dateFrom;
-      const to = filters.date_to || filters.dateTo;
+      const normalizeDateOnly = (s) => {
+        if (!s) return undefined;
+        const raw = String(s).trim();
+        const mIso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (mIso) return mIso[0];
+        const mFr = raw.match(/^([0-3]?\d)\/([0-1]?\d)\/(\d{4})$/);
+        if (mFr) {
+          const dd = String(mFr[1]).padStart(2, '0');
+          const mm = String(mFr[2]).padStart(2, '0');
+          const yyyy = String(mFr[3]);
+          return `${yyyy}-${mm}-${dd}`;
+        }
+        throw new Meteor.Error('invalid-date', `Invalid date format: ${raw}. Expected YYYY-MM-DD or DD/MM/YYYY`);
+      };
+      const fromRaw = filters.date_from || filters.dateFrom;
+      const toRaw = filters.date_to || filters.dateTo;
+      const from = fromRaw ? normalizeDateOnly(fromRaw) : undefined;
+      const to = toRaw ? normalizeDateOnly(toRaw) : undefined;
       const filterArr = [];
-      if (from) filterArr.push({ field: 'date', operator: 'gteq', value: String(from) });
-      if (to) filterArr.push({ field: 'date', operator: 'lteq', value: String(to) });
+      if (from) filterArr.push({ field: 'date', operator: 'gteq', value: from });
+      if (to) filterArr.push({ field: 'date', operator: 'lteq', value: to });
       if (filterArr.length > 0) qp.set('filter', JSON.stringify(filterArr));
     }
     const url = `${baseUrl}supplier_invoices?${qp.toString()}`;
@@ -580,12 +596,21 @@ Meteor.methods({
 
     const qp = new URLSearchParams();
     qp.set('limit', String(Number(perPage) > 0 ? Number(perPage) : 100));
-    const toIsoStart = (s) => {
+    const normalizeStartDate = (s) => {
       if (!s) return undefined;
-      const ss = String(s);
-      return ss.includes('T') ? ss : `${ss}T00:00:00Z`;
+      const raw = String(s).trim();
+      const mIso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (mIso) return `${mIso[0]}T00:00:00Z`;
+      const mFr = raw.match(/^([0-3]?\d)\/([0-1]?\d)\/(\d{4})$/);
+      if (mFr) {
+        const dd = String(mFr[1]).padStart(2, '0');
+        const mm = String(mFr[2]).padStart(2, '0');
+        const yyyy = String(mFr[3]);
+        return `${yyyy}-${mm}-${dd}T00:00:00Z`;
+      }
+      throw new Meteor.Error('invalid-date', `Invalid start_date: ${raw}. Expected YYYY-MM-DD or DD/MM/YYYY`);
     };
-    const sd = toIsoStart(startDate);
+    const sd = normalizeStartDate(startDate);
     if (sd) qp.set('start_date', sd);
 
     const url = `${baseUrl}changelogs/supplier_invoices?${qp.toString()}`;
