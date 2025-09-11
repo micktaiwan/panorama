@@ -362,7 +362,34 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         </button>
         {/* Primary: Last updates */}
         <span className="ml8" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-          <input type="date" value={apiDateFrom} onChange={(e) => setApiDateFrom(e.target.value)} title="From (start_date for last updates)" />
+          <input
+            type="date"
+            value={apiDateFrom}
+            onChange={(e) => {
+              const t = e && e.target;
+              let v = '';
+              if (t && t.valueAsDate instanceof Date && !Number.isNaN(t.valueAsDate.getTime())) {
+                const d = t.valueAsDate;
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                v = `${yyyy}-${mm}-${dd}`;
+              } else {
+                const raw = String((t && t.value) || '').trim();
+                const mIso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                const mFr = raw.match(/^([0-3]?\d)\/([0-1]?\d)\/(\d{4})$/);
+                if (mIso) v = mIso[0];
+                else if (mFr) {
+                  const dd = String(mFr[1]).padStart(2, '0');
+                  const mm = String(mFr[2]).padStart(2, '0');
+                  const yyyy = String(mFr[3]);
+                  v = `${yyyy}-${mm}-${dd}`;
+                } else v = raw;
+              }
+              setApiDateFrom(v);
+            }}
+            title="From (start_date for last updates)"
+          />
           <select className="budgetSelect" value={apiLimit} onChange={(e) => setApiLimit(Number(e.target.value))}>
             <option value={5}>5</option>
             <option value={20}>20</option>
