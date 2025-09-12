@@ -13,6 +13,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'onboarding') return { name: 'onboarding' };
   if (parts[0] === 'preferences') return { name: 'preferences' };
   if (parts[0] === 'reporting') return { name: 'reporting' };
+  if (parts[0] === 'userlog') return { name: 'userlog' };
   if (parts[0] === 'people') return { name: 'people', personId: parts[1] };
   if (parts[0] === 'situation-analyzer') return { name: 'situationAnalyzer' };
   if (parts[0] === 'budget') return { name: 'budget', tab: parts[1] || 'report' };
@@ -60,6 +61,9 @@ export const navigateTo = (route) => {
       break;
     case 'reporting':
       window.location.hash = '#/reporting';
+      break;
+    case 'userlog':
+      window.location.hash = '#/userlog';
       break;
     case 'people':
       window.location.hash = route.personId ? `#/people/${route.personId}` : '#/people';
