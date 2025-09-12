@@ -302,7 +302,7 @@ Meteor.methods({
           else suggestionCounts.unknown += 1;
           const nameLc = ps && ps.name ? String(ps.name).trim().toLowerCase() : '';
           if (nameLc && existingNames.has(nameLc)) {
-            // matched existing; no-op
+            
           } else if (nameLc) {
             if (unmatchedSamples.length < 5) unmatchedSamples.push({ title: t.title, suggested: ps.name });
           }
@@ -587,7 +587,6 @@ Meteor.methods({
 
     const original = typeof note.content === 'string' ? note.content : '';
     if (!original.trim()) {
-      // Nothing to clean; no-op
       return { content: original };
     }
 
