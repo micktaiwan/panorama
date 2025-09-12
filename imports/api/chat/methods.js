@@ -219,9 +219,6 @@ const TOOL_HANDLERS = {
       const prev = await fetchPreview(p.kind, p.docId);
       out.push({ kind: p.kind, id: p.docId, title: prev.title, url: prev.url || null, score: items[i]?.score || 0 });
     }
-    try {
-      const topScores = out.slice(0, 2).map(r => Number(r.score) || 0);
-    } catch { /* noop */ }
     if (memory) {
       memory.lists = memory.lists || {};
       memory.lists.searchResults = out;
@@ -453,23 +450,7 @@ const computeTomorrowEndOfDayISO = () => {
 // Planner execution toggle: when true, execute the LLM-planned steps before synthesis
 const EXECUTE_PLANNER_STEPS = true;
 
-// Build a clearer, human-readable plan based on the user query + planned steps
-const buildReadablePlan = (rawQuery, plannedSteps) => {
-  const lines = [];
-  if (Array.isArray(plannedSteps) && plannedSteps.length > 0) {
-    for (let i = 0; i < plannedSteps.length; i += 1) {
-      const s = plannedSteps[i] || {};
-      lines.push(String(s.tool || 'tool'));
-    }
-  }
-  if (lines.length === 0) return '';
-  return ['Plan:', ...lines.map((t, idx) => `${idx + 1}. ${t}`)].join('\n');
-};
-
-const labelForToolStep = (tool) => {
-  const t = String(tool || '');
-  return t || 'step';
-};
+// Removed verbose planner helpers
 
 
 Meteor.methods({
@@ -639,9 +620,7 @@ Meteor.methods({
           
           // Log output metadata removed (keep error on parse)
           try {
-            const parsed = JSON.parse(result.output || '{}');
-            const keys = Object.keys(parsed || {});
-            const total = typeof parsed.total === 'number' ? parsed.total : undefined;
+            JSON.parse(result.output || '{}');
           } catch {
             console.error('[chat.ask][planner][tool output] parse failed', { tool: step.tool, length: (result.output || '').length });
           }
@@ -780,11 +759,6 @@ Meteor.methods({
       }
       const data2 = await resp2.json();
       let text = data2?.choices?.[0]?.message?.content || '';
-      try { 
-         
-      } catch (e) { 
-        console.error('[chat.ask][planner] log failed', e); 
-      }
       const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
       // The client already persisted the user message for correct ordering; persist only assistant.
       await ChatsCollection.insertAsync({ role: 'assistant', content: text, citations, createdAt: new Date() });
@@ -913,12 +887,10 @@ Meteor.methods({
       throw new Meteor.Error('openai-failed', errText);
     }
     const data = await resp.json();
-    const dbg = { keys: Object.keys(data || {}), outputLen: Array.isArray(data?.output) ? data.output.length : 0, tool_calls: data?.tool_calls };
-    
-    if (Array.isArray(data?.output)) {
-    }
-    const outputArray = Array.isArray(data?.output) ? data.output : [];
+    // Parse meta for potential future debugging (not logged)
+    void { keys: Object.keys(data || {}), outputLen: Array.isArray(data?.output) ? data.output.length : 0, tool_calls: data?.tool_calls };
     // Extract tool calls (Responses API emits 'function_call' items in output[])
+    const outputArray = Array.isArray(data?.output) ? data.output : [];
     const toolCallsFromOutput = outputArray
       .filter((it) => it && (it.type === 'tool_call' || it.type === 'function_call'))
       .map((tc) => {
@@ -954,9 +926,7 @@ Meteor.methods({
             // Ignore status filter to match Panorama UI (todo + doing)
             if (args.status) delete args.status;
             const selector = buildTasksSelector(args);
-            if (!('status' in selector)) {
-              selector.status = { $ne: 'done' };
-            }
+            if (!('status' in selector)) selector.status = { $ne: 'done' };
             const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
             console.log('[chat.ask][chat_tasks] tasks found:', tasks.length);
@@ -1042,9 +1012,7 @@ Meteor.methods({
               const prev = await fetchPreview(p.kind, p.docId);
               out.push({ kind: p.kind, id: p.docId, title: prev.title, url: prev.url || null, score: items[i]?.score || 0 });
             }
-            try {
-              const topScores = out.slice(0, 2).map(r => Number(r.score) || 0);
-            } catch { /* noop */ }
+            
             toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ results: out, total: out.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ error: e?.message || String(e) }) });
@@ -1090,7 +1058,7 @@ Meteor.methods({
       const data2 = await resp2.json();
       text = data2?.choices?.[0]?.message?.content || '';
     }
-    try { /* noop */ } catch { /* noop */ }
+    
     const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
 
     // Persist only assistant: client already persisted the user message for proper ordering

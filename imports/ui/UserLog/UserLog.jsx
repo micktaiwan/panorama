@@ -70,11 +70,7 @@ export default function UserLog() {
   // Persist hideExisting toggle
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
-    try {
-      localStorage.setItem('userlog_hide_existing_v1', hideExisting ? '1' : '0');
-    } catch (e) {
-      // non-blocking
-    }
+    localStorage.setItem('userlog_hide_existing_v1', hideExisting ? '1' : '0');
   }, [hideExisting]);
 
   // Removed local ⌘J toggle and overlay close: handled globally as navigation
