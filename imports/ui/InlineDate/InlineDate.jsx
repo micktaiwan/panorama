@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import PropTypes from 'prop-types';
 import './InlineDate.css';
 import { formatDate, deadlineSeverity } from '/imports/ui/utils/date.js';
 
@@ -10,7 +11,7 @@ const toInputValue = (date) => {
     .slice(0, 10);
 };
 
-export const InlineDate = forwardRef(({ value, onSubmit, placeholder = 'No deadline' }, ref) => {
+export const InlineDate = forwardRef(({ id, value, onSubmit, placeholder = 'No deadline' }, ref) => {
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
@@ -43,9 +44,9 @@ export const InlineDate = forwardRef(({ value, onSubmit, placeholder = 'No deadl
       if (sev) cls.push(sev); else cls.push('dueLater');
     }
     return (
-      <span className={cls.join(' ')} onClick={startEdit} role="button" tabIndex={0}>
+      <button type="button" className={cls.join(' ')} onClick={startEdit}>
         {value ? formatDate(value) : placeholder}
-      </span>
+      </button>
     );
   }
 
@@ -53,6 +54,7 @@ export const InlineDate = forwardRef(({ value, onSubmit, placeholder = 'No deadl
     <span className="deadlineEditor">
       <input
         ref={inputRef}
+        id={id}
         type="date"
         className="inlineEditableInput deadlineInput"
         value={inputValue}
@@ -66,5 +68,12 @@ export const InlineDate = forwardRef(({ value, onSubmit, placeholder = 'No deadl
     </span>
   );
 });
+
+InlineDate.propTypes = {
+  id: PropTypes.string,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
+  onSubmit: PropTypes.func,
+  placeholder: PropTypes.string,
+};
 
 

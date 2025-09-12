@@ -28,10 +28,13 @@ export default function UserLog() {
     [ready]
   );
 
+  // Track first entry id to keep memo deps simple and avoid deep comparisons
+  const entriesFirstId = entries?.[0]?._id || '';
+
   // Summarize and modal state (declared early so effects can reference them safely)
   const [cleaningIds, setCleaningIds] = useState(() => ({}));
   const [summarizing, setSummarizing] = useState(false);
-  const [summaryModal, setSummaryModal] = useState(null); // { summary, tasks, windowHours }
+  const [summaryModal, setSummaryModal] = useState(null);
   const [summaryWindow, setSummaryWindow] = useState(3);
   const [summaryPrompt, setSummaryPrompt] = useState('');
   const [hasSavedSummary, setHasSavedSummary] = useState(() => {
@@ -46,12 +49,15 @@ export default function UserLog() {
     const y = new Date(now); y.setDate(now.getDate() - 1); y.setHours(0,0,0,0);
     const sinceDay = new Date(since); sinceDay.setHours(0,0,0,0);
     const isYesterday = sinceDay.getTime() === y.getTime();
-    const dayPrefix = sameDay ? '' : (isYesterday ? 'Yesterday ' : `${since.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} `);
+    let dayPrefix = '';
+    if (!sameDay) {
+      dayPrefix = isYesterday ? 'Yesterday ' : `${since.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} `;
+    }
     const label = `${dayPrefix}${formatHms(since)}`;
     const cutoff = since.getTime();
     const count = Array.isArray(entries) ? entries.filter(e => (new Date(e.createdAt).getTime() >= cutoff)).length : 0;
     return { label, count };
-  }, [summaryWindow, entries && entries.length > 0 ? entries[0] && entries[0]._id : '']);
+  }, [summaryWindow, entriesFirstId]);
 
   // Persist open state
   useEffect(() => {
@@ -64,6 +70,11 @@ export default function UserLog() {
     if (isOpen && inputRef.current) inputRef.current.focus();
   }, [isOpen]);
 
+  const isEditableTarget = useCallback((target) => {
+    const tag = String(target?.tagName || '').toLowerCase();
+    return !!target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+  }, []);
+
   const toggleOpen = useCallback(() => setIsOpen(v => !v), []);
 
   // Global shortcut: ⌘J toggles overlay and focuses new line
@@ -72,13 +83,7 @@ export default function UserLog() {
       const key = String(e.key || '').toLowerCase();
       if ((e.metaKey || e.ctrlKey) && key === 'j') {
         e.preventDefault();
-        setIsOpen(prev => {
-          const next = !prev;
-          if (next) {
-            setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 0);
-          }
-          return next;
-        });
+        setIsOpen(prev => !prev);
       }
       if (e.key === 'Escape') {
         // Close summary first if open
@@ -88,9 +93,7 @@ export default function UserLog() {
           return;
         }
         const target = e.target;
-        const tag = (target && target.tagName ? String(target.tagName).toLowerCase() : '');
-        const isEditable = (target && target.isContentEditable) || tag === 'input' || tag === 'textarea' || tag === 'select';
-        if (isEditable) return;
+        if (isEditableTarget(target)) return;
         if (isOpen) {
           e.preventDefault();
           setIsOpen(false);
@@ -99,7 +102,168 @@ export default function UserLog() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, summaryModal]);
+  }, [isOpen, summaryModal, isEditableTarget]);
+
+  // Build a Set of log ids that already have a DB task linked (moved up to avoid TDZ in callbacks)
+  const tasksReady = useTracker(() => Meteor.subscribe('tasks.userLogLinks').ready(), []);
+  const { linkedLogIdSet, logIdToTask } = useTracker(() => {
+    const set = new Set();
+    const map = new Map();
+    if (!tasksReady) return { linkedLogIdSet: set, logIdToTask: map };
+    const tasks = TasksCollection.find({ 'source.kind': 'userLog' }, { fields: { 'source.logEntryIds': 1, projectId: 1 } }).fetch();
+    for (const t of (tasks || [])) {
+      const ids = Array.isArray(t?.source?.logEntryIds) ? t.source.logEntryIds : [];
+      for (const id of ids) {
+        const key = String(id);
+        set.add(key);
+        if (!map.has(key)) map.set(key, { taskId: t._id, projectId: t.projectId });
+      }
+    }
+    return { linkedLogIdSet: set, logIdToTask: map };
+  }, [tasksReady]);
+
+  const copySummary = useCallback(() => {
+    const text = summaryModal?.summary || '';
+    import('/imports/ui/utils/clipboard.js').then(m => m.writeClipboard(text));
+  }, [summaryModal]);
+
+  const createAll = useCallback(async () => {
+    const all = Array.isArray(summaryModal?.tasks) ? summaryModal.tasks : [];
+    const windowHours = summaryModal?.windowHours;
+    if (all.length === 0) { notify({ message: 'No tasks to create', kind: 'info' }); return; }
+    const queue = all.filter(t => !(Array.isArray(t?.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)))));
+    if (queue.length === 0) { notify({ message: 'No new tasks to create', kind: 'info' }); return; }
+    const skipped = all.length - queue.length;
+    let created = 0; let failed = 0;
+
+    const callInsert = (fields) => new Promise((resolve) => {
+      Meteor.call('tasks.insert', fields, (err) => {
+        if (err) failed += 1; else created += 1;
+        resolve();
+      });
+    });
+
+    for (const t of queue) {
+      const fields = { title: t.title, notes: t.notes || '', projectId: t.projectId || null };
+      if (t.deadline) fields.deadline = t.deadline;
+      if (Array.isArray(t?.sourceLogIds) && t.sourceLogIds.length > 0) {
+        fields.source = { kind: 'userLog', logEntryIds: t.sourceLogIds, windowHours };
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await callInsert(fields);
+    }
+    const parts = [`Created ${created}`];
+    if (skipped > 0) parts.push(`skipped ${skipped}`);
+    if (failed > 0) parts.push(`${failed} failed`);
+    notify({ message: parts.join(' · '), kind: failed ? 'warning' : 'success' });
+  }, [summaryModal, linkedLogIdSet]);
+
+  const handleSummarize = useCallback(() => {
+    setSummarizing(true);
+    const opt = { promptOverride: String(summaryPrompt || '').trim() };
+    Meteor.call('userLogs.summarizeWindow', 'userlog', summaryWindow, opt, (err, res) => {
+      setSummarizing(false);
+      if (err) {
+        console.error('userLogs.summarizeWindow failed', err);
+        notify({ message: 'Summarize failed', kind: 'error' });
+        return;
+      }
+      const summary = (typeof res?.summary === 'string') ? res.summary : '';
+      const tasks = Array.isArray(res?.tasks) ? res.tasks : [];
+      const norm = tasks.map(t => ({ title: t.title || '', notes: t.notes || '', projectId: t.projectId || '', deadline: t.deadline || '', sourceLogIds: Array.isArray(t?.sourceLogIds) ? t.sourceLogIds : [] }));
+      const payload = { summary, tasks: norm, windowHours: summaryWindow };
+      setSummaryModal(payload);
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem('userlog_last_summary_v1', JSON.stringify(payload));
+          setHasSavedSummary(true);
+        } catch (error) {
+          console.warn('Failed to persist last summary in localStorage', error);
+          notify({ message: 'Failed to save summary locally', kind: 'warning' });
+        }
+      }
+    });
+  }, [summaryPrompt, summaryWindow]);
+
+  const handleReopenSummary = useCallback(() => {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('userlog_last_summary_v1');
+      if (!raw) { notify({ message: 'No saved summary', kind: 'error' }); return; }
+      const parsed = JSON.parse(raw);
+      setSummaryModal(parsed && typeof parsed === 'object' ? parsed : null);
+    } catch (error) {
+      console.error('Failed to load saved summary', error);
+      notify({ message: 'Failed to load saved summary', kind: 'error' });
+    }
+  }, []);
+
+  // InlineSummary row helpers
+  const updateTaskDeadline = useCallback((rowIndex, next) => {
+    setSummaryModal(prev => {
+      if (!prev) return prev;
+      const nextTasks = prev.tasks.slice();
+      nextTasks[rowIndex] = { ...nextTasks[rowIndex], deadline: next || '' };
+      return { ...prev, tasks: nextTasks };
+    });
+  }, []);
+
+  const updateTaskProjectId = useCallback((rowIndex, value) => {
+    setSummaryModal(prev => {
+      if (!prev) return prev;
+      const nextTasks = prev.tasks.slice();
+      nextTasks[rowIndex] = { ...nextTasks[rowIndex], projectId: value };
+      return { ...prev, tasks: nextTasks };
+    });
+  }, []);
+
+  const createSingleTask = useCallback((task, windowHours) => {
+    const fields = { title: task.title, notes: task.notes || '', projectId: task.projectId || null };
+    if (task.deadline) fields.deadline = task.deadline;
+    if (Array.isArray(task?.sourceLogIds) && task.sourceLogIds.length > 0) {
+      fields.source = { kind: 'userLog', logEntryIds: task.sourceLogIds, windowHours };
+    }
+    Meteor.call('tasks.insert', fields, (err) => {
+      if (err) {
+        console.error('tasks.insert failed', err);
+        notify({ message: 'Create task failed', kind: 'error' });
+        return;
+      }
+      notify({ message: 'Task created', kind: 'success' });
+    });
+  }, []);
+
+  const handleClean = useCallback((entry) => {
+    setCleaningIds(prev => ({ ...prev, [entry._id]: true }));
+    Meteor.call('ai.cleanUserLog', entry._id, (err) => {
+      setCleaningIds(prev => ({ ...prev, [entry._id]: false }));
+      if (err) {
+        console.error('ai.cleanUserLog failed', err);
+        notify({ message: 'Correction échouée', kind: 'error' });
+        return;
+      }
+      notify({ message: 'Entrée corrigée', kind: 'success' });
+    });
+  }, []);
+
+  const handleUpdateContent = useCallback((entry, content) => {
+    Meteor.call('userLogs.update', entry._id, { content }, (err) => {
+      if (err) {
+        console.error('userLogs.update failed', err);
+        notify({ message: 'userLogs.update failed', kind: 'error' });
+      }
+    });
+  }, []);
+
+  const handleOpenLinkedProject = useCallback((entry) => {
+    const info = logIdToTask.get(String(entry._id));
+    if (info?.projectId) {
+      setIsOpen(false);
+      const id = String(info.projectId);
+      const hl = `userlog:${entry._id}`;
+      window.location.hash = `#/projects/${id}?hl=${encodeURIComponent(hl)}`;
+    }
+  }, [logIdToTask]);
 
   const handleSubmit = useCallback(() => {
     const trimmed = String(input || '').trim();
@@ -132,31 +296,13 @@ export default function UserLog() {
   const projects = useTracker(() => (projectsReady ? ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetch() : []), [projectsReady]);
   // Note: we only need project names to populate the select options below; no separate map needed.
 
-  // Build a Set of log ids that already have a DB task linked
-  const tasksReady = useTracker(() => Meteor.subscribe('tasks.userLogLinks').ready(), []);
-  const { linkedLogIdSet, logIdToTask } = useTracker(() => {
-    const set = new Set();
-    const map = new Map();
-    if (!tasksReady) return { linkedLogIdSet: set, logIdToTask: map };
-    const tasks = TasksCollection.find({ 'source.kind': 'userLog' }, { fields: { 'source.logEntryIds': 1, projectId: 1 } }).fetch();
-    for (const t of (tasks || [])) {
-      const ids = t && t.source && Array.isArray(t.source.logEntryIds) ? t.source.logEntryIds : [];
-      for (const id of ids) {
-        const key = String(id);
-        set.add(key);
-        if (!map.has(key)) map.set(key, { taskId: t._id, projectId: t.projectId });
-      }
-    }
-    return { linkedLogIdSet: set, logIdToTask: map };
-  }, [tasksReady]);
-
   return (
     <div className={`UserLog__root${isOpen ? ' isOpen' : ''}`} aria-live="polite">
       <button type="button" className="UserLog__fab" onClick={toggleOpen} aria-haspopup="dialog" aria-expanded={isOpen} title={isOpen ? 'Close journal' : 'Open journal'}>
         📝
       </button>
       {isOpen && (
-        <div className="UserLog__panel" role="dialog" aria-label="User Log">
+        <dialog className="UserLog__panel" aria-label="User Log" open>
           <div className="UserLog__header">
             <div className="UserLog__title">Journal</div>
             <button className="UserLog__close" onClick={() => setIsOpen(false)} aria-label="Close">×</button>
@@ -168,38 +314,8 @@ export default function UserLog() {
                 <button className="UserLog__close" onClick={() => setSummaryModal(null)} aria-label="Close">×</button>
               </div>
               <div className="UserLog__inlineSummaryActions">
-                <button className="btn" onClick={() => {
-                  const text = summaryModal.summary || '';
-                  import('/imports/ui/utils/clipboard.js').then(m => m.writeClipboard(text));
-                }}>Copy summary</button>
-                <button className="btn ml8" onClick={() => {
-                  const all = Array.isArray(summaryModal.tasks) ? summaryModal.tasks : [];
-                  if (all.length === 0) return;
-                  const queue = all.filter(t => !(Array.isArray(t.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)))));
-                  if (queue.length === 0) { notify({ message: 'No new tasks to create', kind: 'info' }); return; }
-                  const skipped = all.length - queue.length;
-                  let created = 0; let failed = 0;
-                  const next = () => {
-                    const t = queue.shift();
-                    if (!t) {
-                      const parts = [`Created ${created}`];
-                      if (skipped > 0) parts.push(`skipped ${skipped}`);
-                      if (failed > 0) parts.push(`${failed} failed`);
-                      notify({ message: parts.join(' · '), kind: failed ? 'warning' : 'success' });
-                      return;
-                    }
-                    const fields = { title: t.title, notes: t.notes || '', projectId: t.projectId || null };
-                    if (t.deadline) fields.deadline = t.deadline;
-                    if (Array.isArray(t.sourceLogIds) && t.sourceLogIds.length > 0) {
-                      fields.source = { kind: 'userLog', logEntryIds: t.sourceLogIds, windowHours: summaryModal.windowHours };
-                    }
-                    Meteor.call('tasks.insert', fields, (err) => {
-                      if (err) { failed += 1; } else { created += 1; }
-                      next();
-                    });
-                  };
-                  next();
-                }}>Create all</button>
+                <button className="btn" onClick={copySummary}>Copy summary</button>
+                <button className="btn ml8" onClick={createAll}>Create all</button>
               </div>
               <div className="UserLog__inlineSummaryBody">
                 <div className="UserLog__inlineSummaryText scrollArea">{summaryModal.summary || '(empty)'}</div>
@@ -208,27 +324,24 @@ export default function UserLog() {
                   {summaryModal.tasks && summaryModal.tasks.length > 0 ? (
                     <ul className="UserLog__inlineTasksList scrollArea">
                       {summaryModal.tasks.map((t, idx) => {
-                        const stableKey = (t && Array.isArray(t.sourceLogIds) && t.sourceLogIds.length > 0)
-                          ? `src:${t.sourceLogIds.join(',')}`
-                          : (t && t.title ? `title:${t.title}` : `idx:${idx}`);
-                        const hasDbLinked = Array.isArray(t.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)));
+                        let stableKey = `idx:${idx}`;
+                        if (Array.isArray(t?.sourceLogIds) && t.sourceLogIds.length > 0) {
+                          stableKey = `src:${t.sourceLogIds.join(',')}`;
+                        } else if (t?.title) {
+                          stableKey = `title:${t.title}`;
+                        }
+                        const hasDbLinked = Array.isArray(t?.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)));
                         return (
                         <li key={stableKey} className={`UserLog__inlineTaskRow${hasDbLinked ? ' isLinked' : ''}`}>
                           <div className="UserLog__inlineTaskMain">
                             <div className="UserLog__inlineTaskTitle">{t.title}</div>
                             {t.notes ? <div className="UserLog__inlineTaskNotes">{t.notes}</div> : null}
                             <div className="UserLog__inlineTaskDeadline">
-                              <label>Deadline:&nbsp;</label>
+                              <label htmlFor={`ul_task_deadline_${idx}`}>Deadline:&nbsp;</label>
                               <InlineDate
+                                id={`ul_task_deadline_${idx}`}
                                 value={t.deadline || ''}
-                                onSubmit={(next) => {
-                                  setSummaryModal(prev => {
-                                    if (!prev) return prev;
-                                    const nextTasks = prev.tasks.slice();
-                                    nextTasks[idx] = { ...nextTasks[idx], deadline: next || '' };
-                                    return { ...prev, tasks: nextTasks };
-                                  });
-                                }}
+                                onSubmit={(next) => updateTaskDeadline(idx, next)}
                                 placeholder="No deadline"
                               />
                             </div>
@@ -238,15 +351,7 @@ export default function UserLog() {
                                 className="UserLog__inlineTaskProjectSelect"
                                 id={`ul_task_project_${idx}`}
                                 value={t.projectId || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setSummaryModal(prev => {
-                                    if (!prev) return prev;
-                                    const nextTasks = prev.tasks.slice();
-                                    nextTasks[idx] = { ...nextTasks[idx], projectId: val };
-                                    return { ...prev, tasks: nextTasks };
-                                  });
-                                }}
+                                onChange={(e) => updateTaskProjectId(idx, e.target.value)}
                               >
                                 <option value="">(none)</option>
                                 {(projects || []).map(p => (
@@ -261,21 +366,7 @@ export default function UserLog() {
                           <button
                             className="btn btn-xs"
                             disabled={hasDbLinked}
-                            onClick={() => {
-                              const fields = { title: t.title, notes: t.notes || '', projectId: t.projectId || null };
-                              if (t.deadline) fields.deadline = t.deadline;
-                              if (Array.isArray(t.sourceLogIds) && t.sourceLogIds.length > 0) {
-                                fields.source = { kind: 'userLog', logEntryIds: t.sourceLogIds, windowHours: summaryModal.windowHours };
-                              }
-                              Meteor.call('tasks.insert', fields, (err) => {
-                                if (err) {
-                                  console.error('tasks.insert failed', err);
-                                  notify({ message: 'Create task failed', kind: 'error' });
-                                  return;
-                                }
-                                notify({ message: 'Task created', kind: 'success' });
-                              });
-                            }}
+                            onClick={() => createSingleTask(t, summaryModal.windowHours)}
                           >Create task</button>
                         </li>
                       );})}
@@ -329,47 +420,12 @@ export default function UserLog() {
             <button
               className="btn ml8"
               disabled={summarizing}
-              onClick={() => {
-                setSummarizing(true);
-                const opt = { promptOverride: String(summaryPrompt || '').trim() };
-                Meteor.call('userLogs.summarizeWindow', 'userlog', summaryWindow, opt, (err, res) => {
-                  setSummarizing(false);
-                  if (err) {
-                    console.error('userLogs.summarizeWindow failed', err);
-                    notify({ message: 'Summarize failed', kind: 'error' });
-                    return;
-                  }
-                  const summary = (res && typeof res.summary === 'string') ? res.summary : '';
-                  const tasks = Array.isArray(res && res.tasks) ? res.tasks : [];
-                  // Normalize local tasks state with editable projectId
-                  const norm = tasks.map(t => ({ title: t.title || '', notes: t.notes || '', projectId: t.projectId || '', deadline: t.deadline || '', sourceLogIds: Array.isArray(t && t.sourceLogIds) ? t.sourceLogIds : [] }));
-                  const payload = { summary, tasks: norm, windowHours: summaryWindow };
-                  setSummaryModal(payload);
-                  if (typeof localStorage !== 'undefined') {
-                    try {
-                      localStorage.setItem('userlog_last_summary_v1', JSON.stringify(payload));
-                      setHasSavedSummary(true);
-                    } catch (e) {
-                      console.warn('Failed to persist last summary in localStorage', e);
-                    }
-                  }
-                });
-              }}
+              onClick={handleSummarize}
             >{summarizing ? 'Summarizing…' : 'Summarize'}</button>
             <button
               className="btn ml8"
               disabled={!hasSavedSummary || summarizing}
-              onClick={() => {
-                if (typeof localStorage === 'undefined') return;
-                try {
-                  const raw = localStorage.getItem('userlog_last_summary_v1');
-                  if (!raw) { notify({ message: 'No saved summary', kind: 'error' }); return; }
-                  const parsed = JSON.parse(raw);
-                  setSummaryModal(parsed && typeof parsed === 'object' ? parsed : null);
-                } catch (_e) {
-                  notify({ message: 'Failed to load saved summary', kind: 'error' });
-                }
-              }}
+              onClick={handleReopenSummary}
             >Reopen summary</button>
           </div>
           <div className="UserLog__composer UserLog__composer--top">
@@ -398,39 +454,12 @@ export default function UserLog() {
                     <EntryRow
                       entry={e}
                       isCleaning={!!cleaningIds[e._id]}
-                      onClean={(entry) => {
-                        setCleaningIds(prev => ({ ...prev, [entry._id]: true }));
-                        Meteor.call('ai.cleanUserLog', entry._id, (err) => {
-                          setCleaningIds(prev => ({ ...prev, [entry._id]: false }));
-                          if (err) {
-                            console.error('ai.cleanUserLog failed', err);
-                            notify({ message: 'Correction échouée', kind: 'error' });
-                            return;
-                          }
-                          notify({ message: 'Entrée corrigée', kind: 'success' });
-                        });
-                      }}
-                      onUpdateContent={(entry, content) => {
-                        Meteor.call('userLogs.update', entry._id, { content }, (err) => {
-                          if (err) {
-                            console.error('userLogs.update failed', err);
-                            notify({ message: 'userLogs.update failed', kind: 'error' });
-                            return;
-                          }
-                        });
-                      }}
+                      onClean={handleClean}
+                      onUpdateContent={handleUpdateContent}
                       formatHms={formatHms}
                       timeAgo={timeAgo}
                       isLinked={linkedLogIdSet.has(String(e._id))}
-                      onOpenLinkedProject={(entry) => {
-                        const info = logIdToTask.get(String(entry._id));
-                        if (info && info.projectId) {
-                          setIsOpen(false);
-                          const id = String(info.projectId);
-                          const hl = `userlog:${entry._id}`;
-                          window.location.hash = `#/projects/${id}?hl=${encodeURIComponent(hl)}`;
-                        }
-                      }}
+                      onOpenLinkedProject={handleOpenLinkedProject}
                     />
                   </React.Fragment>
                 );
@@ -440,7 +469,7 @@ export default function UserLog() {
             )}
           </div>
           
-        </div>
+        </dialog>
       )}
       
     </div>
