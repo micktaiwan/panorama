@@ -13,7 +13,7 @@ module.exports = [
       'node_modules/**',
       'dist/**',
       'build/**',
-      'eslint.config.js',
+      'eslint.config.cjs',
       '.eslintrc.json'
     ],
     files: ["**/*.js", "**/*.jsx"],
