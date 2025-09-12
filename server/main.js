@@ -67,6 +67,7 @@ import '/imports/api/chats/methods';
 import '/imports/api/userLogs/collections';
 import '/imports/api/userLogs/publications';
 import '/imports/api/userLogs/methods';
+import '/imports/api/cron/jobs';
 
 Meteor.startup(() => {
   // Place server-side initialization here as your app grows.

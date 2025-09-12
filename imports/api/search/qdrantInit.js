@@ -35,7 +35,7 @@ Meteor.startup(async () => {
       const info = await client.getCollection(collectionName);
       exists = !!info;
     } catch (e) {
-      console.warn(`[qdrant] getCollection('${collectionName}') failed (will attempt create):`, e && e.message ? e.message : e);
+      console.warn(`[qdrant] getCollection('${collectionName}') failed (will attempt create):`, e?.message ?? e);
       exists = false;
     }
 
@@ -48,9 +48,9 @@ Meteor.startup(async () => {
       // Optionally validate vector size/distance (warn if mismatch)
       try {
         const info = await client.getCollection(collectionName);
-        const cfg = info && info.config && info.config.params && info.config.params.vectors;
-        const size = cfg && (cfg.size || (cfg.config && cfg.config.size));
-        const dist = cfg && (cfg.distance || (cfg.config && cfg.config.distance));
+        const cfg = info?.config?.params?.vectors;
+        const size = cfg?.size || cfg?.config?.size;
+        const dist = cfg?.distance || cfg?.config?.distance;
         if (Number(size) !== vectorSize || String(dist).toLowerCase() !== String(distance).toLowerCase()) {
           console.warn(`[qdrant] Collection '${collectionName}' exists but vector config differs (have size=${size}, distance=${dist}; expected size=${vectorSize}, distance=${distance})`);
         }

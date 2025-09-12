@@ -7,7 +7,7 @@ export const ImportSettings = () => {
     try {
       return localStorage.getItem('budget.arr') || '';
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.warn('[budget][ui] Failed to read localStorage budget.arr', e);
       return '';
     }
@@ -16,7 +16,7 @@ export const ImportSettings = () => {
     try {
       localStorage.setItem('budget.arr', String(arrInput || ''));
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.warn('[budget][ui] Failed to write localStorage budget.arr', e);
     }
   };
@@ -34,12 +34,12 @@ export const ImportSettings = () => {
           onClick={() => {
             Meteor.call('budget.testPennylaneApi', (err, res) => {
               if (err) {
-                // eslint-disable-next-line no-console
+                 
                 console.error('budget.testPennylaneApi failed', err);
                 notify({ message: `Pennylane API failed: ${err?.reason || err?.message || 'error'}`, kind: 'error' });
                 return;
               }
-              // eslint-disable-next-line no-console
+               
               console.log('[pennylane][test] sample:', res?.sample);
               notify({ message: `Pennylane OK (HTTP ${res?.status ?? '200'})`, kind: 'success' });
             });

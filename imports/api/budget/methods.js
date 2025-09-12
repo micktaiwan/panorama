@@ -192,9 +192,9 @@ Meteor.methods({
     }
 
     if (unknownDates.length > 0) {
-      // eslint-disable-next-line no-console
+       
       console.warn('[budget][server][import] unknown date count:', unknownDates.length, 'file:', payload.importFile);
-      // eslint-disable-next-line no-console
+       
       console.warn('[budget][server][import] unknown samples (up to 10):', unknownDates.slice(0, 10));
     }
 
@@ -337,7 +337,7 @@ Meteor.methods({
         try {
           body = await res.json();
         } catch (e) {
-          // eslint-disable-next-line no-console
+           
           console.warn('[budget][server] Failed to parse Pennylane JSON response', e);
           body = null;
         }
@@ -345,7 +345,7 @@ Meteor.methods({
         try {
           body = await res.text();
         } catch (e) {
-          // eslint-disable-next-line no-console
+           
           console.warn('[budget][server] Failed to read Pennylane text response', e);
           body = null;
         }
@@ -370,19 +370,19 @@ Meteor.methods({
         } else if (Array.isArray(body)) {
           bodyType = 'array';
         }
-        // eslint-disable-next-line no-console
+         
         console.log('[budget][server] Pennylane test OK META', { status, url, bodyType });
-        // eslint-disable-next-line no-console
+         
         console.dir(body, { depth: null, maxArrayLength: null });
       } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[budget][server] Failed to log Pennylane full response', e);
       }
       return { ok: true, status, url, sample: sample ? JSON.parse(JSON.stringify(sample)) : null };
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[budget][server] testPennylaneApi failed:', err);
-      const reason = err && err.reason ? err.reason : (err && err.message) ? err.message : 'request failed';
+      const reason = err?.reason ?? err?.message ?? 'request failed';
       throw new Meteor.Error('pennylane-request-failed', reason);
     }
   },
@@ -454,7 +454,7 @@ Meteor.methods({
               const rows = await VendorsCacheCollection.rawCollection().find({ supplierId: { $in: supplierIds } }, { projection: { supplierId: 1, name: 1 } }).toArray();
               for (const r of rows) { if (r && r.supplierId) supplierMap[String(r.supplierId)] = r.name; }
             } catch (e) {
-              // eslint-disable-next-line no-console
+               
               console.warn('[budget][server] vendor cache read failed', e);
             }
           }
@@ -488,21 +488,21 @@ Meteor.methods({
             }
           }
           if (empties.length > 0) {
-            // eslint-disable-next-line no-console
+             
             console.warn('[budget][server] API items with empty vendor after fallback', { count: empties.length });
-            // eslint-disable-next-line no-console
+             
             console.dir(empties.slice(0, 20), { depth: null, maxArrayLength: null });
           }
         }
       } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[budget][server] vendor-empty logging failed', e);
       }
       return body;
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[budget][server] fetchPennylaneSupplierInvoices failed:', err);
-      const reason = err && err.reason ? err.reason : (err && err.message) ? err.message : 'request failed';
+      const reason = err?.reason ?? err?.message ?? 'request failed';
       throw new Meteor.Error('pennylane-request-failed', reason);
     }
   },
@@ -529,7 +529,7 @@ Meteor.methods({
       try {
         const res = await fetch(url, { method: 'GET', headers });
         if (!res.ok) {
-          // eslint-disable-next-line no-console
+           
           console.warn('[budget][server] supplier fetch failed', supplierId, res.status);
           continue;
         }
@@ -541,7 +541,7 @@ Meteor.methods({
           results[supplierId] = doc.name;
         }
       } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[budget][server] supplier fetch error', supplierId, e);
       }
     }
