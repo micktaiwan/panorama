@@ -37,6 +37,7 @@ export default function UserLog() {
     if (typeof localStorage === 'undefined') return false;
     return !!localStorage.getItem('userlog_last_summary_v1');
   });
+  const [hideExisting, setHideExisting] = useState(() => true);
 
   const windowInfo = useMemo(() => {
     const now = new Date();
@@ -83,6 +84,18 @@ export default function UserLog() {
     
     return { linkedLogIdSet: set, logIdToTask: map };
   }, [tasksReady]);
+
+  const visibleSummaryTasks = useMemo(() => {
+    const all = Array.isArray(summaryModal?.tasks) ? summaryModal.tasks : [];
+    if (!hideExisting) return all;
+    return all.filter(t => !(Array.isArray(t?.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)))));
+  }, [summaryModal, hideExisting, linkedLogIdSet]);
+
+  const hiddenTasksCount = useMemo(() => {
+    const all = Array.isArray(summaryModal?.tasks) ? summaryModal.tasks : [];
+    if (!hideExisting) return 0;
+    return Math.max(0, all.length - visibleSummaryTasks.length);
+  }, [summaryModal, hideExisting, visibleSummaryTasks]);
 
   const copySummary = useCallback(() => {
     const text = summaryModal?.summary || '';
@@ -170,20 +183,24 @@ export default function UserLog() {
   }, [handleSummarize]);
 
   // InlineSummary row helpers
-  const updateTaskDeadline = useCallback((rowIndex, next) => {
+  const updateTaskDeadline = useCallback((rowTask, next) => {
     setSummaryModal(prev => {
       if (!prev) return prev;
+      const index = prev.tasks.indexOf(rowTask);
+      if (index === -1) return prev;
       const nextTasks = prev.tasks.slice();
-      nextTasks[rowIndex] = { ...nextTasks[rowIndex], deadline: next || '' };
+      nextTasks[index] = { ...nextTasks[index], deadline: next || '' };
       return { ...prev, tasks: nextTasks };
     });
   }, []);
 
-  const updateTaskProjectId = useCallback((rowIndex, value) => {
+  const updateTaskProjectId = useCallback((rowTask, value) => {
     setSummaryModal(prev => {
       if (!prev) return prev;
+      const index = prev.tasks.indexOf(rowTask);
+      if (index === -1) return prev;
       const nextTasks = prev.tasks.slice();
-      nextTasks[rowIndex] = { ...nextTasks[rowIndex], projectId: value };
+      nextTasks[index] = { ...nextTasks[index], projectId: value };
       return { ...prev, tasks: nextTasks };
     });
   }, []);
@@ -281,10 +298,19 @@ export default function UserLog() {
               <div className="UserLog__inlineSummaryBody">
                 <div className="UserLog__inlineSummaryText scrollArea">{summaryModal.summary || '(empty)'}</div>
                 <div className="UserLog__inlineTasks">
-                  <div className="UserLog__inlineTasksTitle">Task suggestions</div>
-                  {summaryModal.tasks && summaryModal.tasks.length > 0 ? (
+                  <div className="UserLog__inlineTasksTitle">
+                    Task suggestions
+                    <label className="ml8">
+                      <input
+                        type="checkbox"
+                        checked={hideExisting}
+                        onChange={(e) => setHideExisting(!!e.target.checked)}
+                      /> Hide existing
+                    </label>
+                  </div>
+                  {visibleSummaryTasks && visibleSummaryTasks.length > 0 ? (
                     <ul className="UserLog__inlineTasksList scrollArea">
-                      {summaryModal.tasks.map((t, idx) => {
+                      {visibleSummaryTasks.map((t, idx) => {
                         let stableKey = `idx:${idx}`;
                         if (Array.isArray(t?.sourceLogIds) && t.sourceLogIds.length > 0) {
                           stableKey = `src:${t.sourceLogIds.join(',')}`;
@@ -297,43 +323,49 @@ export default function UserLog() {
                           <div className="UserLog__inlineTaskMain">
                             <div className="UserLog__inlineTaskTitle">{t.title}</div>
                             {t.notes ? <div className="UserLog__inlineTaskNotes">{t.notes}</div> : null}
-                            <div className="UserLog__inlineTaskDeadline">
-                              <label htmlFor={`ul_task_deadline_${idx}`}>Deadline:&nbsp;</label>
-                              <InlineDate
-                                id={`ul_task_deadline_${idx}`}
-                                value={t.deadline || ''}
-                                onSubmit={(next) => updateTaskDeadline(idx, next)}
-                                placeholder="No deadline"
-                              />
-                            </div>
-                            <div className="UserLog__inlineTaskProject">
-                              <label htmlFor={`ul_task_project_${idx}`}>Project:&nbsp;</label>
-                              <select
-                                className="UserLog__inlineTaskProjectSelect"
-                                id={`ul_task_project_${idx}`}
-                                value={t.projectId || ''}
-                                onChange={(e) => updateTaskProjectId(idx, e.target.value)}
-                              >
-                                <option value="">(none)</option>
-                                {(projects || []).map(p => (
-                                  <option key={p._id} value={p._id}>{p.name || '(untitled)'}</option>
-                                ))}
-                              </select>
-                            </div>
-                            {hasDbLinked ? (
-                              <div className="muted" title="Task already exists for these journal entries">Task already exists</div>
-                            ) : null}
+                            {hasDbLinked ? null : (
+                              <>
+                                <div className="UserLog__inlineTaskDeadline">
+                                  <label htmlFor={`ul_task_deadline_${idx}`}>Deadline:&nbsp;</label>
+                                  <InlineDate
+                                    id={`ul_task_deadline_${idx}`}
+                                    value={t.deadline || ''}
+                                    onSubmit={(next) => updateTaskDeadline(t, next)}
+                                    placeholder="No deadline"
+                                  />
+                                </div>
+                                <div className="UserLog__inlineTaskProject">
+                                  <label htmlFor={`ul_task_project_${idx}`}>Project:&nbsp;</label>
+                                  <select
+                                    className="UserLog__inlineTaskProjectSelect"
+                                    id={`ul_task_project_${idx}`}
+                                    value={t.projectId || ''}
+                                    onChange={(e) => updateTaskProjectId(t, e.target.value)}
+                                  >
+                                    <option value="">(none)</option>
+                                    {(projects || []).map(p => (
+                                      <option key={p._id} value={p._id}>{p.name || '(untitled)'}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </>
+                            )}
                           </div>
-                          <button
-                            className="btn btn-xs"
-                            disabled={hasDbLinked}
-                            onClick={() => createSingleTask(t, summaryModal.windowHours)}
-                          >Create task</button>
+                          {hasDbLinked ? null : (
+                            <button
+                              className="btn btn-xs"
+                              onClick={() => createSingleTask(t, summaryModal.windowHours)}
+                            >Create task</button>
+                          )}
                         </li>
                       );})}
                     </ul>
                   ) : (
-                    <div className="UserLog__empty">No suggested tasks.</div>
+                    hideExisting && Array.isArray(summaryModal?.tasks) && summaryModal.tasks.length > 0 ? (
+                      <div className="UserLog__empty">{hiddenTasksCount} hidden {hiddenTasksCount === 1 ? 'task' : 'tasks'}.</div>
+                    ) : (
+                      <div className="UserLog__empty">No suggested tasks.</div>
+                    )
                   )}
                 </div>
               </div>
