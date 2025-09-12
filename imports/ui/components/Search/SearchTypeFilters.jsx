@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 
 // Tri-state type filters for search results
 // State values: 1 include, -1 exclude, undefined neutral
@@ -22,7 +23,7 @@ export const SearchTypeFilters = ({
     if (typeof localStorage !== 'undefined') {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
-        try { return JSON.parse(raw) || {}; } catch (e) { /* noop */ }
+        try { return JSON.parse(raw) || {}; } catch (e) { console.warn('[SearchTypeFilters] Failed to parse saved filters', e); }
       }
     }
     return {};
@@ -41,7 +42,7 @@ export const SearchTypeFilters = ({
 
   React.useEffect(() => {
     if (typeof localStorage !== 'undefined') {
-      try { localStorage.setItem(storageKey, JSON.stringify(filters)); } catch (_e) { /* noop */ }
+      try { localStorage.setItem(storageKey, JSON.stringify(filters)); } catch (e) { console.warn('[SearchTypeFilters] Failed to save filters', e); }
     }
     if (typeof onChange === 'function') onChange(filters);
   }, [JSON.stringify(filters), storageKey]);
@@ -70,6 +71,13 @@ export const SearchTypeFilters = ({
       ) : null}
     </div>
   );
+};
+
+SearchTypeFilters.propTypes = {
+  storageKey: PropTypes.string,
+  value: PropTypes.object,
+  onChange: PropTypes.func,
+  counts: PropTypes.object,
 };
 
 

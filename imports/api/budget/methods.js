@@ -19,7 +19,7 @@ const normalizeDate = (input) => {
   let s = String(input).trim();
   if (!s) return undefined;
   // Normalize separators (dot -> slash), keep dashes for ISO; collapse newlines
-  s = s.replace(/[\.]/g, '/').replace(/[\r\n]+/g, ' ').trim();
+  s = s.replace(/[.]/g, '/').replace(/[\r\n]+/g, ' ').trim();
   // Handle ISO yyyy-mm-dd explicitly to avoid tz quirks
   let mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (mIso) {
@@ -356,20 +356,8 @@ Meteor.methods({
       } else {
         sample = body || null;
       }
-      // Log the full response body for debugging (no preview), and indicate type
-      try {
-        let bodyType = typeof body;
-        if (contentType && typeof contentType === 'string') {
-          if (contentType.includes('application/json')) bodyType = 'json';
-          else bodyType = contentType;
-        } else if (Array.isArray(body)) {
-          bodyType = 'array';
-        }
-        // Success meta logs removed to reduce noise
-      } catch (e) {
-         
-        console.warn('[budget][server] Failed to log Pennylane full response', e);
-      }
+      // Skip verbose body logging to reduce noise; keep error surface only
+      
       return { ok: true, status, url, sample: sample ? JSON.parse(JSON.stringify(sample)) : null };
     } catch (err) {
        
@@ -455,7 +443,7 @@ Meteor.methods({
             s = s.replace(/\(label généré\)/ig, '');
             s = s.replace(/\([^)]*\)\s*$/g, '');
             s = s.replace(/^Facture\s+/i, '').trim();
-            const parts = s.split(/\s*[\-–—]\s*/).filter(Boolean);
+            const parts = s.split(/\s*[-–—]\s*/).filter(Boolean);
             if (parts.length > 0) return parts[0].trim();
             return s.trim();
           };

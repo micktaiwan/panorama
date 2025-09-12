@@ -77,7 +77,7 @@ Meteor.methods({
       ].filter(Boolean).join('\n\n');
       const sectionsText = sectionsMd
         .replace(/^## /gm, '')
-        .replace(/^\- /gm, '• ');
+        .replace(/^- /gm, '• ');
       return {
         text: `${headerText}\n\n${sectionsText}`,
         markdown: `${headerMd}\n\n${sectionsMd}`
@@ -85,8 +85,7 @@ Meteor.methods({
     }
 
     const lang = (options && typeof options.lang === 'string') ? options.lang.toLowerCase() : 'fr';
-    const format = (options && typeof options.format === 'string') ? options.format.toLowerCase() : 'text';
-    const wantsMarkdown = format === 'markdown';
+    const wantsMarkdown = ((options && typeof options.format === 'string') ? options.format.toLowerCase() : 'text') === 'markdown';
 
     const defaultSystem = [
       'You are an assistant that writes concise CTO activity reports for executive leadership.',
@@ -165,7 +164,7 @@ Meteor.methods({
     const data = await resp.json();
     const raw = data.choices?.[0]?.message?.content || '';
     const markdown = wantsMarkdown ? raw : '';
-    const text = wantsMarkdown ? raw.replace(/^#+\s*/gm, '').replace(/^\-\s*/gm, '• ') : raw;
+    const text = wantsMarkdown ? raw.replace(/^#+\s*/gm, '').replace(/^-\s*/gm, '• ') : raw;
     return { text, markdown };
   }
 });
