@@ -36,7 +36,7 @@ export const normalizeDateStr = (val) => {
   return '';
 };
 
-// Allow an optional onUnknown callback for debugging unparsable dates
+// Allow an optional onUnknown callback for unparsable dates
 export const parseWorkbook = (wb, onUnknown) => {
   const sheetByName = (name) => wb.Sheets[name] || wb.Sheets[wb.SheetNames.find((n) => n.toLowerCase() === name.toLowerCase())];
   const toRows = (ws) => (ws ? XLSX.utils.sheet_to_json(ws, { defval: '' }) : []);
