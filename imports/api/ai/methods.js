@@ -205,9 +205,6 @@ Meteor.methods({
     const { default: fetch } = await import('node-fetch');
 
     try {
-      // Debug: log final prompt messages
-      console.log('[ai.textToTasksAnalyze] System message:', system);
-      console.log('[ai.textToTasksAnalyze] User instructions:', instructions);
       const resp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -235,7 +232,6 @@ Meteor.methods({
 
       const data = await resp.json();
       const content = data.choices?.[0]?.message?.content || '{}';
-      console.log('[ai.textToTasksAnalyze] Raw model content:', content);
       let parsed;
       try {
         parsed = JSON.parse(content);
@@ -289,17 +285,11 @@ Meteor.methods({
       }
       try {
         const tasksArr = Array.isArray(parsed.tasks) ? parsed.tasks : [];
-        const projectsArr = Array.isArray(parsed.projects) ? parsed.projects : [];
-        const sampleTasks = tasksArr.slice(0, 5).map(t => ({
-          title: t && t.title,
-          deadline: t && (t.deadline || t.dueDate),
-          projectSuggestion: t && t.projectSuggestion
-        }));
 
         // Count suggestion types and matching to existing project names
         const existingNames = new Set((catalog || []).map(p => String(p.name || '').trim().toLowerCase()));
         const suggestionCounts = { existing: 0, new: 0, unknown: 0, missing: 0 };
-        let matchedExistingCount = 0;
+        // track of matchedExistingCount removed to reduce log noise
         const unmatchedSamples = [];
         for (const t of tasksArr) {
           const ps = t && t.projectSuggestion;
@@ -311,22 +301,14 @@ Meteor.methods({
           else if (ps.matchType === 'new') suggestionCounts.new += 1;
           else suggestionCounts.unknown += 1;
           const nameLc = ps && ps.name ? String(ps.name).trim().toLowerCase() : '';
-          if (nameLc && existingNames.has(nameLc)) matchedExistingCount += 1;
-          else if (nameLc) {
+          if (nameLc && existingNames.has(nameLc)) {
+            // matched existing; no-op
+          } else if (nameLc) {
             if (unmatchedSamples.length < 5) unmatchedSamples.push({ title: t.title, suggested: ps.name });
           }
         }
 
-        console.log('[ai.textToTasksAnalyze] Parsed summary:', {
-          projectsCount: projectsArr.length,
-          tasksCount: tasksArr.length,
-          suggestionCounts,
-          matchedExistingCount
-        });
-        console.log('[ai.textToTasksAnalyze] Sample tasks:', JSON.stringify(sampleTasks, null, 2));
-        if (unmatchedSamples.length > 0) {
-          console.log('[ai.textToTasksAnalyze] Unmatched suggestion samples:', JSON.stringify(unmatchedSamples, null, 2));
-        }
+        
       } catch (err) {
         console.error('[ai.textToTasksAnalyze] Error processing parsed content', { error: err && err.message });
       }
@@ -420,8 +402,6 @@ Meteor.methods({
 
     // Log final prompt messages for visibility
     const userContent = `${instructions}\n\nNotes (numbered):\n${numbered.join('\n')}`;
-    console.log('[ai.summarizeSession] System:', system);
-    console.log('[ai.summarizeSession] User:', userContent);
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -444,9 +424,7 @@ Meteor.methods({
 
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content || '{}';
-    console.log('[ai.summarizeSession] Raw model content:', content);
     const json = JSON.parse(content);
-    console.log('[ai.summarizeSession] Parsed keys:', Object.keys(json || {}));
 
     const toSection = (title, arr) => {
       if (!arr || arr.length === 0) return '';
@@ -552,8 +530,6 @@ Meteor.methods({
     // Build final system and user contents once and log them
     const systemContent = 'You are a CTO project coach. Ask concise, high-signal questions, propose concrete ideas/suggestions, and if the notes contain explicit questions, provide concise answers. Ground everything strictly in the provided notes. Only propose NEW items; do not repeat or rephrase previously asked or suggested ones.';
     const userContent = `${prompt}\n\nPrevious coach items (for context; avoid duplicates):\nQuestions:\n${previousQuestionsBlock}\n\nIdeas:\n${previousIdeasBlock}\n\nAnswers:\n${previousAnswersBlock}\n\nNotes (numbered):\n${numbered.join('\n')}`;
-    console.log('[ai.coachQuestions] System:', systemContent);
-    console.log('[ai.coachQuestions] User:', userContent);
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -811,18 +787,13 @@ Meteor.methods({
         'Journal entries in chronological order (each with an id). Use their times, but when you mention them, format as HH:mm (24h local). Do not output ISO strings:',
         entriesBlock || '(none)'
       ].join('\n');
-      console.log('[userLogs.summarizeWindow] Custom override active');
-      console.log('[userLogs.summarizeWindow] System:', customSystem);
-      console.log('[userLogs.summarizeWindow] Anchors:', { tz, sinceLocalIso, nowLocalIso, rangeHours });
-      console.log('[userLogs.summarizeWindow] User instructions (custom):', customUser);
+      
 
       const content = await openAiChat({ system: customSystem, user: customUser, expectJson: false });
       parsed = { summary: String(content || '').trim(), tasks: [] };
     } else {
       // Default behavior: structured JSON with summary and task suggestions
-      console.log('[userLogs.summarizeWindow] System:', system);
-      console.log('[userLogs.summarizeWindow] Anchors:', { tz, sinceLocalIso, nowLocalIso, rangeHours });
-      console.log('[userLogs.summarizeWindow] User instructions:', instructions);
+      
 
       const json = await openAiChat({ system, user: instructions, expectJson: true, schema });
       parsed = json;

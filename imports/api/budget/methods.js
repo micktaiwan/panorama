@@ -192,10 +192,8 @@ Meteor.methods({
     }
 
     if (unknownDates.length > 0) {
-       
-      console.warn('[budget][server][import] unknown date count:', unknownDates.length, 'file:', payload.importFile);
-       
-      console.warn('[budget][server][import] unknown samples (up to 10):', unknownDates.slice(0, 10));
+      console.error('[budget][server][import] unknown date count:', unknownDates.length, 'file:', payload.importFile);
+      console.error('[budget][server][import] unknown samples (up to 10):', unknownDates.slice(0, 10));
     }
 
     return { imported: importedCount, skipped: skippedExisting, importBatch, unknownDates: unknownDates.length, unknownSamples: unknownDates.slice(0, 10) };
@@ -315,7 +313,6 @@ Meteor.methods({
     const testPathRaw = typeof cfg.testPath === 'string' ? cfg.testPath : 'supplier_invoices?sort=-id';
     const testPath = String(testPathRaw || '').replace(/^\//, '');
     const url = `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}${testPath}`;
-    console.log('url', url);
     try {
       const headers = {
         'Accept': 'application/json',
@@ -337,16 +334,14 @@ Meteor.methods({
         try {
           body = await res.json();
         } catch (e) {
-           
-          console.warn('[budget][server] Failed to parse Pennylane JSON response', e);
+          console.error('[budget][server] Failed to parse Pennylane JSON response', e);
           body = null;
         }
       } else {
         try {
           body = await res.text();
         } catch (e) {
-           
-          console.warn('[budget][server] Failed to read Pennylane text response', e);
+          console.error('[budget][server] Failed to read Pennylane text response', e);
           body = null;
         }
       }
@@ -370,10 +365,7 @@ Meteor.methods({
         } else if (Array.isArray(body)) {
           bodyType = 'array';
         }
-         
-        console.log('[budget][server] Pennylane test OK META', { status, url, bodyType });
-         
-        console.dir(body, { depth: null, maxArrayLength: null });
+        // Success meta logs removed to reduce noise
       } catch (e) {
          
         console.warn('[budget][server] Failed to log Pennylane full response', e);
@@ -426,7 +418,6 @@ Meteor.methods({
       if (filterArr.length > 0) qp.set('filter', JSON.stringify(filterArr));
     }
     const url = `${baseUrl}supplier_invoices?${qp.toString()}`;
-    console.log('url', url);
     const headers = {
       'Accept': 'application/json',
       'User-Agent': 'Panorama/Dev'
@@ -454,8 +445,7 @@ Meteor.methods({
               const rows = await VendorsCacheCollection.rawCollection().find({ supplierId: { $in: supplierIds } }, { projection: { supplierId: 1, name: 1 } }).toArray();
               for (const r of rows) { if (r && r.supplierId) supplierMap[String(r.supplierId)] = r.name; }
             } catch (e) {
-               
-              console.warn('[budget][server] vendor cache read failed', e);
+              console.error('[budget][server] vendor cache read failed', e);
             }
           }
           const guessVendorFromLabel = (label, filename, externalReference) => {
@@ -488,15 +478,11 @@ Meteor.methods({
             }
           }
           if (empties.length > 0) {
-             
-            console.warn('[budget][server] API items with empty vendor after fallback', { count: empties.length });
-             
-            console.dir(empties.slice(0, 20), { depth: null, maxArrayLength: null });
+            console.error('[budget][server] API items with empty vendor after fallback', { count: empties.length });
           }
         }
       } catch (e) {
-         
-        console.warn('[budget][server] vendor-empty logging failed', e);
+        console.error('[budget][server] vendor-empty logging failed', e);
       }
       return body;
     } catch (err) {
@@ -529,8 +515,7 @@ Meteor.methods({
       try {
         const res = await fetch(url, { method: 'GET', headers });
         if (!res.ok) {
-           
-          console.warn('[budget][server] supplier fetch failed', supplierId, res.status);
+          console.error('[budget][server] supplier fetch failed', supplierId, res.status);
           continue;
         }
         const body = await res.json();
@@ -541,8 +526,7 @@ Meteor.methods({
           results[supplierId] = doc.name;
         }
       } catch (e) {
-         
-        console.warn('[budget][server] supplier fetch error', supplierId, e);
+        console.error('[budget][server] supplier fetch error', supplierId, e);
       }
     }
     return results;

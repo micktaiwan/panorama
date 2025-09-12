@@ -52,12 +52,6 @@ Meteor.methods({
 
     // Fallback: if no key or no rows, return a simple rendering respecting format
     if (!apiKey || rows.length === 0) {
-      if (!apiKey) {
-        console.log('[reporting.aiSummarizeWindow] Fallback: missing OpenAI API key. Returning simple markdown.');
-      }
-      if (rows.length === 0) {
-        console.log('[reporting.aiSummarizeWindow] Fallback: no activity rows for window', windowKey);
-      }
       const lang = (options && typeof options.lang === 'string') ? options.lang.toLowerCase() : 'fr';
       const format = (options && typeof options.format === 'string') ? options.format.toLowerCase() : 'text';
       const headerText = lang === 'en' ? `Activity report — ${windowKey}` : `Rapport d'activité — ${windowKey}`;
@@ -150,9 +144,7 @@ Meteor.methods({
     const system = userPrompt && userPrompt.trim() ? userPrompt : defaultSystem;
     const user = userPrompt && userPrompt.trim() ? `${itemsBlock}\n\n${notesBlock}\n\n${outputConstraints}` : defaultUser;
 
-    console.log('[reporting.aiSummarizeWindow] System prompt:', system);
-    console.log('[reporting.aiSummarizeWindow] User prompt:', user);
-    console.log('[reporting.aiSummarizeWindow] Rows count:', rows.length, 'Window:', windowKey, 'Period:', since.toISOString(), '→', until.toISOString());
+    // Removed verbose prompt and meta logs
 
     const { default: fetch } = await import('node-fetch');
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {

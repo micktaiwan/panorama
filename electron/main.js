@@ -16,7 +16,7 @@ function loadWindowState() {
       return data;
     }
   } catch (error) {
-    console.warn('[electron] Failed to load window state:', error);
+    console.error('[electron] Failed to load window state:', error);
   }
   return null;
 }
@@ -33,7 +33,7 @@ function saveWindowState(win) {
     };
     fs.writeFileSync(getWindowStateFilePath(), JSON.stringify(state, null, 2), 'utf-8');
   } catch (error) {
-    console.warn('[electron] Failed to save window state:', error);
+    console.error('[electron] Failed to save window state:', error);
   }
 }
 
@@ -290,14 +290,13 @@ app.whenReady().then(() => {
     const pngPath = path.join(__dirname, 'assets', 'icon.png');
     let dockIcon = nativeImage.createFromPath(icnsPath);
     if (dockIcon.isEmpty()) {
-      console.warn(`[electron] icon.icns not usable at: ${icnsPath}. Falling back to PNG.`);
+      console.error(`[electron] icon.icns not usable at: ${icnsPath}. Falling back to PNG.`);
       dockIcon = nativeImage.createFromPath(pngPath);
     }
     if (!dockIcon.isEmpty()) {
       app.dock.setIcon(dockIcon);
-      console.log('[electron] Dock icon set successfully.');
     } else {
-      console.warn('[electron] No valid Dock icon found (icns/png).');
+      console.error('[electron] No valid Dock icon found (icns/png).');
     }
   }
   createWindow(savedWindowState);
