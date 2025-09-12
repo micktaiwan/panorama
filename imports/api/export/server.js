@@ -86,15 +86,27 @@ const startArchiveJob = async (jobId) => {
 Meteor.methods({
   async 'app.exportArchiveStart'() {
     const id = Random.id();
-    jobs.set(id, { ready: false, filePath: null, size: 0 });
+    jobs.set(id, { ready: false, filePath: null, size: 0, error: null });
     // Run async; do not await in method
-    setTimeout(() => { startArchiveJob(id).catch((e) => { console.error('exportArchive job failed', e); jobs.delete(id); }); }, 0);
+    setTimeout(() => {
+      startArchiveJob(id)
+        .then(() => {})
+        .catch((e) => {
+          console.error('exportArchive job failed', e);
+          jobs.set(id, {
+            ready: false,
+            filePath: null,
+            size: 0,
+            error: { message: e?.message ?? String(e), stack: e?.stack ?? '' }
+          });
+        });
+    }, 0);
     return { jobId: id };
   },
   async 'app.exportArchiveStatus'(jobId) {
     const j = jobs.get(jobId);
     if (!j) return { exists: false };
-    return { exists: true, ready: j.ready, size: j.size };
+    return { exists: true, ready: j.ready, size: j.size, error: j.error || null };
   }
 });
 
@@ -114,7 +126,11 @@ WebApp.connectHandlers.use((req, res, next) => {
   read.pipe(res);
   read.on('close', () => {
     // Optionally clean up the temp file
-    try { fs.unlinkSync(j.filePath); } catch (e) {}
+    try {
+      if (j?.filePath && fs.existsSync(j.filePath)) fs.unlinkSync(j.filePath);
+    } catch (e) {
+      console.error('Failed to delete export temp file', e);
+    }
     jobs.delete(jobId);
   });
 });

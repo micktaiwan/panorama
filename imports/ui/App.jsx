@@ -55,6 +55,8 @@ function App() {
   }, []);
   const [exportOpen, setExportOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [qdrantModalOpen, setQdrantModalOpen] = useState(false);
+  const [qdrantStatus, setQdrantStatus] = useState(null);
   const [searchQ, setSearchQ] = useState(() => {
     return typeof localStorage !== 'undefined' ? (localStorage.getItem('global_search_q') || '') : '';
   });
@@ -159,6 +161,23 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Qdrant health check on startup
+  useEffect(() => {
+    const checkQdrant = () => {
+      Meteor.call('qdrant.health', (err, res) => {
+        if (err || !res || res.error || !res.exists) {
+          const message = err?.reason || err?.message || res?.error || 'Qdrant indisponible';
+          setQdrantStatus({ ok: false, error: message, info: res || null });
+          setQdrantModalOpen(true);
+          setToast({ message: 'Qdrant indisponible — la recherche sémantique ne fonctionnera pas', kind: 'warning' });
+        } else {
+          setQdrantStatus({ ok: true, info: res });
+        }
+      });
+    };
+    checkQdrant();
   }, []);
 
   // Global navigation shortcuts: Back/Forward with Cmd/Ctrl + Left/Right
@@ -496,6 +515,39 @@ function App() {
         <Notify message={toast.message} kind={toast.kind || 'info'} onClose={() => setToast(null)} durationMs={3000} />
       ) : null}
       <Modal
+        open={qdrantModalOpen}
+        onClose={() => setQdrantModalOpen(false)}
+        title="Qdrant indisponible"
+        icon={<span role="img" aria-label="warning">⚠️</span>}
+        actions={[
+          <button key="retry" className="btn" onClick={() => {
+            Meteor.call('qdrant.health', (err, res) => {
+              if (err || !res || res.error || !res.exists) {
+                const message = err?.reason || err?.message || res?.error || 'Toujours indisponible';
+                setQdrantStatus({ ok: false, error: message, info: res || null });
+                setToast({ message: 'Qdrant toujours indisponible', kind: 'error' });
+              } else {
+                setQdrantStatus({ ok: true, info: res });
+                setToast({ message: 'Qdrant est de nouveau disponible', kind: 'success' });
+                setQdrantModalOpen(false);
+              }
+            });
+          }}>Réessayer</button>,
+          <button key="prefs" className="btn ml8" onClick={() => { setQdrantModalOpen(false); navigateTo({ name: 'preferences' }); }}>Ouvrir Préférences</button>,
+          <button key="close" className="btn ml8" onClick={() => setQdrantModalOpen(false)}>Ignorer</button>
+        ]}
+      >
+        <div>
+          <p>La base Qdrant n'est pas accessible. La recherche sémantique sera désactivée tant que la connexion n'est pas rétablie.</p>
+          {qdrantStatus && qdrantStatus.error ? (
+            <p className="muted">Détails: {String(qdrantStatus.error)}</p>
+          ) : null}
+          {qdrantStatus && qdrantStatus.info && qdrantStatus.info.url ? (
+            <p className="muted">URL configurée: {qdrantStatus.info.url}</p>
+          ) : null}
+        </div>
+      </Modal>
+      <Modal
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         title="Export data"
@@ -512,7 +564,7 @@ function App() {
           <div className="exportModalButtons">
             <button className="btn" onClick={() => {
               Meteor.call('app.exportAll', (err, data) => {
-                if (err) { console.error('export failed', err); setToast({ message: 'Export failed', kind: 'error' }); return; }
+                if (err) { console.error('export failed', err); setToast({ message: `Export failed: ${err?.reason || err?.message || 'Unknown error'}` , kind: 'error' }); return; }
                 try {
                   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                   const url = URL.createObjectURL(blob);
@@ -539,6 +591,7 @@ function App() {
                 const poll = () => {
                   Meteor.call('app.exportArchiveStatus', jobId, (e2, st) => {
                     if (e2 || !st || !st.exists) { setToast({ message: 'Archive failed', kind: 'error' }); return; }
+                    if (st.error) { setToast({ message: `Archive failed: ${st.error?.message || 'Unknown error'}`, kind: 'error' }); return; }
                     if (!st.ready) { setTimeout(poll, 800); return; }
                     setExportOpen(false);
                     const link = `/download-export/${jobId}`;

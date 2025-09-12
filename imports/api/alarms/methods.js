@@ -15,8 +15,8 @@ Meteor.methods({
       enabled: doc.enabled !== false,
       nextTriggerAt: new Date(doc.nextTriggerAt),
       recurrence: {
-        type: doc.recurrence && doc.recurrence.type ? doc.recurrence.type : 'none',
-        daysOfWeek: Array.isArray(doc.recurrence && doc.recurrence.daysOfWeek) ? doc.recurrence.daysOfWeek : undefined
+        type: doc.recurrence?.type ? doc.recurrence.type : 'none',
+        daysOfWeek: Array.isArray(doc.recurrence?.daysOfWeek) ? doc.recurrence.daysOfWeek : undefined
       },
       snoozedUntilAt: doc.snoozedUntilAt ? new Date(doc.snoozedUntilAt) : undefined,
       done: false,
@@ -64,8 +64,8 @@ Meteor.methods({
     const now = new Date();
     const doc = await AlarmsCollection.findOneAsync(alarmId);
     const candidates = [];
-    if (doc && doc.snoozedUntilAt) candidates.push(new Date(doc.snoozedUntilAt).getTime());
-    if (doc && doc.nextTriggerAt) candidates.push(new Date(doc.nextTriggerAt).getTime());
+    if (doc?.snoozedUntilAt) candidates.push(new Date(doc.snoozedUntilAt).getTime());
+    if (doc?.nextTriggerAt) candidates.push(new Date(doc.nextTriggerAt).getTime());
     candidates.push(now.getTime());
     const baseMs = Math.max(...candidates);
     const until = new Date(baseMs + minutes * 60 * 1000);
@@ -78,7 +78,7 @@ Meteor.methods({
     const doc = await AlarmsCollection.findOneAsync(alarmId);
     const now = new Date();
     if (!doc) return 0;
-    const recur = (doc.recurrence && doc.recurrence.type) || 'none';
+    const recur = (doc.recurrence?.type) || 'none';
     if (recur === 'none') {
       const res = await AlarmsCollection.updateAsync(alarmId, { $set: { enabled: false, done: true, acknowledgedAt: now, updatedAt: new Date(), snoozedUntilAt: null } });
       console.log('[alarms.dismiss]', { alarmId, recurring: false, updated: res });

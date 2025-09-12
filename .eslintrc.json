@@ -1,0 +1,26 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2021": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "module",
+    "ecmaFeatures": { "jsx": true }
+  },
+  "plugins": ["react", "import"],
+  "extends": ["eslint:recommended", "plugin:react/recommended"],
+  "settings": {
+    "react": { "version": "detect" },
+    "import/resolver": {
+      "meteor": {}
+    }
+  },
+  "rules": {
+    "import/no-absolute-path": "off"
+  }
+}
+
+

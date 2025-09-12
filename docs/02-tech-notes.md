@@ -275,6 +275,12 @@ export const Example = ({ sessionId }) => {
   - or re‑throw an explicit error (e.g., `throw new Meteor.Error(...)`).
 - Prefer guards to avoid exceptions (tests de présence/état) plutôt que d’attraper.
 
+### Optional Chaining (mandatory)
+
+- Always use optional chaining for safe property access.
+  - Example: prefer `e?.message` over `e && e.message`.
+  - Similarly for deep access: use `obj?.foo?.bar` instead of manual chaining tests.
+
 ## Notifications and confirmations (UI)
 
 - Do not use `window.alert` or `window.confirm`.

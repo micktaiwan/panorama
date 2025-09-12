@@ -285,7 +285,7 @@ Meteor.methods({
 
         parsed.projects = Array.from(newProjectsSet).map(name => ({ name }));
       } catch (e) {
-        console.error('[ai.textToTasksAnalyze] Post-process mapping error', { error: e && e.message });
+        console.error('[ai.textToTasksAnalyze] Post-process mapping error', { error: e?.message });
       }
       try {
         const tasksArr = Array.isArray(parsed.tasks) ? parsed.tasks : [];
@@ -328,7 +328,7 @@ Meteor.methods({
           console.log('[ai.textToTasksAnalyze] Unmatched suggestion samples:', JSON.stringify(unmatchedSamples, null, 2));
         }
       } catch (e) {
-        console.error('[ai.textToTasksAnalyze] Error processing parsed content', { error: e && e.message });
+        console.error('[ai.textToTasksAnalyze] Error processing parsed content', { error: e?.message });
       }
       return parsed;
     } catch (e) {
