@@ -1,17 +1,9 @@
 import { Meteor } from 'meteor/meteor';
 import { getOpenAiApiKey, getQdrantUrl } from '/imports/api/_shared/config';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import fetch from 'node-fetch';
 import { ProjectsCollection } from '/imports/api/projects/collections';
-import { TasksCollection } from '/imports/api/tasks/collections';
-import { NotesCollection } from '/imports/api/notes/collections';
-import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
-import { NoteLinesCollection } from '/imports/api/noteLines/collections';
-import { AlarmsCollection } from '/imports/api/alarms/collections';
-import { LinksCollection } from '/imports/api/links/collections';
 import { ChatsCollection } from '/imports/api/chats/collections';
-import { embedText } from '/imports/api/search/vectorStore';
-import { buildTasksSelector, buildOverdueSelector, buildByProjectSelector, buildFilterSelector, buildProjectByNameSelector, compileWhere, getListKeyForCollection, FIELD_ALLOWLIST } from '/imports/api/chat/helpers';
+import { buildProjectByNameSelector, compileWhere, getListKeyForCollection, FIELD_ALLOWLIST } from '/imports/api/chat/helpers';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
 
@@ -230,7 +222,7 @@ const TOOL_HANDLERS = {
     try {
       const topScores = out.slice(0, 2).map(r => Number(r.score) || 0);
       console.log('[chat.ask][chat_semanticSearch] meta:', { query: clampText(q, 120), limit, total: out.length, topScores });
-    } catch (_e) { /* noop */ }
+    } catch { /* noop */ }
     if (memory) {
       memory.lists = memory.lists || {};
       memory.lists.searchResults = out;
@@ -475,13 +467,7 @@ const buildReadablePlan = (rawQuery, plannedSteps) => {
   return ['Plan:', ...lines.map((t, idx) => `${idx + 1}. ${t}`)].join('\n');
 };
 
-const fmtYmd = (iso) => {
-  const s = String(iso || '');
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
-};
-
-const labelForToolStep = (tool, args = {}) => {
+const labelForToolStep = (tool) => {
   const t = String(tool || '');
   return t || 'step';
 };
@@ -678,7 +664,7 @@ Meteor.methods({
             const keys = Object.keys(parsed || {});
             const total = typeof parsed.total === 'number' ? parsed.total : undefined;
             console.log('[chat.ask][planner][tool output]', { tool: step.tool, keys, total, length: (result.output || '').length });
-          } catch (eLog) {
+          } catch {
             console.error('[chat.ask][planner][tool output] parse failed', { tool: step.tool, length: (result.output || '').length });
           }
           
@@ -979,7 +965,7 @@ Meteor.methods({
     const toolCallsTop = Array.isArray(data?.tool_calls) ? data.tool_calls.map((tc) => ({
       id: tc?.id || tc?.tool_call_id || '',
       name: tc?.function?.name || tc?.name || '',
-      arguments: (() => { try { return typeof tc?.function?.arguments === 'string' ? JSON.parse(tc.function.arguments) : (tc?.arguments || {}); } catch (_e) { return {}; } })()
+      arguments: (() => { try { return typeof tc?.function?.arguments === 'string' ? JSON.parse(tc.function.arguments) : (tc?.arguments || {}); } catch { return {}; } })()
     })) : [];
     const toolCallsAll = (toolCallsFromOutput.length > 0 ? toolCallsFromOutput : toolCallsTop);
     const toolCalls = toolCallsAll.slice(0, 5);
@@ -1100,7 +1086,7 @@ Meteor.methods({
                 total: out.length,
                 topScores
               });
-            } catch (_e) { /* noop */ }
+            } catch { /* noop */ }
             toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ results: out, total: out.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ error: e?.message || String(e) }) });
@@ -1149,7 +1135,7 @@ Meteor.methods({
     try {
       console.log('[chat.ask] Output length:', (text || '').length);
       console.log('[chat.ask] Output:', text);
-    } catch (_e) { /* noop */ }
+    } catch { /* noop */ }
     const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
 
     // Persist only assistant: client already persisted the user message for proper ordering
