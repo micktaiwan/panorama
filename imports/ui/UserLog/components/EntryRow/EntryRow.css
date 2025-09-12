@@ -1,0 +1,10 @@
+.UserLog__entry { padding: 6px 0; border-bottom: none; display: flex; align-items: center; gap: 8px; }
+.UserLog__entryBody { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.UserLog__entryClock { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.UserLog__linkedIcon { margin-left: 6px; color: var(--success); cursor: pointer; background: transparent; border: none; padding: 0; }
+.UserLog__entryText { flex: 1; min-width: 0; }
+.UserLog__action { align-self: center; }
+.UserLog__entryMeta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.UserLog__entryContent { white-space: pre-wrap; word-break: break-word; }
+
+

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain, Notification } = require('electron');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require('path');
 const fs = require('fs');
@@ -151,7 +151,14 @@ function createWindow(savedState) {
       handleFileDownloadAndOpen(win, url);
       return { action: 'deny' };
     }
-    return { action: 'allow' };
+    const isHttpUrl = /^https?:\/\//i.test(url);
+    if (isHttpUrl) {
+      // Open external http(s) links in the user's default browser
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    // Deny creating new Electron windows by default
+    return { action: 'deny' };
   });
 
   if (savedState) {
@@ -312,6 +319,21 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+ipcMain.handle('app:notify', (_event, { title, body }) => {
+  if (!Notification.isSupported()) return;
+  const n = new Notification({ title, body });
+  n.on('click', () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) { win.show(); win.focus(); }
+  });
+  n.show();
+});
+
+ipcMain.handle('app:focusMain', () => {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) { win.show(); win.focus(); }
 });
 
 

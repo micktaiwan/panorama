@@ -18,6 +18,7 @@
 .taskTitleArea .inlineEditable { display: block; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; width: 100%; min-width: 0; }
 .taskTitleArea .inlineEditable.inProgress, .taskRowTitle.inProgress { color: var(--success); }
 .taskTitleArea .inlineEditableInput { width: 100%; }
+.taskNotes { color: var(--muted); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .taskInlineActions { display: inline-flex; align-items: center; gap: 6px; }
 .taskInlineActions .eisenhowerToggle { padding: 0 8px; height: 22px; line-height: 20px; }
 .taskRowC.smallText .taskInlineActions .eisenhowerToggle { padding: 0 6px; height: 20px; line-height: 18px; font-size: 11px; }

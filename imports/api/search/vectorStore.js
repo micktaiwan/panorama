@@ -187,7 +187,12 @@ export const splitIntoChunks = (text, minChars = 800, maxChars = 1200, overlap =
 export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessionId = null, extraPayload = {}, minChars = 800, maxChars = 1200, overlap = 150 }) => {
   const client = await getQdrantClient();
   await ensureCollectionIfNeeded();
-  const chunks = splitIntoChunks(text, minChars, maxChars, overlap);
+  const normalizedText = String(text || '').trim();
+  if (!normalizedText) {
+    // Nothing to index for empty content
+    return;
+  }
+  const chunks = splitIntoChunks(normalizedText, minChars, maxChars, overlap);
   const points = [];
   for (let i = 0; i < chunks.length; i += 1) {
     try {

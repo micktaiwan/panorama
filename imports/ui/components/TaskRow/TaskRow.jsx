@@ -91,6 +91,9 @@ export const TaskRow = ({
             inputClassName={`taskRowTitle${status === 'in_progress' ? ' inProgress' : ''}`}
             onSubmit={(next) => { if (typeof onUpdateTitle === 'function') onUpdateTitle(String(next || '').trim()); }}
           />
+          {task.notes ? (
+            <div className="taskNotes" title={task.notes}>{task.notes}</div>
+          ) : null}
           {inlineActions && showUrgentImportant ? (
             <span className="taskInlineActions">
               <button
@@ -163,6 +166,7 @@ TaskRow.propTypes = {
   task: PropTypes.shape({
     _id: PropTypes.string,
     title: PropTypes.string,
+    notes: PropTypes.string,
     status: PropTypes.string,
     deadline: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
     createdAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),

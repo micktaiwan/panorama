@@ -26,12 +26,24 @@ Meteor.methods({
     check(doc, Object);
     const now = new Date();
     const sanitized = sanitizeTaskDoc(doc);
+    // Duplicate guard for userLog provenance
+    if (doc && doc.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds) && doc.source.logEntryIds.length > 0) {
+      const logIds = doc.source.logEntryIds.map(String);
+      const existing = await TasksCollection.findOneAsync({ 'source.kind': 'userLog', 'source.logEntryIds': { $in: logIds } }, { fields: { _id: 1 } });
+      if (existing) {
+        throw new Meteor.Error('duplicate-task', 'A task already exists for at least one of these journal entries');
+      }
+    }
     const _id = await TasksCollection.insertAsync({
       status: doc.status || 'todo',
       statusChangedAt: now,
       ...sanitized,
       isUrgent: Boolean(sanitized.isUrgent),
       isImportant: Boolean(sanitized.isImportant),
+      // Provenance link (optional): { kind: 'userLog', logEntryIds: [], createdAt, windowHours }
+      source: (doc && doc.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds))
+        ? { kind: 'userLog', logEntryIds: doc.source.logEntryIds.slice(0, 20), createdAt: now, windowHours: Number(doc.source.windowHours) || undefined }
+        : undefined,
       createdAt: now,
       updatedAt: now
     });
