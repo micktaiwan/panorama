@@ -64,11 +64,5 @@ export function playBeep(volume = 0.5) {
       console.error('Audio play failed', err);
     });
   }
-  // Cleanup object URL when finished (retain cached for reuse if multiple plays)
-  audio.addEventListener('ended', () => {
-    // no-op: keep cached URL for subsequent plays
-  });
   return audio;
 }
-
-
