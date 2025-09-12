@@ -59,13 +59,13 @@ async function openAiChat({ system, user, expectJson, schema }) {
   if (!expectJson) return String(content || '');
   try {
     return JSON.parse(content);
-  } catch (e) {
-    console.error('[openAiChat] invalid JSON', { content });
+  } catch (err) {
+    console.error('[openAiChat] invalid JSON', { content, error: err && err.message });
     throw new Meteor.Error('openai-invalid-json', 'Invalid JSON content from model');
   }
 }
 
-const buildPrompt = ({ project, lines }) => {
+const buildPrompt = ({ project, lines: noteLines }) => {
   const head = [
     'You are an assistant that summarizes CTO meeting notes into Decisions, Risks, Next steps.',
     'Use ONLY the provided notes. Do not invent facts. If a section has no factual content, write "No items."',
@@ -76,12 +76,12 @@ const buildPrompt = ({ project, lines }) => {
   const context = project
     ? `\nProject: ${project.name || ''}${project.description ? ` — ${toOneLine(project.description)}` : ''} | Status: ${project.status || ''} | Target: ${project.targetDate || ''}`
     : '';
-  const numbered = lines.map((l, idx) => `L${idx + 1}: ${l.content}`);
+  const numbered = noteLines.map((l, idx) => `L${idx + 1}: ${l.content}`);
   const body = `\nNotes (numbered):\n${numbered.join('\n')}`;
   return `${head}${context}${body}`;
 };
 
-const buildCoachPrompt = ({ project, lines }) => {
+const buildCoachPrompt = ({ project }) => {
   const head = 'You are a CTO project coach.';
   const rules = [
     'Your goals:',
@@ -239,8 +239,8 @@ Meteor.methods({
       let parsed;
       try {
         parsed = JSON.parse(content);
-      } catch (e) {
-        console.error('[ai.textToTasksAnalyze] Invalid JSON content from model', { content });
+      } catch (err) {
+        console.error('[ai.textToTasksAnalyze] Invalid JSON content from model', { content, error: err && err.message });
         throw new Meteor.Error('openai-invalid-json', 'Invalid JSON content from model');
       }
       if (!parsed.projects) parsed.projects = [];
@@ -284,8 +284,8 @@ Meteor.methods({
         }
 
         parsed.projects = Array.from(newProjectsSet).map(name => ({ name }));
-      } catch (e) {
-        console.error('[ai.textToTasksAnalyze] Post-process mapping error', { error: e?.message });
+      } catch (err) {
+        console.error('[ai.textToTasksAnalyze] Post-process mapping error', { error: err && err.message });
       }
       try {
         const tasksArr = Array.isArray(parsed.tasks) ? parsed.tasks : [];
@@ -327,16 +327,16 @@ Meteor.methods({
         if (unmatchedSamples.length > 0) {
           console.log('[ai.textToTasksAnalyze] Unmatched suggestion samples:', JSON.stringify(unmatchedSamples, null, 2));
         }
-      } catch (e) {
-        console.error('[ai.textToTasksAnalyze] Error processing parsed content', { error: e?.message });
+      } catch (err) {
+        console.error('[ai.textToTasksAnalyze] Error processing parsed content', { error: err && err.message });
       }
       return parsed;
-    } catch (e) {
-      if (!(e instanceof Meteor.Error)) {
-        console.error('[ai.textToTasksAnalyze] Unexpected error', e);
-        throw new Meteor.Error('ai-text2tasks-failed', e.message || String(e));
+    } catch (err) {
+      if (!(err instanceof Meteor.Error)) {
+        console.error('[ai.textToTasksAnalyze] Unexpected error', err);
+        throw new Meteor.Error('ai-text2tasks-failed', err.message || String(err));
       }
-      throw e;
+      throw err;
     }
   },
   async 'ai.summarizeSession'(sessionId) {
@@ -494,7 +494,7 @@ Meteor.methods({
         : []);
     const prevIdeas = Array.isArray(session.coachIdeasJson) ? session.coachIdeasJson : [];
     const prevAnswers = Array.isArray(session.coachAnswersJson) ? session.coachAnswersJson : [];
-    const renderPrev = (arr) => (arr && arr.length > 0)
+    const renderPrev = (arr) => (arr?.length > 0)
       ? arr.map((q, i) => {
           const cites = Array.isArray(q.cites) && q.cites.length > 0 ? ` [${q.cites.join(',')}]` : '';
           return `${i + 1}. ${q.text}${cites}`;
@@ -579,8 +579,8 @@ Meteor.methods({
     let parsed;
     try {
       parsed = JSON.parse(content);
-    } catch (e) {
-      console.error('[ai.coachQuestions] Invalid JSON content from model', { content });
+    } catch (err) {
+      console.error('[ai.coachQuestions] Invalid JSON content from model', { content, error: err && err.message });
       throw new Meteor.Error('openai-invalid-json', 'Invalid JSON content from model');
     }
     const qs = Array.isArray(parsed.questions) ? parsed.questions : [];
@@ -660,8 +660,8 @@ Meteor.methods({
         const { ProjectsCollection } = await import('/imports/api/projects/collections');
         await ProjectsCollection.updateAsync(next.projectId, { $set: { updatedAt: new Date() } });
       }
-    } catch (e) {
-      console.error('[ai.cleanNote] post-update side effects failed', e);
+    } catch (err) {
+      console.error('[ai.cleanNote] post-update side effects failed', err);
     }
 
     return { content: cleaned };

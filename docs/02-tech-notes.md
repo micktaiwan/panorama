@@ -273,7 +273,7 @@ export const Example = ({ sessionId }) => {
 - If a `try/catch` is truly needed (runtime boundary):
   - log the error (server: `console.error`; client: surface a Notify),
   - or re‑throw an explicit error (e.g., `throw new Meteor.Error(...)`).
-- Prefer guards to avoid exceptions (tests de présence/état) plutôt que d’attraper.
+- Prefer using guards to prevent exceptions rather than catching them.
 
 ### Optional Chaining (mandatory)
 

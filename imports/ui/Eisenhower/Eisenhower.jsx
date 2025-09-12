@@ -48,7 +48,8 @@ export const Eisenhower = () => {
     t.status || 'todo',
     t.createdAt ? new Date(t.createdAt).toISOString().slice(0,10) : '',
     t.isUrgent ? '1' : '0',
-    t.isImportant ? '1' : '0'
+    t.isImportant ? '1' : '0',
+    (t.title || '')
   ].join(':')))]);
 
   const titleSeverityClass = (deadline) => {
@@ -91,6 +92,7 @@ export const Eisenhower = () => {
                   inlineActions
                   showUrgentImportant
                   titleClassName={titleSeverityClass(t.deadline)}
+                  onUpdateTitle={(next) => Meteor.call('tasks.update', t._id, { title: next })}
                   onMarkDone={(task) => Meteor.call('tasks.update', task._id, { status: 'done' })}
                   onToggleUrgent={(task) => toggleFlag(task, 'isUrgent')}
                   onToggleImportant={(task) => toggleFlag(task, 'isImportant')}
@@ -118,6 +120,7 @@ export const Eisenhower = () => {
                   inlineActions
                   showUrgentImportant
                   titleClassName={titleSeverityClass(t.deadline)}
+                  onUpdateTitle={(next) => Meteor.call('tasks.update', t._id, { title: next })}
                   onMarkDone={(task) => Meteor.call('tasks.update', task._id, { status: 'done' })}
                   onToggleUrgent={(task) => toggleFlag(task, 'isUrgent')}
                   onToggleImportant={(task) => toggleFlag(task, 'isImportant')}
@@ -146,6 +149,7 @@ export const Eisenhower = () => {
                   inlineActions
                   showUrgentImportant
                   titleClassName={titleSeverityClass(t.deadline)}
+                  onUpdateTitle={(next) => Meteor.call('tasks.update', t._id, { title: next })}
                   onMarkDone={(task) => Meteor.call('tasks.update', task._id, { status: 'done' })}
                   onToggleUrgent={(task) => toggleFlag(task, 'isUrgent')}
                   onToggleImportant={(task) => toggleFlag(task, 'isImportant')}
@@ -173,6 +177,7 @@ export const Eisenhower = () => {
                   inlineActions
                   showUrgentImportant
                   titleClassName={titleSeverityClass(t.deadline)}
+                  onUpdateTitle={(next) => Meteor.call('tasks.update', t._id, { title: next })}
                   onMarkDone={(task) => Meteor.call('tasks.update', task._id, { status: 'done' })}
                   onToggleUrgent={(task) => toggleFlag(task, 'isUrgent')}
                   onToggleImportant={(task) => toggleFlag(task, 'isImportant')}
