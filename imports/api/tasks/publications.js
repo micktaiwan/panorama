@@ -9,8 +9,6 @@ Meteor.publish('tasks', function publishTasks() {
 Meteor.publish('tasks.userLogLinks', function publishTaskLinks() {
   return TasksCollection.find(
     { 'source.kind': 'userLog' },
-    { fields: { 'source.logEntryIds': 1, projectId: 1 } }
+    { fields: { 'source.kind': 1, 'source.logEntryIds': 1, projectId: 1 } }
   );
 });
-
-

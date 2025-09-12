@@ -141,42 +141,7 @@ export const useAlarmScheduler = () => {
     // expose scheduler to other effects (like alarms changes)
     scheduleFnRef.current = scheduleNext;
     scheduleNext();
-
-    // Periodic debug logger: every 5 minutes, report overdue alarms (enabled but past due)
-    const debugTick = () => {
-      const now = Date.now();
-      const current = alarmsRef.current || [];
-      const effectiveTime = (a) => (a.snoozedUntilAt ? new Date(a.snoozedUntilAt).getTime() : new Date(a.nextTriggerAt).getTime());
-      const eligible = current.filter(a => a.enabled && (a.snoozedUntilAt || a.nextTriggerAt));
-      const overdue = eligible.filter(a => effectiveTime(a) <= now);
-      const future = eligible.filter(a => effectiveTime(a) > now).sort((a, b) => effectiveTime(a) - effectiveTime(b));
-      const nextAt = future[0] ? effectiveTime(future[0]) : null;
-      const delta = nextAt ? Math.round((nextAt - now) / 1000) : null;
-      console.log('[alarms][debug]', {
-        total: current.length,
-        eligible: eligible.length,
-        overdue: overdue.length,
-        next: nextAt ? new Date(nextAt).toISOString() : null,
-        nextInSeconds: delta
-      });
-      if (overdue.length > 0) {
-        overdue.forEach(a => {
-          const at = effectiveTime(a);
-          console.error('[alarms][debug] overdue enabled alarm (not fired yet)', {
-            _id: a._id,
-            title: a.title,
-            effectiveAt: new Date(at).toISOString(),
-            overdueMs: now - at,
-            enabled: a.enabled,
-            snoozedUntilAt: a.snoozedUntilAt || null,
-            nextTriggerAt: a.nextTriggerAt || null,
-            acknowledgedAt: a.acknowledgedAt || null
-          });
-        });
-      }
-    };
-    debugTick();
-    debugIntervalRef.current = setInterval(debugTick, 5 * 60 * 1000);
+    // alarms debug logging removed
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {

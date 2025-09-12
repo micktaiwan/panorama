@@ -739,10 +739,10 @@ Meteor.methods({
     const { tz, sinceLocalIso, nowLocalIso, startLocal, endLocal } = formatAnchors(now, since);
 
     const system = ([
-      'You analyze short journal entries and produce: (1) a concise daily summary, (2) task suggestions.',
+      'You analyze short journal entries and produce: (1) a structured summary organized by subject, (2) task suggestions.',
       'Do NOT invent facts. Use the provided entries only. Keep original language (typically French).',
       'Return STRICT JSON matching the provided schema. No Markdown, no extra text.',
-      'Time policy: Use ONLY the provided local ISO timestamps (with offset). Compute and display times in 24-hour local time. Do not convert to UTC or any other timezone. Anchor strictly to the provided window.'
+      'Time policy: When mentioning times, format them in 24-hour local time as HH:mm. Only include a calendar date if it is not today, and format it human-readably (e.g., 12 Sep 2025). Never output raw ISO timestamps or timezone offsets in the summary.'
     ].join(' '));
 
     const entriesBlock = buildEntriesBlock(logs);
@@ -757,8 +757,13 @@ Meteor.methods({
       'Available projects (id, name, desc):',
       projectsBlock || '(none)',
       '',
-      'Journal entries in chronological order (each with an id). Use their local ISO timestamps for any time mentions:',
-      entriesBlock || '(none)'
+      'Journal entries in chronological order (each with an id). Use their times, but when you mention them, format as HH:mm (24h local). Do not output ISO strings:',
+      entriesBlock || '(none)',
+      '',
+      'Output policy for tasks (critical):',
+      '- Every task suggestion that is grounded in one or more journal entries MUST include sourceLogIds with the matching entry ids.',
+      '- If no grounding is possible, omit that suggestion instead of inventing.',
+      '- Prefer fewer, well-grounded suggestions over many weak ones.'
     ].join('\n');
 
     const schema = {
@@ -778,7 +783,7 @@ Meteor.methods({
               deadline: { type: 'string' },
               sourceLogIds: { type: 'array', items: { type: 'string' } }
             },
-            required: ['title', 'projectId']
+            required: ['title', 'projectId', 'sourceLogIds']
           }
         }
       },
@@ -792,7 +797,8 @@ Meteor.methods({
       const customSystem = [
         'You receive a user instruction and journal entries as context.',
         'Follow the instruction strictly using ONLY the provided entries. Do not invent facts.',
-        'Respond in plain text (no JSON). Keep the original language when possible.'
+        'Respond in plain text (no JSON). Keep the original language when possible.',
+        'Time policy: When mentioning times, format them in 24-hour local time as HH:mm. Only include a calendar date if it is not today, and format it human-readably (e.g., 12 Sep 2025). Never output raw ISO timestamps or timezone offsets.'
       ].join(' ');
       const customUser = [
         `Instruction: ${promptOverride.trim()}`,
@@ -802,7 +808,7 @@ Meteor.methods({
         `Since (local): ${sinceLocalIso}`,
         `Time window: last ${rangeHours} hours (inclusive)`,
         '',
-        'Journal entries in chronological order (each with an id). Use their local ISO timestamps for any time mentions:',
+        'Journal entries in chronological order (each with an id). Use their times, but when you mention them, format as HH:mm (24h local). Do not output ISO strings:',
         entriesBlock || '(none)'
       ].join('\n');
       console.log('[userLogs.summarizeWindow] Custom override active');

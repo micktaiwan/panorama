@@ -1,6 +1,6 @@
-.deadlineDisplay {
-  cursor: pointer;
-}
+.deadlineDisplay { cursor: pointer; color: var(--muted); min-width: 160px; background: transparent; border: none; padding: 0; }
+.deadlineDisplay:hover { text-decoration: underline; }
+.deadlineDisplay.dueLater { color: var(--text); }
 
 .deadlineEditor { display: inline-flex; align-items: center; position: relative; z-index: 2; }
 .deadlineEditor input[type="date"] { width: auto; }

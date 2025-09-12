@@ -14,10 +14,6 @@ import { EntryRow } from './components/EntryRow/EntryRow.jsx';
 
 export default function UserLog() {
   // formatting helpers imported from './utils'
-  const [isOpen, setIsOpen] = useState(() => {
-    if (typeof localStorage === 'undefined') return false;
-    return localStorage.getItem('userlog_open') === '1';
-  });
   const [input, setInput] = useState('');
   const inputRef = useRef(null);
   const listRef = useRef(null);
@@ -59,50 +55,12 @@ export default function UserLog() {
     return { label, count };
   }, [summaryWindow, entriesFirstId]);
 
-  // Persist open state
+  // Focus input on page mount
   useEffect(() => {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem('userlog_open', isOpen ? '1' : '0');
-  }, [isOpen]);
-
-  // Focus input when opened
-  useEffect(() => {
-    if (isOpen && inputRef.current) inputRef.current.focus();
-  }, [isOpen]);
-
-  const isEditableTarget = useCallback((target) => {
-    const tag = String(target?.tagName || '').toLowerCase();
-    return !!target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+    if (inputRef.current) inputRef.current.focus();
   }, []);
 
-  const toggleOpen = useCallback(() => setIsOpen(v => !v), []);
-
-  // Global shortcut: ⌘J toggles overlay and focuses new line
-  useEffect(() => {
-    const onKey = (e) => {
-      const key = String(e.key || '').toLowerCase();
-      if ((e.metaKey || e.ctrlKey) && key === 'j') {
-        e.preventDefault();
-        setIsOpen(prev => !prev);
-      }
-      if (e.key === 'Escape') {
-        // Close summary first if open
-        if (summaryModal) {
-          e.preventDefault();
-          setSummaryModal(null);
-          return;
-        }
-        const target = e.target;
-        if (isEditableTarget(target)) return;
-        if (isOpen) {
-          e.preventDefault();
-          setIsOpen(false);
-        }
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, summaryModal, isEditableTarget]);
+  // Removed local ⌘J toggle and overlay close: handled globally as navigation
 
   // Build a Set of log ids that already have a DB task linked (moved up to avoid TDZ in callbacks)
   const tasksReady = useTracker(() => Meteor.subscribe('tasks.userLogLinks').ready(), []);
@@ -110,7 +68,10 @@ export default function UserLog() {
     const set = new Set();
     const map = new Map();
     if (!tasksReady) return { linkedLogIdSet: set, logIdToTask: map };
-    const tasks = TasksCollection.find({ 'source.kind': 'userLog' }, { fields: { 'source.logEntryIds': 1, projectId: 1 } }).fetch();
+    const tasks = TasksCollection.find(
+      { 'source.kind': 'userLog' },
+      { fields: { 'source.logEntryIds': 1, projectId: 1 } }
+    ).fetch();
     for (const t of (tasks || [])) {
       const ids = Array.isArray(t?.source?.logEntryIds) ? t.source.logEntryIds : [];
       for (const id of ids) {
@@ -119,6 +80,7 @@ export default function UserLog() {
         if (!map.has(key)) map.set(key, { taskId: t._id, projectId: t.projectId });
       }
     }
+    
     return { linkedLogIdSet: set, logIdToTask: map };
   }, [tasksReady]);
 
@@ -170,6 +132,7 @@ export default function UserLog() {
       }
       const summary = (typeof res?.summary === 'string') ? res.summary : '';
       const tasks = Array.isArray(res?.tasks) ? res.tasks : [];
+      
       const norm = tasks.map(t => ({ title: t.title || '', notes: t.notes || '', projectId: t.projectId || '', deadline: t.deadline || '', sourceLogIds: Array.isArray(t?.sourceLogIds) ? t.sourceLogIds : [] }));
       const payload = { summary, tasks: norm, windowHours: summaryWindow };
       setSummaryModal(payload);
@@ -197,6 +160,14 @@ export default function UserLog() {
       notify({ message: 'Failed to load saved summary', kind: 'error' });
     }
   }, []);
+
+  // Pressing Enter in the custom prompt input triggers summarization
+  const onPromptKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSummarize();
+    }
+  }, [handleSummarize]);
 
   // InlineSummary row helpers
   const updateTaskDeadline = useCallback((rowIndex, next) => {
@@ -258,7 +229,6 @@ export default function UserLog() {
   const handleOpenLinkedProject = useCallback((entry) => {
     const info = logIdToTask.get(String(entry._id));
     if (info?.projectId) {
-      setIsOpen(false);
       const id = String(info.projectId);
       const hl = `userlog:${entry._id}`;
       window.location.hash = `#/projects/${id}?hl=${encodeURIComponent(hl)}`;
@@ -283,10 +253,6 @@ export default function UserLog() {
       e.preventDefault();
       handleSubmit();
     }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      setIsOpen(false);
-    }
   }, [handleSubmit]);
 
  
@@ -297,25 +263,20 @@ export default function UserLog() {
   // Note: we only need project names to populate the select options below; no separate map needed.
 
   return (
-    <div className={`UserLog__root${isOpen ? ' isOpen' : ''}`} aria-live="polite">
-      <button type="button" className="UserLog__fab" onClick={toggleOpen} aria-haspopup="dialog" aria-expanded={isOpen} title={isOpen ? 'Close journal' : 'Open journal'}>
-        📝
-      </button>
-      {isOpen && (
-        <dialog className="UserLog__panel" aria-label="User Log" open>
-          <div className="UserLog__header">
-            <div className="UserLog__title">Journal</div>
-            <button className="UserLog__close" onClick={() => setIsOpen(false)} aria-label="Close">×</button>
-          </div>
+    <div className="UserLog__page" aria-live="polite">
+      <div className="UserLog__card">
+        <div className="UserLog__header">
+          <div className="UserLog__title">Journal</div>
+        </div>
           {summaryModal ? (
             <div className="UserLog__inlineSummary" aria-label="UserLog Summary">
               <div className="UserLog__inlineSummaryHeader">
                 <div className="UserLog__inlineSummaryTitle">Summary — last {summaryModal.windowHours}h</div>
-                <button className="UserLog__close" onClick={() => setSummaryModal(null)} aria-label="Close">×</button>
-              </div>
-              <div className="UserLog__inlineSummaryActions">
-                <button className="btn" onClick={copySummary}>Copy summary</button>
-                <button className="btn ml8" onClick={createAll}>Create all</button>
+                <div className="UserLog__inlineSummaryActions">
+                  <button className="btn" onClick={copySummary}>Copy summary</button>
+                  <button className="btn ml8" onClick={createAll}>Create all</button>
+                  <button className="UserLog__close ml8" onClick={() => setSummaryModal(null)} aria-label="Close">×</button>
+                </div>
               </div>
               <div className="UserLog__inlineSummaryBody">
                 <div className="UserLog__inlineSummaryText scrollArea">{summaryModal.summary || '(empty)'}</div>
@@ -400,6 +361,7 @@ export default function UserLog() {
                 placeholder="Custom prompt (optional)"
                 value={summaryPrompt}
                 onChange={(e) => setSummaryPrompt(e.target.value)}
+                onKeyDown={onPromptKeyDown}
               />
               {summaryPrompt ? (
                 <button
@@ -468,10 +430,7 @@ export default function UserLog() {
               <div className="UserLog__empty">No entries yet. Type and press Enter to add.</div>
             )}
           </div>
-          
-        </dialog>
-      )}
-      
+      </div>
     </div>
   );
 }

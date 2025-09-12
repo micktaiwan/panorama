@@ -163,6 +163,19 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Global shortcut: Cmd/Ctrl + J → open UserLog page
+  useEffect(() => {
+    const onOpenUserLog = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (!hasMod || key !== 'j') return;
+      e.preventDefault();
+      navigateTo({ name: 'userlog' });
+    };
+    window.addEventListener('keydown', onOpenUserLog);
+    return () => window.removeEventListener('keydown', onOpenUserLog);
+  }, []);
+
   // Qdrant health check on startup
   useEffect(() => {
     const checkQdrant = () => {
@@ -203,18 +216,12 @@ function App() {
     return () => window.removeEventListener('keydown', onNavKeys);
   }, []);
 
-  // Global shortcut: Cmd/Ctrl + I → focus first visible input/textarea on the current page (no selects)
+  // Global shortcut: Cmd/Ctrl + I → cycle focus across visible inputs/textareas (no selects)
   useEffect(() => {
-    const onFocusFirstInput = (e) => {
+    const onCycleInputs = (e) => {
       const key = String(e.key || '').toLowerCase();
       const hasMod = e.metaKey || e.ctrlKey;
       if (!hasMod || key !== 'i') return;
-
-      // Do not steal focus while typing in an editable area
-      const target = e.target;
-      const tag = (target?.tagName || '').toLowerCase();
-      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
-      if (isEditable) return;
 
       e.preventDefault();
       const disallowedTypes = new Set(['hidden', 'button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'color', 'file']);
@@ -235,11 +242,16 @@ function App() {
         if (disallowedTypes.has(type)) return false;
         return isVisible(el);
       });
-      const first = candidates[0];
-      if (first && typeof first.focus === 'function') first.focus();
+      if (candidates.length === 0) return;
+
+      const activeEl = document.activeElement;
+      const currentIdx = candidates.findIndex((el) => el === activeEl);
+      const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % candidates.length : 0;
+      const next = candidates[nextIdx];
+      if (next && typeof next.focus === 'function') next.focus();
     };
-    window.addEventListener('keydown', onFocusFirstInput);
-    return () => window.removeEventListener('keydown', onFocusFirstInput);
+    window.addEventListener('keydown', onCycleInputs);
+    return () => window.removeEventListener('keydown', onCycleInputs);
   }, []);
 
   useEffect(() => {
@@ -308,6 +320,7 @@ function App() {
   const goSituationAnalyzer = () => navigateTo({ name: 'situationAnalyzer' });
   const goPeople = () => navigateTo({ name: 'people' });
   const goFiles = () => navigateTo({ name: 'files' });
+  const goUserLog = () => navigateTo({ name: 'userlog' });
   const projectsReady = useTracker(() => Meteor.subscribe('projects').ready(), []);
   const favoriteProjects = useTracker(() => ProjectsCollection.find({ isFavorite: true }, { sort: { favoriteRank: 1, updatedAt: -1 }, fields: { name: 1, favoriteRank: 1 } }).fetch(), [projectsReady]);
   const [order, setOrder] = useState([]);
@@ -474,6 +487,11 @@ function App() {
       {route.name === 'files' && (
         <div className="panel">
           <FilesPage />
+        </div>
+      )}
+      {route.name === 'userlog' && (
+        <div className="panel">
+          <UserLog />
         </div>
       )}
       {route.name === 'onboarding' && (
@@ -733,11 +751,12 @@ function App() {
           <span className="dot">·</span>
           <a href="#/preferences" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'preferences' }); }}>Preferences</a>
           <span className="dot">·</span>
+          <a href="#/userlog" onClick={(e) => { e.preventDefault(); goUserLog(); }}>Journal</a>
+          <span className="dot">·</span>
           <a href="#/width" onClick={(e) => { e.preventDefault(); setWide(v => !v); }}>{wide ? 'Width: 90%' : 'Width: 1100px'}</a>
         </span>
       </footer>
       <ChatWidget />
-      <UserLog />
     </div>
   );
 }
