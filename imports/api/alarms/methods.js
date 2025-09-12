@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { AlarmsCollection } from './collections';
+import { computeNextOccurrence } from '/imports/api/_shared/date.js';
 
 const RecurrenceType = Match.OneOf('none', 'daily', 'weekly', 'monthly');
 
@@ -74,8 +75,34 @@ Meteor.methods({
   },
   async 'alarms.dismiss'(alarmId) {
     check(alarmId, String);
-    const res = await AlarmsCollection.updateAsync(alarmId, { $set: { enabled: false, done: true, acknowledgedAt: new Date(), updatedAt: new Date(), snoozedUntilAt: null } });
-    console.log('[alarms.dismiss]', { alarmId, updated: res });
+    const doc = await AlarmsCollection.findOneAsync(alarmId);
+    const now = new Date();
+    if (!doc) return 0;
+    const recur = (doc.recurrence && doc.recurrence.type) || 'none';
+    if (recur === 'none') {
+      const res = await AlarmsCollection.updateAsync(alarmId, { $set: { enabled: false, done: true, acknowledgedAt: now, updatedAt: new Date(), snoozedUntilAt: null } });
+      console.log('[alarms.dismiss]', { alarmId, recurring: false, updated: res });
+      return res;
+    }
+    // Compute next occurrence ignoring snooze, based on original nextTriggerAt
+    const original = doc.nextTriggerAt ? new Date(doc.nextTriggerAt) : now;
+    const next = computeNextOccurrence(original, recur);
+    if (!next) {
+      const res = await AlarmsCollection.updateAsync(alarmId, { $set: { enabled: false, done: true, acknowledgedAt: now, updatedAt: new Date(), snoozedUntilAt: null } });
+      console.log('[alarms.dismiss]', { alarmId, recurring: 'invalid', updated: res });
+      return res;
+    }
+    const res = await AlarmsCollection.updateAsync(alarmId, {
+      $set: {
+        nextTriggerAt: next,
+        snoozedUntilAt: null,
+        enabled: true,
+        done: false,
+        acknowledgedAt: now,
+        updatedAt: new Date()
+      }
+    });
+    console.log('[alarms.dismiss]', { alarmId, recurring: recur, next: next.toISOString(), updated: res });
     return res;
   },
   async 'alarms.markFiredIfDue'(alarmId) {

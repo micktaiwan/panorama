@@ -1,0 +1,34 @@
+.UserLog__root { position: fixed; bottom: 24px; left: 24px; z-index: 40; }
+.UserLog__fab { width: 44px; height: 44px; border-radius: 22px; background: var(--panel); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+.UserLog__panel { position: fixed; inset: 40px 40px 80px 40px; background: var(--panel); border: 2px solid #3b4252; border-radius: var(--radius); display: flex; flex-direction: column; z-index: 41; box-shadow: 0 24px 72px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08) inset, 0 0 0 3px rgba(79,70,229,0.40), 0 0 36px rgba(79,70,229,0.28); }
+.UserLog__header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: none; background: #1b2550; }
+.UserLog__title { font-weight: 600; }
+.UserLog__close { background: transparent; border: none; color: var(--text); font-size: 20px; cursor: pointer; }
+.UserLog__list { flex: 1; padding: 8px 16px; }
+.UserLog__toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.UserLog__windowSelect { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+.UserLog__windowInfo { margin-left: 4px; }
+.UserLog__promptInput { min-width: 260px; padding-right: 28px; }
+.UserLog__promptInputWrap { position: relative; display: inline-block; }
+.UserLog__promptClear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px; }
+.UserLog__promptClear:hover { color: var(--text); }
+/* moved to components */
+.UserLog__composer { padding: 12px 16px; border-top: none; }
+.UserLog__composer--top { border-top: none; border-bottom: none; }
+.UserLog__input { width: 100%; height: 36px; line-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
+
+.UserLog__inlineSummary { margin: 8px 16px; padding: 8px 0 0; }
+.UserLog__inlineSummaryHeader { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: none; }
+.UserLog__inlineSummaryTitle { font-weight: 600; }
+.UserLog__inlineSummaryBody { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+.UserLog__inlineSummaryActions { padding: 0 16px 12px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; border-bottom: none; }
+.UserLog__inlineSummaryText { background: rgba(255,255,255,0.02); padding: 12px; border: none; border-radius: 8px; min-height: 160px; max-height: 50vh; white-space: pre-wrap; word-break: break-word; }
+.UserLog__inlineTasksTitle { font-weight: 600; margin-bottom: 8px; }
+.UserLog__inlineTasksList { max-height: 50vh; }
+.UserLog__inlineTaskRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: none; }
+.UserLog__inlineTaskRow.isLinked { opacity: 0.6; }
+.UserLog__inlineTaskTitle { font-weight: 500; }
+.UserLog__inlineTaskNotes { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.UserLog__inlineTaskDeadline { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.UserLog__inlineTaskProject { margin-top: 6px; }
+.UserLog__inlineTaskProjectSelect { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }

@@ -24,14 +24,19 @@ Provide a dedicated reporting view that lists recent activity across the workspa
 ## API
 
 - `reporting.recentActivity(windowKey: '24h'|'72h'|'7d') → { since, until, events[] }`
-- `reporting.aiSummarizeWindow(windowKey) → { markdown }`
+- `reporting.aiSummarizeWindow(windowKey, projFilters?, userPrompt?, options?) → { text, markdown }`
+  - `options.lang`: `'fr' | 'en'` (default: `'fr'`)
+  - `options.format`: `'text' | 'markdown'` (default: `'text'`)
+  - The method always returns both `text` and `markdown`. The client picks the right one based on `options.format`.
 
 ## UI
 
 - Component: `imports/ui/Reporting/ReportingPage.jsx` + `ReportingPage.css`
 - Toolbar: selector + refresh, shows window range.
 - Content: grouped lists with timestamp and title (project context when available).
-- Action: AI Summary (Markdown download).
+- Actions:
+  - AI options: Language (`fr`/`en`), Format (`text`/`markdown`).
+  - AI Summary generation. The UI renders the selected format and supports copy to clipboard.
 
 ## Future extensions
 

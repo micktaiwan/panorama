@@ -268,11 +268,12 @@ export const Example = ({ sessionId }) => {
 
 ## Error handling policy
 
-- Avoid silent `try/catch` blocks. Never write `catch (_e) {}`.
-- If a `try/catch` is necessary, always:
-  - log the error (use console.error on the server side / display a message on the UI side),
-  - or re-throw an explicit error (e.g., `throw new Meteor.Error(...)`).
-- Prefer simple guards over `try/catch` (check for the presence of methods and objects).
+- Default rule: no `try/catch` unless strictly necessary (prefer fail‑fast during init).
+- Never use silent `catch`. Never write `catch (_e) {}`.
+- If a `try/catch` is truly needed (runtime boundary):
+  - log the error (server: `console.error`; client: surface a Notify),
+  - or re‑throw an explicit error (e.g., `throw new Meteor.Error(...)`).
+- Prefer guards to avoid exceptions (tests de présence/état) plutôt que d’attraper.
 
 ## Notifications and confirmations (UI)
 

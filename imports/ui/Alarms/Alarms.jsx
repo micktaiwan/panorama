@@ -10,6 +10,7 @@ export const Alarms = () => {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [recurrence, setRecurrence] = useState('none');
+  const [pomoMinutes, setPomoMinutes] = useState('5');
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
@@ -109,6 +110,30 @@ export const Alarms = () => {
           Test +10s
         </button>
         <span className="testHint">Creates a +10s one-off</span>
+        <span className="dot">·</span>
+        <label className="ml8" htmlFor="pomoSelect">Pomodoro</label>
+        <select id="pomoSelect" className="afInput afSelect ml8" value={pomoMinutes} onChange={e => setPomoMinutes(e.target.value)}>
+          <option value="5">5m</option>
+          <option value="15">15m</option>
+          <option value="30">30m</option>
+          <option value="60">1h</option>
+        </select>
+        <button
+          className="btn ml8"
+          onClick={() => {
+            const mins = parseInt(pomoMinutes, 10);
+            const dt = new Date(Date.now() + mins * 60 * 1000);
+            Meteor.call('alarms.insert', {
+              title: 'Pomodoro',
+              nextTriggerAt: dt,
+              recurrence: { type: 'none' }
+            }, (err) => {
+              if (err) console.error('alarms.insert (pomodoro) failed', err);
+            });
+          }}
+        >
+          Start Pomodoro
+        </button>
       </div>
       <form onSubmit={handleCreate} className="alarmsForm">
         <input className="afInput afTitle" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />

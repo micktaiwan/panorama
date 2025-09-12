@@ -35,7 +35,8 @@ import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
-import HelpBubble from '/imports/ui/components/HelpBubble/HelpBubble.jsx';
+// HelpBubble removed
+import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
 
 function App() {
@@ -91,14 +92,28 @@ function App() {
     const effectiveTime = (a) => (a.snoozedUntilAt ? new Date(a.snoozedUntilAt).getTime() : new Date(a.nextTriggerAt).getTime());
     const firedPending = alarms.find(a => !suppressRef.current.has(a._id) && !a.enabled && !a.acknowledgedAt && (a.done || ((a.nextTriggerAt || a.snoozedUntilAt) && effectiveTime(a) <= now)));
     if (firedPending) {
-      setActiveAlarmId(firedPending._id);
+      const isPomo = (firedPending.title || '').toLowerCase() === 'pomodoro';
+      setToast({ message: `Alarm: ${firedPending.title || 'Reminder'}`, kind: 'warning' });
+      if (isPomo) {
+        Meteor.call('alarms.remove', firedPending._id, () => {});
+      } else {
+        setActiveAlarmId(firedPending._id);
+      }
       return;
     }
     const due = alarms.find(a => !suppressRef.current.has(a._id) && a.enabled && (a.nextTriggerAt || a.snoozedUntilAt) && effectiveTime(a) <= now);
     if (due) {
       const id = due._id;
       const nextFields = { snoozedUntilAt: null, lastFiredAt: new Date(), enabled: false, done: true, acknowledgedAt: null };
-      Meteor.call('alarms.update', id, nextFields, () => setActiveAlarmId(id));
+      Meteor.call('alarms.update', id, nextFields, () => {
+        const isPomo = (due.title || '').toLowerCase() === 'pomodoro';
+        setToast({ message: `Alarm: ${due.title || 'Reminder'}`, kind: 'warning' });
+        if (isPomo) {
+          Meteor.call('alarms.remove', id, () => {});
+        } else {
+          setActiveAlarmId(id);
+        }
+      });
     }
   }, [JSON.stringify(alarms)]);
 
@@ -167,6 +182,45 @@ function App() {
     };
     window.addEventListener('keydown', onNavKeys);
     return () => window.removeEventListener('keydown', onNavKeys);
+  }, []);
+
+  // Global shortcut: Cmd/Ctrl + I → focus first visible input/textarea on the current page (no selects)
+  useEffect(() => {
+    const onFocusFirstInput = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (!hasMod || key !== 'i') return;
+
+      // Do not steal focus while typing in an editable area
+      const target = e.target;
+      const tag = (target?.tagName || '').toLowerCase();
+      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+      if (isEditable) return;
+
+      e.preventDefault();
+      const disallowedTypes = new Set(['hidden', 'button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'color', 'file']);
+      const isVisible = (el) => {
+        const style = window.getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none') return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const candidates = Array.from(document.querySelectorAll('input, textarea')).filter((el) => {
+        if (!el || typeof el !== 'object') return false;
+        if (el.getAttribute && el.getAttribute('tabindex') === '-1') return false;
+        if (el.disabled) return false;
+        const tag = String(el.tagName || '').toLowerCase();
+        if (tag === 'textarea') return isVisible(el);
+        if (tag !== 'input') return false; // explicitly exclude selects and others
+        const type = String(el.type || 'text').toLowerCase();
+        if (disallowedTypes.has(type)) return false;
+        return isVisible(el);
+      });
+      const first = candidates[0];
+      if (first && typeof first.focus === 'function') first.focus();
+    };
+    window.addEventListener('keydown', onFocusFirstInput);
+    return () => window.removeEventListener('keydown', onFocusFirstInput);
   }, []);
 
   useEffect(() => {
@@ -630,7 +684,7 @@ function App() {
         </span>
       </footer>
       <ChatWidget />
-      <HelpBubble />
+      <UserLog />
     </div>
   );
 }

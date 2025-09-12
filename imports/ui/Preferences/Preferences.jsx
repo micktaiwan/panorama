@@ -204,6 +204,12 @@ export const Preferences = () => {
               playBeep(0.5);
               setToast({ message: 'Test beep played', kind: 'success' });
             }}>Test audio</button>
+            <button className="btn ml8" onClick={() => {
+              setTimeout(() => {
+                playBeep(0.5);
+                setToast({ message: 'Delayed test: beep + notify', kind: 'success' });
+              }, 3000);
+            }}>Test delayed audio (3s)</button>
           </div>
         </div>
         {indexJob ? (

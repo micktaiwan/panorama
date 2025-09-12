@@ -7,6 +7,64 @@ import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 // Normalize multi-line text to a single line
 const toOneLine = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
+// Shared helpers for AI calls
+const OPENAI_MODEL = 'o4-mini';
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+const localIsoWithOffset = (d) => {
+  const offMin = -d.getTimezoneOffset();
+  const sign = offMin >= 0 ? '+' : '-';
+  const abs = Math.abs(offMin);
+  const hh = pad2(Math.floor(abs / 60));
+  const mm = pad2(abs % 60);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}${sign}${hh}:${mm}`;
+};
+
+const formatAnchors = (now, since) => {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const nowLocalIso = localIsoWithOffset(now);
+  const sinceLocalIso = localIsoWithOffset(since);
+  const startLocal = `${pad2(since.getHours())}:${pad2(since.getMinutes())}`;
+  const endLocal = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  return { tz, sinceLocalIso, nowLocalIso, startLocal, endLocal };
+};
+
+const buildEntriesBlock = (logs) => (logs || []).map(l => {
+  const iso = new Date(l.createdAt).toISOString();
+  return `- { id: ${l._id} } [${iso}] ${toOneLine(l.content || '')}`;
+}).join('\n');
+
+const buildProjectsBlock = (catalog) => catalog.map(p => `- { id: ${p.id}, name: ${p.name}${p.description ? `, desc: ${p.description}` : ''} }`).join('\n');
+
+async function openAiChat({ system, user, expectJson, schema }) {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+  const { default: fetch } = await import('node-fetch');
+  const body = expectJson
+    ? { model: OPENAI_MODEL, messages: [ { role: 'system', content: system }, { role: 'user', content: user } ], response_format: { type: 'json_schema', json_schema: { name: 'userlog_summary', strict: false, schema } } }
+    : { model: OPENAI_MODEL, messages: [ { role: 'system', content: system }, { role: 'user', content: user } ] };
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error('[openAiChat] request failed', { status: resp.status, statusText: resp.statusText, body: errText });
+    throw new Meteor.Error('openai-failed', errText);
+  }
+  const data = await resp.json();
+  const content = data?.choices?.[0]?.message?.content || (expectJson ? '{}' : '');
+  if (!expectJson) return String(content || '');
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    console.error('[openAiChat] invalid JSON', { content });
+    throw new Meteor.Error('openai-invalid-json', 'Invalid JSON content from model');
+  }
+}
+
 const buildPrompt = ({ project, lines }) => {
   const head = [
     'You are an assistant that summarizes CTO meeting notes into Decisions, Risks, Next steps.',
@@ -607,6 +665,170 @@ Meteor.methods({
     }
 
     return { content: cleaned };
+  }
+  ,
+  async 'ai.cleanUserLog'(logId) {
+    check(logId, String);
+
+    const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
+    const entry = await UserLogsCollection.findOneAsync({ _id: logId });
+    if (!entry) throw new Meteor.Error('not-found', 'UserLog entry not found');
+
+    const apiKey = getOpenAiApiKey();
+    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+
+    const original = typeof entry.content === 'string' ? entry.content : '';
+    if (!original.trim()) {
+      return { content: original };
+    }
+
+    const { default: fetch } = await import('node-fetch');
+
+    const system = 'You fix spelling and basic grammar without changing meaning or tone.';
+    const instructions = [
+      'This is a short journal entry. Do not summarize or translate.',
+      'Keep the same language as the original.',
+      'Fix obvious spelling and simple grammar issues. Keep emojis as-is.',
+      'Return the corrected text only.'
+    ].join(' ');
+    const user = `${instructions}\n\nOriginal entry:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
+
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'o4-mini',
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ]
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('[ai.cleanUserLog] OpenAI request failed', { status: resp.status, statusText: resp.statusText, body: errText });
+      throw new Meteor.Error('openai-failed', errText);
+    }
+
+    const data = await resp.json();
+    const cleaned = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? String(data.choices[0].message.content) : '';
+
+    await UserLogsCollection.updateAsync(logId, { $set: { content: cleaned, updatedAt: new Date() } });
+    return { content: cleaned };
+  },
+  async 'userLogs.summarizeWindow'(windowKey, hours, options) {
+    check(windowKey, String);
+    const n = Number(hours);
+    const promptOverride = (typeof options === 'string') ? options : (options && typeof options.promptOverride === 'string' ? options.promptOverride : '');
+    const rangeHours = Number.isFinite(n) && n > 0 ? n : 3;
+
+    const now = new Date();
+    const since = new Date(now.getTime() - rangeHours * 3600 * 1000);
+
+    const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
+    const logs = await UserLogsCollection.find({ createdAt: { $gte: since } }, { sort: { createdAt: 1 } }).fetchAsync();
+
+    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+
+    const catalog = projects
+      .filter(p => !!p.name)
+      .map(p => ({ id: p._id, name: toOneLine(p.name), description: toOneLine(p.description) }));
+
+    const { tz, sinceLocalIso, nowLocalIso, startLocal, endLocal } = formatAnchors(now, since);
+
+    const system = ([
+      'You analyze short journal entries and produce: (1) a concise daily summary, (2) task suggestions.',
+      'Do NOT invent facts. Use the provided entries only. Keep original language (typically French).',
+      'Return STRICT JSON matching the provided schema. No Markdown, no extra text.',
+      'Time policy: Use ONLY the provided local ISO timestamps (with offset). Compute and display times in 24-hour local time. Do not convert to UTC or any other timezone. Anchor strictly to the provided window.'
+    ].join(' '));
+
+    const entriesBlock = buildEntriesBlock(logs);
+    const projectsBlock = buildProjectsBlock(catalog);
+
+    const instructions = [
+      `Timezone (IANA): ${tz}`,
+      `Now (local): ${nowLocalIso}`,
+      `Since (local): ${sinceLocalIso}`,
+      `Time window: last ${rangeHours} hours (inclusive)`,
+      '',
+      'Available projects (id, name, desc):',
+      projectsBlock || '(none)',
+      '',
+      'Journal entries in chronological order (each with an id). Use their local ISO timestamps for any time mentions:',
+      entriesBlock || '(none)'
+    ].join('\n');
+
+    const schema = {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        summary: { type: 'string' },
+        tasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              title: { type: 'string' },
+              notes: { type: 'string' },
+              projectId: { type: 'string' },
+              deadline: { type: 'string' },
+              sourceLogIds: { type: 'array', items: { type: 'string' } }
+            },
+            required: ['title', 'projectId']
+          }
+        }
+      },
+      required: ['summary', 'tasks']
+    };
+
+    // If a custom prompt override is provided, ignore the default prompt and schema.
+    // Send only the override instruction and the journal entries; return plain text.
+    let parsed;
+    if (promptOverride && promptOverride.trim()) {
+      const customSystem = [
+        'You receive a user instruction and journal entries as context.',
+        'Follow the instruction strictly using ONLY the provided entries. Do not invent facts.',
+        'Respond in plain text (no JSON). Keep the original language when possible.'
+      ].join(' ');
+      const customUser = [
+        `Instruction: ${promptOverride.trim()}`,
+        '',
+        `Timezone (IANA): ${tz}`,
+        `Now (local): ${nowLocalIso}`,
+        `Since (local): ${sinceLocalIso}`,
+        `Time window: last ${rangeHours} hours (inclusive)`,
+        '',
+        'Journal entries in chronological order (each with an id). Use their local ISO timestamps for any time mentions:',
+        entriesBlock || '(none)'
+      ].join('\n');
+      console.log('[userLogs.summarizeWindow] Custom override active');
+      console.log('[userLogs.summarizeWindow] System:', customSystem);
+      console.log('[userLogs.summarizeWindow] Anchors:', { tz, sinceLocalIso, nowLocalIso, rangeHours });
+      console.log('[userLogs.summarizeWindow] User instructions (custom):', customUser);
+
+      const content = await openAiChat({ system: customSystem, user: customUser, expectJson: false });
+      parsed = { summary: String(content || '').trim(), tasks: [] };
+    } else {
+      // Default behavior: structured JSON with summary and task suggestions
+      console.log('[userLogs.summarizeWindow] System:', system);
+      console.log('[userLogs.summarizeWindow] Anchors:', { tz, sinceLocalIso, nowLocalIso, rangeHours });
+      console.log('[userLogs.summarizeWindow] User instructions:', instructions);
+
+      const json = await openAiChat({ system, user: instructions, expectJson: true, schema });
+      parsed = json;
+      if (!parsed.tasks) parsed.tasks = [];
+    }
+
+    
+    // Ensure window is present; if not, inject our anchors
+    if (!parsed.window || typeof parsed.window !== 'object') {
+      parsed.window = { tz, sinceIso: sinceLocalIso, nowIso: nowLocalIso, startLocal, endLocal };
+    }
+    return parsed;
   }
 });
 

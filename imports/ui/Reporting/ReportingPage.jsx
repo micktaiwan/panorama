@@ -20,6 +20,14 @@ export const ReportingPage = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiText, setAiText] = useState('');
+  const [aiLang, setAiLang] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'fr';
+    return localStorage.getItem('reporting_ai_lang') || 'fr';
+  });
+  const [aiFormat, setAiFormat] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'text';
+    return localStorage.getItem('reporting_ai_format') || 'text';
+  });
   const [projFilters, setProjFilters] = useState(() => {
     if (typeof localStorage === 'undefined') return {};
     const raw = localStorage.getItem('reporting_proj_filters');
@@ -30,6 +38,17 @@ export const ReportingPage = () => {
   const [aiPrompt, setAiPrompt] = useState(() => {
     if (typeof localStorage === 'undefined') return '';
     return localStorage.getItem('reporting_ai_prompt') || '';
+  });
+  const [recentPrompts, setRecentPrompts] = useState(() => {
+    if (typeof localStorage === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('reporting_ai_recent_prompts');
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(s => typeof s === 'string' && s.trim()) : [];
+    } catch (e) {
+      console.error('Failed to parse reporting_ai_recent_prompts');
+      return [];
+    }
   });
   const projectsReady = useTracker(() => Meteor.subscribe('projects').ready(), []);
   const projectsById = useTracker(() => {
@@ -57,6 +76,32 @@ export const ReportingPage = () => {
       localStorage.setItem('reporting_proj_filters', JSON.stringify(projFilters || {}));
     }
   }, [JSON.stringify(projFilters)]);
+
+  // Persist AI options
+  React.useEffect(() => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('reporting_ai_lang', aiLang || 'fr');
+  }, [aiLang]);
+  React.useEffect(() => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('reporting_ai_format', aiFormat || 'text');
+  }, [aiFormat]);
+  // Persist recent prompts
+  React.useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('reporting_ai_recent_prompts', JSON.stringify(recentPrompts || []));
+    }
+  }, [JSON.stringify(recentPrompts)]);
+
+  const upsertRecentPrompt = (prompt) => {
+    const v = String(prompt || '').trim();
+    if (!v) return; // do not save default/empty
+    setRecentPrompts(prev => {
+      const exists = (prev || []).some(p => p === v);
+      if (exists) return prev;
+      const next = [v, ...(prev || [])];
+      if (next.length > 10) next.pop();
+      return next;
+    });
+  };
 
   // Wire Notify handler to page-level toast
   React.useEffect(() => {
@@ -119,6 +164,33 @@ export const ReportingPage = () => {
         />
       </div>
       <div className="reportingActions">
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+          <label htmlFor="ai-recent" style={{ minWidth: 120 }}>Recent prompts</label>
+          <select id="ai-recent" value="" onChange={(e) => {
+            const sel = e.target.value || '';
+            if (!sel) return;
+            setAiPrompt(sel);
+            if (typeof localStorage !== 'undefined') localStorage.setItem('reporting_ai_prompt', sel);
+            e.target.value = '';
+          }}>
+            <option value="">Select…</option>
+            {(recentPrompts || []).map((p, idx) => (
+              <option key={`rp-${idx}`} value={p}>{p.length > 60 ? p.slice(0, 57) + '…' : p}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+          <label htmlFor="ai-lang" style={{ minWidth: 120 }}>Langue</label>
+          <select id="ai-lang" value={aiLang} onChange={(e) => setAiLang(e.target.value)}>
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+          </select>
+          <label htmlFor="ai-format" style={{ minWidth: 120 }}>Format</label>
+          <select id="ai-format" value={aiFormat} onChange={(e) => setAiFormat(e.target.value)}>
+            <option value="text">Texte</option>
+            <option value="markdown">Markdown</option>
+          </select>
+        </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
           <label htmlFor="ai-prompt" style={{ minWidth: 120, marginTop: 6 }}>AI prompt (optional)</label>
           <textarea
@@ -137,16 +209,19 @@ export const ReportingPage = () => {
         <button className="btn" disabled={aiLoading} onClick={() => {
           setAiError('');
           setAiLoading(true);
-          Meteor.call('reporting.aiSummarizeWindow', windowKey, projFilters, aiPrompt, (err, res) => {
+          const opts = { lang: aiLang || 'fr', format: aiFormat || 'text' };
+          Meteor.call('reporting.aiSummarizeWindow', windowKey, projFilters, aiPrompt, opts, (err, res) => {
             setAiLoading(false);
             if (err) {
               console.error('AI summarize failed', err);
               setAiError(err?.reason || err?.message || 'AI summary failed');
               return;
             }
-            const md = res?.markdown || '';
-            if (!md.trim()) { setAiText(''); setAiError('No content to summarize'); return; }
-            setAiText(md);
+            const content = (aiFormat === 'markdown' ? (res?.markdown || res?.text || '') : (res?.text || res?.markdown || ''));
+            if (!String(content || '').trim()) { setAiText(''); setAiError('No content to summarize'); return; }
+            setAiText(content);
+            // Save prompt if non-empty and not default
+            if (String(aiPrompt || '').trim()) upsertRecentPrompt(aiPrompt);
           });
         }}>{aiLoading ? 'Generating…' : 'Generate AI Summary'}</button>
         {aiError ? <span className="ml8" style={{ color: 'var(--danger, #f66)' }}>{aiError}</span> : null}

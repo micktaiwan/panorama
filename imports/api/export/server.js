@@ -44,8 +44,11 @@ const startArchiveJob = async (jobId) => {
   const { SituationNotesCollection } = await import('/imports/api/situationNotes/collections');
   const { SituationQuestionsCollection } = await import('/imports/api/situationQuestions/collections');
   const { SituationSummariesCollection } = await import('/imports/api/situationSummaries/collections');
-  const { BudgetLinesCollection } = await import('/imports/api/budget/collections');
+  const { BudgetLinesCollection, VendorsCacheCollection, VendorsIgnoreCollection } = await import('/imports/api/budget/collections');
   const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
+  const { ChatsCollection } = await import('/imports/api/chats/collections');
+  const { ErrorsCollection } = await import('/imports/api/errors/collections');
+  const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
 
   await writeCollectionNdjson(gzip, 'projects', ProjectsCollection);
   await writeCollectionNdjson(gzip, 'tasks', TasksCollection);
@@ -64,6 +67,11 @@ const startArchiveJob = async (jobId) => {
   await writeCollectionNdjson(gzip, 'situationSummaries', SituationSummariesCollection);
   await writeCollectionNdjson(gzip, 'budgetLines', BudgetLinesCollection);
   await writeCollectionNdjson(gzip, 'appPreferences', AppPreferencesCollection);
+  await writeCollectionNdjson(gzip, 'chats', ChatsCollection);
+  await writeCollectionNdjson(gzip, 'errors', ErrorsCollection);
+  await writeCollectionNdjson(gzip, 'userLogs', UserLogsCollection);
+  await writeCollectionNdjson(gzip, 'vendorsCache', VendorsCacheCollection);
+  await writeCollectionNdjson(gzip, 'vendorsIgnore', VendorsIgnoreCollection);
 
   gzip.end();
   await new Promise((resolve, reject) => {

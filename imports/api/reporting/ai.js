@@ -11,10 +11,11 @@ const windowKeyToMs = (key) => {
 };
 
 Meteor.methods({
-  async 'reporting.aiSummarizeWindow'(windowKey, projFilters, userPrompt) {
+  async 'reporting.aiSummarizeWindow'(windowKey, projFilters, userPrompt, options) {
     check(windowKey, String);
     if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
     if (userPrompt !== undefined && typeof userPrompt !== 'string') throw new Meteor.Error('invalid-arg', 'userPrompt must be a string');
+    if (options && typeof options !== 'object') throw new Meteor.Error('invalid-arg', 'options must be an object');
     const apiKey = getOpenAiApiKey();
 
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
@@ -49,7 +50,7 @@ Meteor.methods({
     for (const t of tasksDone) push('task_done', new Date(t.statusChangedAt).toISOString(), t.title || '(untitled task)', t.projectId || '');
     for (const n of notes) push('note_created', new Date(n.createdAt).toISOString(), n.title || '(note)', n.projectId || '');
 
-    // Fallback: if no key or no rows, return a simple markdown rendering
+    // Fallback: if no key or no rows, return a simple rendering respecting format
     if (!apiKey || rows.length === 0) {
       if (!apiKey) {
         console.log('[reporting.aiSummarizeWindow] Fallback: missing OpenAI API key. Returning simple markdown.');
@@ -57,28 +58,48 @@ Meteor.methods({
       if (rows.length === 0) {
         console.log('[reporting.aiSummarizeWindow] Fallback: no activity rows for window', windowKey);
       }
-      const header = `# Activity report — ${windowKey}`;
+      const lang = (options && typeof options.lang === 'string') ? options.lang.toLowerCase() : 'fr';
+      const format = (options && typeof options.format === 'string') ? options.format.toLowerCase() : 'text';
+      const headerText = lang === 'en' ? `Activity report — ${windowKey}` : `Rapport d'activité — ${windowKey}`;
+      const headerMd = `# ${headerText}`;
       if (rows.length === 0) {
-        return { markdown: `${header}\n\n_No activity in the selected window._` };
+        const noActText = lang === 'en' ? 'No activity in the selected window.' : "Aucune activité sur la période sélectionnée.";
+        return {
+          text: `${headerText}\n\n${noActText}`,
+          markdown: `${headerMd}\n\n_${noActText}_`
+        };
       }
       const byType = rows.reduce((acc, r) => { (acc[r.type] ||= []).push(r); return acc; }, {});
       const render = (title, arr) => (arr && arr.length > 0)
         ? [`## ${title}`, '', ...arr.map(r => `- [${r.whenIso}] ${r.title}`)].join('\n')
         : '';
-      const sections = [
-        render('Projects created', byType.project_created),
-        render('Tasks completed', byType.task_done),
-        render('Notes added', byType.note_created)
+      const tProjects = lang === 'en' ? 'Projects created' : 'Projets créés';
+      const tTasks = lang === 'en' ? 'Tasks completed' : 'Tâches terminées';
+      const tNotes = lang === 'en' ? 'Notes added' : 'Notes ajoutées';
+      const sectionsMd = [
+        render(tProjects, byType.project_created),
+        render(tTasks, byType.task_done),
+        render(tNotes, byType.note_created)
       ].filter(Boolean).join('\n\n');
-      return { markdown: `${header}\n\n${sections}` };
+      const sectionsText = sectionsMd
+        .replace(/^## /gm, '')
+        .replace(/^\- /gm, '• ');
+      return {
+        text: `${headerText}\n\n${sectionsText}`,
+        markdown: `${headerMd}\n\n${sectionsMd}`
+      };
     }
+
+    const lang = (options && typeof options.lang === 'string') ? options.lang.toLowerCase() : 'fr';
+    const format = (options && typeof options.format === 'string') ? options.format.toLowerCase() : 'text';
+    const wantsMarkdown = format === 'markdown';
 
     const defaultSystem = [
       'You are an assistant that writes concise CTO activity reports for executive leadership.',
       'Audience: CEO. Objective: inform leadership with a strategic, factual weekly-style update.',
       'Style: high-level; include details only when they clarify a decision or risk.',
       'You receive structured activity items (projects/tasks/notes) and FULL TEXT excerpts of notes.',
-      'Do not invent facts; rely only on provided content. Output clean Markdown only.'
+      wantsMarkdown ? 'Do not invent facts; rely only on provided content. Output clean Markdown only.' : 'Do not invent facts; rely only on provided content. Output clean plain text only.'
     ].join(' ');
     const itemsBlock = rows.map(r => `- [${r.whenIso}] (${r.type}) ${r.title}${r.projectId ? ` {projectId:${r.projectId}}` : ''}`).join('\n');
     const toOneLine = (s) => String(s || '').replace(/\s+/g, ' ').trim();
@@ -94,6 +115,11 @@ Meteor.methods({
       })
       .join('\n\n');
 
+    const outputConstraints = [
+      `Output language: ${lang === 'fr' ? 'French' : 'English'}.`,
+      wantsMarkdown ? 'Output format: Markdown.' : 'Output format: plain text.'
+    ].join(' ');
+
     const defaultUser = [
       `Period: ${since.toISOString()} → ${until.toISOString()}`,
       'Activities (chronological, newest first):',
@@ -102,7 +128,9 @@ Meteor.methods({
       'Notes content (latest first; full text excerpts):',
       notesBlock || '(none)',
       '',
-      'Write a short report for the CEO. Organize by theme or project as appropriate. Use bullet points. Sections:',
+      'Write a short report for the CEO. Organize by theme or project as appropriate.',
+      wantsMarkdown ? 'Use bullet points and proper Markdown headings.' : 'Use short lines with simple bullets or paragraphs. No Markdown.',
+      'Sections:',
       '- Highlights (top 3–6 bullets; major advances, outcomes)',
       '- Projects created',
       '- Tasks completed',
@@ -114,11 +142,13 @@ Meteor.methods({
       '- Risks: concrete blockers, uncertainties, or deadlines at risk with brief rationale.',
       '- Meeting Topics: 3–6 crisp bullets for the next leadership meeting (decisions needed, dependencies, follow-ups).',
       '- Prioritize what matters; avoid generic statements. Prefer action-oriented wording.',
-      'Keep bullets compact. If a section is empty, omit it. Indicate provenance (task done, note) when helpful.'
+      'Keep bullets compact. If a section is empty, omit it. Indicate provenance (task done, note) when helpful.',
+      '',
+      outputConstraints
     ].join('\n');
 
     const system = userPrompt && userPrompt.trim() ? userPrompt : defaultSystem;
-    const user = userPrompt && userPrompt.trim() ? `${itemsBlock}\n\n${notesBlock}` : defaultUser;
+    const user = userPrompt && userPrompt.trim() ? `${itemsBlock}\n\n${notesBlock}\n\n${outputConstraints}` : defaultUser;
 
     console.log('[reporting.aiSummarizeWindow] System prompt:', system);
     console.log('[reporting.aiSummarizeWindow] User prompt:', user);
@@ -141,8 +171,10 @@ Meteor.methods({
       throw new Meteor.Error('openai-failed', errText);
     }
     const data = await resp.json();
-    const markdown = data.choices?.[0]?.message?.content || '';
-    return { markdown };
+    const raw = data.choices?.[0]?.message?.content || '';
+    const markdown = wantsMarkdown ? raw : '';
+    const text = wantsMarkdown ? raw.replace(/^#+\s*/gm, '').replace(/^\-\s*/gm, '• ') : raw;
+    return { text, markdown };
   }
 });
 
