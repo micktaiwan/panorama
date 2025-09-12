@@ -85,7 +85,7 @@ export const InlineEditable = ({ value, placeholder, onSubmit, as = 'input', sta
         el.showPicker();
         return true;
       } catch (err) {
-        console.warn('InlineEditable: showPicker failed', err);
+        console.error('InlineEditable: showPicker failed', err);
       }
     }
     // Fallbacks

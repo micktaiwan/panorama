@@ -18,7 +18,7 @@ const claimLeadership = () => {
   try {
     localStorage.setItem(LEADER_KEY, String(Date.now()));
   } catch (e) {
-    console.warn('useAlarmScheduler: cannot write leader heartbeat', e);
+    console.error('useAlarmScheduler: cannot write leader heartbeat', e);
   }
 };
 

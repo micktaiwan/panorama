@@ -7,7 +7,8 @@ import { timeAgo } from '/imports/ui/utils/date.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
-import { InlineDate } from '/imports/ui/InlineDate/InlineDate.jsx';
+import { InlineTasksHeader } from './components/InlineTasksHeader.jsx';
+import { InlineTasksList } from './components/InlineTasksList.jsx';
 import { formatHms, hourKey, formatHourLabel } from './utils';
 import { HourHeader } from './components/HourHeader/HourHeader.jsx';
 import { EntryRow } from './components/EntryRow/EntryRow.jsx';
@@ -37,7 +38,13 @@ export default function UserLog() {
     if (typeof localStorage === 'undefined') return false;
     return !!localStorage.getItem('userlog_last_summary_v1');
   });
-  const [hideExisting, setHideExisting] = useState(() => true);
+  const [hideExisting, setHideExisting] = useState(() => {
+    if (typeof localStorage === 'undefined') return true;
+    const raw = localStorage.getItem('userlog_hide_existing_v1');
+    if (raw === '0') return false;
+    if (raw === '1') return true;
+    return true;
+  });
 
   const windowInfo = useMemo(() => {
     const now = new Date();
@@ -60,6 +67,15 @@ export default function UserLog() {
   useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
   }, []);
+  // Persist hideExisting toggle
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem('userlog_hide_existing_v1', hideExisting ? '1' : '0');
+    } catch (e) {
+      // non-blocking
+    }
+  }, [hideExisting]);
 
   // Removed local ⌘J toggle and overlay close: handled globally as navigation
 
@@ -85,17 +101,31 @@ export default function UserLog() {
     return { linkedLogIdSet: set, logIdToTask: map };
   }, [tasksReady]);
 
+  const isLinkedSuggestion = useCallback((task) => {
+    if (!task) return false;
+    const ids = Array.isArray(task?.sourceLogIds) ? task.sourceLogIds : [];
+    for (const id of ids) {
+      if (linkedLogIdSet.has(String(id))) return true;
+    }
+    return false;
+  }, [linkedLogIdSet]);
+
   const visibleSummaryTasks = useMemo(() => {
     const all = Array.isArray(summaryModal?.tasks) ? summaryModal.tasks : [];
     if (!hideExisting) return all;
-    return all.filter(t => !(Array.isArray(t?.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)))));
-  }, [summaryModal, hideExisting, linkedLogIdSet]);
+    return all.filter(t => !isLinkedSuggestion(t));
+  }, [summaryModal, hideExisting, isLinkedSuggestion]);
 
   const hiddenTasksCount = useMemo(() => {
     const all = Array.isArray(summaryModal?.tasks) ? summaryModal.tasks : [];
     if (!hideExisting) return 0;
     return Math.max(0, all.length - visibleSummaryTasks.length);
   }, [summaryModal, hideExisting, visibleSummaryTasks]);
+
+  const creatableCount = useMemo(() => {
+    const all = Array.isArray(summaryModal?.tasks) ? summaryModal.tasks : [];
+    return all.filter(t => !isLinkedSuggestion(t)).length;
+  }, [summaryModal, isLinkedSuggestion]);
 
   const copySummary = useCallback(() => {
     const text = summaryModal?.summary || '';
@@ -106,7 +136,7 @@ export default function UserLog() {
     const all = Array.isArray(summaryModal?.tasks) ? summaryModal.tasks : [];
     const windowHours = summaryModal?.windowHours;
     if (all.length === 0) { notify({ message: 'No tasks to create', kind: 'info' }); return; }
-    const queue = all.filter(t => !(Array.isArray(t?.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)))));
+    const queue = all.filter(t => !isLinkedSuggestion(t));
     if (queue.length === 0) { notify({ message: 'No new tasks to create', kind: 'info' }); return; }
     const skipped = all.length - queue.length;
     let created = 0; let failed = 0;
@@ -131,7 +161,7 @@ export default function UserLog() {
     if (skipped > 0) parts.push(`skipped ${skipped}`);
     if (failed > 0) parts.push(`${failed} failed`);
     notify({ message: parts.join(' · '), kind: failed ? 'warning' : 'success' });
-  }, [summaryModal, linkedLogIdSet]);
+  }, [summaryModal, isLinkedSuggestion]);
 
   const handleSummarize = useCallback(() => {
     setSummarizing(true);
@@ -154,7 +184,7 @@ export default function UserLog() {
           localStorage.setItem('userlog_last_summary_v1', JSON.stringify(payload));
           setHasSavedSummary(true);
         } catch (error) {
-          console.warn('Failed to persist last summary in localStorage', error);
+          console.error('Failed to persist last summary in localStorage', error);
           notify({ message: 'Failed to save summary locally', kind: 'warning' });
         }
       }
@@ -291,82 +321,30 @@ export default function UserLog() {
                 <div className="UserLog__inlineSummaryTitle">Summary — last {summaryModal.windowHours}h</div>
                 <div className="UserLog__inlineSummaryActions">
                   <button className="btn" onClick={copySummary}>Copy summary</button>
-                  <button className="btn ml8" onClick={createAll}>Create all</button>
                   <button className="UserLog__close ml8" onClick={() => setSummaryModal(null)} aria-label="Close">×</button>
                 </div>
               </div>
               <div className="UserLog__inlineSummaryBody">
                 <div className="UserLog__inlineSummaryText scrollArea">{summaryModal.summary || '(empty)'}</div>
                 <div className="UserLog__inlineTasks">
-                  <div className="UserLog__inlineTasksTitle">
-                    Task suggestions
-                    <label className="ml8">
-                      <input
-                        type="checkbox"
-                        checked={hideExisting}
-                        onChange={(e) => setHideExisting(!!e.target.checked)}
-                      /> Hide existing
-                    </label>
-                  </div>
-                  {visibleSummaryTasks && visibleSummaryTasks.length > 0 ? (
-                    <ul className="UserLog__inlineTasksList scrollArea">
-                      {visibleSummaryTasks.map((t, idx) => {
-                        let stableKey = `idx:${idx}`;
-                        if (Array.isArray(t?.sourceLogIds) && t.sourceLogIds.length > 0) {
-                          stableKey = `src:${t.sourceLogIds.join(',')}`;
-                        } else if (t?.title) {
-                          stableKey = `title:${t.title}`;
-                        }
-                        const hasDbLinked = Array.isArray(t?.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id)));
-                        return (
-                        <li key={stableKey} className={`UserLog__inlineTaskRow${hasDbLinked ? ' isLinked' : ''}`}>
-                          <div className="UserLog__inlineTaskMain">
-                            <div className="UserLog__inlineTaskTitle">{t.title}</div>
-                            {t.notes ? <div className="UserLog__inlineTaskNotes">{t.notes}</div> : null}
-                            {hasDbLinked ? null : (
-                              <>
-                                <div className="UserLog__inlineTaskDeadline">
-                                  <label htmlFor={`ul_task_deadline_${idx}`}>Deadline:&nbsp;</label>
-                                  <InlineDate
-                                    id={`ul_task_deadline_${idx}`}
-                                    value={t.deadline || ''}
-                                    onSubmit={(next) => updateTaskDeadline(t, next)}
-                                    placeholder="No deadline"
-                                  />
-                                </div>
-                                <div className="UserLog__inlineTaskProject">
-                                  <label htmlFor={`ul_task_project_${idx}`}>Project:&nbsp;</label>
-                                  <select
-                                    className="UserLog__inlineTaskProjectSelect"
-                                    id={`ul_task_project_${idx}`}
-                                    value={t.projectId || ''}
-                                    onChange={(e) => updateTaskProjectId(t, e.target.value)}
-                                  >
-                                    <option value="">(none)</option>
-                                    {(projects || []).map(p => (
-                                      <option key={p._id} value={p._id}>{p.name || '(untitled)'}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                          {hasDbLinked ? null : (
-                            <button
-                              className="btn btn-xs"
-                              onClick={() => createSingleTask(t, summaryModal.windowHours)}
-                            >Create task</button>
-                          )}
-                        </li>
-                      );})}
-                    </ul>
-                  ) : (
-                    hideExisting && Array.isArray(summaryModal?.tasks) && summaryModal.tasks.length > 0 ? (
-                      <div className="UserLog__empty">{hiddenTasksCount} hidden {hiddenTasksCount === 1 ? 'task' : 'tasks'}.</div>
-                    ) : (
-                      <div className="UserLog__empty">No suggested tasks.</div>
-                    )
-                  )}
+                  <InlineTasksHeader
+                    hideExisting={hideExisting}
+                    onToggleHideExisting={setHideExisting}
+                    onCreateAll={createAll}
+                    creatableCount={creatableCount}
+                  />
+                  <InlineTasksList
+                    tasks={visibleSummaryTasks}
+                    projects={projects}
+                    linkedLogIdSet={linkedLogIdSet}
+                    isLinkedSuggestion={isLinkedSuggestion}
+                    hiddenTasksCount={hiddenTasksCount}
+                    hideExisting={hideExisting}
+                    onUpdateDeadline={updateTaskDeadline}
+                    onUpdateProject={updateTaskProjectId}
+                    onCreateSingle={(t, h) => createSingleTask(t, h)}
+                    windowHours={summaryModal.windowHours}
+                  />
                 </div>
               </div>
             </div>

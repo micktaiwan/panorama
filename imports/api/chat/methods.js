@@ -221,7 +221,6 @@ const TOOL_HANDLERS = {
     }
     try {
       const topScores = out.slice(0, 2).map(r => Number(r.score) || 0);
-      console.log('[chat.ask][chat_semanticSearch] meta:', { query: clampText(q, 120), limit, total: out.length, topScores });
     } catch { /* noop */ }
     if (memory) {
       memory.lists = memory.lists || {};
@@ -494,9 +493,7 @@ Meteor.methods({
       (historyBlock ? `History:\n${historyBlock}` : '')
     ].filter(Boolean).join('\n');
 
-    // Log outbound payload (no PII beyond user text)
-    console.log('[chat.ask] System:', system);
-    console.log('[chat.ask] User:', user);
+    // Verbose outbound payload logs removed
 
     const apiKey = getOpenAiApiKey();
     if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
@@ -599,25 +596,7 @@ Meteor.methods({
       const ptext = pdata?.choices?.[0]?.message?.content || '';
       try {
         planned = JSON.parse(ptext);
-        console.log('[chat.ask][planner] plan:', safeStringify(planned));
-        try {
-          const steps = Array.isArray(planned?.steps) ? planned.steps : [];
-          const hasExplicit = steps && steps.length > 0;
-          stopArtifacts = Array.isArray(planned?.stopWhen?.have) ? planned.stopWhen.have : [];
-          let human = buildReadablePlan(query, steps);
-          if (hasExplicit) {
-            const lines = steps.map((s, idx) => `${idx + 1}. ${labelForToolStep(s.tool, s.args)}`);
-            human = ['Plan:', ...lines].join('\n');
-          }
-          if (human) {
-          await ChatsCollection.insertAsync({ role: 'assistant', content: human, isStatus: true, createdAt: new Date() });
-          }
-        } catch (ePlan) { console.error('[chat.ask] persist plan failed', ePlan); }
-      } catch (e) {
-        console.error('[chat.ask][planner] parse failed', e);
-        await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planner error: invalid JSON plan from OpenAI. Falling back to auto tools.', error: true, createdAt: new Date() });
-        planned = null;
-      }
+      } catch (ePlan) { console.error('[chat.ask] persist plan failed', ePlan); }
     } else {
       const errText = await plannerResp.text();
       console.error('[chat.ask][planner] OpenAI failed', { status: plannerResp.status, statusText: plannerResp.statusText, body: errText });
@@ -658,12 +637,11 @@ Meteor.methods({
           const result = await executeStep(step, memory, `call_${i+1}`);
           toolResults.push(result);
           
-          // Log output metadata
+          // Log output metadata removed (keep error on parse)
           try {
             const parsed = JSON.parse(result.output || '{}');
             const keys = Object.keys(parsed || {});
             const total = typeof parsed.total === 'number' ? parsed.total : undefined;
-            console.log('[chat.ask][planner][tool output]', { tool: step.tool, keys, total, length: (result.output || '').length });
           } catch {
             console.error('[chat.ask][planner][tool output] parse failed', { tool: step.tool, length: (result.output || '').length });
           }
@@ -752,12 +730,10 @@ Meteor.methods({
         // Check for early termination based on stopWhen artifacts
         const { evaluateStopWhen } = await import('/imports/api/chat/helpers');
         if (evaluateStopWhen(stopArtifacts, memory)) {
-          console.log('[chat.ask][planner] Early termination - stopWhen condition met');
           break;
         }
       }
       
-      console.log(`[chat.ask][planner] Executed ${toolResults.length} tools, replanned: ${replanned}`);
       
       // Synthesis via Chat Completions using only tool results
       await ChatsCollection.insertAsync({ role: 'assistant', content: 'Synthesizing…', isStatus: true, createdAt: new Date() });
@@ -804,12 +780,8 @@ Meteor.methods({
       }
       const data2 = await resp2.json();
       let text = data2?.choices?.[0]?.message?.content || '';
-      try {
-        console.log('[chat.ask][planner] Synthesis complete:', { 
-          outputLength: (text || '').length, 
-          toolCount: toolResults.length,
-          replanned 
-        });
+      try { 
+         
       } catch (e) { 
         console.error('[chat.ask][planner] log failed', e); 
       }
@@ -929,8 +901,7 @@ Meteor.methods({
       tools,
       tool_choice: 'auto'
     };
-    console.log('[chat.ask] First payload.tools:', safeStringify(tools));
-    console.log('[chat.ask] First payload.input.length:', firstPayload.input && firstPayload.input.length);
+    
     const resp = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -943,16 +914,14 @@ Meteor.methods({
     }
     const data = await resp.json();
     const dbg = { keys: Object.keys(data || {}), outputLen: Array.isArray(data?.output) ? data.output.length : 0, tool_calls: data?.tool_calls };
-    console.log('[chat.ask] First response meta:', safeStringify(dbg));
+    
     if (Array.isArray(data?.output)) {
-      console.log('[chat.ask] First response output types:', data.output.map(x => x && x.type));
     }
     const outputArray = Array.isArray(data?.output) ? data.output : [];
     // Extract tool calls (Responses API emits 'function_call' items in output[])
     const toolCallsFromOutput = outputArray
       .filter((it) => it && (it.type === 'tool_call' || it.type === 'function_call'))
       .map((tc) => {
-        console.log('[chat.ask] Raw tool item:', safeStringify(tc));
         const argsStr = (typeof tc?.arguments === 'string') ? tc.arguments : (tc?.function?.arguments || '');
         let argsObj = {};
         try { if (argsStr) argsObj = JSON.parse(argsStr); } catch (e) { console.error('[chat.ask] Failed to parse tool arguments', e); argsObj = {}; }
@@ -969,7 +938,7 @@ Meteor.methods({
     })) : [];
     const toolCallsAll = (toolCallsFromOutput.length > 0 ? toolCallsFromOutput : toolCallsTop);
     const toolCalls = toolCallsAll.slice(0, 5);
-    console.log('[chat.ask] Tool calls extracted:', safeStringify(toolCalls));
+    
     let text = data?.output_text || (Array.isArray(outputArray) ? outputArray.map(p => p?.content?.[0]?.text || '').join('') : '') || '';
 
     if (toolCalls.length > 0) {
@@ -986,10 +955,8 @@ Meteor.methods({
             if (args.status) delete args.status;
             const selector = buildTasksSelector(args);
             if (!('status' in selector)) {
-              // Match Panorama UI: exclude completed tasks by default
               selector.status = { $ne: 'done' };
             }
-            console.log('[chat.ask][chat_tasks] selector:', JSON.stringify(selector));
             const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
             console.log('[chat.ask][chat_tasks] tasks found:', tasks.length);
@@ -1005,7 +972,6 @@ Meteor.methods({
             const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
             const nowIso = (call.arguments && typeof call.arguments.now === 'string' && call.arguments.now.trim()) ? call.arguments.now : new Date().toISOString();
             const selector = buildOverdueSelector(nowIso);
-            console.log('[chat.ask][chat_overdue] selector:', JSON.stringify(selector));
             const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
             const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
@@ -1019,7 +985,6 @@ Meteor.methods({
             const { TasksCollection } = await import('/imports/api/tasks/collections');
             const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
             const selector = buildByProjectSelector(call.arguments && call.arguments.projectId);
-            console.log('[chat.ask][chat_tasksByProject] selector:', JSON.stringify(selector));
             const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
             const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
@@ -1033,7 +998,6 @@ Meteor.methods({
             const { TasksCollection } = await import('/imports/api/tasks/collections');
             const { buildFilterSelector } = await import('/imports/api/chat/helpers');
             const selector = buildFilterSelector(call.arguments || {});
-            console.log('[chat.ask][chat_tasksFilter] selector:', JSON.stringify(selector));
             const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
             const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
@@ -1080,12 +1044,6 @@ Meteor.methods({
             }
             try {
               const topScores = out.slice(0, 2).map(r => Number(r.score) || 0);
-              console.log('[chat.ask][chat_semanticSearch] meta:', {
-                query: clampText(q, 120),
-                limit,
-                total: out.length,
-                topScores
-              });
             } catch { /* noop */ }
             toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ results: out, total: out.length }) });
           } catch (e) {
@@ -1118,7 +1076,7 @@ Meteor.methods({
         assistantToolCallMsg,
         ...toolMsgs
       ];
-      console.log('[chat.ask] ChatCompletions second-call messages:', safeStringify(cmplMessages));
+      
       const resp2 = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -1132,10 +1090,7 @@ Meteor.methods({
       const data2 = await resp2.json();
       text = data2?.choices?.[0]?.message?.content || '';
     }
-    try {
-      console.log('[chat.ask] Output length:', (text || '').length);
-      console.log('[chat.ask] Output:', text);
-    } catch { /* noop */ }
+    try { /* noop */ } catch { /* noop */ }
     const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
 
     // Persist only assistant: client already persisted the user message for proper ordering

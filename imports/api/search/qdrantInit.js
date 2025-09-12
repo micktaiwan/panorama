@@ -23,10 +23,10 @@ Meteor.startup(async () => {
       // Health endpoint is not in the client; do a lightweight fetch
       const resp = await fetch(`${url.replace(/\/$/, '')}/healthz`).catch(() => null);
       if (!resp || !resp.ok) {
-        console.warn('[qdrant] Health check failed or non-OK response');
+        console.error('[qdrant] Health check failed or non-OK response');
       }
     } catch (e) {
-      console.warn('[qdrant] Health check threw an error:', e);
+      console.error('[qdrant] Health check threw an error:', e);
     }
 
     // Ensure collection exists with expected vector parameters
@@ -35,7 +35,7 @@ Meteor.startup(async () => {
       const info = await client.getCollection(collectionName);
       exists = !!info;
     } catch (e) {
-      console.warn(`[qdrant] getCollection('${collectionName}') failed (will attempt create):`, e?.message ?? e);
+      console.error(`[qdrant] getCollection('${collectionName}') failed (will attempt create):`, e?.message ?? e);
       exists = false;
     }
 
@@ -52,9 +52,9 @@ Meteor.startup(async () => {
         const size = cfg?.size || cfg?.config?.size;
         const dist = cfg?.distance || cfg?.config?.distance;
         if (Number(size) !== vectorSize || String(dist).toLowerCase() !== String(distance).toLowerCase()) {
-          console.warn(`[qdrant] Collection '${collectionName}' exists but vector config differs (have size=${size}, distance=${dist}; expected size=${vectorSize}, distance=${distance})`);
+          console.error(`[qdrant] Collection '${collectionName}' exists but vector config differs (have size=${size}, distance=${dist}; expected size=${vectorSize}, distance=${distance})`);
         }
-        console.log(`[qdrant] Collection '${collectionName}' is available (size=${size}, distance=${dist})`);
+        // Removed success-level availability log
       } catch (_e) {
         // Ignore validation errors; collection exists
       }

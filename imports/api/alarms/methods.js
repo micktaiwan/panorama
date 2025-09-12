@@ -70,7 +70,6 @@ Meteor.methods({
     const baseMs = Math.max(...candidates);
     const until = new Date(baseMs + minutes * 60 * 1000);
     const res = await AlarmsCollection.updateAsync(alarmId, { $set: { snoozedUntilAt: until, enabled: true, done: false, acknowledgedAt: now, updatedAt: new Date() } });
-    console.log('[alarms.snooze]', { alarmId, minutes, until, updated: res });
     return res;
   },
   async 'alarms.dismiss'(alarmId) {
@@ -81,7 +80,6 @@ Meteor.methods({
     const recur = (doc.recurrence?.type) || 'none';
     if (recur === 'none') {
       const res = await AlarmsCollection.updateAsync(alarmId, { $set: { enabled: false, done: true, acknowledgedAt: now, updatedAt: new Date(), snoozedUntilAt: null } });
-      console.log('[alarms.dismiss]', { alarmId, recurring: false, updated: res });
       return res;
     }
     // Compute next occurrence ignoring snooze, based on original nextTriggerAt
@@ -89,7 +87,6 @@ Meteor.methods({
     const next = computeNextOccurrence(original, recur);
     if (!next) {
       const res = await AlarmsCollection.updateAsync(alarmId, { $set: { enabled: false, done: true, acknowledgedAt: now, updatedAt: new Date(), snoozedUntilAt: null } });
-      console.log('[alarms.dismiss]', { alarmId, recurring: 'invalid', updated: res });
       return res;
     }
     const res = await AlarmsCollection.updateAsync(alarmId, {
@@ -102,7 +99,6 @@ Meteor.methods({
         updatedAt: new Date()
       }
     });
-    console.log('[alarms.dismiss]', { alarmId, recurring: recur, next: next.toISOString(), updated: res });
     return res;
   },
   async 'alarms.markFiredIfDue'(alarmId) {
@@ -124,7 +120,6 @@ Meteor.methods({
     if (!doc.enabled) return 0;
     if (!(effective.getTime() <= now.getTime())) return 0;
     const res = await AlarmsCollection.updateAsync(alarmId, { $set: { snoozedUntilAt: null, lastFiredAt: now, enabled: false, done: true, acknowledgedAt: null, updatedAt: now } });
-    console.log('[alarms.markFiredIfDue]', { alarmId, updated: res });
     return res;
   }
 });

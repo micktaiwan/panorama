@@ -73,7 +73,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         if (dupMap[key]) { resolve(); return; }
         Meteor.call('budget.checkDuplicate', r, (e2, res) => {
           if (cancelled) { resolve(); return; }
-          if (e2) { console.warn('checkDuplicate failed', e2); setDupMap(prev => ({ ...prev, [key]: { error: true } })); resolve(); return; }
+          if (e2) { console.error('checkDuplicate failed', e2); setDupMap(prev => ({ ...prev, [key]: { error: true } })); resolve(); return; }
           setDupMap(prev => ({ ...prev, [key]: res || { exists: false } }));
           resolve();
         });
@@ -200,7 +200,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
       };
       if (supplierIds.length > 0) {
         Meteor.call('budget.ensureVendors', supplierIds, (e2, vendorsMap) => {
-          if (e2) { console.warn('ensureVendors failed', e2); afterVendors({}); return; }
+          if (e2) { console.error('ensureVendors failed', e2); afterVendors({}); return; }
           afterVendors(vendorsMap || {});
         });
       } else {
@@ -297,7 +297,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
       };
       if (supplierIds.length > 0) {
         Meteor.call('budget.ensureVendors', supplierIds, (e2, vendorsMap) => {
-          if (e2) { console.warn('ensureVendors failed', e2); afterVendors({}); return; }
+          if (e2) { console.error('ensureVendors failed', e2); afterVendors({}); return; }
           afterVendors(vendorsMap || {});
         });
       } else {
@@ -631,7 +631,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                       className="btn"
                       onClick={() => {
                         Meteor.call('budget.checkDuplicate', r, (e2, res) => {
-                          if (e2) { console.warn('checkDuplicate failed', e2); notify({ message: 'Check failed', kind: 'error' }); return; }
+                          if (e2) { console.error('checkDuplicate failed', e2); notify({ message: 'Check failed', kind: 'error' }); return; }
                           if (res && res.exists) {
                             notify({ message: `Duplicate exists (id=${res.id || ''})`, kind: 'error' });
                           } else {
