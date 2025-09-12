@@ -141,7 +141,7 @@ export const useAlarmScheduler = () => {
     // expose scheduler to other effects (like alarms changes)
     scheduleFnRef.current = scheduleNext;
     scheduleNext();
-    // alarms debug logging removed
+    
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
