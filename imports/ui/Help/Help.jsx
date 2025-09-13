@@ -13,8 +13,10 @@ export const Help = () => {
         <li><strong>Alarm modal</strong> — <strong>1</strong> snooze +5m, <strong>2</strong> +15m, <strong>3</strong> +1h, <strong>Esc</strong> dismiss</li>
         <li><strong>Global search</strong> — <strong>⌘K</strong> (macOS) / <strong>Ctrl+K</strong> (Windows/Linux) opens the search anywhere</li>
         <li><strong>Search results</strong> — <strong>↑/↓</strong> navigate results; <strong>Enter</strong> opens the selection</li>
+        <li><strong>Go to screen</strong> — <strong>⌘G</strong> (macOS) / <strong>Ctrl+G</strong> opens the palette; <strong>↑/↓</strong> navigate; <strong>Enter</strong> opens; or type the letter</li>
         <li><strong>AI Chat</strong> — <strong>⌘D</strong> toggle open/close, <strong>⌘⇧D</strong> toggle docked sidebar</li>
         <li><strong>Journal</strong> — <strong>⌘J</strong> opens the Journal page</li>
+        <li><strong>Eisenhower</strong> — <strong>⌘E</strong> (macOS) / <strong>Ctrl+E</strong> (Windows/Linux) opens the Eisenhower page</li>
         <li><strong>Cycle fields</strong> — <strong>⌘I</strong> (macOS) / <strong>Ctrl+I</strong> (Windows/Linux) focuses the next visible input/textarea; repeat to cycle</li>
         <li><strong>Back navigation</strong> — <strong>⌘ + ←</strong> (macOS) / <strong>Ctrl + ←</strong> (Windows/Linux) goes back to previous page</li>
         <li><strong>Forward navigation</strong> — <strong>⌘ + →</strong> (macOS) / <strong>Ctrl + →</strong> (Windows/Linux) goes forward to next page</li>
@@ -22,6 +24,22 @@ export const Help = () => {
         <li><strong>Toggle fullscreen</strong> — <strong>⌘⇧9</strong> (macOS) / <strong>Ctrl+Shift+9</strong> (Windows/Linux)</li>
       </ul>
       <p className="muted">This page should be updated whenever a new shortcut is added.</p>
+      <h3>Go to screen letters</h3>
+      <ul className="helpList">
+        <li><strong>D</strong> — Dashboard</li>
+        <li><strong>J</strong> — Journal</li>
+        <li><strong>E</strong> — Eisenhower</li>
+        <li><strong>B</strong> — Budget</li>
+        <li><strong>R</strong> — Reporting</li>
+        <li><strong>P</strong> — People</li>
+        <li><strong>F</strong> — Files</li>
+        <li><strong>L</strong> — Links</li>
+        <li><strong>A</strong> — Alarms</li>
+        <li><strong>S</strong> — Situation Analyzer</li>
+        <li><strong>I</strong> — Import tasks</li>
+        <li><strong>H</strong> — Help</li>
+        <li><strong>C</strong> — Preferences</li>
+      </ul>
     </div>
   );
 };

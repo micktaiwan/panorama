@@ -103,3 +103,34 @@ body.withDockedChat .container {
     padding-right: 560px; /* explicit cap on very wide screens */
   }
 }
+
+/* Go to screen palette */
+.goList { list-style: none; margin: 0; padding: 0; }
+.goList li { margin: 2px 0; }
+.goItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  text-decoration: none;
+}
+.goItem:hover { background: rgba(255,255,255,0.06); }
+.goItem.active { background: rgba(255,255,255,0.12); }
+.goKey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #0f172a;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+}
+.goLabel { color: #fff; }
