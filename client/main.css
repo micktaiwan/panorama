@@ -102,6 +102,11 @@ button { cursor: pointer; }
   color: var(--danger);
 }
 
+/* Ensure emoji icons render correctly across platforms (Windows, Linux, macOS) */
+.iconButton {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", emoji, system-ui, sans-serif;
+}
+
 .btn.danger {
   border-color: var(--danger);
   background: var(--danger);

@@ -169,8 +169,6 @@ export const useAlarmScheduler = () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
-        timersClearedRef.current += 1;
-        
       }
     };
   }, []);

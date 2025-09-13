@@ -9,14 +9,7 @@ import { getQdrantClient, COLLECTION, VECTOR_SIZE, DISTANCE, embedText, makePrev
 const VECTOR_CACHE_MAX = 2000;
 const vectorCache = new Map(); // key -> { vec: number[], at: number }
 const inFlightVectors = new Map(); // key -> Promise<number[]>
-const normalizeQuery = (q) => {
-  const base = String(q || '').trim().replace(/\s+/g, ' ').toLowerCase();
-  try {
-    return base.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-  } catch (e) {
-    return base; // environments without normalize
-  }
-};
+const normalizeQuery = (q) => String(q || '').trim().replace(/\s+/g, ' ').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
 const getQueryVector = async (rawQuery) => {
   const key = `v1|${normalizeQuery(rawQuery)}`;
   if (vectorCache.has(key)) {
@@ -142,7 +135,9 @@ const runIndexJob = async (jobId) => {
 Meteor.methods({
   async 'qdrant.health'() {
     const url = getQdrantUrl();
-    if (!url) throw new Meteor.Error('config-missing', 'qdrantUrl missing in settings');
+    if (!url) {
+      return { url: null, collection: COLLECTION(), exists: false, disabled: true };
+    }
     const client = await getQdrantClient();
     const name = COLLECTION();
     const out = { url, collection: name, exists: false };
@@ -185,7 +180,7 @@ Meteor.methods({
         // Drop and recreate collection to ensure a clean state
         try {
           await client.deleteCollection(COLLECTION());
-        } catch (e) {
+        } catch {
           // if it doesn't exist, ignore
         }
         await client.createCollection(COLLECTION(), { vectors: { size: VECTOR_SIZE(), distance: DISTANCE() } });
@@ -202,6 +197,10 @@ Meteor.methods({
   },
   async 'panorama.search'(query, opts = {}) {
     check(query, String);
+    const url = getQdrantUrl();
+    if (!url) {
+      return { results: [], cachedVector: false, cacheSize: 0, disabled: true };
+    }
     const client = await getQdrantClient();
     const { vector, cached } = await getQueryVector(String(query || ''));
     const filter = opts && opts.projectId ? { must: [{ key: 'projectId', match: { value: opts.projectId } }] } : undefined;
@@ -209,55 +208,50 @@ Meteor.methods({
     // Map payloads back to docs
     const items = Array.isArray(res) ? res : (res?.result || []);
     const fetchPreview = async (kind, rawId) => {
-      try {
-        const id = String(rawId || '').split(':').pop();
-        switch (kind) {
-          case 'project': {
-            const { ProjectsCollection } = await import('/imports/api/projects/collections');
-            const p = await ProjectsCollection.findOneAsync({ _id: id }, { fields: { name: 1, description: 1 } });
-            if (!p) return null;
-            const s = `${p.name || ''} ${p.description || ''}`.trim();
-            return s || '(project)';
-          }
-          case 'task': {
-            const { TasksCollection } = await import('/imports/api/tasks/collections');
-            const t = await TasksCollection.findOneAsync({ _id: id }, { fields: { title: 1 } });
-            return t?.title || '(task)';
-          }
-          case 'note': {
-            const { NotesCollection } = await import('/imports/api/notes/collections');
-            const n = await NotesCollection.findOneAsync({ _id: id }, { fields: { title: 1, content: 1 } });
-            const s = `${n?.title || ''} ${n?.content || ''}`.trim();
-            return s || '(note)';
-          }
-          case 'session': {
-            const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
-            const s = await NoteSessionsCollection.findOneAsync({ _id: id }, { fields: { name: 1, aiSummary: 1 } });
-            const txt = `${s?.name || ''} ${s?.aiSummary || ''}`.trim();
-            return txt || '(session)';
-          }
-          case 'line': {
-            const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
-            const l = await NoteLinesCollection.findOneAsync({ _id: id }, { fields: { content: 1 } });
-            return l?.content || '(line)';
-          }
-          case 'alarm': {
-            const { AlarmsCollection } = await import('/imports/api/alarms/collections');
-            const a = await AlarmsCollection.findOneAsync({ _id: id }, { fields: { title: 1 } });
-            return a?.title || '(alarm)';
-          }
-          case 'link': {
-            const { LinksCollection } = await import('/imports/api/links/collections');
-            const l = await LinksCollection.findOneAsync({ _id: id }, { fields: { name: 1, url: 1 } });
-            const s = `${l?.name || ''} ${l?.url || ''}`.trim();
-            return s || '(link)';
-          }
-          default:
-            return null;
+      const id = String(rawId || '').split(':').pop();
+      switch (kind) {
+        case 'project': {
+          const { ProjectsCollection } = await import('/imports/api/projects/collections');
+          const p = await ProjectsCollection.findOneAsync({ _id: id }, { fields: { name: 1, description: 1 } });
+          if (!p) return null;
+          const s = `${p.name || ''} ${p.description || ''}`.trim();
+          return s || '(project)';
         }
-      } catch (e) {
-        console.error('[panorama.search] preview fetch failed', { kind, rawId }, e);
-        return null;
+        case 'task': {
+          const { TasksCollection } = await import('/imports/api/tasks/collections');
+          const t = await TasksCollection.findOneAsync({ _id: id }, { fields: { title: 1 } });
+          return t?.title || '(task)';
+        }
+        case 'note': {
+          const { NotesCollection } = await import('/imports/api/notes/collections');
+          const n = await NotesCollection.findOneAsync({ _id: id }, { fields: { title: 1, content: 1 } });
+          const s = `${n?.title || ''} ${n?.content || ''}`.trim();
+          return s || '(note)';
+        }
+        case 'session': {
+          const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
+          const s = await NoteSessionsCollection.findOneAsync({ _id: id }, { fields: { name: 1, aiSummary: 1 } });
+          const txt = `${s?.name || ''} ${s?.aiSummary || ''}`.trim();
+          return txt || '(session)';
+        }
+        case 'line': {
+          const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
+          const l = await NoteLinesCollection.findOneAsync({ _id: id }, { fields: { content: 1 } });
+          return l?.content || '(line)';
+        }
+        case 'alarm': {
+          const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+          const a = await AlarmsCollection.findOneAsync({ _id: id }, { fields: { title: 1 } });
+          return a?.title || '(alarm)';
+        }
+        case 'link': {
+          const { LinksCollection } = await import('/imports/api/links/collections');
+          const l = await LinksCollection.findOneAsync({ _id: id }, { fields: { name: 1, url: 1 } });
+          const s = `${l?.name || ''} ${l?.url || ''}`.trim();
+          return s || '(link)';
+        }
+        default:
+          return null;
       }
     };
     const out = await Promise.all(items.map(async (it) => {
@@ -269,24 +263,23 @@ Meteor.methods({
       };
       let status = null;
       let projectName = null;
+      let linkUrl = null;
       if (p.kind === 'task' && p.docId) {
-        try {
-          const id = String(p.docId).split(':').pop();
-          const { TasksCollection } = await import('/imports/api/tasks/collections');
-          const t = await TasksCollection.findOneAsync({ _id: id }, { fields: { status: 1 } });
-          status = t?.status || null;
-        } catch (_e) {
-          status = null;
-        }
+        const id = String(p.docId).split(':').pop();
+        const { TasksCollection } = await import('/imports/api/tasks/collections');
+        const t = await TasksCollection.findOneAsync({ _id: id }, { fields: { status: 1 } });
+        status = t?.status || null;
       }
       if (p.projectId) {
-        try {
-          const { ProjectsCollection } = await import('/imports/api/projects/collections');
-          const proj = await ProjectsCollection.findOneAsync({ _id: p.projectId }, { fields: { name: 1 } });
-          projectName = proj?.name || null;
-        } catch (_e) {
-          projectName = null;
-        }
+        const { ProjectsCollection } = await import('/imports/api/projects/collections');
+        const proj = await ProjectsCollection.findOneAsync({ _id: p.projectId }, { fields: { name: 1 } });
+        projectName = proj?.name || null;
+      }
+      if (p.kind === 'link' && p.docId) {
+        const id = String(p.docId).split(':').pop();
+        const { LinksCollection } = await import('/imports/api/links/collections');
+        const l = await LinksCollection.findOneAsync({ _id: id }, { fields: { url: 1 } });
+        linkUrl = l?.url || null;
       }
       return {
         score: it?.score,
@@ -296,7 +289,8 @@ Meteor.methods({
         id: p.docId || null,
         sessionId: p.sessionId || null,
         text: norm(text),
-        status
+        status,
+        url: linkUrl
       };
     }));
     // Deduplicate logical documents (same id) by keeping the best score

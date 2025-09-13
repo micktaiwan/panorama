@@ -209,6 +209,10 @@ const TOOL_HANDLERS = {
     const limit = Math.max(1, Math.min(50, Number(args && args.limit) || 8));
     const q = String(args && args.query || '').trim();
     const url = getQdrantUrl();
+    if (!url) {
+      if (memory) { memory.lists = memory.lists || {}; memory.lists.searchResults = []; }
+      return { output: JSON.stringify({ results: [], total: 0, disabled: true }) };
+    }
     const client = new QdrantClient({ url });
     const vector = await embedQuery(q);
     const searchRes = await client.search(COLLECTION(), { vector, limit, with_payload: true });
@@ -1002,6 +1006,10 @@ Meteor.methods({
             const limit = Math.max(1, Math.min(50, Number(call.arguments && call.arguments.limit) || 8));
             const q = String(call.arguments && call.arguments.query || '').trim();
             const url = getQdrantUrl();
+            if (!url) {
+              toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ results: [], total: 0, disabled: true }) });
+              continue;
+            }
             const client = new QdrantClient({ url });
             const vector = await embedQuery(q);
             const searchRes = await client.search(COLLECTION(), { vector, limit, with_payload: true });
