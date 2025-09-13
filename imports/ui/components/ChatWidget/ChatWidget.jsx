@@ -200,17 +200,6 @@ export default function ChatWidget() {
 
   return (
     <div className={`ChatWidget__root${docked ? ' isDocked' : ''}`} aria-live="polite">
-      <button
-        type="button"
-        className="ChatWidget__fab"
-        aria-haspopup="dialog"
-        aria-expanded={isOpen}
-        onClick={toggleOpen}
-        title={isOpen ? 'Close chat' : 'Open chat'}
-      >
-        💬
-      </button>
-
       {isOpen && (
         <div className={`ChatWidget__panel${docked ? ' docked' : ''}`} role="dialog" aria-label="AI Chat">
           <div className="ChatWidget__header">
