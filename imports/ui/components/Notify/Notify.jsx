@@ -37,36 +37,17 @@ export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, cla
 
   if (!visible || !shouldUseInApp) return null;
   const classes = ['notify', kind, className].filter(Boolean).join(' ');
+  const kindToColor = {
+    error: '#ef4444',
+    success: '#10b981',
+    warning: '#f59e0b',
+    info: 'var(--primary)'
+  };
+  const iconColor = kindToColor[kind] || 'var(--primary)';
   const defaultSvg = (
-    <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
-      <defs>
-        <linearGradient id="notifyGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={kind === 'error' ? '#ef4444' : kind === 'success' ? '#22c55e' : '#4f46e5'} />
-          <stop offset="100%" stopColor="#14b8a6" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width="72" height="72" rx="12" fill="#0b1020" stroke="rgba(255,255,255,0.08)" />
-      <g fill="none" stroke="url(#notifyGrad)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-        {kind === 'error' ? (
-          <g>
-            <line x1="22" y1="22" x2="50" y2="50" />
-            <line x1="50" y1="22" x2="22" y2="50" />
-          </g>
-        ) : kind === 'success' ? (
-          <polyline points="20,36 30,46 52,24" />
-        ) : kind === 'warning' ? (
-          <g>
-            <polygon points="36,16 60,56 12,56" fill="none" />
-            <line x1="36" y1="28" x2="36" y2="42" />
-            <circle cx="36" cy="50" r="2" />
-          </g>
-        ) : (
-          <g>
-            <circle cx="30" cy="30" r="10" />
-            <line x1="38" y1="38" x2="50" y2="50" />
-          </g>
-        )}
-      </g>
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" style={{ color: iconColor }}>
+      <path d="M12 2c-1.7 0-3 1.3-3 3v1.1C6 6.8 4 9.5 4 12.7V15l-1.6 1.6c-.45.45-.13 1.4.55 1.4h18.1c.68 0 1-.95.55-1.4L20 15v-2.3c0-3.2-2-5.9-5-6.6V5c0-1.7-1.3-3-3-3z" />
+      <circle cx="12" cy="19" r="1.7" />
     </svg>
   );
 

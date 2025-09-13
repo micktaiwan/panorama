@@ -190,6 +190,35 @@ export const Preferences = () => {
         </div>
       </div>
 
+      <h3>Test notify</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Notifications</div>
+          <div className="prefsValue">
+            <button className="btn" onClick={() => {
+              playBeep(0.5);
+              setToast({ message: 'Test beep played', kind: 'success' });
+            }}>Test audio</button>
+            <button className="btn ml8" onClick={() => {
+              setTimeout(() => {
+                playBeep(0.5);
+                setToast({ message: 'Delayed test: beep + notify', kind: 'success' });
+              }, 3000);
+            }}>Test delayed audio (3s)</button>
+            <button className="btn ml8" onClick={() => {
+              const tests = [
+                { message: 'Info notify test', kind: 'info' },
+                { message: 'Success notify test', kind: 'success' },
+                { message: 'Error notify test', kind: 'error' }
+              ];
+              tests.forEach((t, i) => {
+                setTimeout(() => setToast(t), i * 1200);
+              });
+            }}>Test all notify</button>
+          </div>
+        </div>
+      </div>
+
       <h3>Qdrant</h3>
       <div className="prefsSection">
         <div className="prefsRow">
@@ -200,16 +229,6 @@ export const Preferences = () => {
               Meteor.call('qdrant.health', (err, res) => { setChecking(false); setHealth(err ? { error: err?.reason || err?.message || String(err) } : res); });
             }}>{checking ? 'Checking…' : 'Check health'}</button>
             <button className="btn ml8" disabled={indexing} onClick={() => setConfirmIndex(true)}>{indexing ? 'Indexing…' : 'Rebuild index'}</button>
-            <button className="btn ml8" onClick={() => {
-              playBeep(0.5);
-              setToast({ message: 'Test beep played', kind: 'success' });
-            }}>Test audio</button>
-            <button className="btn ml8" onClick={() => {
-              setTimeout(() => {
-                playBeep(0.5);
-                setToast({ message: 'Delayed test: beep + notify', kind: 'success' });
-              }, 3000);
-            }}>Test delayed audio (3s)</button>
           </div>
         </div>
         {indexJob ? (

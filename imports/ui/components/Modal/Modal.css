@@ -8,16 +8,38 @@
   z-index: 1000;
 }
 
+/* Ensure the native dialog does not apply UA default font/color */
+dialog.modalPanel {
+  background: var(--panel);
+  color: inherit;
+}
+
 .modalPanel {
+  position: relative;
+  z-index: 1;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  padding: 0; /* reset UA dialog padding */
+  margin: 0;  /* reset UA dialog margin */
+  color: inherit; /* avoid UA dialog forcing black text */
   width: 520px;
   max-width: 96vw;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
   max-height: 90vh;
+}
+
+.modalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: default;
+  z-index: 0;
 }
 
 .modalPanel.wide {
@@ -30,6 +52,7 @@
   justify-content: space-between;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
+  color: inherit;
 }
 
 .modalIcon {

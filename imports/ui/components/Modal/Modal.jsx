@@ -3,8 +3,9 @@ import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import './Modal.css';
 
-export const Modal = ({ open, onClose, title, children, actions, className = '', icon = null, panelClassName = '', leftPanel = null }) => {
+export const Modal = ({ open, onClose, title, children, actions, className = '', icon = null, panelClassName = '', leftPanel = null, closable = true }) => {
   const overlayRef = useRef(null);
+  const titleIdRef = useRef(`modal-title-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -19,16 +20,22 @@ export const Modal = ({ open, onClose, title, children, actions, className = '',
   const defaultIcon = '★';
   const renderIcon = icon === false ? null : (icon || defaultIcon);
 
+  const overlayClassName = className ? 'modalOverlay ' + className : 'modalOverlay';
+  const panelClass = panelClassName ? 'modalPanel ' + panelClassName : 'modalPanel';
   const overlay = (
-    <div className={`modalOverlay${className ? ` ${className}` : ''}`} ref={overlayRef} onClick={(e) => {
-      if (e.target === overlayRef.current) onClose?.();
-    }}>
-      <div className={`modalPanel${panelClassName ? ` ${panelClassName}` : ''}`} role="dialog" aria-modal="true">
+    <div
+      className={overlayClassName}
+      ref={overlayRef}
+    >
+      <button type="button" className="modalBackdrop" aria-label="Close modal" onClick={() => onClose?.()} />
+      <dialog className={panelClass} open aria-modal="true" aria-labelledby={title ? titleIdRef.current : undefined}>
         {title ? (
           <div className="modalHeader">
             {renderIcon ? <div className="modalIcon" aria-hidden="true">{renderIcon}</div> : null}
-            <div className="modalTitle">{title}</div>
-            <button className="iconButton" aria-label="Close" onClick={onClose}>✕</button>
+            <div id={titleIdRef.current} className="modalTitle">{title}</div>
+            {closable ? (
+              <button className="iconButton" aria-label="Close" onClick={onClose}>✕</button>
+            ) : null}
           </div>
         ) : null}
         {leftPanel ? (
@@ -48,7 +55,7 @@ export const Modal = ({ open, onClose, title, children, actions, className = '',
             {actions}
           </div>
         ) : null}
-      </div>
+      </dialog>
     </div>
   );
 
@@ -65,5 +72,6 @@ Modal.propTypes = {
   icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node, PropTypes.bool]),
   panelClassName: PropTypes.string,
   leftPanel: PropTypes.oneOfType([PropTypes.node, PropTypes.string]),
+  closable: PropTypes.bool,
 };
 

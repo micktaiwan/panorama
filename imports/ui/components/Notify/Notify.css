@@ -1,9 +1,9 @@
 .notify {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
+  bottom: 24px;
+  right: 24px;
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   display: block;
@@ -28,19 +28,19 @@
 .notifyMain {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
 }
 
-.notify.info { border-color: var(--primary); }
-.notify.error { border-color: #ef4444; }
-.notify.success { border-color: #10b981; }
+.notify.info { border-color: rgba(99, 102, 241, 0.5); }
+.notify.error { border-color: rgba(239, 68, 68, 0.6); }
+.notify.success { border-color: rgba(16, 185, 129, 0.6); }
 
 .ml8 { margin-left: 8px; }
 
 /* When the chat is docked, move the toast to the left of the sidebar */
 body.withDockedChat .notify {
-  right: calc(min(38vw, 560px) + 16px);
+  right: calc(min(38vw, 560px) + 24px);
 }
 

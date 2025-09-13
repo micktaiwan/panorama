@@ -37,9 +37,6 @@ const Tabs = ({ active, onChange }) => {
     </div>
   );
 };
-SearchPane.propTypes = {
-  onClose: PropTypes.func.isRequired,
-};
 Tabs.propTypes = {
   active: PropTypes.number.isRequired,
   onChange: PropTypes.func.isRequired,
@@ -167,6 +164,10 @@ const SearchPane = ({ onClose }) => {
       <p className="muted">Tip: ⌘K / Ctrl+K to open this anywhere.</p>
     </>
   );
+};
+
+SearchPane.propTypes = {
+  onClose: PropTypes.func.isRequired,
 };
 
 const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
@@ -478,9 +479,7 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
         </svg>
       )}
       panelClassName="wide"
-      actions={[
-        <button key="close" className="btn" onClick={onClose}>Close</button>
-      ]}
+      closable={false}
     >
       <Tabs active={activeTab} onChange={setActiveTab} />
       {renderActivePane()}
