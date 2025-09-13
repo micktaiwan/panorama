@@ -33,7 +33,7 @@ export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, cla
       const t = setTimeout(() => { setVisible(false); onClose?.(); }, durationMs);
       return () => clearTimeout(t);
     }
-  }, [durationMs, onClose, shouldUseInApp]);
+  }, [durationMs, shouldUseInApp]);
 
   if (!visible || !shouldUseInApp) return null;
   const classes = ['notify', kind, stacked ? 'stacked' : '', className].filter(Boolean).join(' ');
