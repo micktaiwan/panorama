@@ -11,9 +11,14 @@ export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilte
       <select className="peopleFilter" value={teamFilter} onChange={(e) => onTeamFilterChange(e.target.value)}>
         <option value="">All teams</option>
         <option value="__none__">No team</option>
-        {(teams || []).filter(t => (t.name || '').toLowerCase() === 'tech').map(t => (
-          <option key={t._id} value={t._id}>{t.name || ''}</option>
-        ))}
+        {(teams || [])
+          .filter(t => {
+            const nm = String(t.name || '').toLowerCase();
+            return nm !== 'sre/devops' && nm !== 'data';
+          })
+          .map(t => (
+            <option key={t._id} value={t._id}>{t.name || ''}</option>
+          ))}
       </select>
       <select className="peopleFilter" value={subteamFilter} onChange={(e) => onSubteamFilterChange(e.target.value)}>
         <option value="">All subteams</option>
