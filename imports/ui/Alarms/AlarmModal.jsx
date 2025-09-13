@@ -5,7 +5,7 @@ import { Meteor } from 'meteor/meteor';
 import { notify } from '/imports/ui/utils/notify.js';
 import { formatDateTime } from '/imports/ui/utils/date.js';
 
-export const AlarmModal = ({ open, alarm, onClose, onBeforeAction }) => {
+export const AlarmModal = ({ open = false, alarm = null, onClose, onBeforeAction } = {}) => {
   const title = alarm ? String(alarm?.title || '') : 'Alarm';
   const body = (() => {
     if (!alarm) return null;
@@ -80,11 +80,6 @@ AlarmModal.propTypes = {
   onBeforeAction: PropTypes.func
 };
 
-AlarmModal.defaultProps = {
-  open: false,
-  alarm: null,
-  onClose: undefined,
-  onBeforeAction: undefined
-};
+ 
 
 

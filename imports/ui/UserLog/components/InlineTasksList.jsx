@@ -26,12 +26,13 @@ export function InlineTasksList({
   return (
     <ul className="UserLog__inlineTasksList scrollArea">
       {tasks.map((t, idx) => {
-        let stableKey = `idx:${idx}`;
+        let baseKey = `idx`;
         if (Array.isArray(t?.sourceLogIds) && t.sourceLogIds.length > 0) {
-          stableKey = `src:${t.sourceLogIds.join(',')}`;
+          baseKey = `src:${t.sourceLogIds.join(',')}`;
         } else if (t?.title) {
-          stableKey = `title:${t.title}`;
+          baseKey = `title:${t.title}`;
         }
+        const stableKey = `${baseKey}#${idx}`;
         const hasDbLinked = isLinkedSuggestion ? isLinkedSuggestion(t) : (Array.isArray(t?.sourceLogIds) && t.sourceLogIds.some(id => linkedLogIdSet.has(String(id))));
         return (
           <li key={stableKey} className={`UserLog__inlineTaskRow${hasDbLinked ? ' isLinked' : ''}`}>
