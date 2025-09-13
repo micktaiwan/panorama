@@ -19,10 +19,14 @@ export default function UserLog() {
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
-  const ready = useTracker(() => Meteor.subscribe('userLogs.recent', 300).ready(), []);
+  // Visible range for entries list: default last 24h; load more adds one day
+  const [visibleDays, setVisibleDays] = useState(1);
+  const sinceDate = useMemo(() => new Date(Date.now() - (visibleDays * 24 * 3600 * 1000)), [visibleDays]);
+  // Subscribe, but do not gate rendering on readiness to avoid empty flicker/scroll jumps
+  useTracker(() => { Meteor.subscribe('userLogs.since', sinceDate); return null; }, [sinceDate]);
   const entries = useTracker(
-    () => (ready ? UserLogsCollection.find({}, { sort: { createdAt: -1 } }).fetch() : []),
-    [ready]
+    () => UserLogsCollection.find({ createdAt: { $gte: sinceDate } }, { sort: { createdAt: -1 } }).fetch(),
+    [sinceDate]
   );
 
   // Track first entry id to keep memo deps simple and avoid deep comparisons
@@ -173,7 +177,8 @@ export default function UserLog() {
       const tasks = Array.isArray(res?.tasks) ? res.tasks : [];
       
       const norm = tasks.map(t => ({ title: t.title || '', notes: t.notes || '', projectId: t.projectId || '', deadline: t.deadline || '', sourceLogIds: Array.isArray(t?.sourceLogIds) ? t.sourceLogIds : [] }));
-      const payload = { summary, tasks: norm, windowHours: summaryWindow };
+      const usedCustomPrompt = !!opt.promptOverride;
+      const payload = { summary, tasks: norm, windowHours: summaryWindow, customPrompt: usedCustomPrompt };
       setSummaryModal(payload);
       if (typeof localStorage !== 'undefined') {
         try {
@@ -304,6 +309,7 @@ export default function UserLog() {
   const projectsReady = useTracker(() => Meteor.subscribe('projects').ready(), []);
   const projects = useTracker(() => (projectsReady ? ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetch() : []), [projectsReady]);
   // Note: we only need project names to populate the select options below; no separate map needed.
+  const handleLoadMore = useCallback(() => { setVisibleDays(d => (Number(d) || 1) + 1); }, []);
 
   return (
     <div className="UserLog__page" aria-live="polite">
@@ -320,28 +326,30 @@ export default function UserLog() {
                   <button className="UserLog__close ml8" onClick={() => setSummaryModal(null)} aria-label="Close">×</button>
                 </div>
               </div>
-              <div className="UserLog__inlineSummaryBody">
+              <div className={`UserLog__inlineSummaryBody${summaryModal?.customPrompt ? ' isFull' : ''}`}>
                 <div className="UserLog__inlineSummaryText scrollArea">{summaryModal.summary || '(empty)'}</div>
-                <div className="UserLog__inlineTasks">
-                  <InlineTasksHeader
-                    hideExisting={hideExisting}
-                    onToggleHideExisting={setHideExisting}
-                    onCreateAll={createAll}
-                    creatableCount={creatableCount}
-                  />
-                  <InlineTasksList
-                    tasks={visibleSummaryTasks}
-                    projects={projects}
-                    linkedLogIdSet={linkedLogIdSet}
-                    isLinkedSuggestion={isLinkedSuggestion}
-                    hiddenTasksCount={hiddenTasksCount}
-                    hideExisting={hideExisting}
-                    onUpdateDeadline={updateTaskDeadline}
-                    onUpdateProject={updateTaskProjectId}
-                    onCreateSingle={(t, h) => createSingleTask(t, h)}
-                    windowHours={summaryModal.windowHours}
-                  />
-                </div>
+                {summaryModal?.customPrompt ? null : (
+                  <div className="UserLog__inlineTasks">
+                    <InlineTasksHeader
+                      hideExisting={hideExisting}
+                      onToggleHideExisting={setHideExisting}
+                      onCreateAll={createAll}
+                      creatableCount={creatableCount}
+                    />
+                    <InlineTasksList
+                      tasks={visibleSummaryTasks}
+                      projects={projects}
+                      linkedLogIdSet={linkedLogIdSet}
+                      isLinkedSuggestion={isLinkedSuggestion}
+                      hiddenTasksCount={hiddenTasksCount}
+                      hideExisting={hideExisting}
+                      onUpdateDeadline={updateTaskDeadline}
+                      onUpdateProject={updateTaskProjectId}
+                      onCreateSingle={(t, h) => createSingleTask(t, h)}
+                      windowHours={summaryModal.windowHours}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
@@ -435,6 +443,10 @@ export default function UserLog() {
             ) : (
               <div className="UserLog__empty">No entries yet. Type and press Enter to add.</div>
             )}
+          </div>
+          <div className="UserLog__loadMore">
+            <button type="button" className="btn" onClick={handleLoadMore}>Load more (older 1 day)</button>
+            <span className="ml8 muted">since {timeAgo(sinceDate)}</span>
           </div>
       </div>
     </div>
