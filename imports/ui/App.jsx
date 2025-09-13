@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { Dashboard } from '/imports/ui/Dashboard/Dashboard.jsx';
 import { Help } from '/imports/ui/Help/Help.jsx';
@@ -36,6 +37,30 @@ import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
+
+const SortableChip = ({ id, name, onOpen }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <a
+      ref={setNodeRef}
+      style={style}
+      className={`favChip${isDragging ? ' dragging' : ''}`}
+      href={`#/projects/${id}`}
+      onClick={(e) => { e.preventDefault(); onOpen(); }}
+      {...attributes}
+      {...listeners}
+    >
+      <span className="star">★</span>
+      <span className="name">{name || '(untitled project)'}</span>
+    </a>
+  );
+};
+SortableChip.propTypes = {
+  id: PropTypes.string.isRequired,
+  name: PropTypes.string,
+  onOpen: PropTypes.func.isRequired,
+};
 
 function App() {
   const [route, setRoute] = useState(parseHashRoute());
@@ -303,7 +328,6 @@ function App() {
       }
       if (item.route) {
         navigateTo(item.route);
-        return;
       }
     };
     const onGoKeys = (e) => {
@@ -346,24 +370,7 @@ function App() {
   useEffect(() => { setOrder(favoriteProjects.map(p => p._id)); }, [JSON.stringify(favoriteProjects.map(p => p._id))]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 5 } }));
 
-  const SortableChip = ({ id, name, onOpen }) => {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-    const style = { transform: CSS.Transform.toString(transform), transition };
-    return (
-      <a
-        ref={setNodeRef}
-        style={style}
-        className={`favChip${isDragging ? ' dragging' : ''}`}
-        href={`#/projects/${id}`}
-        onClick={(e) => { e.preventDefault(); onOpen(); }}
-        {...attributes}
-        {...listeners}
-      >
-        <span className="star">★</span>
-        <span className="name">{name || '(untitled project)'}</span>
-      </a>
-    );
-  };
+  // hoisted SortableChip above
 
   const onDragEnd = (event) => {
     const { active, over } = event;
@@ -434,10 +441,10 @@ function App() {
   useEffect(() => {
     if (subPrefs()) return; // not ready
     const needsOnboarding = !appPrefs || !appPrefs.onboardedAt || !appPrefs.filesDir;
-    if (needsOnboarding && route.name !== 'onboarding') {
+    if (needsOnboarding && route?.name !== 'onboarding') {
       navigateTo({ name: 'onboarding' });
     }
-  }, [subPrefs(), appPrefs && appPrefs._id, route && route.name]);
+  }, [subPrefs(), appPrefs?._id, route?.name]);
 
   return (
     <div className={`container${wide ? ' w90' : ''}`}>
@@ -449,16 +456,23 @@ function App() {
           </a>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={order} strategy={horizontalListSortingStrategy}>
-              {order.map(id => {
-                const fp = favoriteProjects.find(p => p._id === id);
+              {order.map((id) => {
+                const fp = favoriteProjects.find((p) => p._id === id);
                 if (!fp) return null;
-                return <SortableChip key={id} id={id} name={fp.name} onOpen={() => openProject(id)} />;
+                return (
+                  <SortableChip
+                    key={id}
+                    id={id}
+                    name={fp?.name}
+                    onOpen={() => openProject(id)}
+                  />
+                );
               })}
             </SortableContext>
           </DndContext>
         </div>
       )}
-      {route.name === 'home' && (
+      {route?.name === 'home' && (
         <div className="panel">
           <div className="homeToolbar">
             <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
@@ -467,7 +481,7 @@ function App() {
           <Dashboard />
         </div>
       )}
-      {route.name === 'project' && (
+      {route?.name === 'project' && (
         <div className="panel">
           <ProjectDetails
             key={route.projectId}
@@ -482,12 +496,12 @@ function App() {
           />
         </div>
       )}
-      {route.name === 'session' && (
+      {route?.name === 'session' && (
         <div className="panel">
           <NoteSession sessionId={route.sessionId} onBack={goHome} />
         </div>
       )}
-      {route.name === 'projectDelete' && (
+      {route?.name === 'projectDelete' && (
         <div className="panel">
           <ProjectDelete
             projectId={route.projectId}
@@ -495,67 +509,67 @@ function App() {
           />
         </div>
       )}
-      {route.name === 'help' && (
+      {route?.name === 'help' && (
         <div className="panel">
           <Help />
         </div>
       )}
-      {route.name === 'alarms' && (
+      {route?.name === 'alarms' && (
         <div className="panel">
           <Alarms />
         </div>
       )}
-      {route.name === 'eisenhower' && (
+      {route?.name === 'eisenhower' && (
         <div className="panel">
           <Eisenhower />
         </div>
       )}
-      {route.name === 'budget' && (
+      {route?.name === 'budget' && (
         <div className="panel">
           <BudgetPage />
         </div>
       )}
-      {route.name === 'reporting' && (
+      {route?.name === 'reporting' && (
         <div className="panel">
           <ReportingPage />
         </div>
       )}
-      {route.name === 'situationAnalyzer' && (
+      {route?.name === 'situationAnalyzer' && (
         <div className="panel">
           <SituationAnalyzer />
         </div>
       )}
-      {route.name === 'people' && (
+      {route?.name === 'people' && (
         <div className="panel">
           <PeoplePage highlightId={route.personId} />
         </div>
       )}
-      {route.name === 'links' && (
+      {route?.name === 'links' && (
         <div className="panel">
           <LinksPage />
         </div>
       )}
-      {route.name === 'files' && (
+      {route?.name === 'files' && (
         <div className="panel">
           <FilesPage />
         </div>
       )}
-      {route.name === 'userlog' && (
+      {route?.name === 'userlog' && (
         <div className="panel">
           <UserLog />
         </div>
       )}
-      {route.name === 'onboarding' && (
+      {route?.name === 'onboarding' && (
         <div className="panel">
           <Onboarding />
         </div>
       )}
-      {route.name === 'preferences' && (
+      {route?.name === 'preferences' && (
         <div className="panel">
           <Preferences />
         </div>
       )}
-      {route.name === 'importTasks' && (
+      {route?.name === 'importTasks' && (
         <div className="panel">
           <ImportTasks />
         </div>
@@ -605,7 +619,7 @@ function App() {
         open={qdrantModalOpen}
         onClose={() => setQdrantModalOpen(false)}
         title="Qdrant indisponible"
-        icon={<span role="img" aria-label="warning">⚠️</span>}
+        icon={<span aria-hidden="true">⚠️</span>}
         actions={[
           <button key="retry" className="btn" onClick={() => {
             Meteor.call('qdrant.health', (err, res) => {
@@ -613,11 +627,11 @@ function App() {
                 const message = err?.reason || err?.message || res?.error || 'Toujours indisponible';
                 setQdrantStatus({ ok: false, error: message, info: res || null });
                 setToast({ message: 'Qdrant toujours indisponible', kind: 'error' });
-              } else {
-                setQdrantStatus({ ok: true, info: res });
-                setToast({ message: 'Qdrant est de nouveau disponible', kind: 'success' });
-                setQdrantModalOpen(false);
+                return;
               }
+              setQdrantStatus({ ok: true, info: res });
+              setToast({ message: 'Qdrant est de nouveau disponible', kind: 'success' });
+              setQdrantModalOpen(false);
             });
           }}>Réessayer</button>,
           <button key="prefs" className="btn ml8" onClick={() => { setQdrantModalOpen(false); navigateTo({ name: 'preferences' }); }}>Ouvrir Préférences</button>,
@@ -626,10 +640,10 @@ function App() {
       >
         <div>
           <p>La base Qdrant n'est pas accessible. La recherche sémantique sera désactivée tant que la connexion n'est pas rétablie.</p>
-          {qdrantStatus && qdrantStatus.error ? (
+          {qdrantStatus?.error ? (
             <p className="muted">Détails: {String(qdrantStatus.error)}</p>
           ) : null}
-          {qdrantStatus && qdrantStatus.info && qdrantStatus.info.url ? (
+          {qdrantStatus?.info?.url ? (
             <p className="muted">URL configurée: {qdrantStatus.info.url}</p>
           ) : null}
         </div>
@@ -672,9 +686,7 @@ function App() {
               📄 Export JSON
             </button>
             <button className="btn" onClick={() => {
-              Meteor.call('app.exportArchiveStart', (err, res) => {
-                if (err || !res) { setToast({ message: 'Archive start failed', kind: 'error' }); return; }
-                const { jobId } = res;
+              const handleStatus = (jobId) => {
                 const poll = () => {
                   Meteor.call('app.exportArchiveStatus', jobId, (e2, st) => {
                     if (e2 || !st || !st.exists) { setToast({ message: 'Archive failed', kind: 'error' }); return; }
@@ -692,6 +704,10 @@ function App() {
                   });
                 };
                 poll();
+              };
+              Meteor.call('app.exportArchiveStart', (err, res) => {
+                if (err || !res) { setToast({ message: 'Archive start failed', kind: 'error' }); return; }
+                handleStatus(res.jobId);
               });
             }}>
               📦 Export Archive
