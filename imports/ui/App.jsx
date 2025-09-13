@@ -17,7 +17,7 @@ import { ReportingPage } from '/imports/ui/Reporting/ReportingPage.jsx';
 import { SituationAnalyzer } from '/imports/ui/SituationAnalyzer/SituationAnalyzer.jsx';
 import { PeoplePage } from '/imports/ui/People/PeoplePage.jsx';
 import { useAlarmScheduler } from '/imports/ui/hooks/useAlarmScheduler.js';
-import { useTracker } from 'meteor/react-meteor-data';
+import { useTracker, useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
@@ -27,13 +27,10 @@ import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { AlarmModal } from '/imports/ui/Alarms/AlarmModal.jsx';
 import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
 import { setNotifyHandler } from '/imports/ui/utils/notify.js';
-import { formatDateTime, timeUntilPrecise } from '/imports/ui/utils/date.js';
-import { SearchBar } from '/imports/ui/components/Search/SearchBar.jsx';
-import { SearchResults } from '/imports/ui/components/Search/SearchResults.jsx';
-import { SearchTypeFilters } from '/imports/ui/components/Search/SearchTypeFilters.jsx';
+import { timeUntilPrecise } from '/imports/ui/utils/date.js';
+import { CommandPalette } from '/imports/ui/CommandPalette/CommandPalette.jsx';
 import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
-import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 // HelpBubble removed
@@ -56,16 +53,11 @@ function App() {
   }, []);
   const [exportOpen, setExportOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [cmdDefaultTab, setCmdDefaultTab] = useState(0);
+  const [cmdDefaultProjectId, setCmdDefaultProjectId] = useState('');
   const [qdrantModalOpen, setQdrantModalOpen] = useState(false);
   const [qdrantStatus, setQdrantStatus] = useState(null);
-  const [searchQ, setSearchQ] = useState(() => {
-    return typeof localStorage !== 'undefined' ? (localStorage.getItem('global_search_q') || '') : '';
-  });
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchFiltered, setSearchFiltered] = useState([]);
-  const [searchCached, setSearchCached] = useState(false);
-  const [searchCacheSize, setSearchCacheSize] = useState(0);
-  const [searchLastKey, setSearchLastKey] = useState('');
+  // Command palette state is internal to component; keep only open/close here
   // Go to screen palette
   const [goOpen, setGoOpen] = useState(false);
   const goItems = [
@@ -80,21 +72,12 @@ function App() {
     { key: 'a', label: 'Alarms', route: { name: 'alarms' } },
     { key: 's', label: 'Situation Analyzer', route: { name: 'situationAnalyzer' } },
     { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
+    { key: 'n', label: 'New Note Session', action: 'newSession' },
     { key: 'h', label: 'Help', route: { name: 'help' } },
     { key: 'c', label: 'Preferences', route: { name: 'preferences' } },
   ];
   const [goActiveIdx, setGoActiveIdx] = useState(0);
-  const [searchDirty, setSearchDirty] = useState(false);
-  const [searchActiveIdx, setSearchActiveIdx] = useState(-1);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [typeFilters, setTypeFilters] = useState(() => {
-    if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem('search_type_filters_v1');
-      if (raw) { try { return JSON.parse(raw) || {}; } catch (_e) {} }
-    }
-    return {};
-  });
-  const [typeCounts, setTypeCounts] = useState({});
+  // (removed local search states)
   const suppressRef = useRef(new Set());
 
   // Preferences
@@ -165,12 +148,14 @@ function App() {
       const hasMod = e.metaKey || e.ctrlKey;
       if (hasMod && key === 'k') {
         e.preventDefault();
+        setCmdDefaultTab(undefined);
+        setCmdDefaultProjectId(route?.name === 'project' ? (route?.projectId || '') : '');
         setSearchOpen(true);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [route?.name, route?.projectId]);
 
   // Global shortcut: Cmd/Ctrl + G → open Go to screen palette
   useEffect(() => {
@@ -185,6 +170,10 @@ function App() {
     window.addEventListener('keydown', onOpenGo);
     return () => window.removeEventListener('keydown', onOpenGo);
   }, []);
+
+  // Tab cycling and autofocus now handled inside CommandPalette
+
+  // (moved project Tab cycling effect below after 'order' is declared)
 
   // Global shortcut: Cmd/Ctrl + J → open UserLog page
   useEffect(() => {
@@ -211,6 +200,19 @@ function App() {
     window.addEventListener('keydown', onOpenEisenhower);
     return () => window.removeEventListener('keydown', onOpenEisenhower);
   }, []);
+
+  // Global shortcut: Cmd/Ctrl + N → create new Note Session (linked if on a project page)
+  useEffect(() => {
+    const onNewSessionShortcut = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (!hasMod || key !== 'n') return;
+      e.preventDefault();
+      handleNewSession(route?.name === 'project' ? route.projectId : undefined);
+    };
+    window.addEventListener('keydown', onNewSessionShortcut);
+    return () => window.removeEventListener('keydown', onNewSessionShortcut);
+  }, [route?.name, route?.projectId]);
 
   // Qdrant health check on startup
   useEffect(() => {
@@ -293,6 +295,17 @@ function App() {
   // Keyboard handling when Go to screen palette is open
   useEffect(() => {
     if (!goOpen) return;
+    const performGoItem = (item) => {
+      if (!item) return;
+      if (item.action === 'newSession') {
+        handleNewSession(route?.name === 'project' ? route.projectId : undefined);
+        return;
+      }
+      if (item.route) {
+        navigateTo(item.route);
+        return;
+      }
+    };
     const onGoKeys = (e) => {
       const key = String(e.key || '').toLowerCase();
       if (key === 'escape') { e.preventDefault(); setGoOpen(false); return; }
@@ -301,76 +314,24 @@ function App() {
       if (key === 'enter') {
         e.preventDefault();
         const item = goItems[goActiveIdx];
-        if (item) { navigateTo(item.route); setGoOpen(false); }
+        if (item) { performGoItem(item); setGoOpen(false); }
         return;
       }
       const hit = goItems.find(it => it.key === key);
-      if (hit) { e.preventDefault(); navigateTo(hit.route); setGoOpen(false); }
+      if (hit) { e.preventDefault(); performGoItem(hit); setGoOpen(false); }
     };
     window.addEventListener('keydown', onGoKeys);
     return () => window.removeEventListener('keydown', onGoKeys);
-  }, [goOpen, goActiveIdx]);
+  }, [goOpen, goActiveIdx, route?.name, route?.projectId]);
 
-  useEffect(() => {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem('global_search_q', searchQ || '');
-  }, [searchQ]);
-
-  const runSearch = (query) => {
-    setSearchLoading(true);
-    if (!String(query).trim()) { setSearchResults([]); setSearchLoading(false); return; }
-    Meteor.call('panorama.search', query, (err, res) => {
-      setSearchLoading(false);
-      if (err) { console.error('panorama.search failed', err); setSearchResults([]); return; }
-      const items = Array.isArray(res) ? res : (res?.results || []);
-      setSearchResults(items);
-      setSearchCached(!!res?.cachedVector);
-      setSearchCacheSize(Number.isFinite(res?.cacheSize) ? res.cacheSize : 0);
-      const normalize = (q) => String(q || '').trim().replace(/\s+/g, ' ').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-      setSearchLastKey(`v1|${normalize(query)}`);
-      setSearchDirty(false);
-    });
-  };
-
-  // Derive counts and filtered list whenever results or filters change
-  useEffect(() => {
-    const counts = { project: 0, task: 0, note: 0, link: 0, file: 0, session: 0 };
-    for (const r of (searchResults || [])) {
-      const k = r?.kind;
-      if (k && Object.prototype.hasOwnProperty.call(counts, k)) counts[k] += 1;
-    }
-    setTypeCounts(counts);
-
-    const hasInclude = Object.values(typeFilters).some(v => v === 1);
-    const filtered = (searchResults || []).filter(r => {
-      const k = r?.kind;
-      const st = typeFilters[k];
-      if (hasInclude) return st === 1;
-      return st === -1 ? false : true;
-    });
-    setSearchFiltered(filtered);
-    // Reset active index if now out of range
-    setSearchActiveIdx(idx => (idx >= 0 && idx < filtered.length ? idx : -1));
-  }, [JSON.stringify(searchResults), JSON.stringify(typeFilters)]);
-
-  useEffect(() => {
-    if (typeof localStorage !== 'undefined') {
-      try { localStorage.setItem('search_type_filters_v1', JSON.stringify(typeFilters)); } catch (_e) {}
-    }
-  }, [JSON.stringify(typeFilters)]);
-
-  useEffect(() => {
-    if (searchOpen && String(searchQ).trim() && searchResults.length === 0) {
-      runSearch(searchQ);
-    }
-  }, [searchOpen]);
+  // Search logic moved to CommandPalette
 
   const goHome = () => navigateTo({ name: 'home' });
   const openProject = (projectId) => navigateTo({ name: 'project', projectId });
   const openSession = (sessionId) => navigateTo({ name: 'session', sessionId });
   const goImportTasks = () => navigateTo({ name: 'importTasks' });
   const goAlarms = () => navigateTo({ name: 'alarms' });
-  const goQdrant = () => navigateTo({ name: 'qdrant' });
+  // Qdrant route shortcut removed (unused)
   const goEisenhower = () => navigateTo({ name: 'eisenhower' });
   const goBudget = () => navigateTo({ name: 'budget' });
   const goReporting = () => navigateTo({ name: 'reporting' });
@@ -380,6 +341,7 @@ function App() {
   const goUserLog = () => navigateTo({ name: 'userlog' });
   const projectsReady = useTracker(() => Meteor.subscribe('projects').ready(), []);
   const favoriteProjects = useTracker(() => ProjectsCollection.find({ isFavorite: true }, { sort: { favoriteRank: 1, updatedAt: -1 }, fields: { name: 1, favoriteRank: 1 } }).fetch(), [projectsReady]);
+  // allProjects removed from App-level (handled in CreateTaskPane)
   const [order, setOrder] = useState([]);
   useEffect(() => { setOrder(favoriteProjects.map(p => p._id)); }, [JSON.stringify(favoriteProjects.map(p => p._id))]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 5 } }));
@@ -413,6 +375,31 @@ function App() {
     next.forEach((id, idx) => { Meteor.call('projects.update', id, { favoriteRank: idx }); });
   };
 
+  // When on a project page, Tab/Shift+Tab cycles through favorite projects (order)
+  useEffect(() => {
+    if (route?.name !== 'project') return;
+    const onCycleProjects = (e) => {
+      if (e.key !== 'Tab') return;
+      if (searchOpen) return; // let CommandPalette handle Tab when open
+      const target = e.target;
+      const tag = (target?.tagName || '').toLowerCase();
+      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+      if (isEditable) return; // don't hijack Tab in forms
+
+      if (!Array.isArray(order) || order.length === 0) return;
+      const currentId = route?.projectId || '';
+      const inFavs = order.includes(currentId);
+      const currentIdx = inFavs ? order.indexOf(currentId) : (e.shiftKey ? order.length - 1 : 0);
+      const nextIdx = e.shiftKey ? (currentIdx - 1 + order.length) % order.length : (currentIdx + 1) % order.length;
+      const nextId = order[nextIdx];
+      if (!nextId || nextId === currentId) return;
+      e.preventDefault();
+      navigateTo({ name: 'project', projectId: nextId });
+    };
+    window.addEventListener('keydown', onCycleProjects);
+    return () => window.removeEventListener('keydown', onCycleProjects);
+  }, [route?.name, route?.projectId, searchOpen, JSON.stringify(order)]);
+
   const handleNewProject = () => {
     Meteor.call('projects.insert', { name: 'New Project', status: 'active' }, (err, res) => {
       if (err) {
@@ -432,6 +419,8 @@ function App() {
       if (res) openSession(res);
     });
   };
+
+  // create task now handled inside CommandPalette
 
   const [wide, setWide] = useState(() => {
     if (typeof localStorage === 'undefined') return false;
@@ -485,6 +474,11 @@ function App() {
             projectId={route.projectId}
             onBack={goHome}
             onOpenNoteSession={handleNewSession}
+            onCreateTaskViaPalette={(pid) => {
+              setCmdDefaultTab(1);
+              setCmdDefaultProjectId(pid || route.projectId || '');
+              setSearchOpen(true);
+            }}
           />
         </div>
       )}
@@ -586,7 +580,15 @@ function App() {
               <a
                 href="#/"
                 className={`goItem${idx === goActiveIdx ? ' active' : ''}`}
-                onClick={(e) => { e.preventDefault(); navigateTo(it.route); setGoOpen(false); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (it.action === 'newSession') {
+                    handleNewSession(route?.name === 'project' ? route.projectId : undefined);
+                  } else if (it.route) {
+                    navigateTo(it.route);
+                  }
+                  setGoOpen(false);
+                }}
               >
                 <span className="goKey">{String(it.key || '').toUpperCase()}</span>
                 <span className="goLabel">{it.label}</span>
@@ -697,88 +699,12 @@ function App() {
           </div>
         </div>
       </Modal>
-      <Modal
+      <CommandPalette
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
-        title="Search"
-        panelClassName="wide"
-        actions={[
-          <button key="close" className="btn" onClick={() => setSearchOpen(false)}>Close</button>
-        ]}
-      >
-        <SearchBar
-          value={searchQ}
-          onChange={(v) => {
-            setSearchQ(v);
-            setSearchDirty(true);
-            setSearchActiveIdx(-1);
-          }}
-          onSearch={(query) => {
-            runSearch(query);
-          }}
-          resultsCount={searchResults.length}
-          cached={searchCached}
-          loading={searchLoading}
-          cacheSize={searchCacheSize}
-          autoFocus
-          armSelectFirst={searchResults.length > 0 && !searchDirty}
-          onSelectFirst={() => {
-            if (searchResults.length > 0) {
-              const idx = (typeof searchActiveIdx === 'number' && searchActiveIdx >= 0 && searchActiveIdx < searchResults.length) ? searchActiveIdx : 0;
-              const r = searchResults[idx];
-              // Minimal duplicate logic to avoid ref wiring
-              if (r.kind === 'project' && r.id) {
-                const id = String(r.id).split(':').pop();
-                navigateTo({ name: 'project', projectId: id });
-                setSearchOpen(false);
-                return;
-              }
-              if (r.kind === 'task' && r.projectId) {
-                navigateTo({ name: 'project', projectId: r.projectId });
-                setSearchOpen(false);
-                return;
-              }
-              if (r.kind === 'line' && r.sessionId) {
-                navigateTo({ name: 'session', sessionId: r.sessionId });
-                setSearchOpen(false);
-                return;
-              }
-              if (r.kind === 'note' && r.projectId) {
-                navigateTo({ name: 'project', projectId: r.projectId });
-                setSearchOpen(false);
-                return;
-              }
-              if (r.kind === 'session' && r.id) {
-                const id = String(r.id).split(':').pop();
-                navigateTo({ name: 'session', sessionId: id });
-                setSearchOpen(false);
-                return;
-              }
-              if (r.kind === 'alarm') {
-                navigateTo({ name: 'alarms' });
-                setSearchOpen(false);
-                return;
-              }
-              navigateTo({ name: 'home' });
-              setSearchOpen(false);
-            }
-          }}
-        />
-        <SearchTypeFilters
-          value={typeFilters}
-          onChange={setTypeFilters}
-          counts={typeCounts}
-        />
-        <SearchResults
-          results={searchFiltered}
-          onAfterNavigate={(idx) => { setSearchActiveIdx(idx ?? -1); setSearchOpen(false); }}
-          keyboardNav={true}
-          activeIdx={searchActiveIdx}
-          onActiveChange={setSearchActiveIdx}
-          stale={searchDirty}
-        />
-        <p className="muted">Tip: ⌘K / Ctrl+K to open this anywhere.</p>
-      </Modal>
+        defaultTab={cmdDefaultTab}
+        defaultProjectId={cmdDefaultProjectId}
+      />
       <footer className="appFooter">
         <span>Panorama — get a clear view of your projects</span>
         <span className="footerNextAlarm">

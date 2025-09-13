@@ -25,7 +25,7 @@ import { Tooltip } from '../components/Tooltip/Tooltip.jsx';
 import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
 import { Modal } from '../components/Modal/Modal.jsx';
 
-export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession }) => {
+export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateTaskViaPalette }) => {
   const loadProjects = useSubscribe('projects');
   const loadTasks = useSubscribe('tasks');
   const loadSessions = useSubscribe('noteSessions');
@@ -115,10 +115,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession }) => {
     );
   }
 
-  const createTask = (cb) => {
-    Meteor.call('tasks.insert', { projectId, title: 'New Task', deadline: null }, (err) => {
-      if (!err && typeof cb === 'function') cb();
-    });
+  const createTask = () => {
+    onCreateTaskViaPalette(projectId);
   };
 
   const updateProjectName = (next) => {
@@ -139,6 +137,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession }) => {
   };
 
   const removeTask = (taskId) => {
+    // Prevent layout jump: remove from local order immediately, server update follows
+    setOrder(prev => prev.filter(id => id !== taskId));
     Meteor.call('tasks.remove', taskId);
   };
 
@@ -531,6 +531,7 @@ ProjectDetails.propTypes = {
   projectId: PropTypes.string.isRequired,
   onBack: PropTypes.func,
   onOpenNoteSession: PropTypes.func,
+  onCreateTaskViaPalette: PropTypes.func,
 };
 
 

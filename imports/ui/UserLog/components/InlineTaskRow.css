@@ -1,0 +1,13 @@
+.UserLog__inlineTaskRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.04); transition: background 120ms ease, border-color 120ms ease; }
+.UserLog__inlineTaskRow + .UserLog__inlineTaskRow { margin-top: 8px; }
+.UserLog__inlineTaskRow:hover { background: rgba(255,255,255,0.06); border-color: #475569; }
+.UserLog__inlineTaskRow.isLinked { opacity: 0.6; }
+.UserLog__inlineTaskRow.isLinked .UserLog__inlineTaskTitle { color: var(--muted); text-decoration: line-through; }
+.UserLog__inlineTaskRow.isLinked .UserLog__inlineTaskNotes { color: var(--muted); }
+.UserLog__inlineTaskTitle { font-weight: 500; }
+.UserLog__inlineTaskNotes { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.UserLog__inlineTaskDeadline { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.UserLog__inlineTaskProject { margin-top: 6px; }
+.UserLog__inlineTaskProjectSelect { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+
+

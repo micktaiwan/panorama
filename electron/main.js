@@ -1,4 +1,4 @@
-const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain, Notification, globalShortcut } = require('electron');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require('path');
 const fs = require('fs');
@@ -300,6 +300,42 @@ app.whenReady().then(() => {
     }
   }
   createWindow(savedWindowState);
+
+  // Register macOS global shortcut to focus/open Panorama
+  if (process.platform === 'darwin') {
+    const accelerator = 'CommandOrControl+Shift+P';
+    const wasRegistered = globalShortcut.isRegistered(accelerator);
+    const handler = () => {
+      let win = BrowserWindow.getAllWindows()[0];
+      if (!win) {
+        createWindow(loadWindowState());
+        win = BrowserWindow.getAllWindows()[0];
+      }
+      if (win) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    };
+    const success = globalShortcut.register(accelerator, handler);
+    const nowRegistered = globalShortcut.isRegistered(accelerator);
+    if (!success || !nowRegistered) {
+      console.error(`[electron] Failed to register global shortcut ${accelerator}`);
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'Panorama',
+          body: "Impossible d'activer Cmd-Shift-P: déjà utilisé par une autre app."
+        }).show();
+      }
+    } else if (wasRegistered) {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'Panorama',
+          body: 'Raccourci Cmd-Shift-P mis à jour.'
+        }).show();
+      }
+    }
+  }
 });
 
 ipcMain.handle('view:resetZoom', () => {
@@ -318,6 +354,11 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+app.on('will-quit', () => {
+  // Unregister all global shortcuts
+  globalShortcut.unregisterAll();
 });
 
 ipcMain.handle('app:notify', (_event, { title, body }) => {

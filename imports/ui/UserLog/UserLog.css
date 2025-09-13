@@ -26,15 +26,6 @@
 .UserLog__inlineSummaryText { background: rgba(255,255,255,0.02); padding: 12px; border: none; border-radius: 8px; min-height: 120px; max-height: 35vh; white-space: pre-wrap; word-break: break-word; }
 .UserLog__inlineTasksTitle { font-weight: 600; margin-bottom: 8px; }
 .UserLog__inlineTasksList { max-height: 35vh; }
-.UserLog__inlineTaskRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: none; }
-.UserLog__inlineTaskRow.isLinked { opacity: 0.6; }
-.UserLog__inlineTaskRow.isLinked .UserLog__inlineTaskTitle { color: var(--muted); text-decoration: line-through; }
-.UserLog__inlineTaskRow.isLinked .UserLog__inlineTaskNotes { color: var(--muted); }
-.UserLog__inlineTaskTitle { font-weight: 500; }
-.UserLog__inlineTaskNotes { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.UserLog__inlineTaskDeadline { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.UserLog__inlineTaskProject { margin-top: 6px; }
-.UserLog__inlineTaskProjectSelect { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
 
 /* Local copy of compact icon button style (was only in other pages) */
 .iconButton {
