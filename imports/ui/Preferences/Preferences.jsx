@@ -6,7 +6,7 @@ import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import './Preferences.css';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { navigateTo } from '../router.js';
-import { Notify } from '../components/Notify/Notify.jsx';
+import { notify } from '../utils/notify.js';
 import { playBeep } from '../utils/sound.js';
 
 export const Preferences = () => {
@@ -24,8 +24,7 @@ export const Preferences = () => {
   const [confirmIndex, setConfirmIndex] = React.useState(false);
   // indexJob: { jobId, total, processed, upserts, errors, done }
   const [indexJob, setIndexJob] = React.useState(null);
-  // toast: { message, kind }
-  const [toast, setToast] = React.useState(null);
+  // removed local toast; using global notify manager
 
   const pollIndexStatus = React.useCallback((jobId) => {
     Meteor.call('qdrant.indexStatus', jobId, (e2, st) => {
@@ -33,13 +32,13 @@ export const Preferences = () => {
         setIndexing(false);
         setIndexJob(null);
         setHealth({ error: e2?.reason || e2?.message || 'status failed' });
-        setToast({ message: `Index status failed: ${e2?.reason || e2?.message || 'unknown error'}`, kind: 'error' });
+        notify({ message: `Index status failed: ${e2?.reason || e2?.message || 'unknown error'}`, kind: 'error' });
         return;
       }
       setIndexJob({ ...st, jobId });
       if (st.done) {
         setIndexing(false);
-        setToast({ message: 'Index rebuild completed', kind: 'success' });
+        notify({ message: 'Index rebuild completed', kind: 'success' });
         Meteor.call('qdrant.health', (e3, r3) => setHealth(e3 ? { error: e3?.reason || e3?.message || String(e3) } : r3));
       } else {
         setTimeout(() => pollIndexStatus(jobId), 800);
@@ -53,7 +52,7 @@ export const Preferences = () => {
       if (err || !res) {
         setIndexing(false);
         setHealth({ error: err?.reason || err?.message || 'start failed' });
-        setToast({ message: `Index start failed: ${err?.reason || err?.message || 'unknown error'}`, kind: 'error' });
+        notify({ message: `Index start failed: ${err?.reason || err?.message || 'unknown error'}`, kind: 'error' });
         return;
       }
       setIndexJob({ jobId: res.jobId, total: res.total, processed: 0, upserts: 0, errors: 0, done: false });
@@ -174,13 +173,13 @@ export const Preferences = () => {
               onClick={() => {
                 if (window.electron?.resetZoom) {
                   window.electron.resetZoom();
-                  setToast({ message: 'Zoom reset to 100%', kind: 'success' });
+                  notify({ message: 'Zoom reset to 100%', kind: 'success' });
                 } else {
                   const isElectron = typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent || '');
                   const msg = isElectron
                     ? 'Zoom reset not available yet. Please restart the app to enable it.'
                     : 'Zoom reset not available in browser';
-                  setToast({ message: msg, kind: 'error' });
+                  notify({ message: msg, kind: 'error' });
                 }
               }}
             >
@@ -197,12 +196,12 @@ export const Preferences = () => {
           <div className="prefsValue">
             <button className="btn" onClick={() => {
               playBeep(0.5);
-              setToast({ message: 'Test beep played', kind: 'success' });
+              notify({ message: 'Test beep played', kind: 'success' });
             }}>Test audio</button>
             <button className="btn ml8" onClick={() => {
               setTimeout(() => {
                 playBeep(0.5);
-                setToast({ message: 'Delayed test: beep + notify', kind: 'success' });
+                notify({ message: 'Delayed test: beep + notify', kind: 'success' });
               }, 3000);
             }}>Test delayed audio (3s)</button>
             <button className="btn ml8" onClick={() => {
@@ -211,9 +210,7 @@ export const Preferences = () => {
                 { message: 'Success notify test', kind: 'success' },
                 { message: 'Error notify test', kind: 'error' }
               ];
-              tests.forEach((t, i) => {
-                setTimeout(() => setToast(t), i * 1200);
-              });
+              tests.forEach((t, i) => setTimeout(() => notify(t), i * 1200));
             }}>Test all notify</button>
           </div>
         </div>
@@ -263,14 +260,7 @@ export const Preferences = () => {
       >
         <p>This will drop and recreate the collection, then reindex all documents.</p>
       </Modal>
-      {toast ? (
-        <Notify
-          message={toast.message}
-          kind={toast.kind}
-          onClose={() => setToast(null)}
-          durationMs={toast.kind === 'error' ? 5000 : 3000}
-        />
-      ) : null}
+      
       <div className="prefsFooter">
         <a href="#/onboarding" className="btn-link" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'onboarding' }); }}>Open Onboarding</a>
       </div>

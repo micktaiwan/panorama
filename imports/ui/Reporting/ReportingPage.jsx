@@ -5,8 +5,7 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { useTracker } from 'meteor/react-meteor-data';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
-import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
-import { setNotifyHandler } from '/imports/ui/utils/notify.js';
+import { setNotifyHandler, notify } from '/imports/ui/utils/notify.js';
 
 const formatWhen = (d) => {
   const dt = new Date(d);
@@ -103,11 +102,17 @@ export const ReportingPage = () => {
     });
   };
 
-  // Wire Notify handler to page-level toast
+  // Wire global notify to manager
   React.useEffect(() => {
-    setNotifyHandler((t) => setToast(t));
+    setNotifyHandler((t) => notify(t));
     return () => setNotifyHandler(null);
   }, []);
+  React.useEffect(() => {
+    if (!toast) return;
+    notify(toast);
+    const t = setTimeout(() => setToast(null), 0);
+    return () => clearTimeout(t);
+  }, [toast?.message, toast?.kind]);
 
   const grouped = useMemo(() => {
     const groups = { project_created: [], task_done: [], note_created: [] };
@@ -234,9 +239,7 @@ export const ReportingPage = () => {
       <div className={`aiSummary scrollArea ${aiText ? '' : 'muted'}`}>
         {aiText || 'No AI summary yet.'}
       </div>
-      {toast ? (
-        <Notify message={toast.message} kind={toast.kind || 'info'} onClose={() => setToast(null)} durationMs={3000} />
-      ) : null}
+      
     </div>
   );
 };

@@ -1,13 +1,20 @@
-.notify {
+.notifyContainer {
   position: fixed;
   bottom: 24px;
   right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  z-index: 10050;
+}
+
+.notify {
   background: var(--panel);
   border: 2px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   display: block;
-  z-index: 10050; /* above ChatWidget (9999) */
   box-shadow: 0 10px 30px rgba(0,0,0,0.4);
   overflow: hidden;
 }
@@ -41,6 +48,10 @@
 
 /* When the chat is docked, move the toast to the left of the sidebar */
 body.withDockedChat .notify {
+  right: calc(min(38vw, 560px) + 24px);
+}
+
+body.withDockedChat .notifyContainer {
   right: calc(min(38vw, 560px) + 24px);
 }
 
