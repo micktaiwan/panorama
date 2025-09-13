@@ -9,10 +9,9 @@ import { SituationQuestionsCollection } from '/imports/api/situationQuestions/co
 import { SituationSummariesCollection } from '/imports/api/situationSummaries/collections';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
-import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
+import { notify, setNotifyHandler } from '/imports/ui/utils/notify.js';
 import { PeopleCollection } from '/imports/api/people/collections';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
-import { setNotifyHandler } from '/imports/ui/utils/notify.js';
 
 export const SituationAnalyzer = () => {
   const [selectedSituationId, setSelectedSituationId] = useState(() => {
@@ -60,9 +59,15 @@ export const SituationAnalyzer = () => {
   const current = situations.find(s => s._id === currentId) || null;
 
   useEffect(() => {
-    setNotifyHandler((t) => setToast(t));
+    setNotifyHandler((t) => notify(t));
     return () => setNotifyHandler(null);
   }, []);
+  useEffect(() => {
+    if (!toast) return;
+    notify(toast);
+    const t = setTimeout(() => setToast(null), 0);
+    return () => clearTimeout(t);
+  }, [toast?.message, toast?.kind]);
 
   const addSituation = () => {
     Meteor.call('situations.insert', { title: 'New Situation' }, (err, res) => {
@@ -179,9 +184,9 @@ export const SituationAnalyzer = () => {
                     setExtractActorsLoading(false);
                     if (err) {
                       console.error('situations.extractActors failed', err);
-                      setToast({ message: 'Auto-detect failed', kind: 'error' });
+                      notify({ message: 'Auto-detect failed', kind: 'error' });
                     } else {
-                      setToast({ message: 'Actors updated', kind: 'success' });
+                      notify({ message: 'Actors updated', kind: 'success' });
                     }
                   });
                 }}
@@ -229,10 +234,10 @@ export const SituationAnalyzer = () => {
                             const first = parts[0] || '';
                             const last = parts.slice(1).join(' ');
                             Meteor.call('people.insert', { name: first, lastName: last }, (err, pid) => {
-                              if (err || !pid) { setToast({ message: 'Create person failed', kind: 'error' }); return; }
+                              if (err || !pid) { notify({ message: 'Create person failed', kind: 'error' }); return; }
                               Meteor.call('situationActors.update', a._id, { personId: pid }, (e2) => {
-                                if (e2) { setToast({ message: 'Link failed', kind: 'error' }); return; }
-                                setToast({ message: 'Person created and linked', kind: 'success' });
+                                if (e2) { notify({ message: 'Link failed', kind: 'error' }); return; }
+                                notify({ message: 'Person created and linked', kind: 'success' });
                               });
                             });
                           }}
@@ -414,9 +419,7 @@ export const SituationAnalyzer = () => {
         <p>Delete this situation and all its actors, notes, questions and summary? This action cannot be undone.</p>
       </Modal>
 
-      {toast ? (
-        <Notify message={toast.message} kind={toast.kind || 'info'} onClose={() => setToast(null)} durationMs={3000} />
-      ) : null}
+      
 
       <Modal
         open={!!deleteActorId}

@@ -26,8 +26,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { AlarmModal } from '/imports/ui/Alarms/AlarmModal.jsx';
-import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
-import { setNotifyHandler } from '/imports/ui/utils/notify.js';
+import { NotifyProvider } from '/imports/ui/components/Notify/NotifyManager.jsx';
+import { notify } from '/imports/ui/utils/notify.js';
 import { timeUntilPrecise } from '/imports/ui/utils/date.js';
 import { CommandPalette } from '/imports/ui/CommandPalette/CommandPalette.jsx';
 import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
@@ -70,12 +70,7 @@ function App() {
   const ready = useTracker(() => Meteor.subscribe('alarms.mine').ready(), []);
   const alarms = useTracker(() => AlarmsCollection.find({}, { sort: { nextTriggerAt: 1 } }).fetch(), [ready]);
   const [activeAlarmId, setActiveAlarmId] = useState(null);
-  const [toast, setToast] = useState(null);
-  // Wire global notify to page-level toast
-  useEffect(() => {
-    setNotifyHandler((t) => setToast(t));
-    return () => setNotifyHandler(null);
-  }, []);
+  // Provider will register notify handler; nothing to do here
   const [exportOpen, setExportOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cmdDefaultTab, setCmdDefaultTab] = useState(0);
@@ -121,7 +116,7 @@ function App() {
     const effectiveTime = (a) => (a.snoozedUntilAt ? new Date(a.snoozedUntilAt).getTime() : new Date(a.nextTriggerAt).getTime());
     const firedPending = alarms.find(a => !suppressRef.current.has(a._id) && !a.enabled && !a.acknowledgedAt && (a.done || ((a.nextTriggerAt || a.snoozedUntilAt) && effectiveTime(a) <= now)));
     if (firedPending) {
-      setToast({ message: `Alarm: ${firedPending.title || 'Reminder'}`, kind: 'warning' });
+      notify({ message: `Alarm: ${firedPending.title || 'Reminder'}`, kind: 'warning' });
       setActiveAlarmId(firedPending._id);
       return;
     }
@@ -130,7 +125,7 @@ function App() {
       const id = due._id;
       const nextFields = { snoozedUntilAt: null, lastFiredAt: new Date(), enabled: false, done: true, acknowledgedAt: null };
       Meteor.call('alarms.update', id, nextFields, () => {
-        setToast({ message: `Alarm: ${due.title || 'Reminder'}`, kind: 'warning' });
+        notify({ message: `Alarm: ${due.title || 'Reminder'}`, kind: 'warning' });
         setActiveAlarmId(id);
       });
     }
@@ -141,19 +136,19 @@ function App() {
       if (!activeAlarmId) return;
       if (e.key === '1') {
         suppressModalFor(activeAlarmId);
-        Meteor.call('alarms.snooze', activeAlarmId, 5, () => setToast({ message: 'Alarm snoozed +5m', kind: 'success' }));
+        Meteor.call('alarms.snooze', activeAlarmId, 5, () => notify({ message: 'Alarm snoozed +5m', kind: 'success' }));
         setActiveAlarmId(null);
       } else if (e.key === '2') {
         suppressModalFor(activeAlarmId);
-        Meteor.call('alarms.snooze', activeAlarmId, 15, () => setToast({ message: 'Alarm snoozed +15m', kind: 'success' }));
+        Meteor.call('alarms.snooze', activeAlarmId, 15, () => notify({ message: 'Alarm snoozed +15m', kind: 'success' }));
         setActiveAlarmId(null);
       } else if (e.key === '3') {
         suppressModalFor(activeAlarmId);
-        Meteor.call('alarms.snooze', activeAlarmId, 60, () => setToast({ message: 'Alarm snoozed +1h', kind: 'success' }));
+        Meteor.call('alarms.snooze', activeAlarmId, 60, () => notify({ message: 'Alarm snoozed +1h', kind: 'success' }));
         setActiveAlarmId(null);
       } else if (e.key === 'Escape') {
         suppressModalFor(activeAlarmId);
-        Meteor.call('alarms.dismiss', activeAlarmId, () => setToast({ message: 'Alarm dismissed', kind: 'info' }));
+        Meteor.call('alarms.dismiss', activeAlarmId, () => notify({ message: 'Alarm dismissed', kind: 'info' }));
         setActiveAlarmId(null);
       }
     };
@@ -247,7 +242,7 @@ function App() {
           const message = err?.reason || err?.message || res?.error || 'Qdrant indisponible';
           setQdrantStatus({ ok: false, error: message, info: res || null });
           setQdrantModalOpen(true);
-          setToast({ message: 'Qdrant indisponible — la recherche sémantique ne fonctionnera pas', kind: 'warning' });
+          notify({ message: 'Qdrant indisponible — la recherche sémantique ne fonctionnera pas', kind: 'warning' });
         } else {
           setQdrantStatus({ ok: true, info: res });
         }
@@ -612,9 +607,8 @@ function App() {
         </ul>
         <p className="muted">Tip: ⌘G / Ctrl+G · ↑/↓ to navigate · Enter or type the letter</p>
       </Modal>
-      {toast ? (
-        <Notify message={toast.message} kind={toast.kind || 'info'} onClose={() => setToast(null)} durationMs={3000} />
-      ) : null}
+      {/* Notification provider renders stacked toasts globally */}
+      <NotifyProvider />
       <Modal
         open={qdrantModalOpen}
         onClose={() => setQdrantModalOpen(false)}
@@ -626,11 +620,11 @@ function App() {
               if (err || !res || res.error || !res.exists) {
                 const message = err?.reason || err?.message || res?.error || 'Toujours indisponible';
                 setQdrantStatus({ ok: false, error: message, info: res || null });
-                setToast({ message: 'Qdrant toujours indisponible', kind: 'error' });
+                notify({ message: 'Qdrant toujours indisponible', kind: 'error' });
                 return;
               }
               setQdrantStatus({ ok: true, info: res });
-              setToast({ message: 'Qdrant est de nouveau disponible', kind: 'success' });
+              notify({ message: 'Qdrant est de nouveau disponible', kind: 'success' });
               setQdrantModalOpen(false);
             });
           }}>Réessayer</button>,
@@ -665,7 +659,7 @@ function App() {
           <div className="exportModalButtons">
             <button className="btn" onClick={() => {
               Meteor.call('app.exportAll', (err, data) => {
-                if (err) { console.error('export failed', err); setToast({ message: `Export failed: ${err?.reason || err?.message || 'Unknown error'}` , kind: 'error' }); return; }
+                if (err) { console.error('export failed', err); notify({ message: `Export failed: ${err?.reason || err?.message || 'Unknown error'}` , kind: 'error' }); return; }
                 try {
                   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                   const url = URL.createObjectURL(blob);
@@ -676,10 +670,10 @@ function App() {
                   a.click();
                   a.remove();
                   URL.revokeObjectURL(url);
-                  setToast({ message: 'Export downloaded', kind: 'success' });
+                  notify({ message: 'Export downloaded', kind: 'success' });
                 } catch (e) {
                   console.error('export save failed', e);
-                  setToast({ message: 'Export failed', kind: 'error' });
+                  notify({ message: 'Export failed', kind: 'error' });
                 }
               });
             }}>
@@ -689,8 +683,8 @@ function App() {
               const handleStatus = (jobId) => {
                 const poll = () => {
                   Meteor.call('app.exportArchiveStatus', jobId, (e2, st) => {
-                    if (e2 || !st || !st.exists) { setToast({ message: 'Archive failed', kind: 'error' }); return; }
-                    if (st.error) { setToast({ message: `Archive failed: ${st.error?.message || 'Unknown error'}`, kind: 'error' }); return; }
+                    if (e2 || !st || !st.exists) { notify({ message: 'Archive failed', kind: 'error' }); return; }
+                    if (st.error) { notify({ message: `Archive failed: ${st.error?.message || 'Unknown error'}`, kind: 'error' }); return; }
                     if (!st.ready) { setTimeout(poll, 800); return; }
                     setExportOpen(false);
                     const link = `/download-export/${jobId}`;
@@ -700,13 +694,13 @@ function App() {
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
-                    setToast({ message: 'Archive download started', kind: 'success' });
+                    notify({ message: 'Archive download started', kind: 'success' });
                   });
                 };
                 poll();
               };
               Meteor.call('app.exportArchiveStart', (err, res) => {
-                if (err || !res) { setToast({ message: 'Archive start failed', kind: 'error' }); return; }
+                if (err || !res) { notify({ message: 'Archive start failed', kind: 'error' }); return; }
                 handleStatus(res.jobId);
               });
             }}>

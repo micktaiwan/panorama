@@ -4,7 +4,6 @@ import * as XLSX from 'xlsx';
 //
 import { Meteor } from 'meteor/meteor';
 //
-import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { parseHashRoute } from '/imports/ui/router.js';
 import { parseWorkbook } from '/imports/ui/Budget/import/parseWorkbook.js';
@@ -18,7 +17,7 @@ import { ImportTab } from '/imports/ui/Budget/tabs/ImportTab/ImportTab.jsx';
 import { ImportSettings } from '/imports/ui/Budget/tabs/ImportSettings/ImportSettings.jsx';
 import { filterByQuery, applyDepartmentFilter, applyTeamFilter, filterByDateRange, applyCurrencyFilter } from '/imports/ui/Budget/utils/filters.js';
 import { useBudgetData } from '/imports/ui/Budget/hooks/useBudgetData.js';
-import { setNotifyHandler } from '/imports/ui/utils/notify.js';
+import { notify, setNotifyHandler } from '/imports/ui/utils/notify.js';
 
 const safe = (v) => (v === undefined || v === null ? '' : v);
 
@@ -28,6 +27,7 @@ export const BudgetPage = () => {
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState('');
   
+  // Legacy setToast still passed to child tabs; children will call it and we bridge to global notify in effect
   const [toast, setToast] = useState(null);
   const [resetOpen, setResetOpen] = useState(false);
 
@@ -45,10 +45,16 @@ export const BudgetPage = () => {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   React.useEffect(() => {
-    // wire Notify handler to page-level toast
-    setNotifyHandler((t) => setToast(t));
+    setNotifyHandler((t) => notify(t));
     return () => setNotifyHandler(null);
   }, []);
+  React.useEffect(() => {
+    if (!toast) return;
+    notify(toast);
+    // Clear local toast after forwarding so components keep working without stacking locally
+    const t = setTimeout(() => setToast(null), 0);
+    return () => clearTimeout(t);
+  }, [toast?.message, toast?.kind]);
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [vendorsDept, setVendorsDept] = useState('all');
   const [reportDept, setReportDept] = useState('all');
@@ -298,9 +304,7 @@ export const BudgetPage = () => {
           />
         )}
       </div>
-      {toast ? (
-        <Notify message={toast.message} kind={toast.kind || 'info'} onClose={() => setToast(null)} durationMs={3000} />
-      ) : null}
+      
       <Modal
         open={resetOpen}
         onClose={() => setResetOpen(false)}
@@ -312,8 +316,8 @@ export const BudgetPage = () => {
             className="btn danger"
             onClick={() => {
               Meteor.call('budget.resetAll', (err, res) => {
-                if (err) { console.error('budget.resetAll failed', err); setToast({ message: 'Reset failed', kind: 'error' }); return; }
-                setToast({ message: `Deleted ${res?.deleted || 0} lines`, kind: 'success' });
+                if (err) { console.error('budget.resetAll failed', err); notify({ message: 'Reset failed', kind: 'error' }); return; }
+                notify({ message: `Deleted ${res?.deleted || 0} lines`, kind: 'success' });
                 setResetOpen(false);
               });
             }}

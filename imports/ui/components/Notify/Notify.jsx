@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { playBeep } from '../../utils/sound.js';
 import './Notify.css';
 
-export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, className = '', leftPanel = null }) => {
+export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, className = '', leftPanel = null, stacked = false }) => {
   const [visible, setVisible] = useState(true);
   const [shouldUseInApp, setShouldUseInApp] = useState(true);
 
@@ -36,7 +36,7 @@ export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, cla
   }, [durationMs, onClose, shouldUseInApp]);
 
   if (!visible || !shouldUseInApp) return null;
-  const classes = ['notify', kind, className].filter(Boolean).join(' ');
+  const classes = ['notify', kind, stacked ? 'stacked' : '', className].filter(Boolean).join(' ');
   const kindToColor = {
     error: '#ef4444',
     success: '#10b981',
@@ -72,5 +72,6 @@ Notify.propTypes = {
   onClose: PropTypes.func,
   durationMs: PropTypes.number,
   className: PropTypes.string,
-  leftPanel: PropTypes.oneOfType([PropTypes.node, PropTypes.string, PropTypes.bool])
+  leftPanel: PropTypes.oneOfType([PropTypes.node, PropTypes.string, PropTypes.bool]),
+  stacked: PropTypes.bool
 };
