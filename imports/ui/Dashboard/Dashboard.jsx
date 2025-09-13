@@ -5,20 +5,19 @@ import { TasksCollection } from '/imports/api/tasks/collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import './Dashboard.css';
-import { formatDate, formatDateTime, deadlineSeverity } from '/imports/ui/utils/date.js';
+import { formatDateTime, deadlineSeverity } from '/imports/ui/utils/date.js';
 import { ProjectsOverview } from '/imports/ui/Dashboard/ProjectsOverview.jsx';
-import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { TaskRow } from '/imports/ui/components/TaskRow/TaskRow.jsx';
 
 export const Dashboard = () => {
   
-  const loadingTasks = useSubscribe('tasks');
-  const loadingProjects = useSubscribe('projects');
-  const loadingSessions = useSubscribe('noteSessions');
+  useSubscribe('tasks');
+  useSubscribe('projects');
+  useSubscribe('noteSessions');
   const rawTasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ] }, { sort: { createdAt: 1 } }));
   const allTasks = useFind(() => TasksCollection.find({}, { fields: { status: 1, deadline: 1, createdAt: 1, statusChangedAt: 1, title: 1, projectId: 1 } }));
-  const allTasksWithFlags = useFind(() => TasksCollection.find({}, { fields: { isUrgent: 1, isImportant: 1, status: 1, title: 1, projectId: 1 } }));
+  // flags are not needed on this screen beyond status/deadline metrics
   const projects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1, colorLabel: 1, isFavorite: 1, favoriteRank: 1 } }));
   const projectsForFilter = projects; // ordering handled in ProjectFilters
   const standaloneSessions = useFind(() => NoteSessionsCollection.find({ $or: [ { projectId: { $exists: false } }, { projectId: null }, { projectId: '' } ] }, { sort: { createdAt: -1 } }));
@@ -30,14 +29,14 @@ export const Dashboard = () => {
 
   const tasks = useMemo(() => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
-    const statusRank = (s) => (s === 'in_progress' ? 0 : 1); // in_progress before todo
+    const statusRank = (s) => (s === 'in_progress' ? 0 : 1); // in_progress before other statuses
     return [...rawTasks].sort((a, b) => {
       const ad = toTime(a.deadline);
       const bd = toTime(b.deadline);
       if (ad !== bd) return ad - bd; // earlier deadlines first; nulls go last (Infinity)
       const as = statusRank(a.status || 'todo');
       const bs = statusRank(b.status || 'todo');
-      if (as !== bs) return as - bs; // in_progress before todo
+      if (as !== bs) return as - bs; // in_progress before other statuses
       const ac = new Date(a.createdAt).getTime();
       const bc = new Date(b.createdAt).getTime();
       return ac - bc; // earlier created first
@@ -91,11 +90,7 @@ export const Dashboard = () => {
     });
   };
 
-  const toggleFlag = (t, key) => {
-    if (!t || !t._id) return;
-    const next = { [key]: !t[key] };
-    Meteor.call('tasks.update', t._id, next);
-  };
+  // no toggleFlag on dashboard; use inline controls in TaskRow
 
   // Avoid loading flicker on route changes; render with reactive data
 
@@ -215,7 +210,13 @@ export const Dashboard = () => {
           <ul className="sessionList">
             {standaloneSessions.map(s => (
               <li key={s._id} className="sessionItem">
-                <a href={`#/sessions/${s._id}`}>Open session</a>
+                <a
+                  href={`#/sessions/${s._id}`}
+                  className="sessionTitle"
+                  title={s.name?.trim() ? s.name : '(untitled session)'}
+                >
+                  {s.name?.trim() ? s.name : '(untitled session)'}
+                </a>
                 <span className="sessionMeta"> · {formatDateTime(s.createdAt)}</span>
               </li>
             ))}

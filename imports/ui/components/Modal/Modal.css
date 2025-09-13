@@ -15,6 +15,9 @@
   width: 520px;
   max-width: 96vw;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
 }
 
 .modalPanel.wide {
@@ -30,13 +33,53 @@
 }
 
 .modalIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #111827;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #c7d2fe;
   margin-right: 8px;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .modalTitle { font-weight: 600; flex: 1; display: flex; align-items: center; }
 
 .modalBody { padding: 14px; }
+
+/* Split layout */
+.modalBody.split {
+  padding: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.modalSplit {
+  display: flex;
+  height: 100%;
+}
+
+.modalAside {
+  flex: 0 0 100px;
+  width: 100px;
+  background: #0f1420;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modalAside img { max-width: 72px; max-height: 72px; border-radius: 12px; }
+
+.modalMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  padding: 14px;
+}
 
 .modalFooter {
   padding: 12px 14px;

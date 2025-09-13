@@ -2,14 +2,35 @@
   position: fixed;
   bottom: 16px;
   right: 16px;
-  background: #1b1e26;
+  background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   color: var(--text);
-  padding: 10px 12px;
-  display: inline-flex;
-  align-items: center;
+  display: block;
   z-index: 10050; /* above ChatWidget (9999) */
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+
+.notifySplit { display: flex; max-width: min(560px, 92vw); }
+.notifyAside {
+  flex: 0 0 50px;
+  width: 50px;
+  background: #0f1420;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notifyAside img { max-width: 36px; max-height: 36px; border-radius: 8px; }
+.notifyAside svg { width: 36px; height: 36px; }
+
+.notifyMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
 }
 
 .notify.info { border-color: var(--primary); }

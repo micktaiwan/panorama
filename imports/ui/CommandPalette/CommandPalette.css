@@ -1,0 +1,13 @@
+.cmdTabs { display: flex; align-items: center; margin-bottom: 12px; }
+.cmdTab { padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 6px; }
+.cmdTab + .cmdTab { margin-left: 8px; }
+.cmdTab.active { border-color: var(--primary); color: var(--primary); }
+.createTaskPane { margin-top: 8px; }
+.formRow { display: flex; align-items: center; }
+.formRow label { width: 140px; color: var(--muted); }
+.formRow .afInput { flex: 1; }
+.formRow .afSelect { flex: 1; }
+.mt8 { margin-top: 8px; }
+.mt12 { margin-top: 12px; }
+.ml8 { margin-left: 8px; }
+

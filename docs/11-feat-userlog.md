@@ -34,10 +34,11 @@ The team discussed building a specialized “board journal” feature to log int
   - Filters entries server‑side by window, sends projects catalog and local ISO timestamps with timezone.
   - Logs prompts and raw model output on the server for traceability.
   - Returns a JSON object with `summary` and `tasks[]` (each task may include `sourceLogIds` of journal entries).
-- UI displays a second‑level modal with:
+- UI displays an inline summary panel with:
   - Summary text and Copy button.
   - Task suggestions: editable project (select) and deadline (inline date), Create buttons, and a Create‑all action.
   - Reopen summary button restores the last generated payload from localStorage.
+  - When a custom prompt is provided, the tasks panel is hidden and the summary expands to full width (to focus on the summary text).
 
 ### Provenance linking and duplicate protection
 - When creating a task from a suggestion that includes `sourceLogIds`, the task stores:
@@ -45,6 +46,16 @@ The team discussed building a specialized “board journal” feature to log int
 - Before insert, the server rejects duplicates when any `logEntryIds` is already referenced by another task.
 - In the summary modal, suggestions are dimmed and disabled only if a real DB task exists with overlapping `logEntryIds`.
 - In the journal list, a green link icon 🔗 appears next to the timestamp when a task exists for that line; clicking it closes the journal and navigates to the project.
+
+### Journal list visibility & loading
+- By default, the journal list shows the last 24 hours of entries. This is separate from the AI summary window.
+- A “Load more (older 1 day)” action reveals entries one additional day per click. The current cutoff is shown next to the button as a relative time label (e.g., “since 1 day ago”).
+- Data fetching avoids flicker when expanding the range so the list does not jump unexpectedly.
+
+### Suggested tasks UI
+- Suggested tasks in the summary panel are styled as compact cards:
+  - Border with rounded corners, inner padding, light panel background, and a subtle hover highlight.
+  - Suggestions already linked to an existing DB task are dimmed/disabled. A “Hide existing” toggle (enabled by default and persisted in localStorage) can hide them entirely.
 
 ### Timezone accuracy
 - The server provides Now/Since in local ISO with offset and an explicit IANA timezone to anchor the model.
