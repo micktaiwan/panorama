@@ -53,19 +53,38 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
     if (!r) return;
     if (r.kind === 'link' && r.id) {
       const id = String(r.id).split(':').pop();
-      const l = LinksCollection.findOne({ _id: id }, { fields: { url: 1 } });
       const ensureHttpUrl = (url) => {
         if (!url || typeof url !== 'string') return url;
         const trimmed = url.trim();
         return /^(https?:)\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
       };
-      const href = ensureHttpUrl(l?.url || '');
-      if (href) {
+      const tryOpen = (href) => {
+        if (!href) return false;
         window.open(href, '_blank', 'noopener,noreferrer');
+        return true;
+      };
+      // Prefer URL from the result itself
+      const directHref = ensureHttpUrl(r?.url || '');
+      if (tryOpen(directHref)) {
         Meteor.call('links.registerClick', id);
         if (onAfterNavigate) onAfterNavigate(index);
         return;
       }
+      // Try client-side cache
+      const l = LinksCollection.findOne({ _id: id }, { fields: { url: 1 } });
+      const localHref = ensureHttpUrl(l?.url || '');
+      if (tryOpen(localHref)) {
+        Meteor.call('links.registerClick', id);
+        if (onAfterNavigate) onAfterNavigate(index);
+        return;
+      }
+      // Fallback to server to get URL and register click
+      Meteor.call('links.getUrl', id, { registerClick: true }, (err, href) => {
+        if (!err && tryOpen(href)) {
+          if (onAfterNavigate) onAfterNavigate(index);
+        }
+      });
+      return;
     }
     if (r.kind === 'project' && r.id) {
       const id = String(r.id).split(':').pop();

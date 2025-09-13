@@ -4,6 +4,7 @@ import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { ProjectsCollection } from '/imports/api/projects/collections';
+import { LinksCollection } from '/imports/api/links/collections';
 import { SearchBar } from '/imports/ui/components/Search/SearchBar.jsx';
 import { SearchResults } from '/imports/ui/components/Search/SearchResults.jsx';
 import { SearchTypeFilters } from '/imports/ui/components/Search/SearchTypeFilters.jsx';
@@ -115,6 +116,41 @@ const SearchPane = ({ onClose }) => {
 
   const navigateForSearchResult = (result) => {
     const idFrom = (raw) => String(raw).split(':').pop();
+
+    // Open external links directly in a new tab (and register click)
+    if (result?.kind === 'link' && result?.id) {
+      const id = idFrom(result.id);
+      const tryOpen = (href) => {
+        if (!href) return false;
+        window.open(href, '_blank', 'noopener,noreferrer');
+        return true;
+      };
+      const ensureHttpUrl = (url) => {
+        if (!url || typeof url !== 'string') return url;
+        const trimmed = url.trim();
+        return /^(https?:)\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+      };
+      // Prefer URL provided in search result
+      const directHref = ensureHttpUrl(result?.url || '');
+      if (tryOpen(directHref)) {
+        Meteor.call('links.registerClick', id);
+        return;
+      }
+      // Then try client cache
+      const l = LinksCollection.findOne({ _id: id }, { fields: { url: 1 } });
+      const localHref = ensureHttpUrl(l?.url || '');
+      if (tryOpen(localHref)) {
+        Meteor.call('links.registerClick', id);
+        return;
+      }
+      // Fallback: fetch URL from server and open it
+      Meteor.call('links.getUrl', id, { registerClick: true }, (err, href) => {
+        if (err) { console.error('links.getUrl failed', err); return; }
+        tryOpen(href);
+      });
+      return;
+    }
+
     const routeByKind = {
       project: (r) => (r?.id ? { name: 'project', projectId: idFrom(r.id) } : null),
       task: (r) => (r?.projectId ? { name: 'project', projectId: r.projectId } : null),

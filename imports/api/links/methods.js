@@ -66,6 +66,17 @@ Meteor.methods({
   async 'links.registerClick'(linkId) {
     check(linkId, String);
     return LinksCollection.updateAsync(linkId, { $inc: { clicksCount: 1 }, $set: { lastClickedAt: new Date(), updatedAt: new Date() } });
+  },
+  async 'links.getUrl'(linkId, opts = {}) {
+    check(linkId, String);
+    const registerClick = !!(opts && opts.registerClick);
+    const l = await LinksCollection.findOneAsync({ _id: linkId }, { fields: { url: 1 } });
+    if (!l || !l.url) throw new Meteor.Error('not-found', 'Link not found');
+    const url = ensureHttpUrl(l.url);
+    if (registerClick) {
+      await LinksCollection.updateAsync(linkId, { $inc: { clicksCount: 1 }, $set: { lastClickedAt: new Date(), updatedAt: new Date() } });
+    }
+    return url;
   }
 });
 

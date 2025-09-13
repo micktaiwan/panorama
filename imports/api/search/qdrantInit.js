@@ -1,11 +1,11 @@
 import { Meteor } from 'meteor/meteor';
+import { getQdrantUrl } from '/imports/api/_shared/config';
 
 // Initialize Qdrant collection on server start (if configured)
 Meteor.startup(async () => {
-  const url = Meteor.settings && Meteor.settings.qdrantUrl;
+  const url = getQdrantUrl();
   if (!url) {
-    // Qdrant not configured; skip
-    console.warn('[qdrant] Qdrant not configured; skipping initialization');
+    console.warn('[qdrant] Disabled (no URL configured); skipping initialization');
     return;
   }
 

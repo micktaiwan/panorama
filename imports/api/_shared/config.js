@@ -35,7 +35,8 @@ export const getPennylaneConfig = () => {
 export const getQdrantUrl = () => {
   const pref = getPrefs();
   const fromPrefs = pref?.qdrantUrl && pref.qdrantUrl.trim();
-  return fromPrefs || process.env.QDRANT_URL || Meteor.settings?.qdrantUrl || 'http://localhost:6333';
+  const url = fromPrefs || process.env.QDRANT_URL || Meteor.settings?.qdrantUrl || null;
+  return url && String(url).trim() ? String(url).trim() : null;
 };
 
 
