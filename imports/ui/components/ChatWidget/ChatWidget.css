@@ -10,18 +10,6 @@
   bottom: 0;
 }
 
-.ChatWidget__fab {
-  width: 48px;
-  height: 48px;
-  border-radius: 9999px;
-  border: none;
-  background: #0b5fff;
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.2);
-  cursor: pointer;
-  font-size: 20px;
-}
-
 .ChatWidget__panel {
   position: absolute;
   right: 0;
@@ -194,25 +182,8 @@
   box-shadow: 0 0 0 2px rgba(11,95,255,0.25);
 }
 
-.ChatWidget__send {
-  min-width: 88px;
-  background: #0b5fff;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  height: 36px;
-  padding: 0 12px;
-}
-
-.ChatWidget__send:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 /* Focus visibility for keyboard users */
-.ChatWidget__close:focus-visible,
-.ChatWidget__send:focus-visible,
-.ChatWidget__fab:focus-visible {
+.ChatWidget__close:focus-visible {
   outline: 2px solid #0b5fff;
   outline-offset: 2px;
 }
