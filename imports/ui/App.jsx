@@ -24,6 +24,7 @@ import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy 
 import { CSS } from '@dnd-kit/utilities';
 import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { AlarmModal } from '/imports/ui/Alarms/AlarmModal.jsx';
 import { Notify } from '/imports/ui/components/Notify/Notify.jsx';
 import { setNotifyHandler } from '/imports/ui/utils/notify.js';
 import { formatDateTime, timeUntilPrecise } from '/imports/ui/utils/date.js';
@@ -112,13 +113,8 @@ function App() {
     const effectiveTime = (a) => (a.snoozedUntilAt ? new Date(a.snoozedUntilAt).getTime() : new Date(a.nextTriggerAt).getTime());
     const firedPending = alarms.find(a => !suppressRef.current.has(a._id) && !a.enabled && !a.acknowledgedAt && (a.done || ((a.nextTriggerAt || a.snoozedUntilAt) && effectiveTime(a) <= now)));
     if (firedPending) {
-      const isPomo = (firedPending.title || '').toLowerCase() === 'pomodoro';
       setToast({ message: `Alarm: ${firedPending.title || 'Reminder'}`, kind: 'warning' });
-      if (isPomo) {
-        Meteor.call('alarms.remove', firedPending._id, () => {});
-      } else {
-        setActiveAlarmId(firedPending._id);
-      }
+      setActiveAlarmId(firedPending._id);
       return;
     }
     const due = alarms.find(a => !suppressRef.current.has(a._id) && a.enabled && (a.nextTriggerAt || a.snoozedUntilAt) && effectiveTime(a) <= now);
@@ -126,13 +122,8 @@ function App() {
       const id = due._id;
       const nextFields = { snoozedUntilAt: null, lastFiredAt: new Date(), enabled: false, done: true, acknowledgedAt: null };
       Meteor.call('alarms.update', id, nextFields, () => {
-        const isPomo = (due.title || '').toLowerCase() === 'pomodoro';
         setToast({ message: `Alarm: ${due.title || 'Reminder'}`, kind: 'warning' });
-        if (isPomo) {
-          Meteor.call('alarms.remove', id, () => {});
-        } else {
-          setActiveAlarmId(id);
-        }
+        setActiveAlarmId(id);
       });
     }
   }, [JSON.stringify(alarms)]);
@@ -575,26 +566,12 @@ function App() {
           <ImportTasks />
         </div>
       )}
-      <Modal
+      <AlarmModal
         open={!!activeAlarmId}
+        alarm={activeAlarmId ? alarms.find(a => a._id === activeAlarmId) : null}
         onClose={() => setActiveAlarmId(null)}
-        title={activeAlarmId ? `${alarms.find(a => a._id === activeAlarmId)?.title || ''}` : 'Alarm'}
-        icon={<span role="img" aria-label="bell">🔔</span>}
-        actions={[
-          <button key="s5" className="btn" onClick={() => { if (activeAlarmId) { suppressModalFor(activeAlarmId); const until = new Date(Date.now() + 5 * 60000); Meteor.call('alarms.snooze', activeAlarmId, 5, (err) => { if (err) { setToast({ message: 'Snooze failed', kind: 'error' }); } else { setToast({ message: `Alarm snoozed until ${formatDateTime(until)}`, kind: 'success' }); } }); } setActiveAlarmId(null); }}>Snooze +5m</button>,
-          <button key="s15" className="btn ml8" onClick={() => { if (activeAlarmId) { suppressModalFor(activeAlarmId); const until = new Date(Date.now() + 15 * 60000); Meteor.call('alarms.snooze', activeAlarmId, 15, (err) => { if (err) { setToast({ message: 'Snooze failed', kind: 'error' }); } else { setToast({ message: `Alarm snoozed until ${formatDateTime(until)}`, kind: 'success' }); } }); } setActiveAlarmId(null); }}>+15m</button>,
-          <button key="s60" className="btn ml8" onClick={() => { if (activeAlarmId) { suppressModalFor(activeAlarmId); const until = new Date(Date.now() + 60 * 60000); Meteor.call('alarms.snooze', activeAlarmId, 60, (err) => { if (err) { setToast({ message: 'Snooze failed', kind: 'error' }); } else { setToast({ message: `Alarm snoozed until ${formatDateTime(until)}`, kind: 'success' }); } }); } setActiveAlarmId(null); }}>+1h</button>,
-          <button key="dismiss" className="btn ml8" onClick={() => { if (activeAlarmId) { suppressModalFor(activeAlarmId); Meteor.call('alarms.dismiss', activeAlarmId, (err) => { if (err) { setToast({ message: 'Dismiss failed', kind: 'error' }); } else { setToast({ message: 'Alarm dismissed', kind: 'info' }); } }); } setActiveAlarmId(null); }}>Dismiss</button>
-        ]}
-      >
-        {activeAlarmId ? (() => { const a = alarms.find(x => x._id === activeAlarmId); return a ? (
-          a.snoozedUntilAt ? (
-            <div>Now snoozed until: {new Date(a.snoozedUntilAt).toLocaleString()} — original: {new Date(a.nextTriggerAt).toLocaleString()}</div>
-          ) : (
-            <div>Scheduled: {new Date(a.nextTriggerAt).toLocaleString()}</div>
-          )
-        ) : null; })() : null}
-      </Modal>
+        onBeforeAction={(id) => suppressModalFor(id)}
+      />
       <Modal
         open={goOpen}
         onClose={() => setGoOpen(false)}
