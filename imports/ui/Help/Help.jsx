@@ -6,33 +6,33 @@ export const Help = () => {
     <div className="help">
       <h2 className="helpTitle">Help & Shortcuts</h2>
       <ul className="helpList">
-        <li className="headingSection headingEditing"><strong>Editing</strong></li>
+        <li className="headingSection headingEditing"><span className="bold">Editing</span></li>
         <ul>
-          <li><strong>Enter</strong> — validate an inline edit (title, fields). In textarea: Enter validates; Shift+Enter inserts a new line.</li>
-          <li><strong>Esc</strong> — cancel inline editing (input and textarea), restore previous value.</li>
-          <li><strong>Shift + Enter</strong> (on a task title) — validate and create a new task, focused</li>
-          <li><strong>Click on deadline</strong> — edit with datepicker; <strong>Esc</strong> cancels; <strong>Enter</strong> validates</li>
+          <li><span className="bold">Enter</span> — validate an inline edit (title, fields). In textarea: Enter validates; Shift+Enter inserts a new line.</li>
+          <li><span className="bold">Esc</span> — cancel inline editing (input and textarea), restore previous value.</li>
+          <li><span className="bold">Shift + Enter</span> (on a task title) — validate and create a new task, focused</li>
+          <li><span className="bold">Click on deadline</span> — edit with datepicker; <span className="bold">Esc</span> cancels; <span className="bold">Enter</span> validates</li>
         </ul>
-        <li className="headingSection headingAlarm"><strong>Alarm Management</strong></li>
+        <li className="headingSection headingAlarm"><span className="bold">Alarm Management</span></li>
         <ul>
-          <li><strong>Alarm modal</strong> — <strong>1</strong> snooze +5m, <strong>2</strong> +15m, <strong>3</strong> +1h, <strong>Esc</strong> dismiss</li>
+          <li><span className="bold">Alarm modal</span> — <span className="bold">1</span> snooze +5m, <span className="bold">2</span> +15m, <span className="bold">3</span> +1h, <span className="bold">Esc</span> dismiss</li>
         </ul>
-        <li className="headingSection headingSearch"><strong>Search and Navigation</strong></li>
+        <li className="headingSection headingSearch"><span className="bold">Search and Navigation</span></li>
         <ul>
-          <li><strong>Global search</strong> — <strong>⌘K</strong> (macOS) / <strong>Ctrl+K</strong> (Windows/Linux) opens the search anywhere</li>
-          <li><strong>Search results</strong> — <strong>↑/↓</strong> navigate results; <strong>Enter</strong> opens the selection</li>
-          <li><strong>Go to screen</strong> — <strong>⌘G</strong> (macOS) / <strong>Ctrl+G</strong> opens the palette; <strong>↑/↓</strong> navigate; <strong>Enter</strong> opens; or type the letter</li>
-          <li><strong>Back navigation</strong> — <strong>⌘ + ←</strong> (macOS) / <strong>Ctrl + ←</strong> (Windows/Linux) goes back to previous page</li>
-          <li><strong>Forward navigation</strong> — <strong>⌘ + →</strong> (macOS) / <strong>Ctrl + →</strong> (Windows/Linux) goes forward to next page</li>
+          <li><span className="bold">Global search</span> — <span className="bold">⌘K</span> (macOS) / <span className="bold">Ctrl+K</span> (Windows/Linux) opens the search anywhere</li>
+          <li><span className="bold">Search results</span> — <span className="bold">↑/↓</span> navigate results; <span className="bold">Enter</span> opens the selection</li>
+          <li><span className="bold">Go to screen</span> — <span className="bold">⌘G</span> (macOS) / <span className="bold">Ctrl+G</span> opens the palette; <span className="bold">↑/↓</span> navigate; <span className="bold">Enter</span> opens; or type the letter</li>
+          <li><span className="bold">Back navigation</span> — <span className="bold">⌘ + ←</span> (macOS) / <span className="bold">Ctrl + ←</span> (Windows/Linux) goes back to previous page</li>
+          <li><span className="bold">Forward navigation</span> — <span className="bold">⌘ + →</span> (macOS) / <span className="bold">Ctrl + →</span> (Windows/Linux) goes forward to next page</li>
         </ul>
-        <li className="headingSection headingFeatures"><strong>Special Features</strong></li>
+        <li className="headingSection headingFeatures"><span className="bold">Special Features</span></li>
         <ul>
-          <li><strong>AI Chat</strong> — <strong>⌘D</strong> toggle open/close, <strong>⌘⇧D</strong> toggle docked sidebar</li>
-          <li><strong>Journal</strong> — <strong>⌘J</strong> opens the Journal page</li>
-          <li><strong>Eisenhower</strong> — <strong>⌘E</strong> (macOS) / <strong>Ctrl+E</strong> (Windows/Linux) opens the Eisenhower page</li>
-          <li><strong>Cycle fields</strong> — <strong>⌘I</strong> (macOS) / <strong>Ctrl+I</strong> (Windows/Linux) focuses the next visible input/textarea; repeat to cycle</li>
-          <li><strong>Reset zoom</strong> — <strong>⌘⇧0</strong> (macOS) / <strong>Ctrl+Shift+0</strong> (Windows/Linux)</li>
-          <li><strong>Toggle fullscreen</strong> — <strong>⌘⇧9</strong> (macOS) / <strong>Ctrl+Shift+9</strong> (Windows/Linux)</li>
+          <li><span className="bold">AI Chat</span> — <span className="bold">⌘D</span> toggle open/close, <span className="bold">⌘⇧D</span> toggle docked sidebar</li>
+          <li><span className="bold">Journal</span> — <span className="bold">⌘J</span> opens the Journal page</li>
+          <li><span className="bold">Eisenhower</span> — <span className="bold">⌘E</span> (macOS) / <span className="bold">Ctrl+E</span> (Windows/Linux) opens the Eisenhower page</li>
+          <li><span className="bold">Cycle fields</span> — <span className="bold">⌘I</span> (macOS) / <span className="bold">Ctrl+I</span> (Windows/Linux) focuses the next visible input/textarea; repeat to cycle</li>
+          <li><span className="bold">Reset zoom</span> — <span className="bold">⌘⇧0</span> (macOS) / <span className="bold">Ctrl+Shift+0</span> (Windows/Linux)</li>
+          <li><span className="bold">Toggle fullscreen</span> — <span className="bold">⌘⇧9</span> (macOS) / <span className="bold">Ctrl+Shift+9</span> (Windows/Linux)</li>
         </ul>
       </ul>
     </div>
