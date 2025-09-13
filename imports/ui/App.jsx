@@ -65,6 +65,24 @@ function App() {
   const [searchCached, setSearchCached] = useState(false);
   const [searchCacheSize, setSearchCacheSize] = useState(0);
   const [searchLastKey, setSearchLastKey] = useState('');
+  // Go to screen palette
+  const [goOpen, setGoOpen] = useState(false);
+  const goItems = [
+    { key: 'd', label: 'Dashboard', route: { name: 'home' } },
+    { key: 'j', label: 'Journal', route: { name: 'userlog' } },
+    { key: 'e', label: 'Eisenhower', route: { name: 'eisenhower' } },
+    { key: 'b', label: 'Budget', route: { name: 'budget' } },
+    { key: 'r', label: 'Reporting', route: { name: 'reporting' } },
+    { key: 'p', label: 'People', route: { name: 'people' } },
+    { key: 'f', label: 'Files', route: { name: 'files' } },
+    { key: 'l', label: 'Links', route: { name: 'links' } },
+    { key: 'a', label: 'Alarms', route: { name: 'alarms' } },
+    { key: 's', label: 'Situation Analyzer', route: { name: 'situationAnalyzer' } },
+    { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
+    { key: 'h', label: 'Help', route: { name: 'help' } },
+    { key: 'c', label: 'Preferences', route: { name: 'preferences' } },
+  ];
+  const [goActiveIdx, setGoActiveIdx] = useState(0);
   const [searchDirty, setSearchDirty] = useState(false);
   const [searchActiveIdx, setSearchActiveIdx] = useState(-1);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -163,6 +181,20 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Global shortcut: Cmd/Ctrl + G → open Go to screen palette
+  useEffect(() => {
+    const onOpenGo = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (!hasMod || key !== 'g') return;
+      e.preventDefault();
+      setGoOpen(true);
+      setGoActiveIdx(0);
+    };
+    window.addEventListener('keydown', onOpenGo);
+    return () => window.removeEventListener('keydown', onOpenGo);
+  }, []);
+
   // Global shortcut: Cmd/Ctrl + J → open UserLog page
   useEffect(() => {
     const onOpenUserLog = (e) => {
@@ -174,6 +206,19 @@ function App() {
     };
     window.addEventListener('keydown', onOpenUserLog);
     return () => window.removeEventListener('keydown', onOpenUserLog);
+  }, []);
+
+  // Global shortcut: Cmd/Ctrl + E → open Eisenhower page
+  useEffect(() => {
+    const onOpenEisenhower = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (!hasMod || key !== 'e') return;
+      e.preventDefault();
+      navigateTo({ name: 'eisenhower' });
+    };
+    window.addEventListener('keydown', onOpenEisenhower);
+    return () => window.removeEventListener('keydown', onOpenEisenhower);
   }, []);
 
   // Qdrant health check on startup
@@ -253,6 +298,27 @@ function App() {
     window.addEventListener('keydown', onCycleInputs);
     return () => window.removeEventListener('keydown', onCycleInputs);
   }, []);
+
+  // Keyboard handling when Go to screen palette is open
+  useEffect(() => {
+    if (!goOpen) return;
+    const onGoKeys = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      if (key === 'escape') { e.preventDefault(); setGoOpen(false); return; }
+      if (key === 'arrowdown') { e.preventDefault(); setGoActiveIdx((i) => (i + 1) % goItems.length); return; }
+      if (key === 'arrowup') { e.preventDefault(); setGoActiveIdx((i) => (i - 1 + goItems.length) % goItems.length); return; }
+      if (key === 'enter') {
+        e.preventDefault();
+        const item = goItems[goActiveIdx];
+        if (item) { navigateTo(item.route); setGoOpen(false); }
+        return;
+      }
+      const hit = goItems.find(it => it.key === key);
+      if (hit) { e.preventDefault(); navigateTo(hit.route); setGoOpen(false); }
+    };
+    window.addEventListener('keydown', onGoKeys);
+    return () => window.removeEventListener('keydown', onGoKeys);
+  }, [goOpen, goActiveIdx]);
 
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
@@ -528,6 +594,30 @@ function App() {
             <div>Scheduled: {new Date(a.nextTriggerAt).toLocaleString()}</div>
           )
         ) : null; })() : null}
+      </Modal>
+      <Modal
+        open={goOpen}
+        onClose={() => setGoOpen(false)}
+        title="Go to screen"
+        actions={[
+          <button key="close" className="btn" onClick={() => setGoOpen(false)}>Close</button>
+        ]}
+      >
+        <ul className="goList">
+          {goItems.map((it, idx) => (
+            <li key={it.key}>
+              <a
+                href="#/"
+                className={`goItem${idx === goActiveIdx ? ' active' : ''}`}
+                onClick={(e) => { e.preventDefault(); navigateTo(it.route); setGoOpen(false); }}
+              >
+                <span className="goKey">{String(it.key || '').toUpperCase()}</span>
+                <span className="goLabel">{it.label}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p className="muted">Tip: ⌘G / Ctrl+G · ↑/↓ to navigate · Enter or type the letter</p>
       </Modal>
       {toast ? (
         <Notify message={toast.message} kind={toast.kind || 'info'} onClose={() => setToast(null)} durationMs={3000} />
