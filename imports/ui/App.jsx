@@ -37,10 +37,13 @@ import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 
 const SortableChip = ({ id, name, onOpen }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition };
+  const fullName = name || '(untitled project)';
+  const label = fullName.length > 10 ? `${fullName.slice(0, 10)}` : fullName;
   return (
     <a
       ref={setNodeRef}
@@ -52,7 +55,9 @@ const SortableChip = ({ id, name, onOpen }) => {
       {...listeners}
     >
       <span className="star">★</span>
-      <span className="name">{name || '(untitled project)'}</span>
+      <Tooltip content={fullName} placement="top">
+        <span className="name">{label}</span>
+      </Tooltip>
     </a>
   );
 };
