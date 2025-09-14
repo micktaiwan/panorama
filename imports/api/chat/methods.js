@@ -134,7 +134,7 @@ const TOOL_HANDLERS = {
   async chat_overdue(args, memory) {
     const { TasksCollection } = await import('/imports/api/tasks/collections');
     const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
-    const nowIso = (args && typeof args.now === 'string' && args.now.trim()) ? args.now : new Date().toISOString();
+    const nowIso = (typeof args?.now === 'string' && args?.now?.trim()) ? args.now : new Date().toISOString();
     const selector = buildOverdueSelector(nowIso);
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
@@ -150,7 +150,7 @@ const TOOL_HANDLERS = {
   async chat_tasksByProject(args, memory) {
     const { TasksCollection } = await import('/imports/api/tasks/collections');
     const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
-    const selector = buildByProjectSelector(args && args.projectId);
+    const selector = buildByProjectSelector(args?.projectId);
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Remove internal IDs from UI responses
@@ -190,9 +190,9 @@ const TOOL_HANDLERS = {
   },
   async chat_projectByName(args, memory) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const selector = buildProjectByNameSelector(args && args.name);
+    const selector = buildProjectByNameSelector(args?.name);
     const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
-    if (proj && proj._id && memory) {
+    if (proj?._id && memory) {
       // Standardize on new generic memory structure
       memory.ids = memory.ids || {};
       memory.ids.projectId = proj._id;
@@ -206,8 +206,8 @@ const TOOL_HANDLERS = {
     return { output: JSON.stringify({ project: out }) };
   },
   async chat_semanticSearch(args, memory) {
-    const limit = Math.max(1, Math.min(50, Number(args && args.limit) || 8));
-    const q = String(args && args.query || '').trim();
+    const limit = Math.max(1, Math.min(50, Number(args?.limit) || 8));
+    const q = String(args?.query || '').trim();
     const url = getQdrantUrl();
     if (!url) {
       if (memory) { memory.lists = memory.lists || {}; memory.lists.searchResults = []; }
@@ -231,9 +231,9 @@ const TOOL_HANDLERS = {
   }
   ,
   async chat_collectionQuery(args, memory) {
-    const collection = String(args && args.collection || '').trim();
-    const where = args && args.where ? args.where : {};
-    const select = Array.isArray(args && args.select) ? args.select.filter(f => FIELD_ALLOWLIST[collection]?.includes(f)) : [];
+    const collection = String(args?.collection || '').trim();
+    const where = args?.where ? args.where : {};
+    const select = Array.isArray(args?.select) ? args.select.filter(f => FIELD_ALLOWLIST[collection]?.includes(f)) : [];
     const selector = compileWhere(collection, where);
     let cursor;
     if (collection === 'tasks') {
@@ -270,7 +270,7 @@ const TOOL_HANDLERS = {
       throw new Error('Unsupported collection');
     }
     const fields = select.length > 0 ? Object.fromEntries(select.map(f => [f, 1])) : undefined;
-    const limit = Math.min(200, Math.max(1, Number(args && args.limit) || 50));
+    const limit = Math.min(200, Math.max(1, Number(args?.limit) || 50));
     const docs = await cursor.find(selector, { fields }).limit(limit).fetchAsync();
     const key = getListKeyForCollection(collection);
     const list = Array.isArray(docs) ? docs : [];
@@ -283,7 +283,7 @@ const TOOL_HANDLERS = {
   ,
   async chat_notesByProject(args, memory) {
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const projectId = String(args && args.projectId || '').trim();
+    const projectId = String(args?.projectId || '').trim();
     const notes = await NotesCollection.find({ projectId }, { fields: { title: 1 } }).fetchAsync();
     const mapped = (notes || []).map(n => ({ title: clampText(n.title || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.notes = mapped; }
@@ -292,7 +292,7 @@ const TOOL_HANDLERS = {
   ,
   async chat_noteSessionsByProject(args, memory) {
     const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
-    const projectId = String(args && args.projectId || '').trim();
+    const projectId = String(args?.projectId || '').trim();
     const sessions = await NoteSessionsCollection.find({ projectId }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (sessions || []).map(s => ({ name: clampText(s.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.noteSessions = mapped; }
@@ -301,7 +301,7 @@ const TOOL_HANDLERS = {
   ,
   async chat_noteLinesBySession(args, memory) {
     const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
-    const sessionId = String(args && args.sessionId || '').trim();
+    const sessionId = String(args?.sessionId || '').trim();
     const lines = await NoteLinesCollection.find({ sessionId }, { fields: { content: 1 } }).fetchAsync();
     const mapped = (lines || []).map(l => ({ content: clampText(l.content || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.noteLines = mapped; }
@@ -310,7 +310,7 @@ const TOOL_HANDLERS = {
   ,
   async chat_linksByProject(args, memory) {
     const { LinksCollection } = await import('/imports/api/links/collections');
-    const projectId = String(args && args.projectId || '').trim();
+    const projectId = String(args?.projectId || '').trim();
     const links = await LinksCollection.find({ projectId }, { fields: { name: 1, url: 1 } }).fetchAsync();
     const mapped = (links || []).map(l => ({ name: clampText(l.name || ''), url: l.url || null }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.links = mapped; }
@@ -335,7 +335,7 @@ const TOOL_HANDLERS = {
   ,
   async chat_filesByProject(args, memory) {
     const { FilesCollection } = await import('/imports/api/files/collections');
-    const projectId = String(args && args.projectId || '').trim();
+    const projectId = String(args?.projectId || '').trim();
     const files = await FilesCollection.find({ projectId }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (files || []).map(f => ({ name: clampText(f.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.files = mapped; }
@@ -344,7 +344,7 @@ const TOOL_HANDLERS = {
   ,
   async chat_alarmsList(args, memory) {
     const { AlarmsCollection } = await import('/imports/api/alarms/collections');
-    const enabled = (typeof (args && args.enabled) === 'boolean') ? args.enabled : undefined;
+    const enabled = (typeof args?.enabled === 'boolean') ? args.enabled : undefined;
     const sel = (typeof enabled === 'boolean') ? { enabled } : {};
     const alarms = await AlarmsCollection.find(sel, { fields: { title: 1 } }).fetchAsync();
     const mapped = (alarms || []).map(a => ({ title: clampText(a.title || '') }));
@@ -361,16 +361,16 @@ const ensureProjectIdArg = async (argsIn, memory) => {
   if (existing) return args;
 
   const candidateName = String(
-    (args && args.name) ||
-    (memory && memory.projectName) ||
-    (memory && memory.entities && memory.entities.project && memory.entities.project.name) ||
+    args?.name ||
+    memory?.projectName ||
+    memory?.entities?.project?.name ||
     ''
   ).trim();
   if (!candidateName) return args;
 
   const selector = buildProjectByNameSelector(candidateName);
   const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
-  if (proj && proj._id) {
+  if (proj?._id) {
     args.projectId = proj._id;
 
     if (memory) {
@@ -891,8 +891,6 @@ Meteor.methods({
       throw new Meteor.Error('openai-failed', errText);
     }
     const data = await resp.json();
-    // Parse meta for potential future debugging (not logged)
-    void { keys: Object.keys(data || {}), outputLen: Array.isArray(data?.output) ? data.output.length : 0, tool_calls: data?.tool_calls };
     // Extract tool calls (Responses API emits 'function_call' items in output[])
     const outputArray = Array.isArray(data?.output) ? data.output : [];
     const toolCallsFromOutput = outputArray
@@ -944,7 +942,7 @@ Meteor.methods({
           try {
             const { TasksCollection } = await import('/imports/api/tasks/collections');
             const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
-            const nowIso = (call.arguments && typeof call.arguments.now === 'string' && call.arguments.now.trim()) ? call.arguments.now : new Date().toISOString();
+            const nowIso = (typeof call.arguments?.now === 'string' && call.arguments?.now?.trim()) ? call.arguments.now : new Date().toISOString();
             const selector = buildOverdueSelector(nowIso);
             const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
@@ -958,7 +956,7 @@ Meteor.methods({
           try {
             const { TasksCollection } = await import('/imports/api/tasks/collections');
             const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
-            const selector = buildByProjectSelector(call.arguments && call.arguments.projectId);
+            const selector = buildByProjectSelector(call.arguments?.projectId);
             const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
             const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
@@ -993,7 +991,7 @@ Meteor.methods({
         } else if (call.name === 'chat_projectByName') {
           try {
             const { ProjectsCollection } = await import('/imports/api/projects/collections');
-            const selector = buildProjectByNameSelector(call.arguments && call.arguments.name);
+            const selector = buildProjectByNameSelector(call.arguments?.name);
             const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
             const out = proj ? { id: proj._id, name: proj.name || '', description: proj.description || '' } : null;
             toolResults.push({ tool_call_id: call.id || 'chat_projectByName', output: JSON.stringify({ project: out }) });
@@ -1003,8 +1001,8 @@ Meteor.methods({
           }
         } else if (call.name === 'chat_semanticSearch') {
           try {
-            const limit = Math.max(1, Math.min(50, Number(call.arguments && call.arguments.limit) || 8));
-            const q = String(call.arguments && call.arguments.query || '').trim();
+            const limit = Math.max(1, Math.min(50, Number(call.arguments?.limit) || 8));
+            const q = String(call.arguments?.query || '').trim();
             const url = getQdrantUrl();
             if (!url) {
               toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ results: [], total: 0, disabled: true }) });
@@ -1088,7 +1086,7 @@ Meteor.methods({
   async 'chat.overdue'(params = {}) {
     const { TasksCollection } = await import('/imports/api/tasks/collections');
     const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
-    const nowIso = (params && typeof params.now === 'string' && params.now.trim()) ? params.now : new Date().toISOString();
+    const nowIso = (typeof params?.now === 'string' && params?.now?.trim()) ? params.now : new Date().toISOString();
     const selector = buildOverdueSelector(nowIso);
     const tasks = await TasksCollection.find(selector, { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } }).fetchAsync();
     return tasks.map(t => ({ _id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
@@ -1096,7 +1094,7 @@ Meteor.methods({
   async 'chat.tasksByProject'(search = {}) {
     const { TasksCollection } = await import('/imports/api/tasks/collections');
     const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
-    const selector = buildByProjectSelector(search && search.projectId);
+    const selector = buildByProjectSelector(search?.projectId);
     const tasks = await TasksCollection.find(selector, { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } }).fetchAsync();
     return tasks.map(t => ({ _id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
   },

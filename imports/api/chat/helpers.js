@@ -76,13 +76,9 @@ export const buildFilterSelector = (filters = {}) => {
 export const buildProjectByNameSelector = (rawName) => {
   const name = String(rawName || '').trim();
   if (!name) return {};
-  try {
-    // Escape regex special chars in user-provided name
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return { name: { $regex: `^${escaped}$`, $options: 'i' } };
-  } catch (_e) {
-    return { name };
-  }
+  // Escape regex special chars in user-provided name
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return { name: { $regex: `^${escaped}$`, $options: 'i' } };
 };
 
 // Generic path resolver for {var:'path'} syntax
@@ -239,14 +235,14 @@ export const compileWhere = (collection, where = {}) => {
       const v = node[k];
       if (v && typeof v === 'object' && !Array.isArray(v)) {
         const ops = {};
-        if (Object.prototype.hasOwnProperty.call(v, 'eq')) ops.$eq = v.eq;
-        if (Object.prototype.hasOwnProperty.call(v, 'ne')) ops.$ne = v.ne;
-        if (Object.prototype.hasOwnProperty.call(v, 'lt')) ops.$lt = v.lt;
-        if (Object.prototype.hasOwnProperty.call(v, 'lte')) ops.$lte = v.lte;
-        if (Object.prototype.hasOwnProperty.call(v, 'gt')) ops.$gt = v.gt;
-        if (Object.prototype.hasOwnProperty.call(v, 'gte')) ops.$gte = v.gte;
-        if (Object.prototype.hasOwnProperty.call(v, 'in')) ops.$in = Array.isArray(v.in) ? v.in : [v.in];
-        if (Object.prototype.hasOwnProperty.call(v, 'nin')) ops.$nin = Array.isArray(v.nin) ? v.nin : [v.nin];
+        if (Object.hasOwn(v, 'eq')) ops.$eq = v.eq;
+        if (Object.hasOwn(v, 'ne')) ops.$ne = v.ne;
+        if (Object.hasOwn(v, 'lt')) ops.$lt = v.lt;
+        if (Object.hasOwn(v, 'lte')) ops.$lte = v.lte;
+        if (Object.hasOwn(v, 'gt')) ops.$gt = v.gt;
+        if (Object.hasOwn(v, 'gte')) ops.$gte = v.gte;
+        if (Object.hasOwn(v, 'in')) ops.$in = Array.isArray(v.in) ? v.in : [v.in];
+        if (Object.hasOwn(v, 'nin')) ops.$nin = Array.isArray(v.nin) ? v.nin : [v.nin];
         if (Object.keys(ops).length > 0) sel[k] = ops;
       } else {
         sel[k] = v;
