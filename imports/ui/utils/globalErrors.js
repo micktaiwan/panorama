@@ -57,8 +57,8 @@ if (typeof window !== 'undefined') {
       const seen = new Set();
       const cursor = ErrorsCollection.find({ kind: 'server' }, { sort: { createdAt: -1 }, limit: 200 });
       cursor.observe({
-        added(doc) {
-          if (!doc || !doc._id) return;
+        addedAt(doc) {
+          if (!doc?._id) return;
           if (seen.has(doc._id)) return;
           seen.add(doc._id);
           const message = String(doc.message || 'Server error');
@@ -68,7 +68,7 @@ if (typeof window !== 'undefined') {
       // Optional: mark existing as seen once subscription is ready
       Tracker.autorun((c) => {
         if (sub.ready()) {
-          ErrorsCollection.find({ kind: 'server' }, { fields: { _id: 1 } }).forEach((d) => { if (d && d._id) seen.add(d._id); });
+          ErrorsCollection.find({ kind: 'server' }, { fields: { _id: 1 } }).forEach((d) => { if (d?._id) seen.add(d._id); });
           c.stop();
         }
       });
