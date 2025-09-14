@@ -313,7 +313,6 @@ export default function UserLog() {
 
   return (
     <div className="UserLog__page" aria-live="polite">
-      <div className="UserLog__card">
         <div className="UserLog__header">
           <div className="UserLog__title">Journal</div>
         </div>
@@ -448,7 +447,6 @@ export default function UserLog() {
             <button type="button" className="btn" onClick={handleLoadMore}>Load more (older 1 day)</button>
             <span className="ml8 muted">since {timeAgo(sinceDate)}</span>
           </div>
-      </div>
     </div>
   );
 }

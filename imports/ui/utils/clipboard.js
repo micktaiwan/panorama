@@ -8,7 +8,7 @@ export const writeClipboard = async (text) => {
     await navigator.clipboard.writeText(text);
     notify({ message: 'Copied !', kind: 'success' });
     return true;
-  } catch (_err) {
+  } catch {
     notify({ message: 'Copy failed', kind: 'error' });
     return false;
   }

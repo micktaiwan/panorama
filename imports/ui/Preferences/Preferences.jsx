@@ -216,6 +216,24 @@ export const Preferences = () => {
         </div>
       </div>
 
+      <h3>Test errors</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Client and Server</div>
+          <div className="prefsValue">
+            <button className="btn" onClick={() => {
+              setTimeout(() => { throw new Error('Test client error'); }, 0);
+            }}>Throw error</button>
+            <button className="btn ml8" onClick={() => {
+              Promise.reject(new Error('Test unhandled rejection'));
+            }}>Unhandled rejection</button>
+            <button className="btn ml8" onClick={() => {
+              Meteor.call('nonexistent.method');
+            }}>Fail method</button>
+          </div>
+        </div>
+      </div>
+
       <h3>Qdrant</h3>
       <div className="prefsSection">
         <div className="prefsRow">
