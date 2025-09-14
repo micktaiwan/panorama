@@ -1,47 +1,55 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { playBeep } from '../../utils/sound.js';
 import './Notify.css';
 
 export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, className = '', leftPanel = null, stacked = false }) => {
-  const [visible, setVisible] = useState(true);
+  const [isClosing, setIsClosing] = useState(false);
   const [shouldUseInApp, setShouldUseInApp] = useState(true);
+  const onCloseRef = useRef(onClose);
 
-  // Decide routing once on mount: in-app if focused, native if unfocused
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  // Decide routing once on mount: always show in-app; also send native if window unfocused
   useEffect(() => {
     const isFocused = typeof document !== 'undefined' && document.hasFocus();
     const canNative = typeof window !== 'undefined' && window.electron && typeof window.electron.notify === 'function';
+    setShouldUseInApp(true);
     if (!isFocused && canNative) {
-      setShouldUseInApp(false);
       window.electron.notify({ title: 'Panorama', body: message });
-      onClose?.();
-    } else {
-      setShouldUseInApp(true);
     }
   }, [message, onClose]);
 
-  // Play sound only for in-app toasts
+  // Play sound once on mount for in-app toasts
   useEffect(() => {
-    if (visible && shouldUseInApp) {
+    if (shouldUseInApp) {
       playBeep(kind === 'error' ? 0.6 : 0.4);
     }
-  }, [visible, kind, shouldUseInApp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    if (!shouldUseInApp) return;
+    if (!shouldUseInApp) return undefined;
     if (durationMs > 0) {
-      const t = setTimeout(() => { setVisible(false); onClose?.(); }, durationMs);
+      const t = setTimeout(() => {
+        setIsClosing(true);
+        const t2 = setTimeout(() => { onCloseRef.current?.(); }, 180);
+        // Cleanup nested timeout if unmounted before it fires
+        return () => clearTimeout(t2);
+      }, durationMs);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [durationMs, shouldUseInApp]);
 
-  if (!visible || !shouldUseInApp) return null;
-  const classes = ['notify', kind, stacked ? 'stacked' : '', className].filter(Boolean).join(' ');
+  if (!shouldUseInApp) return null;
+  const classes = ['notify', kind, isClosing ? 'closing' : '', stacked ? 'stacked' : '', className].filter(Boolean).join(' ');
+  // Icon contrasts with the colored aside background
   const kindToColor = {
-    error: '#ef4444',
-    success: '#10b981',
-    warning: '#f59e0b',
-    info: 'var(--primary)'
+    error: '#ffffff',
+    success: '#ffffff',
+    warning: '#ffffff',
+    info: '#ffffff'
   };
   const iconColor = kindToColor[kind] || 'var(--primary)';
   const defaultSvg = (
@@ -59,7 +67,7 @@ export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, cla
         </aside>
         <div className="notifyMain">
           <span>{message}</span>
-          <button className="iconButton ml8" aria-label="Close" onClick={() => { setVisible(false); onClose?.(); }}>✕</button>
+          <button className="iconButton ml8" aria-label="Close" onClick={() => { setIsClosing(true); setTimeout(() => { onCloseRef.current?.(); }, 160); }}>✕</button>
         </div>
       </div>
     </output>

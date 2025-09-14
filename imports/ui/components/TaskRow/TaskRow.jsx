@@ -1,8 +1,10 @@
 import React from 'react';
+import { Meteor } from 'meteor/meteor';
 import PropTypes from 'prop-types';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { InlineDate } from '/imports/ui/InlineDate/InlineDate.jsx';
 import { formatDate, formatDateTime, deadlineSeverity } from '/imports/ui/utils/date.js';
+import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import './TaskRow.css';
 
 export const TaskRow = ({
@@ -42,10 +44,24 @@ export const TaskRow = ({
 }) => {
   const Container = as || 'li';
   const [showMoveSelect, setShowMoveSelect] = React.useState(false);
+  // Notes modal state
+  const [isNotesOpen, setIsNotesOpen] = React.useState(false);
+  const [notesDraft, setNotesDraft] = React.useState('');
   if (!task) return null;
   const status = task.status || 'todo';
   const sev = task.deadline ? deadlineSeverity(task.deadline) : '';
   const metaCls = sev ? ` ${sev}` : ' taskMetaDefault';
+
+  const openNotes = () => {
+    setNotesDraft(task?.notes || '');
+    setIsNotesOpen(true);
+  };
+
+  const saveNotes = () => {
+    const next = notesDraft;
+    if (task?._id) Meteor.call('tasks.update', task._id, { notes: next });
+    setIsNotesOpen(false);
+  };
 
   return (
     <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}`}>
@@ -114,26 +130,34 @@ export const TaskRow = ({
             fullWidth
             className={`${titleClassName || ''}${status === 'in_progress' ? ' inProgress' : ''}`}
             inputClassName={`taskRowTitle${status === 'in_progress' ? ' inProgress' : ''}`}
-            onSubmit={(next) => { if (typeof onUpdateTitle === 'function') onUpdateTitle(String(next || '').trim()); }}
+            onSubmit={(next) => { onUpdateTitle?.(String(next || '').trim()); }}
           />
+          <span className="taskInlineActions">
+            {inlineActions && showUrgentImportant ? (
+              <>
+                <button
+                  className={`eisenhowerToggle${task.isUrgent ? ' active' : ''}`}
+                  aria-pressed={!!task.isUrgent}
+                  title="Toggle urgent"
+                  onClick={() => onToggleUrgent?.(task)}
+                >urgent</button>
+                <button
+                  className={`eisenhowerToggle${task.isImportant ? ' active' : ''}`}
+                  aria-pressed={!!task.isImportant}
+                  title="Toggle important"
+                  onClick={() => onToggleImportant?.(task)}
+                >important</button>
+              </>
+            ) : null}
+            <button className="iconButton taskNotesButton" title={task.notes ? 'Edit notes' : 'Add notes'} aria-label="Notes" onClick={openNotes}>…</button>
+          </span>
           {task.notes ? (
-            <div className="taskNotes" title={task.notes}>{task.notes}</div>
-          ) : null}
-          {inlineActions && showUrgentImportant ? (
-            <span className="taskInlineActions">
-              <button
-                className={`eisenhowerToggle${task.isUrgent ? ' active' : ''}`}
-                aria-pressed={!!task.isUrgent}
-                title="Toggle urgent"
-                onClick={() => onToggleUrgent && onToggleUrgent(task)}
-              >urgent</button>
-              <button
-                className={`eisenhowerToggle${task.isImportant ? ' active' : ''}`}
-                aria-pressed={!!task.isImportant}
-                title="Toggle important"
-                onClick={() => onToggleImportant && onToggleImportant(task)}
-              >important</button>
-            </span>
+            <button
+              type="button"
+              className="taskNotes taskNotesClickable"
+              title={task.notes}
+              onClick={openNotes}
+            >{task.notes}</button>
           ) : null}
         </div>
       </div>
@@ -148,15 +172,15 @@ export const TaskRow = ({
                   value={task.projectId || ''}
                   onChange={(e) => {
                     const val = e.target.value || null;
-                    if (typeof onMoveProject === 'function') onMoveProject(val);
+                    onMoveProject?.(val);
                     setShowMoveSelect(false);
                   }}
                   title="Move to project"
                 >
                   <option value="">(no project)</option>
                   {(Array.isArray(projectOptions) ? projectOptions : []).map((o) => {
-                    const value = o && o.value ? o.value : '';
-                    const label = o && o.label ? o.label : '';
+                    const value = o?.value ? o.value : '';
+                    const label = o?.label ? o.label : '';
                     return (<option key={value || '__none__'} value={value}>{label}</option>);
                   })}
                 </select>
@@ -167,49 +191,82 @@ export const TaskRow = ({
             )}
           </span>
         ) : null}
-        {showDeadline ? (
-          editableDeadline ? (
-            <div>
-              {status === 'done' ? (
-                <div className="doneMeta">Done {formatDate(task.statusChangedAt)}</div>
-              ) : (
-                <InlineDate
-                  value={task.deadline}
-                  onSubmit={(next) => { if (typeof onUpdateDeadline === 'function') onUpdateDeadline(next); }}
-                  placeholder="No deadline"
-                />
-              )}
-            </div>
-          ) : (
+        {showDeadline ? (() => {
+          if (editableDeadline) {
+            return (
+              <div>
+                {status === 'done' ? (
+                  <div className="doneMeta">Done {formatDate(task.statusChangedAt)}</div>
+                ) : (
+                  <InlineDate
+                    value={task.deadline}
+                    onSubmit={(next) => { onUpdateDeadline?.(next); }}
+                    placeholder="No deadline"
+                  />
+                )}
+              </div>
+            );
+          }
+          return (
             <div className={`taskMeta${metaCls}`}>
-              {task.deadline ? `Due ${formatDate(task.deadline)}` : 'No deadline'} · {formatDateTime(task.createdAt)}
+              {task.deadline ? `Due ${formatDate(task.deadline)}` : 'No deadline'} · {formatDateTime(task?.createdAt)}
             </div>
-          )
-        ) : null}
+          );
+        })() : null}
         {showUrgentImportant ? (
           <span className="taskActions">
             <button
               className={`eisenhowerToggle${task.isUrgent ? ' active' : ''}`}
               aria-pressed={!!task.isUrgent}
               title="Toggle urgent"
-              onClick={() => onToggleUrgent && onToggleUrgent(task)}
+              onClick={() => onToggleUrgent?.(task)}
             >urgent</button>
             <button
               className={`eisenhowerToggle${task.isImportant ? ' active' : ''}`}
               aria-pressed={!!task.isImportant}
               title="Toggle important"
-              onClick={() => onToggleImportant && onToggleImportant(task)}
+              onClick={() => onToggleImportant?.(task)}
             >important</button>
           </span>
         ) : null}
         {showClearDeadline && task.deadline ? (
-          <button className="iconButton" title="Clear deadline" onClick={() => onClearDeadline && onClearDeadline()}>✕</button>
+          <button className="iconButton" title="Clear deadline" onClick={() => onClearDeadline?.()}>✕</button>
         ) : null}
         {showDelete ? (
-          <button className="iconButton" title="Delete task" onClick={() => onRemove && onRemove()}>🗑</button>
+          <button className="iconButton" title="Delete task" onClick={() => onRemove?.()}>🗑</button>
         ) : null}
       </div>
       ) : null}
+      {/* Notes Modal */}
+      {(() => {
+        if (!isNotesOpen) return null;
+        return (
+          <Modal
+            open={isNotesOpen}
+            onClose={() => setIsNotesOpen(false)}
+            title={task?.title ? `Notes · ${task?.title}` : 'Notes'}
+            icon={false}
+          >
+            <textarea
+              className="taskNotesTextarea"
+              rows={10}
+              value={notesDraft}
+              placeholder="Type notes..."
+              onChange={(e) => setNotesDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  saveNotes();
+                }
+              }}
+            />
+            <div className="modalFooter">
+              <button className="btn btn-primary" onClick={saveNotes}>Save</button>
+              <button className="btn ml8" onClick={() => setIsNotesOpen(false)}>Cancel</button>
+            </div>
+          </Modal>
+        );
+      })()}
     </Container>
   );
 };

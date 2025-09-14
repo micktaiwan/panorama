@@ -1,4 +1,5 @@
-.taskRowC { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); width: 100%; }
+.taskRowC { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); position: relative; width: 100%; }
+.taskRowC:hover { background: #272f3e; }
 .taskRowC.withProject { grid-template-columns: 160px 1fr auto; }
 .taskRowC.smallText { font-size: 12px; padding: 4px 0; gap: 8px; }
 .taskRowC.smallText .inlineEditable, .taskRowC.smallText .inlineEditableInput { font-size: 12px; }
@@ -18,8 +19,14 @@
 .taskTitleArea .inlineEditable { display: block; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; width: 100%; min-width: 0; }
 .taskTitleArea .inlineEditable.inProgress, .taskRowTitle.inProgress { color: var(--success); }
 .taskTitleArea .inlineEditableInput { width: 100%; }
-.taskNotes { color: var(--muted); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taskNotes { color: var(--muted); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 100%; min-width: 0; grid-column: 1 / -1; }
+.taskNotesClickable { cursor: pointer; background: transparent; border: none; padding: 0; text-align: left; width: 100%; }
+.taskNotesClickable:hover { text-decoration: underline; color: var(--text); }
 .taskInlineActions { display: inline-flex; align-items: center; gap: 6px; }
+.taskNotesButton { font-size: 12px; color: var(--muted); transition: opacity 120ms ease-in-out; }
+
+/* Notes modal */
+.taskNotesTextarea { width: 100%; display: block; box-sizing: border-box; }
 .taskInlineActions .eisenhowerToggle { padding: 0 8px; height: 22px; line-height: 20px; }
 .taskRowC.smallText .taskInlineActions .eisenhowerToggle { padding: 0 6px; height: 20px; line-height: 18px; font-size: 11px; }
 .taskRowC.smallText .taskMain { grid-template-columns: 120px 1fr; gap: 6px; }
@@ -27,7 +34,6 @@
 .taskRowC.smallText .taskStatusCol { width: 120px; }
 .taskRowTitle.inlineEditableInput { width: 100%; }
 .taskRight { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; justify-content: flex-end; }
-.taskRowC.smallText .taskRight { gap: 6px; }
 .taskRowC.smallText .taskRight { gap: 6px; }
 .taskMeta { font-size: 12px; }
 .taskMetaDefault { color: var(--muted); }

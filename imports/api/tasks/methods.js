@@ -33,14 +33,12 @@ Meteor.methods({
         projectId,
         $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ]
       };
-      const existing = TasksCollection.find(openSelector, { fields: { _id: 1, priorityRank: 1 } }).fetch();
-      existing
-        .filter(t => Number.isFinite(t.priorityRank))
-        .forEach(t => { TasksCollection.updateAsync(t._id, { $inc: { priorityRank: 1 } }); });
+      // Shift all open tasks down by 1 in a single multi-update, then insert at rank 0
+      await TasksCollection.updateAsync(openSelector, { $inc: { priorityRank: 1 } }, { multi: true });
       sanitized.priorityRank = 0;
     }
     // Duplicate guard for userLog provenance
-    if (doc && doc.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds) && doc.source.logEntryIds.length > 0) {
+    if (doc?.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds) && doc.source.logEntryIds.length > 0) {
       const logIds = doc.source.logEntryIds.map(String);
       const existing = await TasksCollection.findOneAsync({ 'source.kind': 'userLog', 'source.logEntryIds': { $in: logIds } }, { fields: { _id: 1 } });
       if (existing) {
@@ -54,7 +52,7 @@ Meteor.methods({
       isUrgent: Boolean(sanitized.isUrgent),
       isImportant: Boolean(sanitized.isImportant),
       // Provenance link (optional): { kind: 'userLog', logEntryIds: [], createdAt, windowHours }
-      source: (doc && doc.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds))
+      source: (doc?.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds))
         ? { kind: 'userLog', logEntryIds: doc.source.logEntryIds.slice(0, 20), createdAt: now, windowHours: Number(doc.source.windowHours) || undefined }
         : undefined,
       createdAt: now,
