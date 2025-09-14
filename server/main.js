@@ -69,7 +69,25 @@ import '/imports/api/userLogs/collections';
 import '/imports/api/userLogs/publications';
 import '/imports/api/userLogs/methods';
 import '/imports/api/cron/jobs';
+import { WebApp } from 'meteor/webapp';
 
 Meteor.startup(() => {
   // Place server-side initialization here as your app grows.
+  const csp = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' blob:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline'",
+    "connect-src 'self' ws: wss: http: https:"
+  ].join('; ');
+
+  WebApp.connectHandlers.use((req, res, next) => {
+    res.setHeader('Content-Security-Policy', csp);
+    next();
+  });
 });
