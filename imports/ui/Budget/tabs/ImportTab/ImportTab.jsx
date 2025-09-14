@@ -451,7 +451,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
               };
               if (supplierIds.length > 0) {
                 Meteor.call('budget.ensureVendors', supplierIds, (e2, vendorsMap) => {
-                  if (e2) { console.warn('ensureVendors failed', e2); afterVendors({}); return; }
+                  if (e2) { console.error('ensureVendors failed', e2); afterVendors({}); return; }
                   afterVendors(vendorsMap || {});
                 });
               } else {

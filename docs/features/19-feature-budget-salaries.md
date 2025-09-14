@@ -113,11 +113,13 @@ Publications (MVP, local-only app):
 
 ## Error Handling and Privacy
 
-- Local-only processing; no external sync in MVP.
-- Respect the rule: avoid try/catch unless necessary; never silently catch — surface clear messages.
+- Local-only processing
+- Respect the rule: avoid try/catch unless necessary
+- never silently catch
+- surface clear messages
 - Optional UI masking: toggle to hide amounts unless revealed.
 
-## Future Enhancements (Non‑MVP)
+## Future Enhancements
 
 - Allocations by project: split a person’s monthly cost across projects by percentages.
 - Scenario planning: future-dated hires/raises and forecast comparison.
@@ -128,7 +130,6 @@ Publications (MVP, local-only app):
 
 ## Tech Notes
 
-- Stack: Meteor + React (same as Panorama).
 - Store amounts in cents; format with locale (e.g., `fr-FR`) in UI and clipboard.
 - Date helpers: implement `getActiveDaysInMonth(person, month)` to compute proration cleanly.
 - Aggregation: compute on demand in method; cache last result in memory if needed.

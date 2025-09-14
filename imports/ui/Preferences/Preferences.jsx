@@ -22,6 +22,9 @@ export const Preferences = () => {
   const [checking, setChecking] = React.useState(false);
   const [indexing, setIndexing] = React.useState(false);
   const [confirmIndex, setConfirmIndex] = React.useState(false);
+  const [selectedKind, setSelectedKind] = React.useState('task');
+  const [rawLines, setRawLines] = React.useState(null);
+  const [fetchingLines, setFetchingLines] = React.useState(false);
   // indexJob: { jobId, total, processed, upserts, errors, done }
   const [indexJob, setIndexJob] = React.useState(null);
   // removed local toast; using global notify manager
@@ -246,6 +249,63 @@ export const Preferences = () => {
             <button className="btn ml8" disabled={indexing} onClick={() => setConfirmIndex(true)}>{indexing ? 'Indexing…' : 'Rebuild index'}</button>
           </div>
         </div>
+
+        <div className="prefsRow">
+          <div className="prefsLabel">Debug last indexed</div>
+          <div className="prefsValue">
+            <button
+              className="btn"
+              disabled={fetchingLines}
+              onClick={() => {
+                setFetchingLines(true);
+                Meteor.call('qdrant.lastIndexedRaw', (err, res) => {
+                  setFetchingLines(false);
+                  setRawLines(err ? { error: err?.reason || err?.message || String(err) } : res);
+                });
+              }}
+            >
+              {fetchingLines ? 'Fetching…' : 'Fetch last indexed (raw)'}
+            </button>
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Rebuild by kind</div>
+          <div className="prefsValue">
+            <select
+              className="afInput"
+              value={selectedKind}
+              onChange={(e) => setSelectedKind(e.target.value)}
+            >
+              <option value="project">Projects</option>
+              <option value="task">Tasks</option>
+              <option value="note">Notes</option>
+              <option value="session">Sessions</option>
+              <option value="line">Note lines</option>
+              <option value="alarm">Alarms</option>
+              <option value="link">Links</option>
+              <option value="userlog">Logs</option>
+            </select>
+            <button
+              className="btn ml8"
+              disabled={indexing}
+              onClick={() => {
+                const kind = selectedKind;
+                setIndexing(true);
+                Meteor.call('qdrant.indexKindStart', kind, (err, res) => {
+                  if (err || !res) {
+                    setIndexing(false);
+                    notify({ message: `Rebuild failed for ${kind}: ${err?.reason || err?.message || 'unknown error'}` , kind: 'error' });
+                    return;
+                  }
+                  setIndexJob({ jobId: res.jobId, total: res.total, processed: 0, upserts: 0, errors: 0, done: false });
+                  pollIndexStatus(res.jobId);
+                });
+              }}
+            >
+              {indexing ? 'Indexing…' : 'Rebuild selected'}
+            </button>
+          </div>
+        </div>
         {indexJob ? (
           <div className="prefsRow">
             <div className="prefsLabel">Index progress</div>
@@ -263,6 +323,12 @@ export const Preferences = () => {
           <div className="prefsRow">
             <div className="prefsLabel" />
             <div className="prefsValue"><pre className="prefsPre">{JSON.stringify(health, null, 2)}</pre></div>
+          </div>
+        ) : null}
+        {rawLines ? (
+          <div className="prefsRow">
+            <div className="prefsLabel" />
+            <div className="prefsValue"><pre className="prefsPre">{JSON.stringify(rawLines, null, 2)}</pre></div>
           </div>
         ) : null}
       </div>

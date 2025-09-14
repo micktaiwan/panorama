@@ -22,20 +22,55 @@ Meteor.methods({
       content,
       createdAt: now
     });
+    // Index to vector store (non-blocking best-effort)
+    try {
+      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+      await upsertDoc({ kind: 'userlog', id: _id, text: content });
+    } catch (e) {
+      console.error('[search][userLogs.insert] upsert failed', e);
+    }
     return _id;
   },
   async 'userLogs.update'(logId, modifier) {
     check(logId, String);
     check(modifier, Object);
     const set = { ...sanitizeLog(modifier), updatedAt: new Date() };
-    return await UserLogsCollection.updateAsync(logId, { $set: set });
+    const res = await UserLogsCollection.updateAsync(logId, { $set: set });
+    // Re-index updated content
+    try {
+      const next = await UserLogsCollection.findOneAsync({ _id: logId }, { fields: { content: 1 } });
+      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+      await upsertDoc({ kind: 'userlog', id: logId, text: next?.content || '' });
+    } catch (e) {
+      console.error('[search][userLogs.update] upsert failed', e);
+    }
+    return res;
   },
   async 'userLogs.remove'(logId) {
     check(logId, String);
-    return await UserLogsCollection.removeAsync(logId);
+    const res = await UserLogsCollection.removeAsync(logId);
+    try {
+      const { deleteDoc } = await import('/imports/api/search/vectorStore.js');
+      await deleteDoc('userlog', logId);
+    } catch (e) {
+      console.error('[search][userLogs.remove] delete failed', e);
+    }
+    return res;
   },
   async 'userLogs.clear'() {
-    return await UserLogsCollection.removeAsync({});
+    const ids = await UserLogsCollection.find({}, { fields: { _id: 1 } }).fetchAsync();
+    const res = await UserLogsCollection.removeAsync({});
+    // Best-effort bulk cleanup of vectors
+    try {
+      const { deleteDoc } = await import('/imports/api/search/vectorStore.js');
+      for (const it of ids) {
+         
+        await deleteDoc('userlog', it._id);
+      }
+    } catch (e) {
+      console.error('[search][userLogs.clear] delete failed', e);
+    }
+    return res;
   }
 });
 

@@ -39,7 +39,7 @@ import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 
-const SortableChip = ({ id, name, onOpen }) => {
+const SortableChip = ({ id, name, onOpen, active }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const fullName = name || '(untitled project)';
@@ -48,7 +48,7 @@ const SortableChip = ({ id, name, onOpen }) => {
     <a
       ref={setNodeRef}
       style={style}
-      className={`favChip${isDragging ? ' dragging' : ''}`}
+      className={`favChip${isDragging ? ' dragging' : ''}${active ? ' active' : ''}`}
       href={`#/projects/${id}`}
       onClick={(e) => { e.preventDefault(); onOpen(); }}
       {...attributes}
@@ -65,6 +65,7 @@ SortableChip.propTypes = {
   id: PropTypes.string.isRequired,
   name: PropTypes.string,
   onOpen: PropTypes.func.isRequired,
+  active: PropTypes.bool,
 };
 
 function App() {
@@ -387,6 +388,8 @@ function App() {
     if (route?.name !== 'project') return;
     const onCycleProjects = (e) => {
       if (e.key !== 'Tab') return;
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (hasMod) return; // don't hijack Cmd/Ctrl+Tab
       if (searchOpen) return; // let CommandPalette handle Tab when open
       const target = e.target;
       const tag = (target?.tagName || '').toLowerCase();
@@ -397,7 +400,27 @@ function App() {
       const currentId = route?.projectId || '';
       const inFavs = order.includes(currentId);
       const currentIdx = inFavs ? order.indexOf(currentId) : (e.shiftKey ? order.length - 1 : 0);
-      const nextIdx = e.shiftKey ? (currentIdx - 1 + order.length) % order.length : (currentIdx + 1) % order.length;
+      if (e.shiftKey) {
+        // If moving backward from the first favorite, go to Dashboard
+        if (inFavs && currentIdx === 0) {
+          e.preventDefault();
+          navigateTo({ name: 'home' });
+          return;
+        }
+        const prevIdx = inFavs ? currentIdx - 1 : order.length - 1; // no wrap to other edge
+        const prevId = order[prevIdx];
+        if (!prevId || prevId === currentId) return;
+        e.preventDefault();
+        navigateTo({ name: 'project', projectId: prevId });
+        return;
+      }
+      // If moving forward from the last favorite, go to Dashboard
+      if (inFavs && currentIdx === order.length - 1) {
+        e.preventDefault();
+        navigateTo({ name: 'home' });
+        return;
+      }
+      const nextIdx = inFavs ? currentIdx + 1 : 0; // no wrap from last to first
       const nextId = order[nextIdx];
       if (!nextId || nextId === currentId) return;
       e.preventDefault();
@@ -406,6 +429,45 @@ function App() {
     window.addEventListener('keydown', onCycleProjects);
     return () => window.removeEventListener('keydown', onCycleProjects);
   }, [route?.name, route?.projectId, searchOpen, JSON.stringify(order)]);
+
+  // When on Dashboard (home), Tab selects the first favorite project
+  useEffect(() => {
+    if (route?.name !== 'home') return;
+    const onTabFromHome = (e) => {
+      if (e.key !== 'Tab') return;
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (hasMod) return; // don't hijack Cmd/Ctrl+Tab
+      if (searchOpen) return;
+      const target = e.target;
+      const tag = (target?.tagName || '').toLowerCase();
+      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+      if (isEditable) return;
+      if (!Array.isArray(order) || order.length === 0) return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        const lastId = order[order.length - 1];
+        if (lastId) navigateTo({ name: 'project', projectId: lastId });
+      } else {
+        const firstId = order[0];
+        if (firstId) navigateTo({ name: 'project', projectId: firstId });
+      }
+    };
+    window.addEventListener('keydown', onTabFromHome);
+    return () => window.removeEventListener('keydown', onTabFromHome);
+  }, [route?.name, searchOpen, JSON.stringify(order)]);
+
+  // Global: Cmd/Ctrl + Shift + H → go to Dashboard
+  useEffect(() => {
+    const onGoDashboard = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (!hasMod || !e.shiftKey || key !== 'h') return;
+      e.preventDefault();
+      navigateTo({ name: 'home' });
+    };
+    window.addEventListener('keydown', onGoDashboard);
+    return () => window.removeEventListener('keydown', onGoDashboard);
+  }, []);
 
   const handleNewProject = () => {
     Meteor.call('projects.insert', { name: 'New Project', status: 'active' }, (err, res) => {
@@ -451,7 +513,7 @@ function App() {
       <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>Panorama</a></h1>
       {favoriteProjects.length > 0 && (
         <div className="favoritesBar">
-          <a className="favChip" href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
+          <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
             <span className="name">Dashboard</span>
           </a>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -465,6 +527,7 @@ function App() {
                     id={id}
                     name={fp?.name}
                     onOpen={() => openProject(id)}
+                    active={route?.name === 'project' && route?.projectId === id}
                   />
                 );
               })}

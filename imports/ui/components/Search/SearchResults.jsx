@@ -118,6 +118,11 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
       if (onAfterNavigate) onAfterNavigate(index);
       return;
     }
+    if (r.kind === 'userlog') {
+      navigateTo({ name: 'userlog' });
+      if (onAfterNavigate) onAfterNavigate(index);
+      return;
+    }
     navigateTo({ name: 'home' });
     if (onAfterNavigate) onAfterNavigate(index);
   };
@@ -153,6 +158,9 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
                 break;
               case 'link':
                 icon = (<svg className="kindIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4.354 11.646a3 3 0 010-4.242l2-2a3 3 0 014.242 4.242l-.793.793-.707-.707.793-.793a2 2 0 10-2.828-2.828l-2 2a2 2 0 102.828 2.828l.293-.293.707.707-.293.293a3 3 0 01-4.242 0z"/></svg>);
+                break;
+              case 'userlog':
+                icon = (<svg className="kindIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h10v12H3zM4 3v10h8V3zM5 5h6v1H5zm0 2h6v1H5zm0 2h6v1H5z"/></svg>);
                 break;
               default:
                 icon = null;

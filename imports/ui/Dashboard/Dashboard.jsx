@@ -189,6 +189,9 @@ export const Dashboard = () => {
             key={t._id}
             task={t}
             showProject={true}
+            allowProjectChange
+            projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+            onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
             projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
             projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
             projectColor={(projects.find(p => p._id === t.projectId)?.colorLabel) || '#6b7280'}

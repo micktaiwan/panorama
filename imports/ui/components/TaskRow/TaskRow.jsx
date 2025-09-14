@@ -13,6 +13,10 @@ export const TaskRow = ({
   projectColor,
   projectHref,
   showProject = false,
+  allowProjectChange = false,
+  projectOptions = [],
+  onMoveProject,
+  showMoveProjectButton = false,
   // Controls
   showStatusSelect = true,
   showDeadline = true,
@@ -37,6 +41,7 @@ export const TaskRow = ({
   onToggleImportant
 }) => {
   const Container = as || 'li';
+  const [showMoveSelect, setShowMoveSelect] = React.useState(false);
   if (!task) return null;
   const status = task.status || 'todo';
   const sev = task.deadline ? deadlineSeverity(task.deadline) : '';
@@ -53,18 +58,38 @@ export const TaskRow = ({
             onChange={(e) => { if (e.target.checked && typeof onMarkDone === 'function') onMarkDone(task); }}
           />
         ) : null}
-        {showProject ? (
-          projectHref ? (
-            <a href={projectHref} className="taskProjectLink">
-              <svg className="projFlag" viewBox="0 0 16 16" aria-hidden="true">
-                <path fill={projectColor || '#6b7280'} d="M2 2v12h2V9h5l1 1h4V3h-3l-1-1H4V2H2z" />
-              </svg>
-              {projectName || 'Open project'}
-            </a>
-          ) : (
-            <span className="taskProjectLink">—</span>
-          )
-        ) : null}
+        {showProject ? (() => {
+          if (allowProjectChange) {
+            const options = Array.isArray(projectOptions) ? projectOptions : [];
+            return (
+              <select
+                className="taskProjectLink"
+                value={task.projectId || ''}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  if (typeof onMoveProject === 'function') onMoveProject(val);
+                }}
+                title="Move to project"
+              >
+                <option value="">(no project)</option>
+                {options.map((o) => (
+                  <option key={o?.value || '__none__'} value={o?.value || ''}>{o?.label || ''}</option>
+                ))}
+              </select>
+            );
+          }
+          if (projectHref) {
+            return (
+              <a href={projectHref} className="taskProjectLink">
+                <svg className="projFlag" viewBox="0 0 16 16" aria-hidden="true">
+                  <path fill={projectColor || '#6b7280'} d="M2 2v12h2V9h5l1 1h4V3h-3l-1-1H4V2H2z" />
+                </svg>
+                {projectName || 'Open project'}
+              </a>
+            );
+          }
+          return (<span className="taskProjectLink">—</span>);
+        })() : null}
       </div>
       <div className={`taskMain${!showStatusSelect ? ' noStatus' : ''}${inlineActions ? ' inline' : ''}`}>
         {showStatusSelect ? (
@@ -114,6 +139,34 @@ export const TaskRow = ({
       </div>
       {!inlineActions ? (
       <div className="taskRight">
+        {!showProject && allowProjectChange && showMoveProjectButton ? (
+          <span className="taskActions" style={{ marginRight: 8 }}>
+            {showMoveSelect ? (
+              <>
+                <select
+                  className="taskProjectLink"
+                  value={task.projectId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    if (typeof onMoveProject === 'function') onMoveProject(val);
+                    setShowMoveSelect(false);
+                  }}
+                  title="Move to project"
+                >
+                  <option value="">(no project)</option>
+                  {(Array.isArray(projectOptions) ? projectOptions : []).map((o) => {
+                    const value = o && o.value ? o.value : '';
+                    const label = o && o.label ? o.label : '';
+                    return (<option key={value || '__none__'} value={value}>{label}</option>);
+                  })}
+                </select>
+                <button className="iconButton" title="Cancel" onClick={() => setShowMoveSelect(false)}>✕</button>
+              </>
+            ) : (
+              <button className="iconButton" title="Move to project" onClick={() => setShowMoveSelect(true)}>⇄</button>
+            )}
+          </span>
+        ) : null}
         {showDeadline ? (
           editableDeadline ? (
             <div>
@@ -180,6 +233,10 @@ TaskRow.propTypes = {
   projectColor: PropTypes.string,
   projectHref: PropTypes.string,
   showProject: PropTypes.bool,
+  allowProjectChange: PropTypes.bool,
+  projectOptions: PropTypes.arrayOf(PropTypes.shape({ value: PropTypes.string, label: PropTypes.string })),
+  onMoveProject: PropTypes.func,
+  showMoveProjectButton: PropTypes.bool,
   // Controls
   showStatusSelect: PropTypes.bool,
   showDeadline: PropTypes.bool,

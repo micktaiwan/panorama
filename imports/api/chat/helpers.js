@@ -191,7 +191,8 @@ export const FIELD_ALLOWLIST = {
   people: ['name', 'createdAt', 'updatedAt'],
   teams: ['name', 'createdAt', 'updatedAt'],
   files: ['projectId', 'name', 'createdAt', 'updatedAt'],
-  alarms: ['title', 'enabled', 'when', 'createdAt', 'updatedAt']
+  alarms: ['title', 'enabled', 'when', 'createdAt', 'updatedAt'],
+  userLogs: ['content', 'createdAt']
 };
 
 // Map collection name to lists.* memory key
@@ -207,7 +208,8 @@ export const getListKeyForCollection = (collection) => {
     people: 'people',
     teams: 'teams',
     files: 'files',
-    alarms: 'alarms'
+    alarms: 'alarms',
+    userLogs: 'userLogs'
   };
   return map[c] || c;
 };

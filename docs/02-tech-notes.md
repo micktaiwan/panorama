@@ -364,5 +364,5 @@ export const Example = ({ sessionId }) => {
 
 ### Error handling and hooks
 
-- Avoid silent catches; log errors (console.error on server; surfaced errors or console.warn on client when non-fatal).
+- Avoid silent catches; log errors
 - Keep hooks order stable. If using a scheduler hook (e.g., `useAlarmScheduler`), declare at the top level of the app shell; never conditionally mount/unmount based on data presence—guard inside the effect logic instead.

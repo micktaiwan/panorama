@@ -80,7 +80,8 @@ export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = 
   try {
     await ensureCollectionIfNeeded();
     const vector = await embedText(text);
-    const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), ...extraPayload };
+    const nowMs = Date.now();
+    const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
     if (projectId) payload.projectId = projectId;
     if (sessionId) payload.sessionId = sessionId;
     const pointId = toPointId(kind, id);
@@ -113,6 +114,12 @@ export const deleteByProjectId = async (projectId) => {
 export const deleteBySessionId = async (sessionId) => {
   const client = await getQdrantClient();
   await client.delete(COLLECTION(), { filter: { must: [{ key: 'sessionId', match: { value: sessionId } }] } });
+};
+
+// Delete all points for a given kind (e.g. 'task', 'project', 'note', 'userlog', ...)
+export const deleteByKind = async (kind) => {
+  const client = await getQdrantClient();
+  await client.delete(COLLECTION(), { filter: { must: [{ key: 'kind', match: { value: String(kind) } }] } });
 };
 
 export const ensureCollection = async () => {
@@ -198,7 +205,8 @@ export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessio
     try {
       const chunk = chunks[i];
       const vector = await embedText(chunk);
-      const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(chunk), chunkIndex: i, ...extraPayload };
+      const nowMs = Date.now();
+      const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(chunk), chunkIndex: i, indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
       if (projectId) payload.projectId = projectId;
       if (sessionId) payload.sessionId = sessionId;
       const pointId = toPointId(kind, `${id}#${i}`);
