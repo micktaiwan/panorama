@@ -10,27 +10,32 @@
 }
 
 .notify {
-  background: var(--panel);
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(17, 24, 39, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   color: var(--text);
   display: block;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   overflow: hidden;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transform: translateY(8px) scale(0.98);
+  opacity: 0;
+  animation: notify-in 200ms ease-out forwards;
 }
 
 .notifySplit { display: flex; max-width: min(560px, 92vw); }
 .notifyAside {
   flex: 0 0 50px;
   width: 50px;
-  background: #0f1420;
-  border-right: 1px solid var(--border);
+  background: #111827;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .notifyAside img { max-width: 36px; max-height: 36px; border-radius: 8px; }
-.notifyAside svg { width: 36px; height: 36px; }
+.notifyAside svg { width: 36px; height: 36px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
 
 .notifyMain {
   flex: 1 1 auto;
@@ -40,9 +45,27 @@
   align-items: center;
 }
 
-.notify.info { border-color: rgba(99, 102, 241, 0.5); }
-.notify.error { border-color: rgba(239, 68, 68, 0.6); }
-.notify.success { border-color: rgba(16, 185, 129, 0.6); }
+.notifyMain span { font-weight: 500; }
+
+.notify.info .notifyAside { background: #4f46e5; }
+.notify.error .notifyAside { background: #ef4444; }
+.notify.success .notifyAside { background: #10b981; }
+.notify.warning .notifyAside { background: #f59e0b; }
+
+/* Exit animation */
+.notify.closing {
+  animation: notify-out 180ms ease-in forwards;
+}
+
+@keyframes notify-in {
+  from { transform: translateY(8px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes notify-out {
+  from { transform: translateY(0) scale(1); opacity: 1; }
+  to { transform: translateY(8px) scale(0.98); opacity: 0; }
+}
 
 .ml8 { margin-left: 8px; }
 

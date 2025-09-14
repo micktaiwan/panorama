@@ -73,6 +73,10 @@ import { WebApp } from 'meteor/webapp';
 
 Meteor.startup(() => {
   // Place server-side initialization here as your app grows.
+  const scriptSrc = Meteor.isDevelopment
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'";
+
   const csp = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -82,7 +86,7 @@ Meteor.startup(() => {
     "media-src 'self' blob:",
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
-    "script-src 'self' 'unsafe-inline'",
+    scriptSrc,
     "connect-src 'self' ws: wss: http: https:"
   ].join('; ');
 

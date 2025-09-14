@@ -1,3 +1,7 @@
+// Suppress Electron security warnings only during development
+if (process.env.NODE_ENV !== 'production') {
+  process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
+}
 const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain, Notification, globalShortcut } = require('electron');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require('path');
