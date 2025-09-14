@@ -43,51 +43,11 @@ Provide a global AI chat interface that can be used to ask questions about the w
 - History persistence: flat `ChatsCollection` storing individual messages for reload resilience.
 - UI feedback: user message appears instantly; header shows "Sending…"; a temporary assistant "Thinking…" bubble is displayed while waiting.
 
-## Tools (planned whitelist)
+## Tools
 
-- projects.insert(name)
-- projects.update(id, fields)
-- tasks.insert({ projectId, title, deadline? })
-- tasks.update(id, fields)
-- chat.tasks(search)
-- chat.overdue(now?)
-- chat.tasksByProject(projectId)
-- chat.tasksFilter({ status?, tag?, projectId? })
-- notes.insert({ projectId, title?, content })
-- noteSessions.insert({ projectId })
-- noteLines.insert({ sessionId, content })
-- links.insert({ projectId, name, url })
+The source code is the reference. See `imports/api/chat/tools_helpers.js` for the up-to-date definition of tools exposed to the model (Responses API) and `TOOL_HANDLERS` in `imports/api/chat/methods.js` for their server-side implementation.
 
-All tools must:
-
-- be confirmed by the user before execution,
-- validate inputs server-side,
-- log an audit entry (tool name, inputs, result, timestamp).
-
-### Tool: chat.tasks(search)
-
-- Input: `{ dueBefore?: ISODateString, projectId?: string, status?: 'todo'|'doing'|'done' }`
-- Server normalization:
-  - If `dueBefore` is missing/invalid, set to local tomorrow 23:59:59.
-  - Exclude completed tasks by default: `status != 'done'` (align with Panorama UI).
-  - Deadline matches Date or string `YYYY-MM-DD` formats.
-- Output: array of `{ _id|id, title, projectId, status, deadline }`.
-- Synthesis: the final answer uses ONLY tool results and includes all tasks + total count.
-
-### Tool: chat.overdue(now?)
-
-- Input: `{ now?: ISODateString }` (optional; server defaults to current time)
-- Behavior: returns non-completed tasks with deadline <= now (supports Date or `YYYY-MM-DD`).
-
-### Tool: chat.tasksByProject(projectId)
-
-- Input: `{ projectId: string }`
-- Behavior: returns non-completed tasks for the project.
-
-### Tool: chat.tasksFilter({ status?, tag?, projectId? })
-
-- Input: `{ status?: string, tag?: string, projectId?: string }`
-- Behavior: returns tasks filtered by simple attributes (no DB mutations).
+Detailed descriptions (inputs/outputs/behaviors) are auto-documented in the code (schemas and selectors). Avoid duplication here.
 
 ## Planner roadmap
 
@@ -218,38 +178,7 @@ Here is a pragmatic, Planner-first prioritized proposal to cover "all" collectio
 
 Priority 1 — Read-only (quick coverage, useful for the Planner)
 
-- Projects
-  - [ ] chat_projectsList()
-  - [ ] chat_projectByName(name)
-  - [ ] chat_projectsSearch(query?, limit?)
-- Tasks
-  - [ ] chat_tasks({ projectId?, dueBefore?, status? })
-  - [ ] chat_overdue({ now? })
-  - [ ] chat_tasksByProject(projectId)
-  - [ ] chat_tasksFilter({ status?, tag?, projectId? })
-- Notes & Sessions
-  - [ ] chat_notesByProject(projectId)
-  - [ ] chat_noteSessionsByProject(projectId)
-  - [ ] chat_noteLinesBySession(sessionId)
-  - [ ] chat_notesSearch(query?, projectId?, limit?)
-- Links
-  - [ ] chat_linksByProject(projectId)
-  - [ ] chat_linksSearch(query?, projectId?, limit?)
-- People / Teams
-  - [ ] chat_peopleList(filter?)
-  - [ ] chat_teamsList(filter?)
-- Files
-  - [ ] chat_filesByProject(projectId)
-  - [ ] chat_filesSearch(query?, projectId?, limit?)
-- Alarms
-  - [ ] chat_alarmsList({ enabled? })
-- Situations (if used)
-  - [ ] chat_situationsList({ projectId? })
-  - [ ] chat_situationNotes(situationId)
-  - [ ] chat_situationQuestions(situationId)
-  - [ ] chat_situationSummaries(situationId)
-- Semantic
-  - [ ] chat_semanticSearch(query, limit?)
+- See `TOOL_HANDLERS` for the effective list of read-only tools (tasks, projects, notes, links, people, teams, files, alarms) and `CHAT_TOOLS_DEFINITION` for model exposure.
 
 Priority 2 — Essential mutations (with confirmation)
 
@@ -277,9 +206,8 @@ Conventions (for any new tool)
 - Input
   - Strict validation (ISO dates, enums), no ambiguous optional fields.
   - Confirmation required for any mutation (confirmed: true).
-- Output (standard envelope)
-  - { data, total?, error?, warning?, meta? }
-  - No internal IDs in the user interface (useful only for memory chaining).
+- Output
+  - Contracts are specified in the code (schemas/handlers). No duplication here.
 - Standard memory (Planner-friendly)
   - lists.* for arrays (e.g. lists.tasks, lists.projects)
   - entities.* for unique objects (e.g. entities.project)

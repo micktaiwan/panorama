@@ -70,7 +70,6 @@ export const buildFilterSelector = (filters = {}) => {
   return sel;
 };
 
-
 // Build a selector to find a project by name (case-insensitive; trims input).
 // Uses a case-insensitive regex. For accent-insensitive needs, consider storing a normalizedName field.
 export const buildProjectByNameSelector = (rawName) => {
@@ -252,5 +251,3 @@ export const compileWhere = (collection, where = {}) => {
   };
   return compileNode(where);
 };
-
-

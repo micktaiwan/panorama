@@ -4,6 +4,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { buildProjectByNameSelector, compileWhere, getListKeyForCollection, FIELD_ALLOWLIST } from '/imports/api/chat/helpers';
+import { buildCitationsFromMemory, buildCitationsFromToolResults, buildPlannerConfig, buildResponsesFirstPayload, extractResponsesToolCalls } from '/imports/api/chat/tools_helpers';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
 
@@ -464,10 +465,8 @@ Meteor.methods({
     if (!query) throw new Meteor.Error('bad-request', 'query is required');
 
     // Semantic search available as chat_semanticSearch tool when planner needs it
-    const sources = [];
-
     const system = buildSystemPrompt();
-    const contextBlock = makeContextBlock(sources.map(s => ({ kind: s.kind, title: s.title, text: s.text, id: s.id })));
+    const contextBlock = makeContextBlock([]);
     const historyBlock = (history || []).map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
     const user = [
       `User question: ${query}`,
@@ -485,68 +484,11 @@ Meteor.methods({
     const { default: fetch } = await import('node-fetch');
     // Mini planner: analyze intent → JSON plan (≤5 steps)
     await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning…', isStatus: true, createdAt: new Date() });
-    const plannerSchema = {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        steps: {
-          type: 'array',
-          maxItems: 5,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              tool: { type: 'string', enum: Object.keys(TOOL_SCHEMAS) },
-              args: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  dueBefore: { type: 'string' },
-                  projectId: { type: 'string' },
-                  status: { type: 'string' },
-                  now: { type: 'string' },
-                  tag: { type: 'string' },
-                  name: { type: 'string' },
-                  sessionId: { type: 'string' },
-                  enabled: { type: 'boolean' },
-                  query: { type: 'string' },
-                  limit: { type: 'number' },
-                  collection: { type: 'string' },
-                  where: { type: 'object' },
-                  select: { type: 'array', items: { type: 'string' } }
-                }
-              }
-            },
-            required: ['tool', 'args']
-          }
-        },
-        stopWhen: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            have: { type: 'array', maxItems: 5, items: { type: 'string' } }
-          }
-        }
-      },
-      required: ['steps']
-    };
-    const plannerPrompt = [
-      'You will plan the minimal sequence of tool calls to answer the user.',
-      'Choose only from the allowed tools and provide precise arguments.',
-      'Use chat_overdue for overdue items (<= now).',
-      'Use chat_tasks with dueBefore for deadlines (e.g., tomorrow).',
-      'Use chat_tasksByProject when a project id is specified.',
-      'If the user names a project, first call chat_projectByName, then call chat_tasksByProject. You may omit projectId in the second step; the runtime will bind it from the previous result.',
-      'Use chat_tasksFilter for status/tag filters.',
-      'Use chat_semanticSearch for finding relevant documents by content.',
-      'IMPORTANT: Include stopWhen.have to avoid unnecessary steps. Examples: ["lists.tasks"] after getting tasks, ["ids.projectId"] after finding project, ["lists.*"] when any list is populated.',
-      'Leverage variable binding: use {"var":"ids.projectId"} to reference previously found IDs.',
-      'Output JSON only that matches the schema. Keep at most 5 steps.'
-    ].join(' ');
-    const plannerMessages = [
-      { role: 'system', content: `${buildSystemPrompt()} Allowed tools: ${Object.keys(TOOL_SCHEMAS).join(', ')}. ${plannerPrompt}` },
-      { role: 'user', content: user }
-    ];
+    const { plannerSchema, plannerPrompt, plannerMessages } = buildPlannerConfig(
+      buildSystemPrompt(),
+      user,
+      Object.keys(TOOL_SCHEMAS)
+    );
     // Add timeout to planner call
     const plannerController = new AbortController();
     const plannerTimeoutId = setTimeout(() => plannerController.abort(), 30000);
@@ -607,12 +549,10 @@ Meteor.methods({
       if (evaluateStopWhen(stopArtifacts, memory)) {
         // Nothing to do; synthesize empty response promptly
         await ChatsCollection.insertAsync({ role: 'assistant', content: 'No data to retrieve.', isStatus: true, createdAt: new Date() });
-        const citations = [];
-        await ChatsCollection.insertAsync({ role: 'assistant', content: 'Done.', citations, createdAt: new Date() });
-        return { text: 'Done.', citations };
+        await ChatsCollection.insertAsync({ role: 'assistant', content: 'Done.', createdAt: new Date() });
+        return { text: 'Done.', citations: [] };
       }
       const MAX_STEPS = 5;
-      let replanned = false;
       for (let i = 0; i < Math.min(execSteps.length, MAX_STEPS); i += 1) {
         const step = execSteps[i] || {};
         
@@ -631,7 +571,7 @@ Meteor.methods({
           
         } catch (stepError) {
           // Handle missing arguments with re-planning
-          if (stepError.message.includes('Missing required arguments') && !replanned) {
+          if (stepError.message.includes('Missing required arguments')) {
             // Re-plan once with memory snapshot
             await ChatsCollection.insertAsync({ role: 'assistant', content: 'Re-planning…', isStatus: true, createdAt: new Date() });
             const mem = {
@@ -698,7 +638,6 @@ Meteor.methods({
                 console.error('[chat.ask][replan] fetch failed', fetchError);
               }
             }
-            replanned = true;
             break;
           } else {
             // Re-throw non-replannable errors
@@ -763,122 +702,13 @@ Meteor.methods({
       }
       const data2 = await resp2.json();
       let text = data2?.choices?.[0]?.message?.content || '';
-      const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
-      // The client already persisted the user message for correct ordering; persist only assistant.
-      await ChatsCollection.insertAsync({ role: 'assistant', content: text, citations, createdAt: new Date() });
+      const citations = buildCitationsFromMemory(memory);
+      const base = { role: 'assistant', content: text, createdAt: new Date() };
+      await ChatsCollection.insertAsync(citations.length ? { ...base, citations } : base);
       return { text, citations };
     }
     // Declare available tools for the model (fallback path)
-    const tools = [
-      {
-        type: 'function',
-        name: 'chat_tasks',
-        description: 'List non-completed tasks filtered by deadline upper bound and/or project. Use for queries like tasks due before a date (e.g., tomorrow). Exclude completed tasks by default.',
-        parameters: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            dueBefore: { type: 'string', description: 'ISO date/time upper bound for deadline (server normalizes to local tomorrow 23:59:59 if omitted)' },
-            projectId: { type: 'string', description: 'Filter by project id' },
-            status: { type: 'string', enum: ['todo', 'doing', 'done'] }
-          }
-        }
-      },
-      {
-        type: 'function',
-        name: 'chat_overdue',
-        description: 'Return non-completed tasks with deadline <= now. Use when the user asks for overdue or late items. Defaults to current time if now is not provided.',
-        parameters: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            now: { type: 'string', description: 'ISO date/time (optional). Defaults to current time.' }
-          }
-        }
-      },
-      {
-        type: 'function',
-        name: 'chat_tasksByProject',
-        description: 'Return non-completed tasks for a specific project. Use when the user mentions a project or asks for tasks within a project.',
-        parameters: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            projectId: { type: 'string' }
-          },
-          required: ['projectId']
-        }
-      },
-      {
-        type: 'function',
-        name: 'chat_tasksFilter',
-        description: 'Return tasks filtered by simple attributes like status, tag, and/or projectId. Use when the user specifies a tag or status filter.',
-        parameters: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            status: { type: 'string', description: 'Task status to filter (e.g., todo, doing, done)' },
-            tag: { type: 'string', description: 'Tag value to filter' },
-            projectId: { type: 'string', description: 'Optional project id to scope the filter' }
-          }
-        }
-      }
-      ,
-      {
-        type: 'function',
-        name: 'chat_projectsList',
-        description: 'List projects (name, description). Use for project discovery or selection.',
-        parameters: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {}
-        }
-      },
-      {
-        type: 'function',
-        name: 'chat_projectByName',
-        description: 'Fetch a single project by its name (case-insensitive). Use when the user names a project.',
-        parameters: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            name: { type: 'string', description: 'Project name (case-insensitive match)' }
-          },
-          required: ['name']
-        }
-      },
-      {
-        type: 'function',
-        name: 'chat_semanticSearch',
-        description: 'Semantic search over workspace items (projects, tasks, notes, links). Returns top matches with titles and optional URLs.',
-        parameters: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            query: { type: 'string', description: 'User query for semantic retrieval' },
-            limit: { type: 'number', description: 'Max results (default 8)' }
-          },
-          required: ['query']
-        }
-      },
-      { type: 'function', name: 'chat_notesByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
-      { type: 'function', name: 'chat_noteSessionsByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
-      { type: 'function', name: 'chat_noteLinesBySession', parameters: { type: 'object', additionalProperties: false, properties: { sessionId: { type: 'string' } }, required: ['sessionId'] } },
-      { type: 'function', name: 'chat_linksByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
-      { type: 'function', name: 'chat_peopleList', parameters: { type: 'object', additionalProperties: false, properties: {} } },
-      { type: 'function', name: 'chat_teamsList', parameters: { type: 'object', additionalProperties: false, properties: {} } },
-      { type: 'function', name: 'chat_filesByProject', parameters: { type: 'object', additionalProperties: false, properties: { projectId: { type: 'string' } }, required: ['projectId'] } },
-      { type: 'function', name: 'chat_alarmsList', parameters: { type: 'object', additionalProperties: false, properties: { enabled: { type: 'boolean' } } } },
-      { type: 'function', name: 'chat_collectionQuery', description: 'Generic read-only query across collections with a validated where DSL. Use to filter items by fields.', parameters: { type: 'object', additionalProperties: false, properties: { collection: { type: 'string' }, where: { type: 'object' }, select: { type: 'array', items: { type: 'string' } }, limit: { type: 'number' }, sort: { type: 'object' } }, required: ['collection'] } },
-      
-    ];
-    const firstPayload = {
-      model: 'o4-mini',
-      instructions: system,
-      input: [ { role: 'user', content: [ { type: 'input_text', text: user } ] } ],
-      tools,
-      tool_choice: 'auto'
-    };
+    const firstPayload = buildResponsesFirstPayload(system, user);
     
     const resp = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -892,31 +722,14 @@ Meteor.methods({
     }
     const data = await resp.json();
     // Extract tool calls (Responses API emits 'function_call' items in output[])
-    const outputArray = Array.isArray(data?.output) ? data.output : [];
-    const toolCallsFromOutput = outputArray
-      .filter((it) => it && (it.type === 'tool_call' || it.type === 'function_call'))
-      .map((tc) => {
-        const argsStr = (typeof tc?.arguments === 'string') ? tc.arguments : (tc?.function?.arguments || '');
-        let argsObj = {};
-        try { if (argsStr) argsObj = JSON.parse(argsStr); } catch (e) { console.error('[chat.ask] Failed to parse tool arguments', e); argsObj = {}; }
-        return {
-          id: tc?.id || tc?.tool_call_id || tc?.call_id || '',
-          name: tc?.name || tc?.tool_name || tc?.function?.name || '',
-          arguments: argsObj
-        };
-      });
-    const toolCallsTop = Array.isArray(data?.tool_calls) ? data.tool_calls.map((tc) => ({
-      id: tc?.id || tc?.tool_call_id || '',
-      name: tc?.function?.name || tc?.name || '',
-      arguments: (() => { try { return typeof tc?.function?.arguments === 'string' ? JSON.parse(tc.function.arguments) : (tc?.arguments || {}); } catch { return {}; } })()
-    })) : [];
-    const toolCallsAll = (toolCallsFromOutput.length > 0 ? toolCallsFromOutput : toolCallsTop);
-    const toolCalls = toolCallsAll.slice(0, 5);
+    const toolCalls = extractResponsesToolCalls(data);
     
-    let text = data?.output_text || (Array.isArray(outputArray) ? outputArray.map(p => p?.content?.[0]?.text || '').join('') : '') || '';
+    const outputArray = Array.isArray(data?.output) ? data.output : [];
+    let text = data?.output_text || (outputArray.length ? outputArray.map(p => p?.content?.[0]?.text || '').join('') : '') || '';
+    let toolResults = [];
 
     if (toolCalls.length > 0) {
-      const toolResults = [];
+      toolResults = [];
       for (const call of toolCalls) {
         if (call.name === 'chat_tasks') {
           try {
@@ -1018,7 +831,6 @@ Meteor.methods({
               const prev = await fetchPreview(p.kind, p.docId);
               out.push({ kind: p.kind, id: p.docId, title: prev.title, url: prev.url || null, score: items[i]?.score || 0 });
             }
-            
             toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ results: out, total: out.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ error: e?.message || String(e) }) });
@@ -1050,7 +862,6 @@ Meteor.methods({
         assistantToolCallMsg,
         ...toolMsgs
       ];
-      
       const resp2 = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -1065,44 +876,11 @@ Meteor.methods({
       text = data2?.choices?.[0]?.message?.content || '';
     }
     
-    const citations = sources.map(s => ({ id: s.id, title: s.title, kind: s.kind, projectId: s.projectId, sessionId: s.sessionId, url: s.url || null }));
-
-    // Persist only assistant: client already persisted the user message for proper ordering
-    await ChatsCollection.insertAsync({ role: 'assistant', content: text, citations, createdAt: new Date() });
+    // Build citations from toolResults if semantic search was used
+    const citations = buildCitationsFromToolResults(toolCalls, toolResults);
+    const base = { role: 'assistant', content: text, createdAt: new Date() };
+    await ChatsCollection.insertAsync(citations.length ? { ...base, citations } : base);
     return { text, citations };
   },
-  async 'chat.tasks'(search = {}) {
-    const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const selector = {};
-    if (search && typeof search.projectId === 'string' && search.projectId.trim()) selector.projectId = search.projectId.trim();
-    if (search && typeof search.status === 'string' && search.status.trim()) selector.status = search.status.trim();
-    if (search && typeof search.dueBefore === 'string' && search.dueBefore.trim()) {
-      const dt = new Date(search.dueBefore);
-      if (!isNaN(dt.getTime())) selector.deadline = { $lte: dt.toISOString().slice(0, 10) };
-    }
-    const tasks = await TasksCollection.find(selector, { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } }).fetchAsync();
-    return tasks.map(t => ({ _id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-  },
-  async 'chat.overdue'(params = {}) {
-    const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
-    const nowIso = (typeof params?.now === 'string' && params?.now?.trim()) ? params.now : new Date().toISOString();
-    const selector = buildOverdueSelector(nowIso);
-    const tasks = await TasksCollection.find(selector, { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } }).fetchAsync();
-    return tasks.map(t => ({ _id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-  },
-  async 'chat.tasksByProject'(search = {}) {
-    const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
-    const selector = buildByProjectSelector(search?.projectId);
-    const tasks = await TasksCollection.find(selector, { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } }).fetchAsync();
-    return tasks.map(t => ({ _id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-  },
-  async 'chat.tasksFilter'(filters = {}) {
-    const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const { buildFilterSelector } = await import('/imports/api/chat/helpers');
-    const selector = buildFilterSelector(filters || {});
-    const tasks = await TasksCollection.find(selector, { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } }).fetchAsync();
-    return tasks.map(t => ({ _id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-  }
+  
 });
