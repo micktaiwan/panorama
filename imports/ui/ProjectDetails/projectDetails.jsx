@@ -34,6 +34,11 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const loadFiles = useSubscribe('files.byProject', projectId);
 
   const project = useFind(() => ProjectsCollection.find({ _id: projectId }))[0];
+  const allProjects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1 } }));
+  const projectOptions = useMemo(
+    () => allProjects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })),
+    [allProjects]
+  );
   const tasks = useFind(() => TasksCollection.find({ projectId }, { sort: { updatedAt: -1 } }));
   const activeTasks = useMemo(() => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
@@ -304,6 +309,10 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                     as="div"
                     task={t}
                     showProject={false}
+                    allowProjectChange
+                    showMoveProjectButton
+                    projectOptions={projectOptions}
+                    onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
                     showStatusSelect
                     showDeadline
                     editableDeadline
@@ -469,6 +478,10 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                     as="div"
                     task={t}
                     showProject={false}
+                    allowProjectChange
+                    showMoveProjectButton
+                    projectOptions={projectOptions}
+                    onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
                     showStatusSelect
                     showDeadline
                     editableDeadline

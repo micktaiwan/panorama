@@ -74,7 +74,7 @@ if (typeof window !== 'undefined') {
       });
     } catch (e) {
       // Best-effort only; avoid throwing in global setup
-      console.warn('[globalErrors] server errors subscription failed', e);
+      console.error('[globalErrors] server errors subscription failed', e);
     }
   }
 }

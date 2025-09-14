@@ -266,6 +266,9 @@ const TOOL_HANDLERS = {
     } else if (collection === 'alarms') {
       const { AlarmsCollection } = await import('/imports/api/alarms/collections');
       cursor = AlarmsCollection;
+    } else if (collection === 'userLogs') {
+      const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
+      cursor = UserLogsCollection;
     } else {
       throw new Error('Unsupported collection');
     }
@@ -427,7 +430,7 @@ const executeStep = async (step, memory, callId, retries = 3) => {
     } catch (error) {
       lastError = error;
       if (attempt < retries - 1) {
-        console.warn(`[executeStep] ${tool} attempt ${attempt + 1} failed, retrying:`, error.message);
+        console.error(`[executeStep] ${tool} attempt ${attempt + 1} failed, retrying:`, error.message);
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000)); // exponential backoff
       }
     }
@@ -485,6 +488,15 @@ Meteor.methods({
     const apiKey = getOpenAiApiKey();
     if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
     const { default: fetch } = await import('node-fetch');
+    const fetchWithTimeout = async (url, init = {}, ms = 30000) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ms);
+      try {
+        return await fetch(url, { ...(init || {}), signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
     // Mini planner: analyze intent → JSON plan (≤5 steps)
     await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning…', isStatus: true, createdAt: new Date() });
     const { plannerSchema, plannerPrompt, plannerMessages } = buildPlannerConfig(
@@ -492,25 +504,18 @@ Meteor.methods({
       user,
       Object.keys(TOOL_SCHEMAS)
     );
-    // Add timeout to planner call
-    const plannerController = new AbortController();
-    const plannerTimeoutId = setTimeout(() => plannerController.abort(), 30000);
-    
     let plannerResp;
     try {
-      plannerResp = await fetch('https://api.openai.com/v1/chat/completions', {
+      plannerResp = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: 'o4-mini',
           messages: plannerMessages,
           response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } }
-        }),
-        signal: plannerController.signal
-      });
-      clearTimeout(plannerTimeoutId);
+        })
+      }, 30000);
     } catch (plannerError) {
-      clearTimeout(plannerTimeoutId);
       if (plannerError.name === 'AbortError') {
         console.error('[chat.ask][planner] timeout after 30s');
         await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning timed out. Falling back to auto tools.', error: true, createdAt: new Date() });
@@ -594,18 +599,12 @@ Meteor.methods({
               { role: 'user', content: user + '\n\nMemory snapshot:\n' + safeStringify(mem) }
             ];
             
-            // Add timeout to fetch call
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
-            
             try {
-              const respRe = await fetch('https://api.openai.com/v1/chat/completions', {
+              const respRe = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({ model: 'o4-mini', messages: replanMessages, response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } } }),
-                signal: controller.signal
-              });
-              clearTimeout(timeoutId);
+                body: JSON.stringify({ model: 'o4-mini', messages: replanMessages, response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: false, schema: plannerSchema } } })
+              }, 30000);
               if (respRe.ok) {
                 const pdata2 = await respRe.json();
                 const ptext2 = pdata2?.choices?.[0]?.message?.content || '';
@@ -664,7 +663,6 @@ Meteor.methods({
                 console.error('[chat.ask][replan] OpenAI failed', { status: respRe.status, statusText: respRe.statusText, body: errTextRe });
               }
             } catch (fetchError) {
-              clearTimeout(timeoutId);
               if (fetchError.name === 'AbortError') {
                 console.error('[chat.ask][replan] timeout after 30s');
               } else {
@@ -692,37 +690,38 @@ Meteor.methods({
       
       // Synthesis via Chat Completions using only tool results
       await ChatsCollection.insertAsync({ role: 'assistant', content: 'Synthesizing…', isStatus: true, createdAt: new Date() });
+      // Filter out skipped tool results so they don't pollute synthesis context
+      const parsedResults = toolResults.map(tr => {
+        let payload;
+        try { payload = JSON.parse(tr.output || '{}'); } catch { payload = {}; }
+        return { ...tr, _payload: payload };
+      });
+      const finalResults = parsedResults.filter(tr => tr._payload && tr._payload.skipped !== true);
+
       const assistantToolCallMsg = { 
         role: 'assistant', 
-        tool_calls: toolResults.map((tr, idx) => ({
+        tool_calls: finalResults.map((tr, idx) => ({
           id: tr.tool_call_id || `call_${idx+1}`, 
           type: 'function', 
           function: { 
-            name: tr.tool || execSteps[idx]?.tool || 'unknown_tool', 
-            arguments: JSON.stringify(tr.args || execSteps[idx]?.args || {}) 
+            name: tr.tool || 'unknown_tool', 
+            arguments: JSON.stringify(tr.args || {}) 
           } 
         }))
       };
-      const toolMsgs = toolResults.map(tr => ({ role: 'tool', tool_call_id: tr.tool_call_id, content: tr.output }));
+      const toolMsgs = finalResults.map(tr => ({ role: 'tool', tool_call_id: tr.tool_call_id, content: tr.output }));
       const synthSys = "You are Panorama's assistant. Compose the final answer using ONLY the tool results. Include all items and the total count. Be concise. Do NOT show internal IDs (task or project). Show only human-readable fields (title, status, deadline).";
       const synthUser = `Answer the user's question: "${query}" using only the provided tool results.`;
       const cmplMessages = [ { role: 'system', content: synthSys }, { role: 'user', content: synthUser }, assistantToolCallMsg, ...toolMsgs ];
       
-      // Add timeout to synthesis call
-      const synthController = new AbortController();
-      const synthTimeoutId = setTimeout(() => synthController.abort(), 30000);
-      
       let resp2;
       try {
-        resp2 = await fetch('https://api.openai.com/v1/chat/completions', {
+        resp2 = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
           method: 'POST', 
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, 
-          body: JSON.stringify({ model: 'o4-mini', messages: cmplMessages }),
-          signal: synthController.signal
-        });
-        clearTimeout(synthTimeoutId);
+          body: JSON.stringify({ model: 'o4-mini', messages: cmplMessages })
+        }, 30000);
       } catch (synthError) {
-        clearTimeout(synthTimeoutId);
         if (synthError.name === 'AbortError') {
           throw new Meteor.Error('openai-timeout', 'Synthesis request timed out after 30 seconds');
         }
@@ -743,11 +742,11 @@ Meteor.methods({
     // Declare available tools for the model (fallback path)
     const firstPayload = buildResponsesFirstPayload(system, user);
     
-    const resp = await fetch('https://api.openai.com/v1/responses', {
+    const resp = await fetchWithTimeout('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify(firstPayload)
-    });
+    }, 30000);
     if (!resp.ok) {
       const errText = await resp.text();
       console.error('[chat.ask] OpenAI failed', { status: resp.status, statusText: resp.statusText, body: errText });
@@ -847,11 +846,11 @@ Meteor.methods({
         assistantToolCallMsg,
         ...toolMsgs
       ];
-      const resp2 = await fetch('https://api.openai.com/v1/chat/completions', {
+      const resp2 = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({ model: 'o4-mini', messages: cmplMessages })
-      });
+      }, 30000);
       if (!resp2.ok) {
         const errText2 = await resp2.text();
         console.error('[chat.ask] OpenAI final synthesis failed', { status: resp2.status, statusText: resp2.statusText, body: errText2 });

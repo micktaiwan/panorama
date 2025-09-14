@@ -4,8 +4,6 @@ export const BudgetLinesCollection = new Mongo.Collection('budgetLines');
 export const VendorsCacheCollection = new Mongo.Collection('vendorsCache');
 export const VendorsIgnoreCollection = new Mongo.Collection('vendorsIgnore');
 
-// No schema attachment in MVP to avoid extra deps; validate in methods.
-
 if (Meteor.isServer) {
   BudgetLinesCollection.rawCollection().createIndex({ date: 1, category: 1, vendor: 1 });
   BudgetLinesCollection.rawCollection().createIndex({ importBatch: 1 });

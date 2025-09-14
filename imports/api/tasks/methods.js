@@ -26,6 +26,19 @@ Meteor.methods({
     check(doc, Object);
     const now = new Date();
     const sanitized = sanitizeTaskDoc(doc);
+    // If a project is provided, shift existing open tasks down and insert new task at rank 0
+    if (sanitized.projectId) {
+      const projectId = String(sanitized.projectId);
+      const openSelector = {
+        projectId,
+        $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ]
+      };
+      const existing = TasksCollection.find(openSelector, { fields: { _id: 1, priorityRank: 1 } }).fetch();
+      existing
+        .filter(t => Number.isFinite(t.priorityRank))
+        .forEach(t => { TasksCollection.updateAsync(t._id, { $inc: { priorityRank: 1 } }); });
+      sanitized.priorityRank = 0;
+    }
     // Duplicate guard for userLog provenance
     if (doc && doc.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds) && doc.source.logEntryIds.length > 0) {
       const logIds = doc.source.logEntryIds.map(String);
@@ -52,7 +65,8 @@ Meteor.methods({
     }
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'task', id: _id, text: sanitized.title || '', projectId: sanitized.projectId || null });
+      const text = `${sanitized.title || ''} ${sanitized.notes || ''}`.trim();
+      await upsertDoc({ kind: 'task', id: _id, text, projectId: sanitized.projectId || null });
     } catch (e) { console.error('[search][tasks.insert] upsert failed', e); }
     return _id;
   },
@@ -76,11 +90,16 @@ Meteor.methods({
     if (task && task.projectId) {
       await ProjectsCollection.updateAsync(task.projectId, { $set: { updatedAt: new Date() } });
     }
-    try {
-      const next = await TasksCollection.findOneAsync(taskId, { fields: { title: 1, projectId: 1 } });
-      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'task', id: taskId, text: (next && next.title) || '', projectId: next && next.projectId });
-    } catch (e) { console.error('[search][tasks.update] upsert failed', e); }
+    // Only re-index in vector store when searchable fields change
+    const shouldReindex = Object.hasOwn(modifier, 'title') || Object.hasOwn(modifier, 'notes') || Object.hasOwn(modifier, 'projectId');
+    if (shouldReindex) {
+      try {
+        const next = await TasksCollection.findOneAsync(taskId, { fields: { title: 1, notes: 1, projectId: 1 } });
+        const text = `${next?.title || ''} ${next?.notes || ''}`.trim();
+        const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+        await upsertDoc({ kind: 'task', id: taskId, text, projectId: next && next.projectId });
+      } catch (e) { console.error('[search][tasks.update] upsert failed', e); }
+    }
     return res;
   },
   // Removed legacy setDone/unsetDone methods

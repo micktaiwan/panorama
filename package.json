@@ -20,6 +20,7 @@
     "@swc/helpers": "^0.5.17",
     "marked": "^12.0.2",
     "meteor-node-stubs": "^1.2.12",
+    "mongodb": "^6.19.0",
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "prop-types": "^15.8.1",

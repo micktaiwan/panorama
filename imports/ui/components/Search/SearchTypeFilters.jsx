@@ -16,15 +16,14 @@ export const SearchTypeFilters = ({
     { key: 'link', label: 'Links' },
     { key: 'file', label: 'Files' },
     { key: 'session', label: 'Sessions' },
+    { key: 'userlog', label: 'Logs' },
   ]), []);
 
   const [filters, setFilters] = React.useState(() => {
     if (value && typeof value === 'object') return value;
     if (typeof localStorage !== 'undefined') {
       const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        try { return JSON.parse(raw) || {}; } catch (e) { console.warn('[SearchTypeFilters] Failed to parse saved filters', e); }
-      }
+      if (raw) return JSON.parse(raw) || {};
     }
     return {};
   });
@@ -41,9 +40,7 @@ export const SearchTypeFilters = ({
   };
 
   React.useEffect(() => {
-    if (typeof localStorage !== 'undefined') {
-      try { localStorage.setItem(storageKey, JSON.stringify(filters)); } catch (e) { console.warn('[SearchTypeFilters] Failed to save filters', e); }
-    }
+    localStorage.setItem(storageKey, JSON.stringify(filters));
     if (typeof onChange === 'function') onChange(filters);
   }, [JSON.stringify(filters), storageKey]);
 

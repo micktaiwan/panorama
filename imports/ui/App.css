@@ -61,6 +61,12 @@
 }
 .favChip:hover { background: #141923; }
 .favChip .star { color: #f59e0b; }
+.favChip.active {
+  background: #0f172a;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.5) inset;
+  border-width: 2px;
+}
 
 .favChip.dragging { opacity: 0.6; cursor: grabbing; transform: scale(0.98); }
 .favChip.dropTarget { border-color: #f59e0b; box-shadow: 0 0 0 1px #f59e0b inset; }

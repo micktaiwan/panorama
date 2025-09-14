@@ -5,7 +5,7 @@ import { getQdrantUrl } from '/imports/api/_shared/config';
 Meteor.startup(async () => {
   const url = getQdrantUrl();
   if (!url) {
-    console.warn('[qdrant] Disabled (no URL configured); skipping initialization');
+    console.error('[qdrant] Disabled (no URL configured); skipping initialization');
     return;
   }
 

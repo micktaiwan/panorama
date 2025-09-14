@@ -57,7 +57,7 @@ const SearchPane = ({ onClose }) => {
   const [typeFilters, setTypeFilters] = useState(() => {
     if (typeof localStorage !== 'undefined') {
       const raw = localStorage.getItem('search_type_filters_v1');
-      if (raw) { try { return JSON.parse(raw) || {}; } catch (e) { console.warn('search_type_filters_v1 parse failed', e?.message || e); } }
+      if (raw) return JSON.parse(raw) || {};
     }
     return {};
   });
@@ -65,7 +65,7 @@ const SearchPane = ({ onClose }) => {
 
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
-      try { localStorage.setItem('search_type_filters_v1', JSON.stringify(typeFilters)); } catch (e) { console.warn('search_type_filters_v1 save failed', e?.message || e); }
+      localStorage.setItem('search_type_filters_v1', JSON.stringify(typeFilters));
     }
   }, [JSON.stringify(typeFilters)]);
 
@@ -89,7 +89,7 @@ const SearchPane = ({ onClose }) => {
   };
 
   useEffect(() => {
-    const counts = { project: 0, task: 0, note: 0, link: 0, file: 0, session: 0, alarm: 0 };
+    const counts = { project: 0, task: 0, note: 0, link: 0, file: 0, session: 0, alarm: 0, userlog: 0 };
     for (const r of (searchResults || [])) {
       const k = r?.kind;
       if (Object.hasOwn(counts, k)) counts[k] += 1;
@@ -451,7 +451,7 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
         const n = raw != null ? parseInt(raw, 10) : NaN;
         return Number.isFinite(n) && (n === 0 || n === 1 || n === 2) ? n : 0;
       } catch (e) {
-        console.warn('cmd_palette_last_tab read failed', e?.message || e);
+        console.error('cmd_palette_last_tab read failed', e?.message || e);
         return 0;
       }
     };
@@ -462,7 +462,7 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
   // Persist tab changes
   useEffect(() => {
     if (!open) return;
-    try { if (typeof localStorage !== 'undefined') localStorage.setItem('cmd_palette_last_tab', String(activeTab)); } catch (e) { console.warn('cmd_palette_last_tab save failed', e?.message || e); }
+    localStorage.setItem('cmd_palette_last_tab', String(activeTab));
   }, [open, activeTab]);
 
   // Tab/Shift+Tab cycling across 3 tabs

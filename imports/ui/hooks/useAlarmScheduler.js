@@ -77,7 +77,7 @@ export const useAlarmScheduler = () => {
       const now = Date.now();
       const current = alarmsRef.current || [];
 
-      // Catch-up: fire all past-due alarms immediately (MVP disables them)
+      // Catch-up: fire all past-due alarms immediately
       const dueNow = current
         .filter(a => a.enabled && (a.snoozedUntilAt || a.nextTriggerAt))
         .filter(a => effectiveTime(a) <= now);
