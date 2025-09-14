@@ -421,7 +421,9 @@ const executeStep = async (step, memory, callId, retries = 3) => {
       const result = await runTool(tool, args, memory);
       return {
         tool_call_id: callId || `call_${Date.now()}`,
-        output: result.output || '{}'
+        output: result.output || '{}',
+        tool,
+        args
       };
     } catch (error) {
       lastError = error;
@@ -435,7 +437,9 @@ const executeStep = async (step, memory, callId, retries = 3) => {
   console.error(`[executeStep] ${tool} failed after ${retries} attempts:`, lastError.message);
   return {
     tool_call_id: callId || `call_${Date.now()}`,
-    output: JSON.stringify({ error: lastError?.message || String(lastError) })
+    output: JSON.stringify({ error: lastError?.message || String(lastError) }),
+    tool,
+    args
   };
 };
 
@@ -523,6 +527,7 @@ Meteor.methods({
       const ptext = pdata?.choices?.[0]?.message?.content || '';
       try {
         planned = JSON.parse(ptext);
+        stopArtifacts = Array.isArray(planned?.stopWhen) ? planned.stopWhen : [];
       } catch (ePlan) { console.error('[chat.ask] persist plan failed', ePlan); }
     } else {
       const errText = await plannerResp.text();
@@ -608,6 +613,9 @@ Meteor.methods({
                 try {
                   const planned2 = JSON.parse(ptext2);
                   const steps2 = Array.isArray(planned2?.steps) ? planned2.steps : [];
+                  if (Array.isArray(planned2?.stopWhen)) {
+                    stopArtifacts = planned2.stopWhen;
+                  }
                   
                   // Execute the re-planned steps with remaining budget using generic executor
                   const remain = Math.max(0, MAX_STEPS - i);
@@ -665,8 +673,8 @@ Meteor.methods({
           id: tr.tool_call_id || `call_${idx+1}`, 
           type: 'function', 
           function: { 
-            name: execSteps[idx]?.tool || toolResults[idx]?.tool_call_id?.includes('re_') ? 'replan_tool' : 'chat_tasks', 
-            arguments: JSON.stringify(execSteps[idx]?.args || {}) 
+            name: tr.tool || execSteps[idx]?.tool || 'unknown_tool', 
+            arguments: JSON.stringify(tr.args || execSteps[idx]?.args || {}) 
           } 
         }))
       };
@@ -742,11 +750,11 @@ Meteor.methods({
             if (args.status) delete args.status;
             const selector = buildTasksSelector(args);
             if (!('status' in selector)) selector.status = { $ne: 'done' };
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
             console.log('[chat.ask][chat_tasks] tasks found:', tasks.length);
-            const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-            toolResults.push({ tool_call_id: call.id || 'chat_tasks', output: JSON.stringify({ tasks: compact }) });
+            const compact = tasks.map(t => ({ title: t.title || '', status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+            toolResults.push({ tool_call_id: call.id || 'chat_tasks', output: JSON.stringify({ tasks: compact, total: compact.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_tasks', output: JSON.stringify({ error: e?.message || String(e) }) });
             console.error('[chat.ask][chat_tasks] execution error:', e?.message || e);
@@ -757,10 +765,10 @@ Meteor.methods({
             const { buildOverdueSelector } = await import('/imports/api/chat/helpers');
             const nowIso = (typeof call.arguments?.now === 'string' && call.arguments?.now?.trim()) ? call.arguments.now : new Date().toISOString();
             const selector = buildOverdueSelector(nowIso);
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-            const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-            toolResults.push({ tool_call_id: call.id || 'chat_overdue', output: JSON.stringify({ tasks: compact }) });
+            const compact = tasks.map(t => ({ title: t.title || '', status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+            toolResults.push({ tool_call_id: call.id || 'chat_overdue', output: JSON.stringify({ tasks: compact, total: compact.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_overdue', output: JSON.stringify({ error: e?.message || String(e) }) });
             console.error('[chat.ask][chat_overdue] execution error:', e?.message || e);
@@ -770,10 +778,10 @@ Meteor.methods({
             const { TasksCollection } = await import('/imports/api/tasks/collections');
             const { buildByProjectSelector } = await import('/imports/api/chat/helpers');
             const selector = buildByProjectSelector(call.arguments?.projectId);
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-            const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-            toolResults.push({ tool_call_id: call.id || 'chat_tasksByProject', output: JSON.stringify({ tasks: compact }) });
+            const compact = tasks.map(t => ({ title: t.title || '', status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+            toolResults.push({ tool_call_id: call.id || 'chat_tasksByProject', output: JSON.stringify({ tasks: compact, total: compact.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_tasksByProject', output: JSON.stringify({ error: e?.message || String(e) }) });
             console.error('[chat.ask][chat_tasksByProject] execution error:', e?.message || e);
@@ -783,10 +791,10 @@ Meteor.methods({
             const { TasksCollection } = await import('/imports/api/tasks/collections');
             const { buildFilterSelector } = await import('/imports/api/chat/helpers');
             const selector = buildFilterSelector(call.arguments || {});
-            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1 } };
+            const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1 } };
             const tasks = await TasksCollection.find(selector, fields).fetchAsync();
-            const compact = tasks.map(t => ({ id: t._id, title: t.title || '', projectId: t.projectId || null, status: t.status || 'todo', deadline: t.deadline || null }));
-            toolResults.push({ tool_call_id: call.id || 'chat_tasksFilter', output: JSON.stringify({ tasks: compact }) });
+            const compact = tasks.map(t => ({ title: t.title || '', status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+            toolResults.push({ tool_call_id: call.id || 'chat_tasksFilter', output: JSON.stringify({ tasks: compact, total: compact.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_tasksFilter', output: JSON.stringify({ error: e?.message || String(e) }) });
             console.error('[chat.ask][chat_tasksFilter] execution error:', e?.message || e);
@@ -795,8 +803,8 @@ Meteor.methods({
           try {
             const { ProjectsCollection } = await import('/imports/api/projects/collections');
             const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
-            const compact = (projects || []).map(p => ({ id: p._id, name: p.name || '', description: p.description || '' }));
-            toolResults.push({ tool_call_id: call.id || 'chat_projectsList', output: JSON.stringify({ projects: compact }) });
+            const compact = (projects || []).map(p => ({ name: p.name || '', description: p.description || '' }));
+            toolResults.push({ tool_call_id: call.id || 'chat_projectsList', output: JSON.stringify({ projects: compact, total: compact.length }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_projectsList', output: JSON.stringify({ error: e?.message || String(e) }) });
             console.error('[chat.ask][chat_projectsList] execution error:', e?.message || e);
@@ -806,7 +814,7 @@ Meteor.methods({
             const { ProjectsCollection } = await import('/imports/api/projects/collections');
             const selector = buildProjectByNameSelector(call.arguments?.name);
             const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
-            const out = proj ? { id: proj._id, name: proj.name || '', description: proj.description || '' } : null;
+            const out = proj ? { name: proj.name || '', description: proj.description || '' } : null;
             toolResults.push({ tool_call_id: call.id || 'chat_projectByName', output: JSON.stringify({ project: out }) });
           } catch (e) {
             toolResults.push({ tool_call_id: call.id || 'chat_projectByName', output: JSON.stringify({ error: e?.message || String(e) }) });
