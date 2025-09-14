@@ -1,5 +1,7 @@
 import { Meteor } from 'meteor/meteor';
+import { Tracker } from 'meteor/tracker';
 import { notify } from '/imports/ui/utils/notify.js';
+import { ErrorsCollection } from '/imports/api/errors/collections';
 
 // Ensure we only attach handlers once per client session
 if (typeof window !== 'undefined') {
@@ -48,7 +50,31 @@ if (typeof window !== 'undefined') {
         return originalCall.apply(this, args);
       };
     }
+
+    // Subscribe to recent server errors and notify as they arrive
+    try {
+      const sub = Meteor.subscribe('errors.recent');
+      const seen = new Set();
+      const cursor = ErrorsCollection.find({ kind: 'server' }, { sort: { createdAt: -1 }, limit: 200 });
+      cursor.observe({
+        added(doc) {
+          if (!doc || !doc._id) return;
+          if (seen.has(doc._id)) return;
+          seen.add(doc._id);
+          const message = String(doc.message || 'Server error');
+          notify({ message, kind: 'error', durationMs: 6000 });
+        }
+      });
+      // Optional: mark existing as seen once subscription is ready
+      Tracker.autorun((c) => {
+        if (sub.ready()) {
+          ErrorsCollection.find({ kind: 'server' }, { fields: { _id: 1 } }).forEach((d) => { if (d && d._id) seen.add(d._id); });
+          c.stop();
+        }
+      });
+    } catch (e) {
+      // Best-effort only; avoid throwing in global setup
+      console.warn('[globalErrors] server errors subscription failed', e);
+    }
   }
 }
-
-
