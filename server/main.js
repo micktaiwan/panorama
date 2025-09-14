@@ -60,6 +60,7 @@ import '/imports/api/situationSummaries/methods';
 import '/imports/api/errors/collections';
 import '/imports/api/errors/publications';
 import '/imports/api/errors/methods';
+import '/imports/api/errors/serverConsoleOverride';
 import '/imports/api/chat/methods';
 import '/imports/api/chats/collections';
 import '/imports/api/chats/publications';
