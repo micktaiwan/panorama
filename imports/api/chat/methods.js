@@ -614,11 +614,39 @@ Meteor.methods({
                   const steps2 = Array.isArray(planned2?.steps) ? planned2.steps : [];
                   // Note: re-planned stop conditions are not applied, as we break out of the outer loop after re-plan.
                   
+                  // Helper to pre-validate and auto-resolve required args (e.g., projectId)
+                  const prepareArgsForStep = async (stepIn) => {
+                    const { bindArgsWithMemory } = await import('/imports/api/chat/helpers');
+                    let prepared = bindArgsWithMemory(stepIn.tool, stepIn.args || {}, memory);
+                    const schemaX = TOOL_SCHEMAS[stepIn.tool];
+                    if (schemaX && Array.isArray(schemaX.required) && schemaX.required.includes('projectId')) {
+                      const needs = !prepared || !String(prepared.projectId || '').trim();
+                      if (needs) prepared = await ensureProjectIdArg(prepared, memory);
+                    }
+                    return prepared;
+                  };
+                  
                   // Execute the re-planned steps with remaining budget using generic executor
                   const remain = Math.max(0, MAX_STEPS - i);
                   for (let j = 0; j < Math.min(steps2.length, remain); j += 1) {
                     try {
-                      const replanResult = await executeStep(steps2[j], memory, `call_re_${j+1}`);
+                      const stepJ = steps2[j] || {};
+                      const argsJ = await prepareArgsForStep(stepJ);
+                      const schemaJ = TOOL_SCHEMAS[stepJ.tool];
+                      if (schemaJ && Array.isArray(schemaJ.required) && schemaJ.required.includes('projectId')) {
+                        const hasPid = String(argsJ?.projectId || '').trim();
+                        if (!hasPid) {
+                          // Skip quietly when projectId cannot be resolved, avoiding noisy errors
+                          toolResults.push({ 
+                            tool_call_id: `call_re_${j+1}`, 
+                            output: JSON.stringify({ skipped: true, reason: 'Missing projectId after resolution' }),
+                            tool: stepJ.tool,
+                            args: argsJ
+                          });
+                          continue;
+                        }
+                      }
+                      const replanResult = await executeStep({ tool: stepJ.tool, args: argsJ }, memory, `call_re_${j+1}`);
                       toolResults.push(replanResult);
                     } catch (replanError) {
                       console.error('[chat.ask][replan] step failed', replanError);
