@@ -198,6 +198,11 @@ export default function ChatWidget() {
     notify({ message: 'Transcript copied to clipboard', kind: 'success' });
   }, [buildTranscript]);
 
+  const handleCopyMessage = useCallback(async (text) => {
+    const toCopy = (typeof text === 'string') ? text : String(text || '');
+    await writeClipboard(toCopy);
+  }, []);
+
   return (
     <div className={`ChatWidget__root${docked ? ' isDocked' : ''}`} aria-live="polite">
       {isOpen && (
@@ -238,6 +243,19 @@ export default function ChatWidget() {
                         )}
                       </div>
                     )}
+                    {m.role === 'assistant' && !m.isStatus ? (
+                      <div className="ChatWidget__actions">
+                        <button
+                          type="button"
+                          className="ChatWidget__iconBtn"
+                          onClick={() => handleCopyMessage(m.content)}
+                          aria-label="Copy reply"
+                          title="Copy reply"
+                        >
+                          ⧉
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))

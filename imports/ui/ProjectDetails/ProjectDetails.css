@@ -11,6 +11,7 @@
 }
 
 .projectTitle { margin: 0; }
+.projectHeaderRight { margin-left: auto; }
 .toggleBtn { padding: 4px 8px; font-size: 12px; }
 .doneSection { margin-top: 32px; }
 .doneHeader { cursor: pointer; user-select: none; }

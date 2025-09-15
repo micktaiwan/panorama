@@ -5,7 +5,7 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { useTracker } from 'meteor/react-meteor-data';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
-import { setNotifyHandler, notify } from '/imports/ui/utils/notify.js';
+// notify is provided globally via NotifyProvider; no local handler wiring here
 
 const formatWhen = (d) => {
   const dt = new Date(d);
@@ -33,7 +33,7 @@ export const ReportingPage = () => {
     if (!raw) return {};
     return JSON.parse(raw) || {};
   });
-  const [toast, setToast] = useState(null);
+  // Removed legacy local toast wiring to avoid recursion with global notify
   const [aiPrompt, setAiPrompt] = useState(() => {
     if (typeof localStorage === 'undefined') return '';
     return localStorage.getItem('reporting_ai_prompt') || '';
@@ -102,17 +102,7 @@ export const ReportingPage = () => {
     });
   };
 
-  // Wire global notify to manager
-  React.useEffect(() => {
-    setNotifyHandler((t) => notify(t));
-    return () => setNotifyHandler(null);
-  }, []);
-  React.useEffect(() => {
-    if (!toast) return;
-    notify(toast);
-    const t = setTimeout(() => setToast(null), 0);
-    return () => clearTimeout(t);
-  }, [toast?.message, toast?.kind]);
+  // Removed recursive notify wiring; NotifyProvider handles global toasts
 
   const grouped = useMemo(() => {
     const groups = { project_created: [], task_done: [], note_created: [] };

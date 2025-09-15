@@ -861,7 +861,7 @@ Meteor.methods({
       'Return STRICT JSON using the provided schema. No Markdown.',
       'Language: respond in the same language as the user inputs and project description (often French).',
       'Improved description should APPEND to the existing description, not replace it. Provide only the appended paragraph(s), not the full description.',
-      'Additionally, at the END of the appended description, include a short sub-section with plain-text bullet points (e.g., lines starting with "- ") listing concrete tasks to bootstrap the project (3–8 items). No deadlines needed. No separate JSON field for tasks.'
+      'Task suggestions must be concrete, short, and feasible as first steps (3–8 items). Do not invent deadlines.'
     ].join(' ');
 
     const user = [
@@ -879,19 +879,46 @@ Meteor.methods({
       type: 'object',
       additionalProperties: false,
       properties: {
-        appendedDescription: { type: 'string' }
+        appendedDescription: { type: 'string' },
+        starterTasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              title: { type: 'string' },
+              notes: { type: 'string' }
+            },
+            required: ['title']
+          },
+          minItems: 0,
+          maxItems: 12
+        }
       },
-      required: ['appendedDescription']
+      required: ['appendedDescription', 'starterTasks']
     };
 
     const json = await openAiChat({ system, user, expectJson: true, schema });
     const appended = String(json?.appendedDescription || '').trim();
+    const tasks = Array.isArray(json?.starterTasks) ? json.starterTasks : [];
 
     // Update project description by appending
     const nextDescription = appended ? (desc ? `${desc}\n\n${appended}` : appended) : desc;
     await ProjectsCollection.updateAsync(projectId, { $set: { description: nextDescription, updatedAt: new Date() } });
 
-    return { appendedDescription: appended };
+    // Record suggestions as a note under the project for user review
+    try {
+      const { NotesCollection } = await import('/imports/api/notes/collections');
+      const bullets = (tasks || []).filter(t => t && t.title).map(t => `- ${t.title}${t.notes ? ` — ${t.notes}` : ''}`).join('\n');
+      if (bullets) {
+        const content = `Task suggestions to kickstart the project:\n\n${bullets}`;
+        await NotesCollection.insertAsync({ projectId, title: 'AI tasks suggestions', content, kind: 'aiSummary', createdAt: new Date(), updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[ai.project.applyImprovement] failed to record suggestions note', err);
+    }
+
+    return { appendedDescription: appended, tasksCount: Array.isArray(tasks) ? tasks.length : 0 };
   }
 });
 
