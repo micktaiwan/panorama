@@ -60,15 +60,22 @@ if (typeof window !== 'undefined') {
         addedAt(doc) {
           if (!doc?._id) return;
           if (seen.has(doc._id)) return;
+          if (doc.shownAt) { seen.add(doc._id); return; }
           seen.add(doc._id);
           const message = String(doc.message || 'Server error');
           notify({ message, kind: 'error', durationMs: 6000 });
+          // Mark as shown so we don't re-notify on next sessions
+          Meteor.call('errors.markShown', doc._id);
         }
       });
       // Optional: mark existing as seen once subscription is ready
       Tracker.autorun((c) => {
         if (sub.ready()) {
-          ErrorsCollection.find({ kind: 'server' }, { fields: { _id: 1 } }).forEach((d) => { if (d?._id) seen.add(d._id); });
+          ErrorsCollection.find({ kind: 'server' }, { fields: { _id: 1, shownAt: 1 } }).forEach((d) => {
+            if (d?._id) {
+              if (d.shownAt) { seen.add(d._id); }
+            }
+          });
           c.stop();
         }
       });

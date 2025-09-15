@@ -81,6 +81,8 @@ export const Eisenhower = () => {
                   task={t}
                   textSize="small"
                   showProject={true}
+                  projectColWidth="80px"
+                  colGap="8px"
                   allowProjectChange
                   projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
@@ -112,6 +114,8 @@ export const Eisenhower = () => {
                   task={t}
                   textSize="small"
                   showProject={true}
+                  projectColWidth="100px"
+                  colGap="12px"
                   allowProjectChange
                   projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
@@ -144,6 +148,8 @@ export const Eisenhower = () => {
                   task={t}
                   textSize="small"
                   showProject={true}
+                  projectColWidth="100px"
+                  colGap="12px"
                   allowProjectChange
                   projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
@@ -175,6 +181,8 @@ export const Eisenhower = () => {
                   task={t}
                   textSize="small"
                   showProject={true}
+                  projectColWidth="100px"
+                  colGap="12px"
                   allowProjectChange
                   projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}

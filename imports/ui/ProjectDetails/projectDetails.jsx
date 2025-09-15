@@ -102,6 +102,14 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [cleaningNoteIds, setCleaningNoteIds] = useState({});
   const [undoAvailable, setUndoAvailable] = useState({});
 
+  // Improve description (AI) modal state
+  const [isImproveOpen, setIsImproveOpen] = useState(false);
+  const [improveQuestions, setImproveQuestions] = useState([]);
+  const [isLoadingImprove, setIsLoadingImprove] = useState(false);
+  const [improveError, setImproveError] = useState('');
+  const [answersText, setAnswersText] = useState('');
+  const [isApplyingImprove, setIsApplyingImprove] = useState(false);
+
   const progress = useMemo(() => {
     if (!tasks || tasks.length === 0) return 0;
     const withProgress = tasks.filter(t => typeof t.progressPercent === 'number');
@@ -160,6 +168,60 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     Meteor.call('notes.insert', { projectId, content: '' });
   };
 
+  const openImproveModal = () => {
+    setIsImproveOpen(true);
+    setImproveQuestions([]);
+    setImproveError('');
+    setAnswersText('');
+    setIsLoadingImprove(true);
+    Meteor.call('ai.project.improvementQuestions', projectId, (err, res) => {
+      setIsLoadingImprove(false);
+      if (err) {
+        console.error('ai.project.improvementQuestions failed', err);
+        setImproveError(err && err.message ? err.message : 'Failed to load questions');
+        return;
+      }
+      const qs = Array.isArray(res && res.questions) ? res.questions : [];
+      setImproveQuestions(qs);
+    });
+  };
+
+  const regenerateImproveQuestions = () => {
+    setIsLoadingImprove(true);
+    setImproveError('');
+    Meteor.call('ai.project.improvementQuestions', projectId, (err, res) => {
+      setIsLoadingImprove(false);
+      if (err) {
+        console.error('ai.project.improvementQuestions failed', err);
+        setImproveError(err && err.message ? err.message : 'Failed to load questions');
+        return;
+      }
+      const qs = Array.isArray(res && res.questions) ? res.questions : [];
+      setImproveQuestions(qs);
+    });
+  };
+
+  const applyImprovement = () => {
+    if (isApplyingImprove) return;
+    setIsApplyingImprove(true);
+    setImproveError('');
+    // Split answers into separate items by blank lines; fallback to lines
+    const parts = String(answersText || '')
+      .split(/\n\s*\n/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const answers = parts.length > 0 ? parts : String(answersText || '').split('\n').map(s => s.trim()).filter(Boolean);
+    Meteor.call('ai.project.applyImprovement', projectId, { answers }, (err, res) => {
+      setIsApplyingImprove(false);
+      if (err) {
+        console.error('ai.project.applyImprovement failed', err);
+        setImproveError(err && err.message ? err.message : 'Failed to apply improvement');
+        return;
+      }
+      setIsImproveOpen(false);
+    });
+  };
+
   return (
     <div>
       <Card className="projectHeaderCard" title={null} actions={null}>
@@ -186,6 +248,9 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
               onSubmit={updateProjectName}
             />
           </h2>
+          <div className="projectHeaderRight">
+            <button className="btn-link" onClick={openImproveModal} title="Improve project description">Improve description</button>
+          </div>
         </div>
         <div className="projectDescription">
           <InlineEditable
@@ -514,6 +579,48 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         ]}
       >
         <div>Delete this project and all its tasks and sessions? This cannot be undone.</div>
+      </Modal>
+
+      {/* Improve Description Modal */}
+      <Modal
+        open={isImproveOpen}
+        onClose={() => setIsImproveOpen(false)}
+        title={`Improve description · ${project.name || '(untitled)'}`}
+      >
+        <div className="mb8">
+          {isLoadingImprove ? (
+            <div>Generating questions…</div>
+          ) : improveError ? (
+            <div className="errorText">{improveError}</div>
+          ) : (
+            <div>
+              {improveQuestions && improveQuestions.length > 0 ? (
+                <ol className="mb8">
+                  {improveQuestions.map((q, i) => (
+                    <li key={i} className="mb4">{q}</li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="muted">No questions. You can still share context below.</div>
+              )}
+              <button className="btn ml0 mb8" onClick={regenerateImproveQuestions}>Regenerate questions</button>
+              <div className="mb4">Your answers and context (free text). Use paragraphs; one answer per paragraph.</div>
+              <textarea
+                className="projectNoteTextarea"
+                rows={10}
+                value={answersText}
+                placeholder="Answer here…"
+                onChange={(e) => setAnswersText(e.target.value)}
+              />
+              <div className="modalFooter">
+                <button className="btn" onClick={() => setIsImproveOpen(false)}>Cancel</button>
+                <button className="btn btn-primary ml8" disabled={isApplyingImprove} onClick={applyImprovement}>
+                  {isApplyingImprove ? 'Applying…' : 'Apply improvement'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </Modal>
 
       <Modal

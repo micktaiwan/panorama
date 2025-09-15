@@ -19,6 +19,8 @@ export const TaskRow = ({
   projectOptions = [],
   onMoveProject,
   showMoveProjectButton = false,
+  projectColWidth,
+  colGap,
   // Controls
   showStatusSelect = true,
   showDeadline = true,
@@ -51,6 +53,10 @@ export const TaskRow = ({
   const status = task.status || 'todo';
   const sev = task.deadline ? deadlineSeverity(task.deadline) : '';
   const metaCls = sev ? ` ${sev}` : ' taskMetaDefault';
+  const containerStyle = {
+    ...(projectColWidth ? { ['--task-project-col-width']: projectColWidth } : {}),
+    ...(colGap ? { ['--task-col-gap']: colGap } : {}),
+  };
 
   const openNotes = () => {
     setNotesDraft(task?.notes || '');
@@ -64,7 +70,7 @@ export const TaskRow = ({
   };
 
   return (
-    <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}`}>
+    <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}`} style={containerStyle}>
       <div className="taskLeft">
         {showMarkDone ? (
           <input
@@ -307,6 +313,8 @@ TaskRow.propTypes = {
   // Layout
   inlineActions: PropTypes.bool,
   titleClassName: PropTypes.string,
+  projectColWidth: PropTypes.string,
+  colGap: PropTypes.string,
   // Handlers
   onUpdateStatus: PropTypes.func,
   onUpdateTitle: PropTypes.func,
