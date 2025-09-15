@@ -764,62 +764,12 @@ Meteor.methods({
       toolResults = [];
       const memory = { ids: {}, entities: {}, lists: {}, params: {}, errors: [], projectId: null, projectName: null, tasks: [] };
       for (const call of toolCalls) {
-        if (call.name === 'chat_tasks') {
-          try {
-            const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
-            toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
-          } catch (e) {
-            toolResults.push({ tool_call_id: call.id || 'chat_tasks', output: JSON.stringify({ error: e?.message || String(e) }) });
-            console.error('[chat.ask][chat_tasks] execution error:', e?.message || e);
-          }
-        } else if (call.name === 'chat_overdue') {
-          try {
-            const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
-            toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
-          } catch (e) {
-            toolResults.push({ tool_call_id: call.id || 'chat_overdue', output: JSON.stringify({ error: e?.message || String(e) }) });
-            console.error('[chat.ask][chat_overdue] execution error:', e?.message || e);
-          }
-        } else if (call.name === 'chat_tasksByProject') {
-          try {
-            const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
-            toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
-          } catch (e) {
-            toolResults.push({ tool_call_id: call.id || 'chat_tasksByProject', output: JSON.stringify({ error: e?.message || String(e) }) });
-            console.error('[chat.ask][chat_tasksByProject] execution error:', e?.message || e);
-          }
-        } else if (call.name === 'chat_tasksFilter') {
-          try {
-            const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
-            toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
-          } catch (e) {
-            toolResults.push({ tool_call_id: call.id || 'chat_tasksFilter', output: JSON.stringify({ error: e?.message || String(e) }) });
-            console.error('[chat.ask][chat_tasksFilter] execution error:', e?.message || e);
-          }
-        } else if (call.name === 'chat_projectsList') {
-          try {
-            const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
-            toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
-          } catch (e) {
-            toolResults.push({ tool_call_id: call.id || 'chat_projectsList', output: JSON.stringify({ error: e?.message || String(e) }) });
-            console.error('[chat.ask][chat_projectsList] execution error:', e?.message || e);
-          }
-        } else if (call.name === 'chat_projectByName') {
-          try {
-            const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
-            toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
-          } catch (e) {
-            toolResults.push({ tool_call_id: call.id || 'chat_projectByName', output: JSON.stringify({ error: e?.message || String(e) }) });
-            console.error('[chat.ask][chat_projectByName] execution error:', e?.message || e);
-          }
-        } else if (call.name === 'chat_semanticSearch') {
-          try {
-            const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
-            toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
-          } catch (e) {
-            toolResults.push({ tool_call_id: call.id || 'chat_semanticSearch', output: JSON.stringify({ error: e?.message || String(e) }) });
-            console.error('[chat.ask][chat_semanticSearch] execution error:', e?.message || e);
-          }
+        try {
+          const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
+          toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
+        } catch (e) {
+          console.error(`[chat.ask][${call?.name || 'unknown_tool'}] execution error:`, e?.message || e);
+          toolResults.push({ tool_call_id: call.id || 'call_0', output: JSON.stringify({ error: e?.message || String(e) }) });
         }
       }
       // Final synthesis call via Chat Completions (stable tool result protocol)

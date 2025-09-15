@@ -108,6 +108,25 @@
   border: 1px solid #334155;
 }
 
+.ChatWidget__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ChatWidget__iconBtn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.ChatWidget__iconBtn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
 .ChatWidget__message--user .ChatWidget__bubble {
   background: rgba(11,95,255,0.12);
   border: 1px solid rgba(11,95,255,0.6);

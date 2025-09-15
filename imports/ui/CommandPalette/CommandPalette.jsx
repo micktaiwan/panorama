@@ -258,7 +258,7 @@ const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
     Meteor.call('tasks.insert', doc, (err, res) => {
       setCreatingTask(false);
       if (err) { notify({ message: err?.reason || err?.message || 'Task creation failed', kind: 'error' }); return; }
-      notify({ message: 'Task created', kind: 'success' });
+      notify({ message: 'Task created!', kind: 'success' });
       setNewTaskTitle('');
       if (inputRef.current && typeof inputRef.current.focus === 'function') inputRef.current.focus();
     });
