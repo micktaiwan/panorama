@@ -12,7 +12,7 @@
 
 .projectTitle { margin: 0; }
 .toggleBtn { padding: 4px 8px; font-size: 12px; }
-.doneSection { margin-top: 16px; }
+.doneSection { margin-top: 32px; }
 .doneHeader { cursor: pointer; user-select: none; }
 .backBtn { padding: 4px 10px; font-size: 12px; }
 .tasksList {
@@ -216,6 +216,11 @@
   min-height: 220px;
 }
 
+/* Full-width textarea in Improve description modal */
+.projectNoteTextarea {
+  width: 100%;
+}
+
 .notePre {
   white-space: pre-wrap;
   margin: 0;
@@ -226,10 +231,6 @@
   margin-top: 8px;
   margin-bottom: 4px;
   font-size: 0.95rem;
-}
-
-.doneSection {
-  margin-top: 32px;
 }
 
 /* Bottom-right delete placement */

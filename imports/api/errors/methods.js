@@ -17,6 +17,16 @@ Meteor.methods({
     };
     return ErrorsCollection.insertAsync(clean);
   },
+  async 'errors.markShown'(idOrIds) {
+    check(idOrIds, Match.OneOf(String, [String]));
+    const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    const now = new Date();
+    return ErrorsCollection.updateAsync(
+      { _id: { $in: ids }, $or: [{ shownAt: { $exists: false } }, { shownAt: null }] },
+      { $set: { shownAt: now } },
+      { multi: true }
+    );
+  },
   async 'errors.removeOld'(olderThanDays = 30) {
     check(olderThanDays, Number);
     const cutoff = new Date(Date.now() - Math.max(1, olderThanDays) * 24 * 60 * 60 * 1000);
