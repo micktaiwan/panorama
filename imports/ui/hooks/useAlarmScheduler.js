@@ -71,7 +71,6 @@ export const useAlarmScheduler = () => {
 
 
     const scheduleNext = () => {
-      if (!isLeader()) return; // only leader schedules
       if (schedulingRef.current) return; // prevent re-entrancy
       schedulingRef.current = true;
       const now = Date.now();
@@ -89,6 +88,12 @@ export const useAlarmScheduler = () => {
           schedulingRef.current = false;
           setTimeout(scheduleNext, 0);
         });
+        return;
+      }
+
+      // Only leader schedules future timers
+      if (!isLeader()) {
+        schedulingRef.current = false;
         return;
       }
 
