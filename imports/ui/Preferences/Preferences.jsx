@@ -28,6 +28,15 @@ export const Preferences = () => {
   // indexJob: { jobId, total, processed, upserts, errors, done }
   const [indexJob, setIndexJob] = React.useState(null);
   // removed local toast; using global notify manager
+  const [mobileTasksEnabled, setMobileTasksEnabled] = React.useState(() => {
+    try {
+      const raw = window.localStorage.getItem('panorama.mobileTasksEnabled');
+      return raw == null ? true : String(raw) === 'true';
+    } catch (e) {
+      console.warn('[prefs] localStorage read failed for panorama.mobileTasksEnabled', e);
+      return true;
+    }
+  });
 
   const pollIndexStatus = React.useCallback((jobId) => {
     Meteor.call('qdrant.indexStatus', jobId, (e2, st) => {
@@ -100,6 +109,27 @@ export const Preferences = () => {
               onSubmit={(next) => {
                 setQdrantUrl(next);
                 Meteor.call('appPreferences.update', { qdrantUrl: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Mobile tasks page (LAN)</div>
+          <div className="prefsValue">
+            <InlineEditable
+              as="select"
+              value={mobileTasksEnabled ? 'enabled' : 'disabled'}
+              options={[{ value: 'enabled', label: 'Enabled' }, { value: 'disabled', label: 'Disabled' }]}
+              onSubmit={(next) => {
+                const v = next === 'enabled';
+                setMobileTasksEnabled(v);
+                try {
+                  window.localStorage.setItem('panorama.mobileTasksEnabled', String(v));
+                } catch (e) {
+                  console.warn('[prefs] localStorage write failed for panorama.mobileTasksEnabled', e);
+                }
+                Meteor.call('mobileTasksRoute.setEnabled', v, () => {});
+                notify({ message: `Mobile tasks page ${v ? 'enabled' : 'disabled'}`, kind: 'success' });
               }}
             />
           </div>
