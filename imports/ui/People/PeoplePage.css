@@ -1,4 +1,19 @@
-.peoplePage { }
+.peoplePage { min-height: 0; }
+.peopleSection { margin-top: 32px; }
+.peopleSection .collapsibleHeader { 
+  background: #162230; 
+  padding: 16px 20px; 
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.peopleSection .collapsibleTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.peopleSection .collapsiblePanel {
+  padding: 16px 12px 12px 12px;
+}
 .peopleToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .peopleFilter { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: #1b1e26; color: var(--text); }
 .peopleTable { width: 100%; border-collapse: collapse; }

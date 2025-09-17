@@ -35,6 +35,7 @@ import '/imports/api/budget/publications';
 import '/imports/api/budget/methods';
 import '/imports/api/reporting/methods';
 import '/imports/api/reporting/ai';
+import '/imports/api/panorama/methods';
 import '/imports/api/teams/collections';
 import '/imports/api/teams/publications';
 import '/imports/api/teams/methods';
@@ -69,6 +70,9 @@ import '/imports/api/userLogs/collections';
 import '/imports/api/userLogs/publications';
 import '/imports/api/userLogs/methods';
 import '/imports/api/cron/jobs';
+import '/imports/api/calendar/collections';
+import '/imports/api/calendar/publications';
+import '/imports/api/calendar/methods';
 import { WebApp } from 'meteor/webapp';
 
 Meteor.startup(() => {

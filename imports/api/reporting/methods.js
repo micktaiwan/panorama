@@ -8,6 +8,7 @@ const windowKeyToMs = (key) => {
   const k = String(key || '').toLowerCase();
   if (k === '24h' || k === '24') return 24 * 60 * 60 * 1000;
   if (k === '72h' || k === '72') return 72 * 60 * 60 * 1000;
+  if (k === '3w' || k === '3weeks' || k === '21d' || k === '21') return 21 * 24 * 60 * 60 * 1000;
   if (k === '7d' || k === '7days' || k === 'last7days' || k === '7') return 7 * 24 * 60 * 60 * 1000;
   return 24 * 60 * 60 * 1000; // default 24h
 };
@@ -16,9 +17,17 @@ Meteor.methods({
   async 'reporting.recentActivity'(windowKey, projFilters) {
     check(windowKey, String);
     if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
-    const windowMs = windowKeyToMs(windowKey);
-    const since = new Date(Date.now() - windowMs);
-    const until = new Date();
+    const k = String(windowKey || '').toLowerCase();
+    let since;
+    let until;
+    if (k === 'all') {
+      since = new Date(0);
+      until = new Date();
+    } else {
+      const windowMs = windowKeyToMs(windowKey);
+      since = new Date(Date.now() - windowMs);
+      until = new Date();
+    }
 
     const includeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === 1).map(([k]) => k));
     const excludeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === -1).map(([k]) => k));

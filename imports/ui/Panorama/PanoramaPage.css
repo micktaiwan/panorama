@@ -1,0 +1,115 @@
+.PanoramaPage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panoramaToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panoramaToolbar .left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.panoramaToolbar .right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.panoramaToolbar .input {
+  width: 320px;
+  background: #10141b;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.panoramaToolbar .select {
+  background: #10141b;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.hotspots {
+  display: flex;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-size: 12px;
+  border: 1px solid var(--border);
+}
+.chip.danger { background: rgba(239,68,68,0.12); color: #ef4444; border-color: rgba(239,68,68,0.5); }
+.chip.warn { background: rgba(245,158,11,0.12); color: #f59e0b; border-color: rgba(245,158,11,0.5); }
+.chip.idle { background: rgba(59,130,246,0.12); color: #3b82f6; border-color: rgba(59,130,246,0.5); }
+
+.ProjectGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.ProjectCard {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #1b1e26;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.ProjectCard.dragging { opacity: 0.9; transform: scale(0.98); box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+.ProjectCard .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ProjectCard .title { font-weight: 600; }
+.ProjectCard .title .clickable { cursor: pointer; background: transparent; color: inherit; border: none; padding: 0; font: inherit; text-align: left; }
+.ProjectCard .dragHandle { cursor: grab; color: var(--muted); margin-right: 8px; }
+.ProjectCard .dragHandle:active { cursor: grabbing; }
+.ProjectCard .badges {
+  display: flex;
+  gap: 6px;
+}
+.ProjectCard .meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ProjectCard .sectionTitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.ProjectCard .taskRow {
+  display: block; /* override global .taskRow grid from ProjectDetails */
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  width: 100%;
+  white-space: pre-wrap; /* keep manual line breaks, wrap long lines */
+}
+.ProjectCard .noteSummary {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+

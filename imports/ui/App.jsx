@@ -34,6 +34,8 @@ import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
+import { CalendarPage } from '/imports/ui/Calendar/CalendarPage.jsx';
+import { PanoramaPage } from '/imports/ui/Panorama/PanoramaPage.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -88,10 +90,12 @@ function App() {
   const [goOpen, setGoOpen] = useState(false);
   const goItems = [
     { key: 'd', label: 'Dashboard', route: { name: 'home' } },
+    { key: 'v', label: 'Panorama', route: { name: 'panorama' } },
     { key: 'j', label: 'Journal', route: { name: 'userlog' } },
     { key: 'e', label: 'Eisenhower', route: { name: 'eisenhower' } },
     { key: 'b', label: 'Budget', route: { name: 'budget' } },
     { key: 'r', label: 'Reporting', route: { name: 'reporting' } },
+    { key: 'c', label: 'Calendar', route: { name: 'calendar' } },
     { key: 'p', label: 'People', route: { name: 'people' } },
     { key: 'f', label: 'Files', route: { name: 'files' } },
     { key: 'l', label: 'Links', route: { name: 'links' } },
@@ -100,7 +104,7 @@ function App() {
     { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
     { key: 'n', label: 'New Note Session', action: 'newSession' },
     { key: 'h', label: 'Help', route: { name: 'help' } },
-    { key: 'c', label: 'Preferences', route: { name: 'preferences' } },
+    { key: 'o', label: 'Preferences', route: { name: 'preferences' } },
   ];
   const [goActiveIdx, setGoActiveIdx] = useState(0);
   // (removed local search states)
@@ -360,6 +364,7 @@ function App() {
   const goEisenhower = () => navigateTo({ name: 'eisenhower' });
   const goBudget = () => navigateTo({ name: 'budget' });
   const goReporting = () => navigateTo({ name: 'reporting' });
+  const goCalendar = () => navigateTo({ name: 'calendar' });
   const goSituationAnalyzer = () => navigateTo({ name: 'situationAnalyzer' });
   const goPeople = () => navigateTo({ name: 'people' });
   const goFiles = () => navigateTo({ name: 'files' });
@@ -597,6 +602,16 @@ function App() {
           <ReportingPage />
         </div>
       )}
+      {route?.name === 'calendar' && (
+        <div className="panel">
+          <CalendarPage />
+        </div>
+      )}
+      {route?.name === 'panorama' && (
+        <div className="panel">
+          <PanoramaPage />
+        </div>
+      )}
       {route?.name === 'situationAnalyzer' && (
         <div className="panel">
           <SituationAnalyzer />
@@ -799,6 +814,8 @@ function App() {
           <span className="dot">·</span>
           <a href="#/help">Help</a>
           <span className="dot">·</span>
+          <a href="#/panorama">Panorama</a>
+          <span className="dot">·</span>
           <a href="#/alarms" onClick={(e) => { e.preventDefault(); goAlarms(); }}>Alarms</a>
           <span className="dot">·</span>
           <a href="#/import-tasks" onClick={(e) => { e.preventDefault(); goImportTasks(); }}>Import tasks</a>
@@ -809,6 +826,8 @@ function App() {
           <a href="#/budget" onClick={(e) => { e.preventDefault(); goBudget(); }}>Budget</a>
           <span className="dot">·</span>
           <a href="#/reporting" onClick={(e) => { e.preventDefault(); goReporting(); }}>Reporting</a>
+          <span className="dot">·</span>
+          <a href="#/calendar" onClick={(e) => { e.preventDefault(); goCalendar(); }}>Calendar</a>
           <span className="dot">·</span>
           <a href="#/situation-analyzer" onClick={(e) => { e.preventDefault(); goSituationAnalyzer(); }}>Situation Analyzer</a>
           <span className="dot">·</span>

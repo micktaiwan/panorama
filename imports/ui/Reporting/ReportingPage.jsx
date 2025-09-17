@@ -129,6 +129,8 @@ export const ReportingPage = () => {
           <option value="24h">Last 24h</option>
           <option value="72h">Last 72h</option>
           <option value="7d">Last 7 days</option>
+          <option value="3w">Last 3 weeks</option>
+          <option value="all">All time</option>
         </select>
         <button className="btn ml8" onClick={() => load()}>Refresh</button>
         <span className="muted ml8">{data?.since ? `From ${formatWhen(data.since)} to ${formatWhen(data.until)}` : ''}</span>

@@ -16,6 +16,7 @@ export const PeopleTable = ({ people, teams, onUpdate, onToggleLeft, onDelete, h
           <th>Email</th>
           <th>Aliases</th>
           <th>Arrival</th>
+          <th>Contact</th>
           <th>Left</th>
           <th className="actionsCol">Actions</th>
         </tr>
@@ -90,6 +91,9 @@ export const PeopleTable = ({ people, teams, onUpdate, onToggleLeft, onDelete, h
                 onSubmit={(v) => onUpdate(p._id, { arrivalDate: v || undefined })}
                 placeholder="no date"
               />
+            </td>
+            <td>
+              <input type="checkbox" checked={!!p.contactOnly} onChange={() => onUpdate(p._id, { contactOnly: !p.contactOnly })} />
             </td>
             <td>
               <input type="checkbox" checked={!!p.left} onChange={() => onToggleLeft(p._id, !p.left)} />

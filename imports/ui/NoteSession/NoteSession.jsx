@@ -18,6 +18,7 @@ import { marked } from 'marked';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Card } from '/imports/ui/components/Card/Card.jsx';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { NoteRow } from '/imports/ui/components/NoteRow/NoteRow.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
 
@@ -204,11 +205,13 @@ export const NoteSession = ({ sessionId, onBack }) => {
               ) : (
                 <ul className="contextList">
                   {projectNotes.slice(0, 3).map(n => (
-                    <li key={n._id}>
-                      <Tooltip content={<pre className="tooltipPre">{n.content}</pre>} placement="right" size="large">
-                        <span className="truncateOneLine" title={new Date(n.createdAt).toLocaleString()}>{n.title && n.title.trim() ? n.title : '(untitled note)'}</span>
-                      </Tooltip>
-                    </li>
+                    <NoteRow
+                      key={n._id}
+                      as="li"
+                      note={n}
+                      showProject={false}
+                      onUpdateTitle={(title) => Meteor.call('notes.update', n._id, { title })}
+                    />
                   ))}
                 </ul>
               )}
