@@ -18,6 +18,7 @@ export const Preferences = () => {
   const [pennyBaseUrl, setPennyBaseUrl] = React.useState('');
   const [pennyToken, setPennyToken] = React.useState('');
   const [qdrantUrl, setQdrantUrl] = React.useState('');
+  const [calendarIcsUrl, setCalendarIcsUrl] = React.useState('');
   const [health, setHealth] = React.useState(null);
   const [checking, setChecking] = React.useState(false);
   const [indexing, setIndexing] = React.useState(false);
@@ -37,6 +38,32 @@ export const Preferences = () => {
       return true;
     }
   });
+  const [lanIp, setLanIp] = React.useState('');
+
+  // Ensure UI reflects actual server toggle on mount
+  React.useEffect(() => {
+    Meteor.call('mobileTasksRoute.getStatus', (err, res) => {
+      if (err) {
+        console.warn('[prefs] mobileTasksRoute.getStatus failed', err);
+        return;
+      }
+      const sv = !!(res && res.enabled);
+      setMobileTasksEnabled(sv);
+      try { window.localStorage.setItem('panorama.mobileTasksEnabled', String(sv)); } catch (e2) { console.warn('[prefs] localStorage write failed (sync from server)', e2); }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    Meteor.call('mobileTasksRoute.getLanIps', (err, res) => {
+      if (err) {
+        console.warn('[prefs] getLanIps failed', err);
+        setLanIp('');
+        return;
+      }
+      const first = Array.isArray(res?.ips) && res.ips.length > 0 ? res.ips[0] : '';
+      setLanIp(first);
+    });
+  }, []);
 
   const pollIndexStatus = React.useCallback((jobId) => {
     Meteor.call('qdrant.indexStatus', jobId, (e2, st) => {
@@ -79,6 +106,7 @@ export const Preferences = () => {
     setPennyBaseUrl(pref.pennylaneBaseUrl || '');
     setPennyToken(pref.pennylaneToken || '');
     setQdrantUrl(pref.qdrantUrl || '');
+    setCalendarIcsUrl(pref.calendarIcsUrl || '');
   }, [pref?._id]);
   if (sub()) return <div>Loading…</div>;
   return (
@@ -132,6 +160,7 @@ export const Preferences = () => {
                 notify({ message: `Mobile tasks page ${v ? 'enabled' : 'disabled'}`, kind: 'success' });
               }}
             />
+            {lanIp ? <span className="ml8" style={{ color: 'var(--muted)' }}>{`http://${lanIp}:3000`}</span> : null}
           </div>
         </div>
         <div className="prefsRow">
@@ -165,6 +194,35 @@ export const Preferences = () => {
                 Meteor.call('appPreferences.update', { openaiApiKey: next }, () => {});
               }}
             />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Google Calendar</div>
+          <div className="prefsValue">
+            <div>
+              <input
+                className="afInput"
+                type="text"
+                placeholder="Paste your private ICS URL"
+                value={calendarIcsUrl}
+                onChange={(e) => setCalendarIcsUrl(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="mt8">
+              <button
+                className="btn"
+                onClick={() => {
+                  const url = String(calendarIcsUrl || '').trim();
+                  if (!url) { notify({ message: 'ICS URL manquant', kind: 'error' }); return; }
+                  Meteor.call('calendar.setIcsUrl', url, (err) => {
+                    if (err) { notify({ message: err?.reason || err?.message || 'Save failed', kind: 'error' }); return; }
+                    notify({ message: 'ICS URL saved', kind: 'success' });
+                  });
+                }}
+              >Link with GCal</button>
+              <a className="btn-link ml8" href="#/calendar" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'calendar' }); }}>Open Calendar</a>
+            </div>
           </div>
         </div>
         <div className="prefsRow">

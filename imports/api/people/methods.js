@@ -20,10 +20,11 @@ Meteor.methods({
     const now = new Date();
     const normalizedName = normalize(name);
     const left = !!fields.left;
+    const contactOnly = !!fields.contactOnly;
     const subteam = typeof fields.subteam === 'string' ? fields.subteam.trim() : '';
     const teamId = fields.teamId ? String(fields.teamId) : undefined;
     const arrivalDate = fields.arrivalDate ? new Date(fields.arrivalDate) : undefined;
-    const doc = { name, lastName, normalizedName, aliases, role, email, notes, left, createdAt: now, updatedAt: now };
+    const doc = { name, lastName, normalizedName, aliases, role, email, notes, left, contactOnly, createdAt: now, updatedAt: now };
     if (teamId) doc.teamId = teamId;
     if (subteam) doc.subteam = subteam;
     if (arrivalDate && !isNaN(arrivalDate.getTime())) doc.arrivalDate = arrivalDate;
@@ -46,6 +47,7 @@ Meteor.methods({
     if ('email' in fields) updates.email = typeof fields.email === 'string' ? fields.email.trim().toLowerCase() : '';
     if ('lastName' in fields) updates.lastName = typeof fields.lastName === 'string' ? fields.lastName.trim() : '';
     if ('left' in fields) updates.left = !!fields.left;
+    if ('contactOnly' in fields) updates.contactOnly = !!fields.contactOnly;
     if ('teamId' in fields) {
       if (fields.teamId) updates.teamId = String(fields.teamId);
       else unset.teamId = 1;

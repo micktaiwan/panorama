@@ -21,6 +21,19 @@ Meteor.methods({
   },
   'mobileTasksRoute.getStatus'() {
     return { enabled: !!mobileTasksEnabled };
+  },
+  'mobileTasksRoute.getLanIps'() {
+    const ifaces = os.networkInterfaces();
+    const ips = [];
+    for (const name of Object.keys(ifaces)) {
+      const list = ifaces[name] || [];
+      for (const info of list) {
+        if (info && info.family === 'IPv4' && !info.internal && typeof info.address === 'string') {
+          ips.push(info.address);
+        }
+      }
+    }
+    return { ips };
   }
 });
 

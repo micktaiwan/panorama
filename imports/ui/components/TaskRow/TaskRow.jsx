@@ -82,22 +82,19 @@ export const TaskRow = ({
         ) : null}
         {showProject ? (() => {
           if (allowProjectChange) {
-            const options = Array.isArray(projectOptions) ? projectOptions : [];
+            const options = [{ value: '', label: '(no project)' }, ...((Array.isArray(projectOptions) ? projectOptions : []))];
             return (
-              <select
-                className="taskProjectLink"
+              <InlineEditable
+                as="select"
                 value={task.projectId || ''}
-                onChange={(e) => {
-                  const val = e.target.value || null;
-                  if (typeof onMoveProject === 'function') onMoveProject(val);
+                options={options}
+                className="taskProjectLink"
+                inputClassName="taskProjectLink"
+                onSubmit={(next) => {
+                  const val = next || '';
+                  if (typeof onMoveProject === 'function') onMoveProject(val || null);
                 }}
-                title="Move to project"
-              >
-                <option value="">(no project)</option>
-                {options.map((o) => (
-                  <option key={o?.value || '__none__'} value={o?.value || ''}>{o?.label || ''}</option>
-                ))}
-              </select>
+              />
             );
           }
           if (projectHref) {

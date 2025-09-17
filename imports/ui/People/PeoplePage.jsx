@@ -17,7 +17,7 @@ import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 import './PeoplePage.css';
 
 export const PeoplePage = ({ highlightId: externalHighlightId }) => {
-  const ready = useTracker(() => Meteor.subscribe('people.all').ready(), []);
+  useTracker(() => Meteor.subscribe('people.all').ready(), []);
   const teamsReady = useTracker(() => Meteor.subscribe('teams.all').ready(), []);
   const people = useTracker(() => PeopleCollection.find({}, { sort: { left: 1, name: 1, lastName: 1 } }).fetch());
   const teams = useTracker(() => TeamsCollection.find({}, { sort: { name: 1 } }).fetch(), [teamsReady]);
@@ -39,6 +39,31 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
   const [subteamFilter, setSubteamFilter] = useState(() => loadPeopleFilters().subteam);
   const deepLinkId = useHashHighlight('people', '#/people');
   const [highlightId, setHighlightId] = useState(deepLinkId || null);
+  // Collapsible section states (persisted in localStorage)
+  const [openTeams, setOpenTeams] = useState(() => {
+    const v = localStorage.getItem('people.open.teams');
+    if (v === null) return false;
+    return v === '1';
+  });
+  useEffect(() => { localStorage.setItem('people.open.teams', openTeams ? '1' : '0'); }, [openTeams]);
+  const [openList, setOpenList] = useState(() => {
+    const v = localStorage.getItem('people.open.list');
+    if (v === null) return true;
+    return v === '1';
+  });
+  useEffect(() => { localStorage.setItem('people.open.list', openList ? '1' : '0'); }, [openList]);
+  const [openContacts, setOpenContacts] = useState(() => {
+    const v = localStorage.getItem('people.open.contacts');
+    if (v === null) return false;
+    return v === '1';
+  });
+  useEffect(() => { localStorage.setItem('people.open.contacts', openContacts ? '1' : '0'); }, [openContacts]);
+  const [openNotes, setOpenNotes] = useState(() => {
+    const v = localStorage.getItem('people.open.notes');
+    if (v === null) return true;
+    return v === '1';
+  });
+  useEffect(() => { localStorage.setItem('people.open.notes', openNotes ? '1' : '0'); }, [openNotes]);
   useEffect(() => {
     if (externalHighlightId) setHighlightId(externalHighlightId);
   }, [externalHighlightId]);
@@ -58,7 +83,9 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       const inNotes = normalize(p.notes || '').includes(f);
       return inName || inLast || inRole || inEmail || inAliases || inNotes;
     });
-    let afterTeam = base;
+    // Exclude contacts from the main list
+    const nonContacts = base.filter(p => !p.contactOnly);
+    let afterTeam = nonContacts;
     if (teamFilter) {
       if (teamFilter === '__none__') {
         afterTeam = base.filter(p => !p.teamId);
@@ -99,7 +126,8 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       p.left,
       p.teamId,
       p.arrivalDate,
-      p.subteam
+      p.subteam,
+      p.contactOnly
     ])),
     filter,
     teamFilter,
@@ -130,9 +158,49 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
     p.email,
     (p.aliases || []).join('|'),
     p.notes,
+    p.teamId,
     p.arrivalDate,
-    p.subteam
+    p.subteam,
+    p.contactOnly
   ]))]);
+
+  // Separate contacts list (read-only display)
+  const contacts = useMemo(() => {
+    const base = (people || []).filter(p => !!p.contactOnly);
+    const f = normalize(filter.trim());
+    const filteredContacts = base.filter(p => {
+      const inName = normalize(p.name || '').includes(f);
+      const inLast = normalize(p.lastName || '').includes(f);
+      const inRole = normalize(p.role || '').includes(f);
+      const inEmail = normalize(p.email || '').includes(f);
+      const inAliases = Array.isArray(p.aliases) && p.aliases.some(a => normalize(a).includes(f));
+      const inNotes = normalize(p.notes || '').includes(f);
+      return inName || inLast || inRole || inEmail || inAliases || inNotes;
+    });
+    const list = filteredContacts.slice();
+    const cmp = (a, b) => {
+      const na = normalize(a.name || '');
+      const nb = normalize(b.name || '');
+      if (na !== nb) return na < nb ? -1 : 1;
+      const la = normalize(a.lastName || '');
+      const lb = normalize(b.lastName || '');
+      if (la !== lb) return la < lb ? -1 : 1;
+      return 0;
+    };
+    return list.sort(cmp);
+  }, [
+    JSON.stringify((people || []).map(p => [
+      p._id,
+      p.name,
+      p.lastName,
+      p.role,
+      p.email,
+      (p.aliases || []).join('|'),
+      p.notes,
+      p.contactOnly
+    ])),
+    filter
+  ]);
   const handleCopy = async () => {
     const teamNameById = new Map((teams || []).map(t => [String(t._id), t.name || '']));
     const header = 'First name\tLast name\tRole\tTeam\tEmail\tAliases\tArrival\tLeft';
@@ -149,7 +217,23 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
   return (
     <div className="peoplePage">
       <h2>People</h2>
-      <Collapsible title="" defaultOpen={false} toggleTextClosed="Show teams" toggleTextOpen="Hide teams">
+      <PeopleFilterBar
+        onNewPerson={() => {
+          Meteor.call('people.insert', { name: 'New Person' }, (err, res) => {
+            if (!err && res) setHighlightId(res);
+          });
+        }}
+        filter={filter}
+        onFilterChange={setFilter}
+        teamFilter={teamFilter}
+        onTeamFilterChange={setTeamFilter}
+        subteamFilter={subteamFilter}
+        onSubteamFilterChange={setSubteamFilter}
+        teams={teams}
+        count={sorted.length}
+        onCopy={handleCopy}
+      />
+      <Collapsible title="Teams" className="peopleSection" open={openTeams} onToggle={setOpenTeams} toggleTextClosed="Show teams" toggleTextOpen="Hide teams">
         <TeamsTable
           teams={teams}
           teamCounts={teamCounts}
@@ -216,57 +300,68 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       >
         <p>Delete this person? This action cannot be undone.</p>
       </Modal>
-      <PeopleFilterBar
-        onNewPerson={() => {
-          Meteor.call('people.insert', { name: 'New Person' }, (err, res) => {
-            if (!err && res) setHighlightId(res);
-          });
-        }}
-        filter={filter}
-        onFilterChange={setFilter}
-        teamFilter={teamFilter}
-        onTeamFilterChange={setTeamFilter}
-        subteamFilter={subteamFilter}
-        onSubteamFilterChange={setSubteamFilter}
-        teams={teams}
-        count={sorted.length}
-        onCopy={handleCopy}
-      />
-      <div className="tableMeta">Displayed: {sorted.length}</div>
-      <PeopleTable
-        people={sorted}
-        teams={teams}
-        onUpdate={(id, fields) => { Meteor.call('people.update', id, fields); setHighlightId(id); }}
-        onToggleLeft={(id, next) => { Meteor.call('people.update', id, { left: next }); setHighlightId(id); }}
-        onDelete={(id) => setPersonDeleteId(id)}
-        highlightId={highlightId}
-      />
-      <h3 className="notesTitle">Notes</h3>
-      <table className="peopleTable">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map(p => (
-            <tr key={`notes-${p._id}`} className={`${p._id === highlightId ? 'highlight' : ''} ${p.left ? 'leftRow' : ''}`}>
-              <td>{[p.name || '', p.lastName || ''].filter(Boolean).join(' ')}</td>
-              <td>
-                <InlineEditable
-                  value={p.notes || ''}
-                  placeholder="General notes about this person"
-                  as="textarea"
-                  rows={4}
-                  onSubmit={(v) => { Meteor.call('people.update', p._id, { notes: v }); setHighlightId(p._id); }}
-                  fullWidth
-                />
-              </td>
+      <Collapsible title="People" className="peopleSection" open={openList} onToggle={setOpenList}>
+        <div className="tableMeta">Displayed: {sorted.length}</div>
+        <PeopleTable
+          people={sorted}
+          teams={teams}
+          onUpdate={(id, fields) => { Meteor.call('people.update', id, fields); setHighlightId(id); }}
+          onToggleLeft={(id, next) => { Meteor.call('people.update', id, { left: next }); setHighlightId(id); }}
+          onDelete={(id) => setPersonDeleteId(id)}
+          highlightId={highlightId}
+        />
+      </Collapsible>
+      {contacts.length > 0 && (
+        <Collapsible title="Contacts" className="peopleSection" open={openContacts} onToggle={setOpenContacts}>
+          <table className="peopleTable">
+            <thead>
+              <tr>
+                <th>First name</th>
+                <th>Last name</th>
+                <th>Role</th>
+                <th>Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contacts.map(p => (
+                <tr key={`contact-${p._id}`} className={`${p._id === highlightId ? 'highlight' : ''}`}>
+                  <td>{p.name || ''}</td>
+                  <td>{p.lastName || ''}</td>
+                  <td>{p.role || ''}</td>
+                  <td>{p.email || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Collapsible>
+      )}
+      <Collapsible title="Notes" className="peopleSection" open={openNotes} onToggle={setOpenNotes}>
+        <table className="peopleTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Notes</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sorted.map(p => (
+              <tr key={`notes-${p._id}`} className={`${p._id === highlightId ? 'highlight' : ''} ${p.left ? 'leftRow' : ''}`}>
+                <td>{[p.name || '', p.lastName || ''].filter(Boolean).join(' ')}</td>
+                <td>
+                  <InlineEditable
+                    value={p.notes || ''}
+                    placeholder="General notes about this person"
+                    as="textarea"
+                    rows={4}
+                    onSubmit={(v) => { Meteor.call('people.update', p._id, { notes: v }); setHighlightId(p._id); }}
+                    fullWidth
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Collapsible>
     </div>
   );
 };

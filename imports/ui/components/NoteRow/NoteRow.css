@@ -1,0 +1,58 @@
+.noteRowC {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+.noteRowC.withProject { grid-template-columns: 220px 1fr auto; }
+.noteRowC.smallText {
+  font-size: 12px;
+}
+.noteLeft {
+  min-width: 0;
+}
+.noteProjectLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #374151;
+  text-decoration: none;
+  max-width: 100%;
+}
+.noteProjectLink .projFlag {
+  width: 14px;
+  height: 14px;
+}
+.noteMain {
+  min-width: 0;
+}
+.noteTitleArea {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.noteRowTitle {
+  font-weight: 500;
+}
+.notePreview {
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: pre-line;
+}
+.noteRight {
+  color: #6b7280;
+  white-space: nowrap;
+}
+.iconButton {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+

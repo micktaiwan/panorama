@@ -14,6 +14,8 @@ if (typeof window !== 'undefined') {
       const raw = event?.error || event;
       const msg = event?.message || raw?.message || String(raw ?? 'Unknown error');
       notify({ message: `Client error: ${msg}`, kind: 'error', durationMs: 6000 });
+      // Do not suppress console visibility
+      console.error('[client][window.onerror]', raw || msg);
     });
 
     // Unhandled Promise rejections
@@ -21,6 +23,8 @@ if (typeof window !== 'undefined') {
       const reason = event?.reason;
       const msg = (reason && (reason.reason || reason.message)) || String(reason ?? 'Unhandled rejection');
       notify({ message: `Client error: ${msg}`, kind: 'error', durationMs: 6000 });
+      // Do not suppress console visibility
+      console.error('[client][unhandledrejection]', reason || msg);
     });
 
     // Patch Meteor.call to surface server method errors via Notify by default
@@ -44,6 +48,7 @@ if (typeof window !== 'undefined') {
             if (err) {
               const message = err?.reason || err?.message || String(err ?? 'Unknown error');
               notify({ message, kind: 'error', durationMs: 6000 });
+              console.error('[client][Meteor.call]', err);
             }
           });
         }

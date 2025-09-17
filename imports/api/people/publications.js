@@ -12,6 +12,7 @@ Meteor.publish('people.all', function () {
       email: 1,
       notes: 1,
       left: 1,
+      contactOnly: 1,
       teamId: 1,
       arrivalDate: 1,
       subteam: 1,

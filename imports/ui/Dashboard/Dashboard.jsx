@@ -4,17 +4,20 @@ import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
+import { NotesCollection } from '/imports/api/notes/collections';
 import './Dashboard.css';
 import { formatDateTime, deadlineSeverity } from '/imports/ui/utils/date.js';
 import { ProjectsOverview } from '/imports/ui/Dashboard/ProjectsOverview.jsx';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { TaskRow } from '/imports/ui/components/TaskRow/TaskRow.jsx';
+import { NoteRow } from '/imports/ui/components/NoteRow/NoteRow.jsx';
 
 export const Dashboard = () => {
   
   useSubscribe('tasks');
   useSubscribe('projects');
   useSubscribe('noteSessions');
+  useSubscribe('notes');
   const rawTasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ] }, { sort: { createdAt: 1 } }));
   const allTasks = useFind(() => TasksCollection.find({}, { fields: { status: 1, deadline: 1, createdAt: 1, statusChangedAt: 1, title: 1, projectId: 1 } }));
   // flags are not needed on this screen beyond status/deadline metrics
@@ -26,6 +29,13 @@ export const Dashboard = () => {
     projects.forEach(p => { acc[p._id] = p.name || '(untitled project)'; });
     return acc;
   }, [projects]);
+
+  const unassignedNotes = useFind(() => (
+    NotesCollection.find(
+      { $or: [ { projectId: { $exists: false } }, { projectId: null }, { projectId: '' } ] },
+      { sort: { createdAt: -1 } }
+    )
+  ));
 
   const tasks = useMemo(() => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
@@ -66,6 +76,10 @@ export const Dashboard = () => {
       .sort((a, b) => new Date(b.statusChangedAt) - new Date(a.statusChangedAt));
     return { today, yesterday };
   }, [JSON.stringify(allTasks.map(t => [(t.status || 'todo'), t.statusChangedAt ? new Date(t.statusChangedAt).toISOString().slice(0,10) : ''].join(':')))]);
+
+  const unassignedTasks = useMemo(() => (
+    tasks.filter(t => !t.projectId)
+  ), [tasks]);
 
   // Project filters (tri-state per project: include -> 1, exclude -> -1, neutral -> 0/undefined)
   const [projFilters, setProjFilters] = useState({});
@@ -222,6 +236,55 @@ export const Dashboard = () => {
                 </a>
                 <span className="sessionMeta"> · {formatDateTime(s.createdAt)}</span>
               </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {unassignedTasks.length > 0 && (
+        <div className="unassignedTasks" style={{ marginTop: 24 }}>
+          <h2>Tasks without project ({unassignedTasks.length})</h2>
+          <ul className="taskList">
+            {unassignedTasks.map(t => (
+              <TaskRow
+                key={`u-${t._id}`}
+                task={t}
+                showProject={true}
+                allowProjectChange
+                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
+                projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
+                projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
+                projectColor={(projects.find(p => p._id === t.projectId)?.colorLabel) || '#6b7280'}
+                showStatusSelect
+                showDeadline
+                showClearDeadline
+                showDelete
+                onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
+                onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}
+                onRemove={() => removeTask(t._id)}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+      {unassignedNotes.length > 0 && (
+        <div className="unassignedNotes" style={{ marginTop: 24 }}>
+          <h2>Notes without project ({unassignedNotes.length})</h2>
+          <ul className="notesList">
+            {unassignedNotes.map(n => (
+              <NoteRow
+                key={n._id}
+                note={n}
+                showProject={true}
+                allowProjectChange
+                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                onMoveProject={(projectId) => Meteor.call('notes.update', n._id, { projectId })}
+                onUpdateTitle={(title) => Meteor.call('notes.update', n._id, { title })}
+                projectName={n.projectId ? (projectById[n.projectId] || 'Open project') : '—'}
+                projectHref={n.projectId ? `#/projects/${n.projectId}` : undefined}
+                projectColor={(projects.find(p => p._id === n.projectId)?.colorLabel) || '#6b7280'}
+              />
             ))}
           </ul>
         </div>
