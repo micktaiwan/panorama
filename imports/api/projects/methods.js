@@ -48,6 +48,12 @@ Meteor.methods({
     check(projectId, String);
     check(modifier, Object);
     const sanitized = sanitizeProjectDoc(modifier);
+    if (Object.prototype.hasOwnProperty.call(modifier, 'panoramaStatus')) {
+      const allowed = new Set(['red','orange','green', null, '']);
+      const v = modifier.panoramaStatus;
+      if (!allowed.has(v)) throw new Meteor.Error('invalid-panorama-status', 'panoramaStatus must be red|orange|green|null');
+      sanitized.panoramaStatus = v || null;
+    }
     const res = await ProjectsCollection.updateAsync(projectId, { $set: { ...sanitized, updatedAt: new Date() } });
     try {
       const next = await ProjectsCollection.findOneAsync(projectId, { fields: { name: 1, description: 1 } });

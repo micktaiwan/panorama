@@ -1,14 +1,14 @@
 .taskRowC { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--task-col-gap, 12px); padding: 8px 0; border-bottom: 1px solid var(--border); position: relative; width: 100%; }
 .taskRowC:hover { background: #272f3e; }
-.taskRowC.withProject { grid-template-columns: max-content 1fr auto; }
-.taskRowC.smallText { font-size: 12px; padding: 4px 0; gap: var(--task-col-gap, 8px); }
+.taskRowC.withProject { grid-template-columns: var(--task-project-col-width, 160px) 1fr auto; }
+.taskRowC.smallText { font-size: 12px; padding: 4px 0; gap: var(--task-col-gap, 8px); --task-project-col-width: 120px; }
 .taskRowC.smallText .inlineEditable, .taskRowC.smallText .inlineEditableInput { font-size: 12px; }
-.taskRowC.withProject.smallText { grid-template-columns: max-content minmax(0, 1fr) auto; }
+.taskRowC.withProject.smallText { grid-template-columns: var(--task-project-col-width, 120px) minmax(0, 1fr) auto; }
 .taskRowC.inlineActions.withProject.smallText { grid-template-columns: max-content 1fr; }
 .taskRowC.inlineActions .taskRight { display: none; }
 .taskRowC:last-child { border-bottom: none; }
 .taskLeft { display: inline-flex; align-items: center; gap: 8px; }
-.taskRowC.withProject .taskLeft { min-width: max-content; }
+.taskRowC.withProject .taskLeft { min-width: 0; }
 .taskMain { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; width: 100%; }
 .taskMain.noStatus { grid-template-columns: minmax(0, 1fr); }
 .taskRowC .taskMain.noStatus { grid-template-columns: minmax(0, 1fr); }
@@ -57,8 +57,8 @@
 .taskRowC .inlineEditable.dueNow { color: #ef4444; }
 .taskRowC .inlineEditable.dueLater { color: #22c55e; }
 .taskCheck { width: 16px; height: 16px; margin: 0; accent-color: #22c55e; }
-.taskProjectLink { color: var(--muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; max-width: var(--task-project-col-width, 160px); margin-right: 8px; }
-.taskRowC.smallText .taskProjectLink { max-width: var(--task-project-col-width, 120px); margin-right: 6px; }
+.taskProjectLink { color: var(--muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; width: 100%; margin-right: 8px; }
+.taskRowC.smallText .taskProjectLink { width: 100%; margin-right: 6px; }
 .taskProjectLink:hover { text-decoration: underline; }
 .projFlag { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
 

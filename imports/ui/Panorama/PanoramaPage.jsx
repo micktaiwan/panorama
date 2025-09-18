@@ -98,8 +98,10 @@ export const PanoramaPage = () => {
   const ProjectCardItem = ({ p }) => {
     const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: p._id, disabled: sortMode !== 'custom' });
     const style = { transform: CSS.Transform.toString(transform), transition };
+    const status = p?.panoramaStatus || '';
+    const statusClass = status ? ` status-${status}` : '';
     return (
-      <div ref={setNodeRef} style={style} className={`ProjectCard${isDragging ? ' dragging' : ''}`}>
+      <div ref={setNodeRef} style={style} className={`ProjectCard${statusClass}${isDragging ? ' dragging' : ''}`}>
         <div className="header">
           <div className="title">
             {sortMode === 'custom' ? (
@@ -114,6 +116,25 @@ export const PanoramaPage = () => {
             </button>
           </div>
           <div className="badges">
+            <select
+              className="statusSelect"
+              value={status}
+              onChange={(e) => {
+                const v = e.target.value;
+                setData(prev => prev.map(x => x._id === p._id ? { ...x, panoramaStatus: v || null } : x));
+                Meteor.call('projects.update', p._id, { panoramaStatus: v || null });
+              }}
+              title={
+                status === 'red' ? 'Important: immediate attention required' :
+                status === 'orange' ? 'Attention: watch closely' :
+                status === 'green' ? 'All good / personal' : 'No status'
+              }
+            >
+              <option value="">—</option>
+              <option value="red">Red</option>
+              <option value="orange">Orange</option>
+              <option value="green">Green</option>
+            </select>
             {!!p?.tasks?.overdue && <span className="chip danger">{p.tasks.overdue} overdue</span>}
             {!!p?.tasks?.blocked && <span className="chip warn">{p.tasks.blocked} blocked</span>}
             {p.dormant && <span className="chip idle">Dormant</span>}
@@ -129,18 +150,11 @@ export const PanoramaPage = () => {
         </div>
         <div className="next">
           <div className="sectionTitle">Next actions</div>
-          {(p?.tasks?.next || []).slice(0, 3).map(t => (
+          {(p?.tasks?.next || []).slice(0, 5).map(t => (
             <div key={t._id} className="taskRow">{t.title}</div>
           ))}
         </div>
-        <div className="notes">
-          <div className="sectionTitle">Notes</div>
-          <div className="noteSummary">
-            <span>Status: {p?.notes?.lastStatusAt ? new Date(p.notes.lastStatusAt).toLocaleDateString() : '—'}</span>
-            <span>Decisions 7d: {p?.notes?.decisions7d ?? 0}</span>
-            <span>Risks 7d: {p?.notes?.risks7d ?? 0}</span>
-          </div>
-        </div>
+        {/* Notes summary removed per request */}
       </div>
     );
   };

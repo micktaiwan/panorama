@@ -24,12 +24,12 @@ Meteor.methods({
     const periodDays = Number(filters.periodDays) || 14;
     const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
 
-    const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1 } };
+    const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
     const projects = await ProjectsCollection.find({}, projFields).fetchAsync();
     const projectIds = projects.map(p => p._id);
 
     // Aggregate per-project task metrics using JS for simplicity first (optimize later)
-    const taskFields = { fields: { projectId: 1, status: 1, deadline: 1, updatedAt: 1, title: 1, statusChangedAt: 1, createdAt: 1 } };
+    const taskFields = { fields: { projectId: 1, status: 1, deadline: 1, updatedAt: 1, title: 1, statusChangedAt: 1, createdAt: 1, priorityRank: 1 } };
     const allTasks = await TasksCollection.find({ projectId: { $in: projectIds } }, taskFields).fetchAsync();
     const now = new Date();
     const soon = new Date(Date.now() + 3 * 864e5);
@@ -54,16 +54,32 @@ Meteor.methods({
       }
       if (!isClosed) {
         const title = typeof t.title === 'string' ? t.title.trim() : '';
-        if (title) acc.next.push({ _id: t._id, title, deadline: t.deadline || null });
+        if (title) acc.next.push({
+          _id: t._id,
+          title,
+          deadline: t.deadline || null,
+          status: t.status || 'todo',
+          priorityRank: Number.isFinite(t.priorityRank) ? t.priorityRank : null,
+          createdAt: t.createdAt || null
+        });
       }
     }
     for (const [, acc] of tasksByProject) {
+      const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
+      const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
       acc.next.sort((a, b) => {
-        const ad = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-        const bd = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-        return ad - bd;
+        const ad = toTime(a.deadline); const bd = toTime(b.deadline);
+        if (ad !== bd) return ad - bd;
+        const as = statusRank(a.status || 'todo'); const bs = statusRank(b.status || 'todo');
+        if (as !== bs) return as - bs;
+        const ar = Number.isFinite(a.priorityRank) ? a.priorityRank : Number.POSITIVE_INFINITY;
+        const br = Number.isFinite(b.priorityRank) ? b.priorityRank : Number.POSITIVE_INFINITY;
+        if (ar !== br) return ar - br;
+        const ac = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return ac - bc;
       });
-      acc.next = acc.next.slice(0, 3);
+      acc.next = acc.next.slice(0, 5);
     }
 
     // Notes aggregates (recent activity counts)
@@ -103,6 +119,7 @@ Meteor.methods({
         tags: p.tags || [],
         createdAt: p.createdAt || null,
         panoramaRank: Number.isFinite(p.panoramaRank) ? p.panoramaRank : null,
+        panoramaStatus: typeof p.panoramaStatus === 'string' ? p.panoramaStatus : null,
         lastActivityAt,
         heat: { notes: n.notes7d || 0, tasksChanged: t.changedInPeriod || 0 },
         tasks: { open: t.open || 0, overdue: t.overdue || 0, blocked: t.blocked || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
