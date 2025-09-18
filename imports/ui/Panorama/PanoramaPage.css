@@ -71,6 +71,9 @@
   gap: 8px;
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
+.ProjectCard.status-red { background: #2a1616; border-color: #963232; }
+.ProjectCard.status-orange { background: #362d1d; border-color: #5f4a1f; }
+.ProjectCard.status-green { background: #162a1a; border-color: #1f5f2c; }
 .ProjectCard.dragging { opacity: 0.9; transform: scale(0.98); box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
 .ProjectCard .header {
   display: flex;
@@ -85,6 +88,7 @@
   display: flex;
   gap: 6px;
 }
+.ProjectCard .statusSelect { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
 .ProjectCard .meta {
   display: flex;
   gap: 12px;
@@ -98,12 +102,15 @@
 }
 .ProjectCard .taskRow {
   display: block; /* override global .taskRow grid from ProjectDetails */
-  padding: 6px 8px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  margin-bottom: 6px;
+  padding: 3px;
   width: 100%;
   white-space: pre-wrap; /* keep manual line breaks, wrap long lines */
+  font-size: 12px;
+}
+.ProjectCard .taskRow::before {
+  content: "• ";
+  color: var(--muted);
+  margin-right: 4px;
 }
 .ProjectCard .noteSummary {
   display: flex;
@@ -111,5 +118,3 @@
   font-size: 12px;
   color: var(--text);
 }
-
-

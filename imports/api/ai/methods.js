@@ -594,8 +594,9 @@ Meteor.methods({
 
     const system = 'You clean and normalize note text without summarizing or translating.';
     const instructions = [
-      'This is a note. Remove emojis. Remove formatting, but keep a text format with titles if needed.',
-      'Keep conversation flow and names if it is a conversation.',
+      'This is a note. Remove emojis. Remove formatting, remove time stamps like "2 minutes ago" or "9:14"',
+      'Keep a text format and put sections titles if needed',
+      'Keep conversation flow and names if it is a conversation',
       'Do not lose content, do not summarize.',
       'Keep the same language as the original note.',
       'You can fix spelling errors.'
