@@ -1,237 +1,31 @@
-import React, { useMemo, useState } from 'react';
-import { Meteor } from 'meteor/meteor';
+import React, { useState } from 'react';
 import './ReportingPage.css';
-import { ProjectsCollection } from '/imports/api/projects/collections';
-import { useTracker } from 'meteor/react-meteor-data';
-import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
-import { writeClipboard } from '/imports/ui/utils/clipboard.js';
-// notify is provided globally via NotifyProvider; no local handler wiring here
-
-const formatWhen = (d) => {
-  const dt = new Date(d);
-  return Number.isNaN(dt.getTime()) ? '' : dt.toLocaleString();
-};
+import { ActivitySummary } from '/imports/ui/components/ActivitySummary/ActivitySummary.jsx';
 
 export const ReportingPage = () => {
-  const [windowKey, setWindowKey] = useState('24h');
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState({ events: [], since: null, until: null });
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState('');
-  const [aiText, setAiText] = useState('');
-  const [aiLang, setAiLang] = useState(() => {
-    if (typeof localStorage === 'undefined') return 'fr';
-    return localStorage.getItem('reporting_ai_lang') || 'fr';
-  });
-  const [aiFormat, setAiFormat] = useState(() => {
-    if (typeof localStorage === 'undefined') return 'text';
-    return localStorage.getItem('reporting_ai_format') || 'text';
-  });
   const [projFilters, setProjFilters] = useState(() => {
     if (typeof localStorage === 'undefined') return {};
     const raw = localStorage.getItem('reporting_proj_filters');
     if (!raw) return {};
     return JSON.parse(raw) || {};
   });
-  // Removed legacy local toast wiring to avoid recursion with global notify
-  const [aiPrompt, setAiPrompt] = useState(() => {
-    if (typeof localStorage === 'undefined') return '';
-    return localStorage.getItem('reporting_ai_prompt') || '';
-  });
-  const [recentPrompts, setRecentPrompts] = useState(() => {
-    if (typeof localStorage === 'undefined') return [];
-    try {
-      const raw = localStorage.getItem('reporting_ai_recent_prompts');
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr.filter(s => typeof s === 'string' && s.trim()) : [];
-    } catch (e) {
-      console.error('Failed to parse reporting_ai_recent_prompts');
-      return [];
-    }
-  });
-  const projectsReady = useTracker(() => Meteor.subscribe('projects').ready(), []);
-  const projectsById = useTracker(() => {
-    const arr = ProjectsCollection.find({}, { fields: { name: 1 } }).fetch();
-    const map = new Map();
-    for (const p of arr) map.set(p._id, p);
-    return map;
-  }, [projectsReady]);
 
-  const load = (key, filters) => {
-    const k = key || windowKey;
-    const effectiveFilters = (filters && typeof filters === 'object') ? filters : projFilters;
-    setLoading(true);
-    Meteor.call('reporting.recentActivity', k, effectiveFilters, (err, res) => {
-      setLoading(false);
-      if (err) { console.error('reporting.recentActivity failed', err); setData({ events: [], since: null, until: null }); return; }
-      setData(res || { events: [], since: null, until: null });
-    });
-  };
-
-  React.useEffect(() => { load('24h'); }, []);
-  // Keep projFilters in localStorage in sync when modified via component
-  React.useEffect(() => {
+  const handleFiltersChange = (filters) => {
+    const next = filters || {};
+    setProjFilters(next);
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('reporting_proj_filters', JSON.stringify(projFilters || {}));
+      localStorage.setItem('reporting_proj_filters', JSON.stringify(next));
     }
-  }, [JSON.stringify(projFilters)]);
-
-  // Persist AI options
-  React.useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('reporting_ai_lang', aiLang || 'fr');
-  }, [aiLang]);
-  React.useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('reporting_ai_format', aiFormat || 'text');
-  }, [aiFormat]);
-  // Persist recent prompts
-  React.useEffect(() => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('reporting_ai_recent_prompts', JSON.stringify(recentPrompts || []));
-    }
-  }, [JSON.stringify(recentPrompts)]);
-
-  const upsertRecentPrompt = (prompt) => {
-    const v = String(prompt || '').trim();
-    if (!v) return; // do not save default/empty
-    setRecentPrompts(prev => {
-      const exists = (prev || []).some(p => p === v);
-      if (exists) return prev;
-      const next = [v, ...(prev || [])];
-      if (next.length > 10) next.pop();
-      return next;
-    });
-  };
-
-  // Removed recursive notify wiring; NotifyProvider handles global toasts
-
-  const grouped = useMemo(() => {
-    const groups = { project_created: [], task_done: [], note_created: [] };
-    for (const e of (data?.events || [])) {
-      if (!groups[e.type]) groups[e.type] = [];
-      groups[e.type].push(e);
-    }
-    return groups;
-  }, [JSON.stringify(data?.events || [])]);
-
-  const titleFor = (e) => {
-    const projectName = e.projectId && projectsById.get(e.projectId) ? projectsById.get(e.projectId).name : '';
-    if (e.type === 'project_created') return `New project: ${e.title}`;
-    if (e.type === 'task_done') return `Task done: ${e.title}${projectName ? ` — ${projectName}` : ''}`;
-    if (e.type === 'note_created') return `Note added: ${e.title}${projectName ? ` — ${projectName}` : ''}`;
-    return e.title || '';
   };
 
   return (
     <div className="reportingPage">
-      <div className="reportingToolbar">
-        <label htmlFor="reporting-window">Time window:</label>
-        <select id="reporting-window" value={windowKey} onChange={(e) => { setWindowKey(e.target.value); load(e.target.value); }}>
-          <option value="24h">Last 24h</option>
-          <option value="72h">Last 72h</option>
-          <option value="7d">Last 7 days</option>
-          <option value="3w">Last 3 weeks</option>
-          <option value="all">All time</option>
-        </select>
-        <button className="btn ml8" onClick={() => load()}>Refresh</button>
-        <span className="muted ml8">{data?.since ? `From ${formatWhen(data.since)} to ${formatWhen(data.until)}` : ''}</span>
-      </div>
-      <div className="reportingContent scrollArea" style={{ maxHeight: 480 }}>
-        {loading ? <div className="muted">Loading…</div> : null}
-        {!loading && (data?.events || []).length === 0 ? <div className="muted">No activity in this window.</div> : null}
-        {['project_created', 'task_done', 'note_created'].map(section => (
-          <div key={section} className="reportingSection">
-            <h3>{section === 'project_created' ? 'Projects created' : section === 'task_done' ? 'Tasks completed' : 'Notes added'}</h3>
-            <ul className="reportingList">
-              {(grouped[section] || []).map(e => (
-                <li key={`${e.type}:${e.id}`}>
-                  <span className="when">{formatWhen(e.when)}</span>
-                  <span className="title">{titleFor(e)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-      <div className="reportingFilters">
-        <h4>Projects filter</h4>
-        <ProjectFilters
-          projects={useTracker(() => ProjectsCollection.find({}, { fields: { name: 1, isFavorite: 1, favoriteRank: 1 } }).fetch(), [])}
-          storageKey="reporting_proj_filters"
-          onChange={(f) => { const next = f || {}; setProjFilters(next); load(undefined, next); }}
-        />
-      </div>
-      <div className="reportingActions">
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-          <label htmlFor="ai-recent" style={{ minWidth: 120 }}>Recent prompts</label>
-          <select id="ai-recent" value="" onChange={(e) => {
-            const sel = e.target.value || '';
-            if (!sel) return;
-            setAiPrompt(sel);
-            if (typeof localStorage !== 'undefined') localStorage.setItem('reporting_ai_prompt', sel);
-            e.target.value = '';
-          }}>
-            <option value="">Select…</option>
-            {(recentPrompts || []).map((p, idx) => (
-              <option key={`rp-${idx}`} value={p}>{p.length > 60 ? p.slice(0, 57) + '…' : p}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-          <label htmlFor="ai-lang" style={{ minWidth: 120 }}>Langue</label>
-          <select id="ai-lang" value={aiLang} onChange={(e) => setAiLang(e.target.value)}>
-            <option value="fr">Français</option>
-            <option value="en">English</option>
-          </select>
-          <label htmlFor="ai-format" style={{ minWidth: 120 }}>Format</label>
-          <select id="ai-format" value={aiFormat} onChange={(e) => setAiFormat(e.target.value)}>
-            <option value="text">Texte</option>
-            <option value="markdown">Markdown</option>
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
-          <label htmlFor="ai-prompt" style={{ minWidth: 120, marginTop: 6 }}>AI prompt (optional)</label>
-          <textarea
-            id="ai-prompt"
-            rows={4}
-            style={{ width: '100%' }}
-            placeholder="Add guidance for the AI (overrides default instructions)"
-            value={aiPrompt}
-            onChange={(e) => {
-              const v = e.target.value || '';
-              setAiPrompt(v);
-              if (typeof localStorage !== 'undefined') localStorage.setItem('reporting_ai_prompt', v);
-            }}
-          />
-        </div>
-        <button className="btn" disabled={aiLoading} onClick={() => {
-          setAiError('');
-          setAiLoading(true);
-          const opts = { lang: aiLang || 'fr', format: aiFormat || 'text' };
-          Meteor.call('reporting.aiSummarizeWindow', windowKey, projFilters, aiPrompt, opts, (err, res) => {
-            setAiLoading(false);
-            if (err) {
-              console.error('AI summarize failed', err);
-              setAiError(err?.reason || err?.message || 'AI summary failed');
-              return;
-            }
-            const content = (aiFormat === 'markdown' ? (res?.markdown || res?.text || '') : (res?.text || res?.markdown || ''));
-            if (!String(content || '').trim()) { setAiText(''); setAiError('No content to summarize'); return; }
-            setAiText(content);
-            // Save prompt if non-empty and not default
-            if (String(aiPrompt || '').trim()) upsertRecentPrompt(aiPrompt);
-          });
-        }}>{aiLoading ? 'Generating…' : 'Generate AI Summary'}</button>
-        {aiError ? <span className="ml8" style={{ color: 'var(--danger, #f66)' }}>{aiError}</span> : null}
-      </div>
-      {aiText ? (
-        <div className="aiSummaryActions">
-          <button className="btn" onClick={() => writeClipboard(aiText)}>Copy AI Text</button>
-        </div>
-      ) : null}
-      <div className={`aiSummary scrollArea ${aiText ? '' : 'muted'}`}>
-        {aiText || 'No AI summary yet.'}
-      </div>
-      
+      <ActivitySummary
+        projectFilters={projFilters}
+        showProjectFilter={true}
+        title="Activity Summary"
+        onFiltersChange={handleFiltersChange}
+      />
     </div>
   );
 };

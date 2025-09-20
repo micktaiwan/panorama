@@ -25,10 +25,23 @@ export const groupByMonthVendor = (rows) => {
     if (!entry.sampleId && r._id) entry.sampleId = r._id;
     group.set(key, entry);
   }
-  return Array.from(group.entries()).map(([k, v]) => {
+  const result = Array.from(group.entries()).map(([k, v]) => {
     const [m, ven] = k.split('|');
     return { month: m, vendor: ven, total: v.total, count: v.count, sampleId: v.sampleId, team: v.team, department: v.department };
   }).sort((a, b) => (a.month === b.month ? a.vendor.localeCompare(b.vendor) : a.month.localeCompare(b.month)));
+  
+  // Debug logging to help identify grouping issues
+  const vendors = [...new Set(result.map(r => r.vendor))];
+  if (vendors.some(v => v.toLowerCase().includes('anthropic')) && vendors.some(v => v.toLowerCase().includes('sendinblue'))) {
+    console.log('Grouping result contains both Anthropic and Sendinblue:', {
+      totalGroups: result.length,
+      vendors: vendors,
+      anthropicGroups: result.filter(r => r.vendor.toLowerCase().includes('anthropic')),
+      sendinblueGroups: result.filter(r => r.vendor.toLowerCase().includes('sendinblue'))
+    });
+  }
+  
+  return result;
 };
 
 export const vendorTotals = (rows) => {

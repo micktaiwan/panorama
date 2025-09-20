@@ -24,6 +24,7 @@ import { FileItem } from '../components/File/File.jsx';
 import { Tooltip } from '../components/Tooltip/Tooltip.jsx';
 import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
 import { Modal } from '../components/Modal/Modal.jsx';
+import { ActivitySummary } from '../components/ActivitySummary/ActivitySummary.jsx';
 
 export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateTaskViaPalette }) => {
   const loadProjects = useSubscribe('projects');
@@ -358,6 +359,18 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         </div>
       </div>
 
+      {/* Activity Summary Section */}
+      <div className="projectActivitySummary">
+        <Collapsible title="Activity Summary" defaultOpen={false}>
+          <ActivitySummary
+            projectFilters={{ [projectId]: 1 }}
+            windowKey="7d"
+            showProjectFilter={false}
+            title={`Activity for ${project.name || '(untitled project)'}`}
+          />
+        </Collapsible>
+      </div>
+
       <h3 className="tasksHeader">Tasks</h3>
       <div className="projectActions">
         <button className="btn btn-primary" onClick={createTask}>Add Task</button>
@@ -566,6 +579,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
           ) : null}
         </div>
       ) : null}
+
       <div className="projectDeleteFooter">
         <button className="btn-link" onClick={() => navigateTo({ name: 'projectDelete', projectId })}>Delete Project…</button>
       </div>

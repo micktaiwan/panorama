@@ -7,14 +7,13 @@ import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { useSingle } from '/imports/ui/hooks/useSingle.js';
 import { useDoc } from '/imports/ui/hooks/useDoc.js';
 import { navigateTo } from '/imports/ui/router.js';
-import { timeAgo, formatDate } from '/imports/ui/utils/date.js';
+import { formatDate } from '/imports/ui/utils/date.js';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
 import './NoteSession.css';
-import { marked } from 'marked';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Card } from '/imports/ui/components/Card/Card.jsx';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
@@ -30,7 +29,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
   const [isCoaching, setIsCoaching] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [finalizeStatus, setFinalizeStatus] = useState(null); // 'ok' | 'err' | null
-  const [isEditingSummary, setIsEditingSummary] = useState(false);
+  
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const load = useSubscribe('noteLines');
@@ -381,13 +380,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
             >
               {isSummarizing ? 'Summarizing…' : 'Summarize'}
             </button>
-            <button
-              className={`btn ml8 ${isEditingSummary ? 'success' : ''}`}
-              onClick={() => setIsEditingSummary(v => !v)}
-              disabled={!session || !session.aiSummary}
-            >
-              {isEditingSummary ? 'Done' : 'Edit summary'}
-            </button>
+            
           </div>
         </div>
         <div className="aiContent mt8">
@@ -438,63 +431,18 @@ export const NoteSession = ({ sessionId, onBack }) => {
           ) : null}
           {session && (
             <Card>
-              {!session.aiSummary ? (
-                <div className="aiMarkdown">No summary yet.</div>
-              ) : (
-                isEditingSummary ? (
-                  <InlineEditable
-                    as="textarea"
-                    value={session.aiSummary}
-                    placeholder="(empty)"
-                    startEditing
-                    selectAllOnFocus
-                    rows={20}
-                    onSubmit={(next) => {
-                      Meteor.call('noteSessions.update', sessionId, { aiSummary: next }, () => {
-                        setIsEditingSummary(false);
-                      });
-                    }}
-                  />
-                ) : (
-                  (() => {
-                    const s = session.aiSummaryJson || {};
-                    const toBlock = (title, arr) => {
-                      if (!arr || arr.length === 0) return null;
-                      return (
-                        <>
-                          <h3>{title}</h3>
-                          <ul>
-                            {arr.map((it, idx) => (
-                              <li key={idx}>{`${it.text}${Array.isArray(it.cites) && it.cites.length ? ` [${it.cites.map(n => `L${n}`).join(',')}]` : ''}`}</li>
-                            ))}
-                          </ul>
-                        </>
-                      );
-                    };
-                    const summaryText = typeof s.summary === 'string' && s.summary.trim() ? s.summary.trim() : '';
-                    const blocks = [
-                      (summaryText ? (
-                        <>
-                          <h3>Summary</h3>
-                          <p>{summaryText}</p>
-                        </>
-                      ) : null),
-                      toBlock('Decisions', s.decisions),
-                      toBlock('Risks', s.risks),
-                      toBlock('Next steps', s.nextSteps)
-                    ].filter(Boolean);
-                    return blocks.length > 0 ? (
-                      <div className="aiMarkdown">
-                        {blocks.map((b, idx) => (
-                          <div key={idx} style={{ marginBottom: idx < blocks.length - 1 ? 12 : 0 }}>{b}</div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="aiMarkdown">No summary yet.</div>
-                    );
-                  })()
-                )
-              )}
+              <div className="aiMarkdown">
+                <InlineEditable
+                  as="textarea"
+                  value={(session && session.aiSummary) || ''}
+                  placeholder="(empty)"
+                  rows={20}
+                  fullWidth
+                  onSubmit={(next) => {
+                    Meteor.call('noteSessions.update', sessionId, { aiSummary: next });
+                  }}
+                />
+              </div>
               {session.aiSummary ? (
                 <div className="mt8">
                   {(() => {
