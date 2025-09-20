@@ -55,6 +55,22 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
   }, [hidePhotos]);
   const rowKey = (r) => `${r.invoiceId}|${r.invoiceNumber}|${r.date}|${r.vendor}|${r.amountTtc}|${r.currency}`.slice(0, 240);
 
+  // Helper function to filter ignored items (same logic as server)
+  const filterIgnoredItems = (rows, ignoreList) => {
+    const list = Array.isArray(ignoreList && ignoreList.items) ? ignoreList.items : [];
+    const idSet = new Set(list.filter(x => (x.type ? x.type === 'supplier' : !!x.supplierId)).map(x => String(x.supplierId)));
+    const nameSet = new Set(list.filter(x => (x.type ? x.type === 'label' : !x.supplierId)).map(x => String(x.vendorNameLower)));
+    const urlSet = new Set(list.filter(x => x.type === 'photo/pdf' && x.publicFileUrl).map(x => String(x.publicFileUrl)));
+    
+    return rows.filter(r => {
+      const nameLower = String(r.vendor || '').trim().toLowerCase();
+      if (r.supplierId && idSet.has(String(r.supplierId))) return false;
+      if (nameLower && nameSet.has(nameLower)) return false;
+      if (r.publicFileUrl && urlSet.has(String(r.publicFileUrl))) return false;
+      return true;
+    });
+  };
+
   const apiRange = React.useMemo(() => {
     if (!Array.isArray(apiRows) || apiRows.length === 0) return null;
     const onlyDates = apiRows.map(r => String((r.apiDate || r.apiDeadline || '') || '').slice(0,10)).filter(Boolean);
@@ -166,24 +182,16 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         // Rely on API sorting; do not sort locally
         // Apply ignore rules client-side
         Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-          if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); }
-          const list = Array.isArray(resIg && resIg.items) ? resIg.items : [];
-          const idSet = new Set(list.filter(x => (x.type ? x.type === 'supplier' : !!x.supplierId)).map(x => String(x.supplierId)));
-          const nameSet = new Set(list.filter(x => (x.type ? x.type === 'label' : !x.supplierId)).map(x => String(x.vendorNameLower)));
-          const urlSet = new Set(list.filter(x => x.type === 'photo/pdf' && x.publicFileUrl).map(x => String(x.publicFileUrl)));
-          const filtered = mapped.filter(r => {
-            const nameLower = String(r.vendor || '').trim().toLowerCase();
-            if (r.supplierId && idSet.has(String(r.supplierId))) return false;
-            if (nameLower && nameSet.has(nameLower)) return false;
-            if (r.publicFileUrl && urlSet.has(String(r.publicFileUrl))) return false;
-            return true;
-          });
+          if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); return; }
+          
+          const filtered = filterIgnoredItems(mapped, resIg);
           const removed = mapped.length - filtered.length;
+          
+          // Calculate examples
           const exampleNames = [];
           const seenExamples = new Set();
           for (const r of mapped) {
-            const nameLower = String(r.vendor || '').trim().toLowerCase();
-            const isIgnored = (r.supplierId && idSet.has(String(r.supplierId))) || (nameLower && nameSet.has(nameLower)) || (r.publicFileUrl && urlSet.has(String(r.publicFileUrl)));
+            const isIgnored = !filtered.includes(r);
             if (!isIgnored) continue;
             const nm = String(r.vendor || (r.supplierId ? `supplier#${r.supplierId}` : ''));
             const key = `${r.supplierId || ''}|${nm.trim().toLowerCase()}`;
@@ -192,6 +200,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
             exampleNames.push(nm);
             if (exampleNames.length >= 5) break;
           }
+          
           setIgnored({ count: removed, examples: exampleNames });
           localStorage.setItem('budget.apiCache', JSON.stringify(filtered));
           setApiRows(filtered);
@@ -252,24 +261,16 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         });
         // Apply ignore rules on the newly fetched page, then merge
         Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-          if (errIg) { console.error('fetchVendorsIgnore failed', errIg); }
-          const list = Array.isArray(resIg && resIg.items) ? resIg.items : [];
-          const idSet = new Set(list.filter(x => (x.type ? x.type === 'supplier' : !!x.supplierId)).map(x => String(x.supplierId)));
-          const nameSet = new Set(list.filter(x => (x.type ? x.type === 'label' : !x.supplierId)).map(x => String(x.vendorNameLower)));
-          const urlSet = new Set(list.filter(x => x.type === 'photo/pdf' && x.publicFileUrl).map(x => String(x.publicFileUrl)));
-          const filteredNew = mapped.filter(r => {
-            const nameLower = String(r.vendor || '').trim().toLowerCase();
-            if (r.supplierId && idSet.has(String(r.supplierId))) return false;
-            if (nameLower && nameSet.has(nameLower)) return false;
-            if (r.publicFileUrl && urlSet.has(String(r.publicFileUrl))) return false;
-            return true;
-          });
+          if (errIg) { console.error('fetchVendorsIgnore failed', errIg); return; }
+          
+          const filteredNew = filterIgnoredItems(mapped, resIg);
           const removedDelta = mapped.length - filteredNew.length;
+          
+          // Calculate examples
           const exampleNames = [];
           const seenExamples = new Set();
           for (const r of mapped) {
-            const nameLower = String(r.vendor || '').trim().toLowerCase();
-            const isIgnored = (r.supplierId && idSet.has(String(r.supplierId))) || (nameLower && nameSet.has(nameLower)) || (r.publicFileUrl && urlSet.has(String(r.publicFileUrl)));
+            const isIgnored = !filteredNew.includes(r);
             if (!isIgnored) continue;
             const nm = String(r.vendor || (r.supplierId ? `supplier#${r.supplierId}` : ''));
             const key = `${r.supplierId || ''}|${nm.trim().toLowerCase()}`;
@@ -278,6 +279,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
             exampleNames.push(nm);
             if (exampleNames.length >= 5) break;
           }
+          
           setIgnored(prev => {
             const prevSeen = new Set((prev.examples || []).map(x => String(x).trim().toLowerCase()));
             const mergedExamples = [...prev.examples];
@@ -288,6 +290,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
             }
             return { count: (prev.count || 0) + removedDelta, examples: mergedExamples.slice(0, 5) };
           });
+          
           // Merge without local sorting; rely on API order
           const nextAll = [...apiRows, ...filteredNew];
           localStorage.setItem('budget.apiCache', JSON.stringify(nextAll));
@@ -431,19 +434,12 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                   });
                 });
                 Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-                  if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); }
-                  const list = Array.isArray(resIg && resIg.items) ? resIg.items : [];
-                  const idSet = new Set(list.filter(x => (x.type ? x.type === 'supplier' : !!x.supplierId)).map(x => String(x.supplierId)));
-                  const nameSet = new Set(list.filter(x => (x.type ? x.type === 'label' : !x.supplierId)).map(x => String(x.vendorNameLower)));
-                  const urlSet = new Set(list.filter(x => x.type === 'photo/pdf' && x.publicFileUrl).map(x => String(x.publicFileUrl)));
-                  const filtered = mapped.filter(r => {
-                    const nameLower = String(r.vendor || '').trim().toLowerCase();
-                    if (r.supplierId && idSet.has(String(r.supplierId))) return false;
-                    if (nameLower && nameSet.has(nameLower)) return false;
-                    if (r.publicFileUrl && urlSet.has(String(r.publicFileUrl))) return false;
-                    return true;
-                  });
-                  setIgnored({ count: mapped.length - filtered.length, examples: [] });
+                  if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); return; }
+                  
+                  const filtered = filterIgnoredItems(mapped, resIg);
+                  const removed = mapped.length - filtered.length;
+                  
+                  setIgnored({ count: removed, examples: [] });
                   localStorage.setItem('budget.apiCache', JSON.stringify(filtered));
                   setApiRows(filtered);
                   notify({ message: `Fetched ${filtered.length} last updates`, kind: 'success' });
@@ -532,7 +528,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                       className="btn"
                       title={`Ignore ${r.vendor}`}
                       onClick={() => {
-                        const isPhoto = String(r.vendor || '').toLowerCase() === 'facture photo';
+                        const isPhoto = String(r.vendor || '').toLowerCase() === 'photo/pdf';
                         const payload = r.supplierId
                           ? { type: 'supplier', supplierId: r.supplierId, vendorName: r.vendor }
                           : (isPhoto && r.publicFileUrl
@@ -541,37 +537,31 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                         Meteor.call('budget.ignoreVendor', payload, (e4) => {
                             if (e4) { console.error('ignoreVendor failed', e4); notify({ message: 'Ignore failed', kind: 'error' }); return; }
                             notify({ message: `Ignored ${r.vendor}`, kind: 'info' });
-                            setApiRows(prev => {
-                              const next = prev.filter(x => {
-                                if (r.supplierId) return x.supplierId !== r.supplierId;
-                                const isPhotoX = String(r.vendor || '').toLowerCase() === 'facture photo' && r.publicFileUrl;
-                                if (isPhotoX) return x.publicFileUrl !== r.publicFileUrl;
-                                return String(x.vendor || '').trim().toLowerCase() !== String(r.vendor || '').trim().toLowerCase();
-                              });
-                              // refresh ignored banner
-                              Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-                                if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); return; }
-                                const list = Array.isArray(resIg && resIg.items) ? resIg.items : [];
-                                const idSet = new Set(list.filter(x => (x.type ? x.type === 'supplier' : !!x.supplierId)).map(x => String(x.supplierId)));
-                                const nameSet = new Set(list.filter(x => (x.type ? x.type === 'label' : (!x.supplierId && !x.publicFileUrl))).map(x => String(x.vendorNameLower)));
-                                const urlSet = new Set(list.filter(x => x.type === 'photo/pdf' && x.publicFileUrl).map(x => String(x.publicFileUrl)));
-                                const removedNow = prev.length - next.length;
-                                const exampleNames = [];
-                                const seenExamples = new Set();
-                                for (const x of prev) {
-                                  const nameLower = String(x.vendor || '').trim().toLowerCase();
-                                  const isIgnored = (x.supplierId && idSet.has(String(x.supplierId))) || (nameLower && nameSet.has(nameLower)) || (x.publicFileUrl && urlSet.has(String(x.publicFileUrl)));
-                                  if (!isIgnored) continue;
-                                  const nm = String(x.vendor || (x.supplierId ? `supplier#${x.supplierId}` : ''));
-                                  const key = `${x.supplierId || ''}|${nm.trim().toLowerCase()}`;
-                                  if (seenExamples.has(key)) continue;
-                                  seenExamples.add(key);
-                                  exampleNames.push(nm);
-                                  if (exampleNames.length >= 5) break;
-                                }
-                                setIgnored({ count: (ignored.count - 0) + removedNow, examples: exampleNames.slice(0,5) });
-                              });
-                              return next;
+                            // refresh ignored banner and re-filter
+                            Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
+                              if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); return; }
+                              
+                              // Re-filter all rows using the updated ignore list
+                              const filtered = filterIgnoredItems(apiRows, resIg);
+                              const removedCount = apiRows.length - filtered.length;
+                              
+                              // Calculate examples
+                              const exampleNames = [];
+                              const seenExamples = new Set();
+                              for (const x of apiRows) {
+                                const nameLower = String(x.vendor || '').trim().toLowerCase();
+                                const isIgnored = !filtered.includes(x);
+                                if (!isIgnored) continue;
+                                const nm = String(x.vendor || (x.supplierId ? `supplier#${x.supplierId}` : ''));
+                                const key = `${x.supplierId || ''}|${nm.trim().toLowerCase()}`;
+                                if (seenExamples.has(key)) continue;
+                                seenExamples.add(key);
+                                exampleNames.push(nm);
+                                if (exampleNames.length >= 5) break;
+                              }
+                              
+                              setIgnored({ count: removedCount, examples: exampleNames.slice(0,5) });
+                              setApiRows(filtered);
                             });
                           });
                       }}

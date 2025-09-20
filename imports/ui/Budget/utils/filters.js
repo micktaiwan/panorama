@@ -3,9 +3,19 @@ const ALLOWED_TEAMS = ['lemapp','sre','data','pony','cto'];
 export const filterByQuery = (rows, query) => {
   const s = String(query || '').trim().toLowerCase();
   if (!s) return rows;
-  return rows.filter((r) =>
+  const filtered = rows.filter((r) =>
     String(r.vendor || '').toLowerCase().includes(s)
   );
+  // Debug logging to help identify filtering issues
+  if (s === 'anthropic') {
+    console.log('Filtering by "anthropic":', {
+      totalRows: rows.length,
+      filteredRows: filtered.length,
+      vendors: [...new Set(rows.map(r => r.vendor))],
+      filteredVendors: [...new Set(filtered.map(r => r.vendor))]
+    });
+  }
+  return filtered;
 };
 
 export const applyDepartmentFilter = (rows, departmentFilter) => {
