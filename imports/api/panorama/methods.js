@@ -4,14 +4,12 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
 
-// Compute a simple health score based on overdue/blockers/dormancy and recent activity
+// Compute a simple health score based on overdue/dormancy and recent activity
 const computeHealth = ({ t = {}, n = {}, dormant = false }) => {
   let score = 100;
   const overdue = Number(t.overdue || 0);
-  const blocked = Number(t.blocked || 0);
   const notes7d = Number(n.notes7d || 0);
   score -= overdue * 8;
-  score -= blocked * 6;
   if (dormant) score -= 20;
   score += Math.min(20, notes7d * 2);
   score = Math.max(0, Math.min(100, score));
@@ -36,7 +34,7 @@ Meteor.methods({
     const tasksByProject = new Map();
     for (const t of allTasks) {
       const pid = t.projectId || '';
-      if (!tasksByProject.has(pid)) tasksByProject.set(pid, { open: 0, overdue: 0, dueSoon: 0, blocked: 0, lastTaskAt: null, next: [] });
+      if (!tasksByProject.has(pid)) tasksByProject.set(pid, { open: 0, overdue: 0, dueSoon: 0, lastTaskAt: null, next: [] });
       const acc = tasksByProject.get(pid);
       const status = (t.status || 'todo');
       const isClosed = ['done', 'cancelled'].includes(status);
@@ -125,7 +123,7 @@ Meteor.methods({
 
     // Compose output
     return projects.map((p) => {
-      const t = tasksByProject.get(p._id) || { open: 0, overdue: 0, dueSoon: 0, blocked: 0, next: [], lastTaskAt: null };
+      const t = tasksByProject.get(p._id) || { open: 0, overdue: 0, dueSoon: 0, next: [], lastTaskAt: null };
       const n = notesByProject.get(p._id) || { notes7d: 0 };
       const lastNoteAt = notesLastByProject.get(p._id) || null;
       // Ignore project updatedAt to avoid pollution from panorama reordering; rely on tasks/notes
@@ -149,8 +147,8 @@ Meteor.methods({
         lastActivityAt,
         isInactive,
         heat: { notes: n.notes7d || 0, tasksChanged: t.changedInPeriod || 0 },
-        tasks: { open: t.open || 0, overdue: t.overdue || 0, blocked: t.blocked || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
-        notes: { lastStatusAt: null, decisions7d: 0, risks7d: 0, blockers7d: 0 },
+        tasks: { open: t.open || 0, overdue: t.overdue || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
+        notes: { lastStatusAt: null, decisions7d: 0, risks7d: 0 },
         health
       };
     });
