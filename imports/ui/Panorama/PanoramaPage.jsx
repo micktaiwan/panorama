@@ -4,6 +4,7 @@ import { Meteor } from 'meteor/meteor';
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { formatDate } from '/imports/ui/utils/date.js';
 import './PanoramaPage.css';
 
 export const PanoramaPage = () => {
@@ -67,8 +68,7 @@ export const PanoramaPage = () => {
     let arr = data.filter(p => (p.name || '').toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)));
     if (activityFilter !== 'all') {
       arr = arr.filter(p => {
-        const changes = (p?.heat?.notes || 0) + (p?.heat?.tasksChanged || 0);
-        return activityFilter === 'active' ? changes > 0 : changes === 0;
+        return activityFilter === 'active' ? !p.isInactive : p.isInactive;
       });
     }
     return arr;
@@ -86,7 +86,14 @@ export const PanoramaPage = () => {
       return arr.sort((a, b) => ((b?.tasks?.overdue || 0) - (a?.tasks?.overdue || 0)));
     }
     if (sortMode === 'activityDesc') {
-      return arr.sort((a, b) => (((b?.heat?.notes || 0) + (b?.heat?.tasksChanged || 0)) - ((a?.heat?.notes || 0) + (a?.heat?.tasksChanged || 0))));
+      return arr.sort((a, b) => {
+        const ba = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+        const aa = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+        if (ba !== aa) return ba - aa;
+        // Sort inactive projects last
+        if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1;
+        return 0;
+      });
     }
     // custom: by panoramaRank asc nulls last, then name
     return arr.sort((a, b) => {
@@ -99,9 +106,9 @@ export const PanoramaPage = () => {
 
   const hotspots = useMemo(() => {
     const overdue = filtered.filter(p => (p?.tasks?.overdue || 0) > 0);
-    const dormant = filtered.filter(p => p?.dormant);
+    const inactive = filtered.filter(p => p?.isInactive);
     const blockers = filtered.filter(p => (p?.tasks?.blocked || 0) > 0 || (p?.notes?.blockers7d || 0) > 0);
-    return { overdue, dormant, blockers };
+    return { overdue, inactive, blockers };
   }, [filtered]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }));
@@ -161,16 +168,12 @@ export const PanoramaPage = () => {
             </select>
             {!!p?.tasks?.overdue && <span className="chip danger">{p.tasks.overdue} overdue</span>}
             {!!p?.tasks?.blocked && <span className="chip warn">{p.tasks.blocked} blocked</span>}
-            {p.dormant && <span className="chip idle">Dormant</span>}
-            {((p?.heat?.notes || 0) + (p?.heat?.tasksChanged || 0)) === 0 && (
-              <span className="chip">Inactive</span>
-            )}
+            {p.isInactive && <span className="chip idle">Inactive</span>}
           </div>
         </div>
         <div className="meta">
-          <span>Last activity: {new Date(p.lastActivityAt).toLocaleDateString()}</span>
+          <span>Last activity: {p.lastActivityAt ? formatDate(p.lastActivityAt) : '—'}</span>
           <span>Health: {p?.health?.score ?? '-'}</span>
-          <span>Heat: {p?.heat?.notes || 0}n / {p?.heat?.tasksChanged || 0}t</span>
         </div>
         <div className="next">
           <div className="sectionTitle">Next actions</div>
@@ -186,9 +189,8 @@ export const PanoramaPage = () => {
     p: PropTypes.shape({
       _id: PropTypes.string.isRequired,
       name: PropTypes.string,
-      dormant: PropTypes.bool,
-      lastActivityAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date), PropTypes.number]),
-      heat: PropTypes.shape({ notes7d: PropTypes.number, tasksChanged7d: PropTypes.number }),
+      isInactive: PropTypes.bool,
+      lastActivityAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date), PropTypes.number, PropTypes.oneOf([null])]),
       health: PropTypes.shape({ score: PropTypes.number }),
       tasks: PropTypes.shape({
         overdue: PropTypes.number,
@@ -241,7 +243,7 @@ export const PanoramaPage = () => {
       <div className="hotspots">
         <span className={`chip${hotspots.overdue.length ? ' danger' : ''}`}>Overdue: {hotspots.overdue.length}</span>
         <span className={`chip${hotspots.blockers.length ? ' warn' : ''}`}>Blockers: {hotspots.blockers.length}</span>
-        <span className={`chip${hotspots.dormant.length ? ' idle' : ''}`}>Dormant: {hotspots.dormant.length}</span>
+        <span className={`chip${hotspots.inactive.length ? ' idle' : ''}`}>Inactive: {hotspots.inactive.length}</span>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
