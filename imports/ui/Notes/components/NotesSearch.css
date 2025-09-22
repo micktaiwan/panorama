@@ -1,0 +1,20 @@
+.notes-search {
+  padding: 16px;
+  border-bottom: 1px solid #404040;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  background: #1a1a1a;
+  color: #e5e7eb;
+}
+
+.search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}

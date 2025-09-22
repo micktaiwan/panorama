@@ -1,10 +1,23 @@
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
+import { useTracker } from 'meteor/react-meteor-data';
 import { notify } from '/imports/ui/utils/notify.js';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { VendorsIgnoreCollection } from '/imports/api/budget/collections';
 import './ImportTab.css';
 
 export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFile, onConfirmImport }) => {
+  // Subscribe to vendorsIgnore collection
+  const vendorsIgnoreSubscription = useTracker(() => {
+    return Meteor.subscribe('budget.vendorsIgnore');
+  }, []);
+
+  const vendorsIgnoreData = useTracker(() => {
+    const data = VendorsIgnoreCollection.find({}).fetch();
+    console.log('VendorsIgnore subscription data updated:', data);
+    return data;
+  }, [vendorsIgnoreSubscription]);
+
   const guessVendorFromLabel = (label, filename, extra) => {
     const base = String(label || extra || filename || '').trim();
     if (!base) return '';
@@ -57,16 +70,51 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
 
   // Helper function to filter ignored items (same logic as server)
   const filterIgnoredItems = (rows, ignoreList) => {
-    const list = Array.isArray(ignoreList && ignoreList.items) ? ignoreList.items : [];
-    const idSet = new Set(list.filter(x => (x.type ? x.type === 'supplier' : !!x.supplierId)).map(x => String(x.supplierId)));
-    const nameSet = new Set(list.filter(x => (x.type ? x.type === 'label' : !x.supplierId)).map(x => String(x.vendorNameLower)));
-    const urlSet = new Set(list.filter(x => x.type === 'photo/pdf' && x.publicFileUrl).map(x => String(x.publicFileUrl)));
+    // Use vendorsIgnoreData from subscription if available, otherwise fallback to ignoreList
+    const list = vendorsIgnoreData && vendorsIgnoreData.length > 0 
+      ? vendorsIgnoreData 
+      : (Array.isArray(ignoreList && ignoreList.items) ? ignoreList.items : []);
+    
+    // Create sets for different types of ignore rules
+    const supplierIdSet = new Set();
+    const vendorNameSet = new Set();
+    const urlSet = new Set();
+    
+    // Populate sets based on ignore list items
+    for (const item of list) {
+      if (item.type === 'supplier' && item.supplierId) {
+        supplierIdSet.add(String(item.supplierId));
+      } else if (item.type === 'label' && item.vendorNameLower) {
+        vendorNameSet.add(String(item.vendorNameLower));
+      } else if (item.type === 'photo/pdf' && item.publicFileUrl) {
+        urlSet.add(String(item.publicFileUrl));
+      } else if (!item.type) {
+        // Backward compatibility: if no type specified, infer from presence of fields
+        if (item.supplierId) {
+          supplierIdSet.add(String(item.supplierId));
+        } else if (item.vendorNameLower) {
+          vendorNameSet.add(String(item.vendorNameLower));
+        }
+      }
+    }
     
     return rows.filter(r => {
+      // Check supplier ID match
+      if (r.supplierId && supplierIdSet.has(String(r.supplierId))) {
+        return false;
+      }
+      
+      // Check vendor name match
       const nameLower = String(r.vendor || '').trim().toLowerCase();
-      if (r.supplierId && idSet.has(String(r.supplierId))) return false;
-      if (nameLower && nameSet.has(nameLower)) return false;
-      if (r.publicFileUrl && urlSet.has(String(r.publicFileUrl))) return false;
+      if (nameLower && vendorNameSet.has(nameLower)) {
+        return false;
+      }
+      
+      // Check URL match
+      if (r.publicFileUrl && urlSet.has(String(r.publicFileUrl))) {
+        return false;
+      }
+      
       return true;
     });
   };
@@ -181,11 +229,15 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         // Debugs omitted for brevity
         // Rely on API sorting; do not sort locally
         // Apply ignore rules client-side
-        Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-          if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); return; }
+        // Use subscription data if available, otherwise fallback to method call
+        if (vendorsIgnoreData && vendorsIgnoreData.length >= 0) {
+          console.log('Using subscription data for filtering:', vendorsIgnoreData);
+          console.log('Items to filter:', mapped.length);
           
-          const filtered = filterIgnoredItems(mapped, resIg);
+          const filtered = filterIgnoredItems(mapped, { items: vendorsIgnoreData });
           const removed = mapped.length - filtered.length;
+          
+          console.log('After filtering:', filtered.length, 'removed:', removed);
           
           // Calculate examples
           const exampleNames = [];
@@ -204,7 +256,43 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
           setIgnored({ count: removed, examples: exampleNames });
           localStorage.setItem('budget.apiCache', JSON.stringify(filtered));
           setApiRows(filtered);
-        });
+        } else {
+          // Fallback to method call if subscription data not available
+          Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
+            if (errIg) { 
+              console.error('fetchVendorsIgnore failed', errIg); 
+              notify({ message: `Failed to load ignore rules: ${errIg.reason || errIg.message || 'Unknown error'}`, kind: 'error' });
+              setIgnored({ count: 0, examples: [] }); 
+              return; 
+            }
+            
+            console.log('VendorsIgnore data received:', resIg);
+            console.log('Items to filter:', mapped.length);
+            
+            const filtered = filterIgnoredItems(mapped, resIg);
+            const removed = mapped.length - filtered.length;
+            
+            console.log('After filtering:', filtered.length, 'removed:', removed);
+            
+            // Calculate examples
+            const exampleNames = [];
+            const seenExamples = new Set();
+            for (const r of mapped) {
+              const isIgnored = !filtered.includes(r);
+              if (!isIgnored) continue;
+              const nm = String(r.vendor || (r.supplierId ? `supplier#${r.supplierId}` : ''));
+              const key = `${r.supplierId || ''}|${nm.trim().toLowerCase()}`;
+              if (seenExamples.has(key)) continue;
+              seenExamples.add(key);
+              exampleNames.push(nm);
+              if (exampleNames.length >= 5) break;
+            }
+            
+            setIgnored({ count: removed, examples: exampleNames });
+            localStorage.setItem('budget.apiCache', JSON.stringify(filtered));
+            setApiRows(filtered);
+          });
+        }
         notify({ message: `Fetched ${mapped.length} invoices from API`, kind: 'success' });
       };
       if (supplierIds.length > 0) {
@@ -260,10 +348,11 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
           });
         });
         // Apply ignore rules on the newly fetched page, then merge
-        Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-          if (errIg) { console.error('fetchVendorsIgnore failed', errIg); return; }
+        // Use subscription data if available, otherwise fallback to method call
+        if (vendorsIgnoreData && vendorsIgnoreData.length >= 0) {
+          console.log('Using subscription data for loadMore filtering:', vendorsIgnoreData);
           
-          const filteredNew = filterIgnoredItems(mapped, resIg);
+          const filteredNew = filterIgnoredItems(mapped, { items: vendorsIgnoreData });
           const removedDelta = mapped.length - filteredNew.length;
           
           // Calculate examples
@@ -296,7 +385,50 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
           localStorage.setItem('budget.apiCache', JSON.stringify(nextAll));
           setApiRows(nextAll);
           notify({ message: `Loaded ${mapped.length} more invoices`, kind: 'success' });
-        });
+        } else {
+          // Fallback to method call if subscription data not available
+          Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
+            if (errIg) { 
+              console.error('fetchVendorsIgnore failed', errIg); 
+              notify({ message: `Failed to load ignore rules: ${errIg.reason || errIg.message || 'Unknown error'}`, kind: 'error' });
+              return; 
+            }
+            
+            const filteredNew = filterIgnoredItems(mapped, resIg);
+            const removedDelta = mapped.length - filteredNew.length;
+            
+            // Calculate examples
+            const exampleNames = [];
+            const seenExamples = new Set();
+            for (const r of mapped) {
+              const isIgnored = !filteredNew.includes(r);
+              if (!isIgnored) continue;
+              const nm = String(r.vendor || (r.supplierId ? `supplier#${r.supplierId}` : ''));
+              const key = `${r.supplierId || ''}|${nm.trim().toLowerCase()}`;
+              if (seenExamples.has(key)) continue;
+              seenExamples.add(key);
+              exampleNames.push(nm);
+              if (exampleNames.length >= 5) break;
+            }
+            
+            setIgnored(prev => {
+              const prevSeen = new Set((prev.examples || []).map(x => String(x).trim().toLowerCase()));
+              const mergedExamples = [...prev.examples];
+              for (const nm of exampleNames) {
+                const k = String(nm).trim().toLowerCase();
+                if (!prevSeen.has(k)) { mergedExamples.push(nm); prevSeen.add(k); }
+                if (mergedExamples.length >= 5) break;
+              }
+              return { count: (prev.count || 0) + removedDelta, examples: mergedExamples.slice(0, 5) };
+            });
+            
+            // Merge without local sorting; rely on API order
+            const nextAll = [...apiRows, ...filteredNew];
+            localStorage.setItem('budget.apiCache', JSON.stringify(nextAll));
+            setApiRows(nextAll);
+            notify({ message: `Loaded ${mapped.length} more invoices`, kind: 'success' });
+          });
+        }
       };
       if (supplierIds.length > 0) {
         Meteor.call('budget.ensureVendors', supplierIds, (e2, vendorsMap) => {
@@ -433,17 +565,36 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                     apiDeadline: String(it.deadline || ''),
                   });
                 });
-                Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-                  if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); return; }
+                // Use subscription data if available, otherwise fallback to method call
+                if (vendorsIgnoreData && vendorsIgnoreData.length >= 0) {
+                  console.log('Using subscription data for last updates filtering:', vendorsIgnoreData);
                   
-                  const filtered = filterIgnoredItems(mapped, resIg);
+                  const filtered = filterIgnoredItems(mapped, { items: vendorsIgnoreData });
                   const removed = mapped.length - filtered.length;
                   
                   setIgnored({ count: removed, examples: [] });
                   localStorage.setItem('budget.apiCache', JSON.stringify(filtered));
                   setApiRows(filtered);
                   notify({ message: `Fetched ${filtered.length} last updates`, kind: 'success' });
-                });
+                } else {
+                  // Fallback to method call if subscription data not available
+                  Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
+                    if (errIg) { 
+                      console.error('fetchVendorsIgnore failed', errIg); 
+                      notify({ message: `Failed to load ignore rules: ${errIg.reason || errIg.message || 'Unknown error'}`, kind: 'error' });
+                      setIgnored({ count: 0, examples: [] }); 
+                      return; 
+                    }
+                    
+                    const filtered = filterIgnoredItems(mapped, resIg);
+                    const removed = mapped.length - filtered.length;
+                    
+                    setIgnored({ count: removed, examples: [] });
+                    localStorage.setItem('budget.apiCache', JSON.stringify(filtered));
+                    setApiRows(filtered);
+                    notify({ message: `Fetched ${filtered.length} last updates`, kind: 'success' });
+                  });
+                }
               };
               if (supplierIds.length > 0) {
                 Meteor.call('budget.ensureVendors', supplierIds, (e2, vendorsMap) => {
@@ -538,11 +689,11 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                             if (e4) { console.error('ignoreVendor failed', e4); notify({ message: 'Ignore failed', kind: 'error' }); return; }
                             notify({ message: `Ignored ${r.vendor}`, kind: 'info' });
                             // refresh ignored banner and re-filter
-                            Meteor.call('budget.fetchVendorsIgnore', (errIg, resIg) => {
-                              if (errIg) { console.error('fetchVendorsIgnore failed', errIg); setIgnored({ count: 0, examples: [] }); return; }
-                              
+                            // Since we just added a new ignore rule, we need to refresh the data
+                            // The subscription should automatically update, but we'll trigger a re-filter
+                            setTimeout(() => {
                               // Re-filter all rows using the updated ignore list
-                              const filtered = filterIgnoredItems(apiRows, resIg);
+                              const filtered = filterIgnoredItems(apiRows, { items: vendorsIgnoreData });
                               const removedCount = apiRows.length - filtered.length;
                               
                               // Calculate examples
@@ -562,7 +713,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                               
                               setIgnored({ count: removedCount, examples: exampleNames.slice(0,5) });
                               setApiRows(filtered);
-                            });
+                            }, 100); // Small delay to ensure subscription data is updated
                           });
                       }}
                     >

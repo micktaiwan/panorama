@@ -36,6 +36,7 @@ import { AppPreferencesCollection } from '/imports/api/appPreferences/collection
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 import { CalendarPage } from '/imports/ui/Calendar/CalendarPage.jsx';
 import { PanoramaPage } from '/imports/ui/Panorama/PanoramaPage.jsx';
+import { NotesPage } from '/imports/ui/Notes/NotesPage.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -89,8 +90,8 @@ function App() {
   // Go to screen palette
   const [goOpen, setGoOpen] = useState(false);
   const goItems = [
-    { key: 'd', label: 'Dashboard', route: { name: 'home' } },
     { key: 'v', label: 'Panorama', route: { name: 'panorama' } },
+    { key: 'o', label: 'Overview', route: { name: 'dashboard' } },
     { key: 'j', label: 'Journal', route: { name: 'userlog' } },
     { key: 'e', label: 'Eisenhower', route: { name: 'eisenhower' } },
     { key: 'b', label: 'Budget', route: { name: 'budget' } },
@@ -102,9 +103,10 @@ function App() {
     { key: 'a', label: 'Alarms', route: { name: 'alarms' } },
     { key: 's', label: 'Situation Analyzer', route: { name: 'situationAnalyzer' } },
     { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
+    { key: 't', label: 'Notes', route: { name: 'notes' } },
     { key: 'n', label: 'New Note Session', action: 'newSession' },
     { key: 'h', label: 'Help', route: { name: 'help' } },
-    { key: 'o', label: 'Preferences', route: { name: 'preferences' } },
+    { key: 'g', label: 'Preferences', route: { name: 'preferences' } },
   ];
   const [goActiveIdx, setGoActiveIdx] = useState(0);
   // (removed local search states)
@@ -336,10 +338,36 @@ function App() {
       }
     };
     const onGoKeys = (e) => {
+      // Only handle keys when Go to screen is open and not in an input field
+      const target = e.target;
+      const tag = (target?.tagName || '').toLowerCase();
+      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+      if (isEditable) return;
+
       const key = String(e.key || '').toLowerCase();
-      if (key === 'escape') { e.preventDefault(); setGoOpen(false); return; }
-      if (key === 'arrowdown') { e.preventDefault(); setGoActiveIdx((i) => (i + 1) % goItems.length); return; }
-      if (key === 'arrowup') { e.preventDefault(); setGoActiveIdx((i) => (i - 1 + goItems.length) % goItems.length); return; }
+      const hasMod = e.metaKey || e.ctrlKey;
+      
+      // Prevent global shortcuts when Go to screen is open
+      if (hasMod) {
+        e.preventDefault();
+        return;
+      }
+      
+      if (key === 'escape') { 
+        e.preventDefault(); 
+        setGoOpen(false); 
+        return; 
+      }
+      if (key === 'arrowdown') { 
+        e.preventDefault(); 
+        setGoActiveIdx((i) => (i + 1) % goItems.length); 
+        return; 
+      }
+      if (key === 'arrowup') { 
+        e.preventDefault(); 
+        setGoActiveIdx((i) => (i - 1 + goItems.length) % goItems.length); 
+        return; 
+      }
       if (key === 'enter') {
         e.preventDefault();
         const item = goItems[goActiveIdx];
@@ -347,7 +375,11 @@ function App() {
         return;
       }
       const hit = goItems.find(it => it.key === key);
-      if (hit) { e.preventDefault(); performGoItem(hit); setGoOpen(false); }
+      if (hit) { 
+        e.preventDefault(); 
+        performGoItem(hit); 
+        setGoOpen(false); 
+      }
     };
     window.addEventListener('keydown', onGoKeys);
     return () => window.removeEventListener('keydown', onGoKeys);
@@ -388,10 +420,9 @@ function App() {
     next.forEach((id, idx) => { Meteor.call('projects.update', id, { favoriteRank: idx }); });
   };
 
-  // When on a project page, Tab/Shift+Tab cycles through favorite projects (order)
+  // Universal Tab navigation: Panorama -> Overview -> Projects -> Panorama
   useEffect(() => {
-    if (route?.name !== 'project') return;
-    const onCycleProjects = (e) => {
+    const onTabNavigation = (e) => {
       if (e.key !== 'Tab') return;
       const hasMod = e.metaKey || e.ctrlKey;
       if (hasMod) return; // don't hijack Cmd/Ctrl+Tab
@@ -402,76 +433,81 @@ function App() {
       if (isEditable) return; // don't hijack Tab in forms
 
       if (!Array.isArray(order) || order.length === 0) return;
-      const currentId = route?.projectId || '';
-      const inFavs = order.includes(currentId);
-      const currentIdx = inFavs ? order.indexOf(currentId) : (e.shiftKey ? order.length - 1 : 0);
-      if (e.shiftKey) {
-        // If moving backward from the first favorite, go to Dashboard
-        if (inFavs && currentIdx === 0) {
-          e.preventDefault();
-          navigateTo({ name: 'home' });
-          return;
-        }
-        const prevIdx = inFavs ? currentIdx - 1 : order.length - 1; // no wrap to other edge
-        const prevId = order[prevIdx];
-        if (!prevId || prevId === currentId) return;
-        e.preventDefault();
-        navigateTo({ name: 'project', projectId: prevId });
-        return;
-      }
-      // If moving forward from the last favorite, go to Dashboard
-      if (inFavs && currentIdx === order.length - 1) {
-        e.preventDefault();
-        navigateTo({ name: 'home' });
-        return;
-      }
-      const nextIdx = inFavs ? currentIdx + 1 : 0; // no wrap from last to first
-      const nextId = order[nextIdx];
-      if (!nextId || nextId === currentId) return;
+      
       e.preventDefault();
-      navigateTo({ name: 'project', projectId: nextId });
+      
+      // Navigation order: Panorama -> Overview -> Project1 -> Project2 -> ... -> Panorama
+      if (route?.name === 'home') {
+        // From Panorama
+        if (e.shiftKey) {
+          // Shift+Tab: go to last project
+          const lastId = order[order.length - 1];
+          if (lastId) navigateTo({ name: 'project', projectId: lastId });
+        } else {
+          // Tab: go to Overview
+          navigateTo({ name: 'dashboard' });
+        }
+      } else if (route?.name === 'dashboard') {
+        // From Overview
+        if (e.shiftKey) {
+          // Shift+Tab: go to Panorama
+          navigateTo({ name: 'home' });
+        } else {
+          // Tab: go to first project
+          const firstId = order[0];
+          if (firstId) navigateTo({ name: 'project', projectId: firstId });
+        }
+      } else if (route?.name === 'project') {
+        // From a project
+        const currentId = route?.projectId || '';
+        const currentIdx = order.indexOf(currentId);
+        
+        if (e.shiftKey) {
+          // Shift+Tab: go to previous item
+          if (currentIdx === 0) {
+            // First project -> go to Overview
+            navigateTo({ name: 'dashboard' });
+          } else if (currentIdx > 0) {
+            // Go to previous project
+            const prevId = order[currentIdx - 1];
+            navigateTo({ name: 'project', projectId: prevId });
+          } else {
+            // Not in favorites -> go to Overview
+            navigateTo({ name: 'dashboard' });
+          }
+        } else {
+          // Tab: go to next item
+          if (currentIdx === order.length - 1) {
+            // Last project -> go to Panorama
+            navigateTo({ name: 'home' });
+          } else if (currentIdx >= 0) {
+            // Go to next project
+            const nextId = order[currentIdx + 1];
+            navigateTo({ name: 'project', projectId: nextId });
+          } else {
+            // Not in favorites -> go to first project
+            const firstId = order[0];
+            if (firstId) navigateTo({ name: 'project', projectId: firstId });
+          }
+        }
+      }
     };
-    window.addEventListener('keydown', onCycleProjects);
-    return () => window.removeEventListener('keydown', onCycleProjects);
+    
+    window.addEventListener('keydown', onTabNavigation);
+    return () => window.removeEventListener('keydown', onTabNavigation);
   }, [route?.name, route?.projectId, searchOpen, JSON.stringify(order)]);
 
-  // When on Dashboard (home), Tab selects the first favorite project
+  // Global: Cmd/Ctrl + Shift + H → go to Overview
   useEffect(() => {
-    if (route?.name !== 'home') return;
-    const onTabFromHome = (e) => {
-      if (e.key !== 'Tab') return;
-      const hasMod = e.metaKey || e.ctrlKey;
-      if (hasMod) return; // don't hijack Cmd/Ctrl+Tab
-      if (searchOpen) return;
-      const target = e.target;
-      const tag = (target?.tagName || '').toLowerCase();
-      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
-      if (isEditable) return;
-      if (!Array.isArray(order) || order.length === 0) return;
-      e.preventDefault();
-      if (e.shiftKey) {
-        const lastId = order[order.length - 1];
-        if (lastId) navigateTo({ name: 'project', projectId: lastId });
-      } else {
-        const firstId = order[0];
-        if (firstId) navigateTo({ name: 'project', projectId: firstId });
-      }
-    };
-    window.addEventListener('keydown', onTabFromHome);
-    return () => window.removeEventListener('keydown', onTabFromHome);
-  }, [route?.name, searchOpen, JSON.stringify(order)]);
-
-  // Global: Cmd/Ctrl + Shift + H → go to Dashboard
-  useEffect(() => {
-    const onGoDashboard = (e) => {
+    const onGoOverview = (e) => {
       const key = String(e.key || '').toLowerCase();
       const hasMod = e.metaKey || e.ctrlKey;
       if (!hasMod || !e.shiftKey || key !== 'h') return;
       e.preventDefault();
-      navigateTo({ name: 'home' });
+      navigateTo({ name: 'dashboard' });
     };
-    window.addEventListener('keydown', onGoDashboard);
-    return () => window.removeEventListener('keydown', onGoDashboard);
+    window.addEventListener('keydown', onGoOverview);
+    return () => window.removeEventListener('keydown', onGoOverview);
   }, []);
 
   const handleNewProject = () => {
@@ -519,7 +555,10 @@ function App() {
       {favoriteProjects.length > 0 && (
         <div className="favoritesBar">
           <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
-            <span className="name">Dashboard</span>
+            <span className="name">Panorama</span>
+          </a>
+          <a className={`favChip${route?.name === 'dashboard' ? ' active' : ''}`} href="#/dashboard" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'dashboard' }); }}>
+            <span className="name">Overview</span>
           </a>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={order} strategy={horizontalListSortingStrategy}>
@@ -541,6 +580,15 @@ function App() {
         </div>
       )}
       {route?.name === 'home' && (
+        <div className="panel">
+          <div className="homeToolbar">
+            <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
+            <button className="btn ml8" onClick={() => handleNewSession(undefined)}>New Note Session</button>
+          </div>
+          <PanoramaPage />
+        </div>
+      )}
+      {route?.name === 'dashboard' && (
         <div className="panel">
           <div className="homeToolbar">
             <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
@@ -635,6 +683,11 @@ function App() {
       {route?.name === 'userlog' && (
         <div className="panel">
           <UserLog />
+        </div>
+      )}
+      {route?.name === 'notes' && (
+        <div className="panel">
+          <NotesPage />
         </div>
       )}
       {route?.name === 'onboarding' && (
@@ -810,11 +863,11 @@ function App() {
           })()}
         </span>
         <span>
-          <a href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>Dashboard</a>
+          <a href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>Panorama</a>
           <span className="dot">·</span>
           <a href="#/help">Help</a>
           <span className="dot">·</span>
-          <a href="#/panorama">Panorama</a>
+          <a href="#/dashboard" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'dashboard' }); }}>Overview</a>
           <span className="dot">·</span>
           <a href="#/alarms" onClick={(e) => { e.preventDefault(); goAlarms(); }}>Alarms</a>
           <span className="dot">·</span>

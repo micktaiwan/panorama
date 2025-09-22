@@ -123,7 +123,7 @@ export const Dashboard = () => {
   return (
     <div className="dashboard">
       <div className="dashboardHeader">
-        <h2>Dashboard</h2>
+        <h2>Overview</h2>
       </div>
       
       <ProjectsOverview />

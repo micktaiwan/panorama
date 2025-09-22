@@ -601,7 +601,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         onClose={() => setIsImproveOpen(false)}
         title={`Improve description · ${project.name || '(untitled)'}`}
       >
-        <div className="mb8">
+        <div className="mb16">
           {isLoadingImprove ? (
             <div>Generating questions…</div>
           ) : improveError ? (
@@ -609,16 +609,16 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
           ) : (
             <div>
               {improveQuestions && improveQuestions.length > 0 ? (
-                <ol className="mb8">
+                <ol className="mb16">
                   {improveQuestions.map((q, i) => (
-                    <li key={i} className="mb4">{q}</li>
+                    <li key={i} className="mb8">{q}</li>
                   ))}
                 </ol>
               ) : (
-                <div className="muted">No questions. You can still share context below.</div>
+                <div className="muted mb16">No questions. You can still share context below.</div>
               )}
-              <button className="btn ml0 mb8" onClick={regenerateImproveQuestions}>Regenerate questions</button>
-              <div className="mb4">Your answers and context (free text). Use paragraphs; one answer per paragraph.</div>
+              <button className="btn ml0 mb16" onClick={regenerateImproveQuestions}>Regenerate questions</button>
+              <div className="mb8">Your answers and context (free text). Use paragraphs; one answer per paragraph.</div>
               <textarea
                 className="projectNoteTextarea"
                 rows={10}
@@ -626,7 +626,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                 placeholder="Answer here…"
                 onChange={(e) => setAnswersText(e.target.value)}
               />
-              <div className="modalFooter">
+              <div className="modalFooter mt16">
                 <button className="btn" onClick={() => setIsImproveOpen(false)}>Cancel</button>
                 <button className="btn btn-primary ml8" disabled={isApplyingImprove} onClick={applyImprovement}>
                   {isApplyingImprove ? 'Applying…' : 'Apply improvement'}
