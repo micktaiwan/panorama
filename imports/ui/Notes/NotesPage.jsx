@@ -17,12 +17,56 @@ export const NotesPage = () => {
   const [noteContents, setNoteContents] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [renamedTabs, setRenamedTabs] = useState(new Set());
+  const [touchedNotes, setTouchedNotes] = useState(new Set());
 
   const parseLocalJson = (key, fallback) => {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     return parsed == null ? fallback : parsed;
+  };
+
+  // Get all notes early for downstream hooks
+  const notes = useTracker(() => {
+    Meteor.subscribe('notes');
+    return NotesCollection.find({}, { sort: { updatedAt: -1, createdAt: -1 } }).fetch();
+  });
+
+  // Fast lookup for current DB state
+  const notesById = useMemo(() => {
+    const map = new Map();
+    for (const n of notes) map.set(n._id, n);
+    return map;
+  }, [notes]);
+
+  // Draft helpers (JSON-based, backward-compatible)
+  const getDraftFor = (noteId) => {
+    const raw = localStorage.getItem(`note-content-${noteId}`);
+    if (raw == null) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+        const savedAt = Number(parsed.savedAt) || 0;
+        return { content: String(parsed.content || ''), savedAt };
+      }
+      // Backward-compat: raw string content without metadata
+      return { content: String(raw || ''), savedAt: 0 };
+    } catch (e) {
+      // Parsing failed: log and fallback to treating raw as legacy string content
+      // eslint-disable-next-line no-console
+      console.error('[NotesPage] Failed to parse draft JSON for note', noteId, e);
+      return { content: String(raw || ''), savedAt: 0 };
+    }
+  };
+
+  const setDraftFor = (noteId, content, baselineContent) => {
+    // If the draft equals the current DB baseline, avoid storing
+    if (String(content || '') === String(baselineContent || '')) {
+      localStorage.removeItem(`note-content-${noteId}`);
+      return;
+    }
+    const payload = { content: String(content || ''), savedAt: Date.now() };
+    localStorage.setItem(`note-content-${noteId}`, JSON.stringify(payload));
   };
 
   // Load open tabs from localStorage on mount
@@ -34,8 +78,17 @@ export const NotesPage = () => {
       // Load content of open notes
       const contents = {};
       tabs.forEach(tab => {
-        const savedContent = localStorage.getItem(`note-content-${tab.id}`);
-        if (savedContent) contents[tab.id] = savedContent;
+        const draft = getDraftFor(tab.id);
+        const snapshotUpdatedAt = tab?.note?.updatedAt ? new Date(tab.note.updatedAt).getTime() : 0;
+        if (draft) {
+          if (snapshotUpdatedAt > (draft.savedAt || 0)) {
+            contents[tab.id] = tab?.note?.content || '';
+          } else {
+            contents[tab.id] = draft.content;
+          }
+        } else {
+          contents[tab.id] = tab?.note?.content || '';
+        }
       });
       setNoteContents(contents);
       if (savedActiveTab && tabs.find(tab => tab.id === savedActiveTab)) {
@@ -69,12 +122,15 @@ export const NotesPage = () => {
     }
   }, [activeTabId]);
 
-  // Save note contents to localStorage
+  // Save note contents to localStorage (JSON with savedAt), avoid storing if equals DB baseline
   useEffect(() => {
     Object.keys(noteContents).forEach(noteId => {
-      localStorage.setItem(`note-content-${noteId}`, noteContents[noteId]);
+      // Only persist drafts for notes that were actively edited by the user
+      if (!touchedNotes.has(noteId)) return;
+      const dbBaseline = notesById.get(noteId)?.content ?? openTabs.find(t => t.id === noteId)?.note?.content ?? '';
+      setDraftFor(noteId, noteContents[noteId], dbBaseline);
     });
-  }, [noteContents]);
+  }, [noteContents, notesById, JSON.stringify(openTabs.map(t => [t.id, t?.note?.content || ''])), touchedNotes]);
 
   // Save renamed tabs to localStorage
   useEffect(() => {
@@ -85,18 +141,35 @@ export const NotesPage = () => {
     }
   }, [renamedTabs]);
 
+  // Invalidate drafts when DB updates are more recent
+  useEffect(() => {
+    if (!openTabs.length) return;
+    const next = { ...noteContents };
+    let changed = false;
+    for (const tab of openTabs) {
+      const db = notesById.get(tab.id);
+      if (!db) continue;
+      const draft = getDraftFor(tab.id);
+      const dbUpdatedAt = db?.updatedAt ? new Date(db.updatedAt).getTime() : 0;
+      const draftSavedAt = draft?.savedAt || 0;
+      if (dbUpdatedAt > draftSavedAt) {
+        const wanted = db.content || '';
+        if ((next[tab.id] ?? '') !== wanted) {
+          next[tab.id] = wanted;
+          changed = true;
+        }
+        localStorage.removeItem(`note-content-${tab.id}`);
+      }
+    }
+    if (changed) setNoteContents(next);
+  }, [notesById, JSON.stringify(openTabs.map(t => t.id))]);
+
   // Clean localStorage on component unmount
   useEffect(() => {
     return () => {
       // Don't clean automatically, keep data for next load
     };
   }, []);
-
-  // Get all notes
-  const notes = useTracker(() => {
-    Meteor.subscribe('notes');
-    return NotesCollection.find({}, { sort: { updatedAt: -1, createdAt: -1 } }).fetch();
-  });
 
   // Projects map for labels
   const projectNamesById = useTracker(() => {
@@ -119,16 +192,16 @@ export const NotesPage = () => {
       .sort((a, b) => toMs(b.updatedAt || b.createdAt) - toMs(a.updatedAt || a.createdAt));
   }, [notes, searchTerm]);
 
-  // Dirty tabs: content edited but not saved
+  // Dirty tabs: compare against current DB baseline when available
   const dirtySet = useMemo(() => {
     const set = new Set();
     for (const tab of openTabs) {
-      const baseline = (tab?.note?.content || '');
-      const current = (noteContents[tab.id] ?? baseline);
-      if (current !== baseline) set.add(tab.id);
+      const dbBaseline = notesById.get(tab.id)?.content ?? tab?.note?.content ?? '';
+      const current = (noteContents[tab.id] ?? dbBaseline);
+      if (current !== dbBaseline) set.add(tab.id);
     }
     return set;
-  }, [JSON.stringify(openTabs.map(t => [t.id, t?.note?.content || ''].join(':'))), JSON.stringify(noteContents)]);
+  }, [JSON.stringify(openTabs.map(t => [t.id, t?.note?.content || ''].join(':'))), JSON.stringify(noteContents), notesById]);
 
   // Open a note in a new tab
   const openNote = (note) => {
@@ -139,13 +212,16 @@ export const NotesPage = () => {
         note: note
       };
       setOpenTabs(prev => [...prev, newTab]);
-      
-      // Use database content if no saved content
-      const savedContent = localStorage.getItem(`note-content-${note._id}`);
-      setNoteContents(prev => ({
-        ...prev,
-        [note._id]: savedContent || note.content || ''
-      }));
+
+      // Prefer most recent between draft and DB
+      const draft = getDraftFor(note._id);
+      const dbUpdatedAt = note?.updatedAt ? new Date(note.updatedAt).getTime() : 0;
+      let nextContent = note.content || '';
+      if (draft) {
+        const draftIsNewerOrEqual = (draft.savedAt || 0) >= dbUpdatedAt;
+        nextContent = draftIsNewerOrEqual ? draft.content : (note.content || '');
+      }
+      setNoteContents(prev => ({ ...prev, [note._id]: nextContent }));
     }
     setActiveTabId(note._id);
   };
@@ -161,6 +237,7 @@ export const NotesPage = () => {
     
     // Clean localStorage for this note
     localStorage.removeItem(`note-content-${tabId}`);
+    setTouchedNotes(prev => { const n = new Set(prev); n.delete(tabId); return n; });
     
     // Remove from renamed tabs set
     setRenamedTabs(prev => {
@@ -193,6 +270,7 @@ export const NotesPage = () => {
       
       // Clean localStorage after successful save
       localStorage.removeItem(`note-content-${noteId}`);
+      setTouchedNotes(prev => { const n = new Set(prev); n.delete(noteId); return n; });
 
       // Update baseline content so the tab is no longer dirty
       setOpenTabs(prev => prev.map(tab => tab.id === noteId ? { ...tab, note: { ...(tab.note || {}), content: noteContents[noteId] } } : tab));
@@ -209,6 +287,7 @@ export const NotesPage = () => {
       ...prev,
       [noteId]: content
     }));
+    setTouchedNotes(prev => new Set([...prev, noteId]));
   };
 
   // Save all open notes
@@ -224,6 +303,7 @@ export const NotesPage = () => {
       await Meteor.callAsync('notes.remove', noteId);
       // Remove local unsaved content
       localStorage.removeItem(`note-content-${noteId}`);
+      setTouchedNotes(prev => { const n = new Set(prev); n.delete(noteId); return n; });
       // Close the tab if open
       closeTab(noteId);
     } catch {
