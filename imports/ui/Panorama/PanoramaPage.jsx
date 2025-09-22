@@ -76,8 +76,7 @@ const filterByActivity = (projects, activityFilter) => {
 const calculateHotspots = (projects) => {
   return {
     overdue: projects.filter(p => (p?.tasks?.overdue || 0) > 0),
-    inactive: projects.filter(p => p?.isInactive),
-    blockers: projects.filter(p => (p?.tasks?.blocked || 0) > 0 || (p?.notes?.blockers7d || 0) > 0)
+    inactive: projects.filter(p => p?.isInactive)
   };
 };
 
@@ -281,7 +280,6 @@ export const PanoramaPage = () => {
 
       <div className="hotspots">
         <span className={`chip${hotspots.overdue.length ? ' danger' : ''}`}>Overdue: {hotspots.overdue.length}</span>
-        <span className={`chip${hotspots.blockers.length ? ' warn' : ''}`}>Blockers: {hotspots.blockers.length}</span>
         <span className={`chip${hotspots.inactive.length ? ' idle' : ''}`}>Inactive: {hotspots.inactive.length}</span>
       </div>
 
