@@ -421,6 +421,7 @@ function App() {
   };
 
   // Universal Tab navigation: Panorama -> Overview -> Projects -> Panorama
+  // For non-main pages: Tab always goes to Panorama
   useEffect(() => {
     const onTabNavigation = (e) => {
       if (e.key !== 'Tab') return;
@@ -432,64 +433,71 @@ function App() {
       const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
       if (isEditable) return; // don't hijack Tab in forms
 
-      if (!Array.isArray(order) || order.length === 0) return;
+      // Pages principales avec navigation Tab complexe
+      const mainPages = ['home', 'dashboard', 'project'];
       
-      e.preventDefault();
-      
-      // Navigation order: Panorama -> Overview -> Project1 -> Project2 -> ... -> Panorama
-      if (route?.name === 'home') {
-        // From Panorama
-        if (e.shiftKey) {
-          // Shift+Tab: go to last project
-          const lastId = order[order.length - 1];
-          if (lastId) navigateTo({ name: 'project', projectId: lastId });
-        } else {
-          // Tab: go to Overview
-          navigateTo({ name: 'dashboard' });
-        }
-      } else if (route?.name === 'dashboard') {
-        // From Overview
-        if (e.shiftKey) {
-          // Shift+Tab: go to Panorama
-          navigateTo({ name: 'home' });
-        } else {
-          // Tab: go to first project
-          const firstId = order[0];
-          if (firstId) navigateTo({ name: 'project', projectId: firstId });
-        }
-      } else if (route?.name === 'project') {
-        // From a project
-        const currentId = route?.projectId || '';
-        const currentIdx = order.indexOf(currentId);
+      if (mainPages.includes(route?.name)) {
+        // Navigation complexe pour les pages principales
+        if (!Array.isArray(order) || order.length === 0) return;
         
-        if (e.shiftKey) {
-          // Shift+Tab: go to previous item
-          if (currentIdx === 0) {
-            // First project -> go to Overview
-            navigateTo({ name: 'dashboard' });
-          } else if (currentIdx > 0) {
-            // Go to previous project
-            const prevId = order[currentIdx - 1];
-            navigateTo({ name: 'project', projectId: prevId });
+        e.preventDefault();
+        
+        // Navigation order: Panorama -> Overview -> Project1 -> Project2 -> ... -> Panorama
+        if (route?.name === 'home') {
+          // From Panorama
+          if (e.shiftKey) {
+            // Shift+Tab: go to last project
+            const lastId = order[order.length - 1];
+            if (lastId) navigateTo({ name: 'project', projectId: lastId });
           } else {
-            // Not in favorites -> go to Overview
+            // Tab: go to Overview
             navigateTo({ name: 'dashboard' });
           }
-        } else {
-          // Tab: go to next item
-          if (currentIdx === order.length - 1) {
-            // Last project -> go to Panorama
+        } else if (route?.name === 'dashboard') {
+          // From Overview
+          if (e.shiftKey) {
+            // Shift+Tab: go to Panorama
             navigateTo({ name: 'home' });
-          } else if (currentIdx >= 0) {
-            // Go to next project
-            const nextId = order[currentIdx + 1];
-            navigateTo({ name: 'project', projectId: nextId });
           } else {
-            // Not in favorites -> go to first project
+            // Tab: go to first project
             const firstId = order[0];
             if (firstId) navigateTo({ name: 'project', projectId: firstId });
           }
+        } else if (route?.name === 'project') {
+          // From a project
+          const currentId = route?.projectId || '';
+          const currentIdx = order.indexOf(currentId);
+          
+          if (e.shiftKey) {
+            // Shift+Tab: go to previous item
+            if (currentIdx === 0) {
+              // First project -> go to Overview
+              navigateTo({ name: 'dashboard' });
+            } else if (currentIdx > 0) {
+              // Go to previous project
+              const prevId = order[currentIdx - 1];
+              navigateTo({ name: 'project', projectId: prevId });
+            } else {
+              // Not in favorites -> go to Overview
+              navigateTo({ name: 'dashboard' });
+            }
+          } else if (currentIdx === order.length - 1) {
+            // Tab: Last project -> go to Panorama
+            navigateTo({ name: 'home' });
+          } else if (currentIdx >= 0) {
+            // Tab: Go to next project
+            const nextId = order[currentIdx + 1];
+            navigateTo({ name: 'project', projectId: nextId });
+          } else if (order[0]) {
+            // Tab: Not in favorites -> go to first project
+            navigateTo({ name: 'project', projectId: order[0] });
+          }
         }
+      } else {
+        // Pour toutes les autres pages : Tab -> Panorama
+        e.preventDefault();
+        // Tab et Shift+Tab vont tous les deux à Panorama
+        navigateTo({ name: 'home' });
       }
     };
     
