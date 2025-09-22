@@ -22,6 +22,7 @@ Meteor.methods({
   async 'panorama.getOverview'(filters = {}) {
     check(filters, Object);
     const periodDays = Number(filters.periodDays) || 14;
+    const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
 
     const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, panoramaUpdatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
     const projects = await ProjectsCollection.find({}, projFields).fetchAsync();
@@ -50,6 +51,11 @@ Meteor.methods({
       const mostRecent = [upd, statusChanged, created].filter(Boolean).sort((a, b) => b - a)[0];
       if (mostRecent && (!acc.lastTaskAt || mostRecent > acc.lastTaskAt)) {
         acc.lastTaskAt = mostRecent;
+      }
+      // task heat within period
+      const changedAt = t.statusChangedAt || t.updatedAt || t.createdAt || null;
+      if (changedAt && new Date(changedAt) >= since) {
+        acc.changedInPeriod = (acc.changedInPeriod || 0) + 1;
       }
       if (!isClosed) {
         const title = typeof t.title === 'string' ? t.title.trim() : '';
@@ -81,10 +87,21 @@ Meteor.methods({
       acc.next = acc.next.slice(0, 5);
     }
 
-    // Notes aggregates (for last activity calculation only)
+    // Notes aggregates (for last activity calculation and heat)
     const noteFields = { fields: { projectId: 1, createdAt: 1, updatedAt: 1 } };
+    const notesRecent = await NotesCollection.find({
+      projectId: { $in: projectIds },
+      $or: [ { createdAt: { $gte: since } }, { updatedAt: { $gte: since } } ]
+    }, noteFields).fetchAsync();
     const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, noteFields).fetchAsync();
+    const notesByProject = new Map();
     const notesLastByProject = new Map();
+    for (const n of notesRecent) {
+      const pid = n.projectId || '';
+      if (!notesByProject.has(pid)) notesByProject.set(pid, { notes7d: 0 });
+      const acc = notesByProject.get(pid);
+      acc.notes7d += 1;
+    }
     for (const n of notesAll) {
       const pid = n.projectId || '';
       const created = n.createdAt ? new Date(n.createdAt) : null;
@@ -109,6 +126,7 @@ Meteor.methods({
     // Compose output
     return projects.map((p) => {
       const t = tasksByProject.get(p._id) || { open: 0, overdue: 0, dueSoon: 0, blocked: 0, next: [], lastTaskAt: null };
+      const n = notesByProject.get(p._id) || { notes7d: 0 };
       const lastNoteAt = notesLastByProject.get(p._id) || null;
       // Ignore project updatedAt to avoid pollution from panorama reordering; rely on tasks/notes
       const contentUpdatedAtTime = 0;
@@ -120,7 +138,7 @@ Meteor.methods({
       );
       const lastActivityAt = maxTime > 0 ? new Date(maxTime) : null;
       const isInactive = !lastActivityAt || (Date.now() - lastActivityAt.getTime()) > (periodDays * 864e5);
-      const health = computeHealth({ t, n: {}, dormant: isInactive });
+      const health = computeHealth({ t, n, dormant: isInactive });
       return {
         _id: p._id,
         name: p.name || '(untitled project)',
@@ -130,6 +148,7 @@ Meteor.methods({
         panoramaStatus: typeof p.panoramaStatus === 'string' ? p.panoramaStatus : null,
         lastActivityAt,
         isInactive,
+        heat: { notes: n.notes7d || 0, tasksChanged: t.changedInPeriod || 0 },
         tasks: { open: t.open || 0, overdue: t.overdue || 0, blocked: t.blocked || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
         notes: { lastStatusAt: null, decisions7d: 0, risks7d: 0, blockers7d: 0 },
         health
