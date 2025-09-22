@@ -22,9 +22,8 @@ Meteor.methods({
   async 'panorama.getOverview'(filters = {}) {
     check(filters, Object);
     const periodDays = Number(filters.periodDays) || 14;
-    const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
 
-    const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
+    const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, panoramaUpdatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
     const projects = await ProjectsCollection.find({}, projFields).fetchAsync();
     const projectIds = projects.map(p => p._id);
 
@@ -46,11 +45,11 @@ Meteor.methods({
       if (!isClosed && dl && dl >= now && dl <= soon) acc.dueSoon += 1;
       // Blocked flag not modeled yet → placeholder 0; could derive from status or notes later
       const upd = t.updatedAt ? new Date(t.updatedAt) : null;
-      if (upd && (!acc.lastTaskAt || upd > acc.lastTaskAt)) acc.lastTaskAt = upd;
-      // task heat within period
-      const changedAt = t.statusChangedAt || t.updatedAt || t.createdAt || null;
-      if (changedAt && new Date(changedAt) >= since) {
-        acc.changedInPeriod = (acc.changedInPeriod || 0) + 1;
+      const statusChanged = t.statusChangedAt ? new Date(t.statusChangedAt) : null;
+      const created = t.createdAt ? new Date(t.createdAt) : null;
+      const mostRecent = [upd, statusChanged, created].filter(Boolean).sort((a, b) => b - a)[0];
+      if (mostRecent && (!acc.lastTaskAt || mostRecent > acc.lastTaskAt)) {
+        acc.lastTaskAt = mostRecent;
       }
       if (!isClosed) {
         const title = typeof t.title === 'string' ? t.title.trim() : '';
@@ -82,37 +81,46 @@ Meteor.methods({
       acc.next = acc.next.slice(0, 5);
     }
 
-    // Notes aggregates (recent activity counts)
-    const noteFields = { fields: { projectId: 1, createdAt: 1 } };
-    const notesRecent = await NotesCollection.find({ projectId: { $in: projectIds }, createdAt: { $gte: since } }, noteFields).fetchAsync();
-    const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1, createdAt: 1 } }).fetchAsync();
-    const notesByProject = new Map();
+    // Notes aggregates (for last activity calculation only)
+    const noteFields = { fields: { projectId: 1, createdAt: 1, updatedAt: 1 } };
+    const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, noteFields).fetchAsync();
     const notesLastByProject = new Map();
-    for (const n of notesRecent) {
-      const pid = n.projectId || '';
-      if (!notesByProject.has(pid)) notesByProject.set(pid, { notes7d: 0 });
-      const acc = notesByProject.get(pid);
-      acc.notes7d += 1;
-    }
     for (const n of notesAll) {
       const pid = n.projectId || '';
-      const c = n.createdAt ? new Date(n.createdAt) : null;
+      const created = n.createdAt ? new Date(n.createdAt) : null;
+      const updated = n.updatedAt ? new Date(n.updatedAt) : null;
+      const mostRecent = [created, updated].filter(Boolean).sort((a, b) => b - a)[0];
       const prev = notesLastByProject.get(pid) || null;
-      if (c && (!prev || c > prev)) notesLastByProject.set(pid, c);
+      if (mostRecent && (!prev || mostRecent > prev)) {
+        notesLastByProject.set(pid, mostRecent);
+      }
+    }
+    
+    // Add project creation date to lastNoteAt calculation
+    for (const p of projects) {
+      const pid = p._id;
+      const projectCreated = p.createdAt ? new Date(p.createdAt) : null;
+      const lastNoteAt = notesLastByProject.get(pid) || null;
+      if (projectCreated && (!lastNoteAt || projectCreated > lastNoteAt)) {
+        notesLastByProject.set(pid, projectCreated);
+      }
     }
 
     // Compose output
     return projects.map((p) => {
       const t = tasksByProject.get(p._id) || { open: 0, overdue: 0, dueSoon: 0, blocked: 0, next: [], lastTaskAt: null };
-      const n = notesByProject.get(p._id) || { notes7d: 0 };
       const lastNoteAt = notesLastByProject.get(p._id) || null;
-      const lastActivityAt = new Date(Math.max(
+      // Ignore project updatedAt to avoid pollution from panorama reordering; rely on tasks/notes
+      const contentUpdatedAtTime = 0;
+      const maxTime = Math.max(
         lastNoteAt ? lastNoteAt.getTime() : 0,
         t.lastTaskAt ? t.lastTaskAt.getTime() : 0,
-        p.updatedAt ? new Date(p.updatedAt).getTime() : 0
-      ) || Date.now());
-      const dormant = (Date.now() - lastActivityAt.getTime()) > (periodDays * 864e5);
-      const health = computeHealth({ t, n, dormant });
+        contentUpdatedAtTime,
+        0 // avoid -Infinity
+      );
+      const lastActivityAt = maxTime > 0 ? new Date(maxTime) : null;
+      const isInactive = !lastActivityAt || (Date.now() - lastActivityAt.getTime()) > (periodDays * 864e5);
+      const health = computeHealth({ t, n: {}, dormant: isInactive });
       return {
         _id: p._id,
         name: p.name || '(untitled project)',
@@ -121,11 +129,10 @@ Meteor.methods({
         panoramaRank: Number.isFinite(p.panoramaRank) ? p.panoramaRank : null,
         panoramaStatus: typeof p.panoramaStatus === 'string' ? p.panoramaStatus : null,
         lastActivityAt,
-        heat: { notes: n.notes7d || 0, tasksChanged: t.changedInPeriod || 0 },
+        isInactive,
         tasks: { open: t.open || 0, overdue: t.overdue || 0, blocked: t.blocked || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
         notes: { lastStatusAt: null, decisions7d: 0, risks7d: 0, blockers7d: 0 },
-        health,
-        dormant
+        health
       };
     });
   }
@@ -137,7 +144,8 @@ Meteor.methods({
     const n = Number(rank);
     if (!Number.isFinite(n)) throw new Meteor.Error('invalid-rank', 'rank must be a finite number');
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    await ProjectsCollection.updateAsync(projectId, { $set: { panoramaRank: n, updatedAt: new Date() } });
+    // Do not touch updatedAt to avoid polluting last activity with UI reordering
+    await ProjectsCollection.updateAsync(projectId, { $set: { panoramaRank: n, panoramaUpdatedAt: new Date() } });
     return true;
   }
 });
