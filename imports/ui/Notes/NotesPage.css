@@ -26,6 +26,8 @@
   flex-direction: column;
   background: #1a1a1a !important;
   min-height: 0; /* Allow flex item to shrink */
+  overflow: hidden; /* Prevent overflow from tabs */
+  max-width: 100%;
 }
 
 

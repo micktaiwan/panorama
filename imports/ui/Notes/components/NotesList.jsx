@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { navigateTo } from '/imports/ui/router.js';
 import './NotesList.css';
 
 export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, projectNamesById, onNoteClick, onRequestClose }) => {
@@ -25,7 +26,18 @@ export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, project
       <button
         key={note._id}
         className={`note-item ${openTabs.find(tab => tab.id === note._id) ? 'open' : ''} ${activeTabId === note._id ? 'active' : ''}`}
-        onClick={() => onNoteClick(note)}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey) {
+            // Cmd-Click or Ctrl-Click: open project
+            if (note.projectId) {
+              e.preventDefault();
+              navigateTo({ name: 'project', projectId: note.projectId });
+            }
+          } else {
+            // Normal click: open note
+            onNoteClick(note);
+          }
+        }}
         onKeyDown={(e) => {
           const key = String(e.key || '').toLowerCase();
           const hasMod = e.metaKey || e.ctrlKey;
