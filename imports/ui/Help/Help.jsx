@@ -59,6 +59,28 @@ export const Help = () => {
           <li><span className="bold">Back navigation</span> — <span className="bold">⌘ + ←</span> (macOS) / <span className="bold">Ctrl + ←</span> (Windows/Linux) goes back to previous page</li>
           <li><span className="bold">Forward navigation</span> — <span className="bold">⌘ + →</span> (macOS) / <span className="bold">Ctrl + →</span> (Windows/Linux) goes forward to next page</li>
         </ul>
+        <li className="headingSection headingNotes"><span className="bold">Notes</span></li>
+        <ul>
+          <li>
+            <span className="bold">Note Editor</span>
+            <ul>
+              <li><span className="bold">⌘S / Ctrl+S</span> — Save current note</li>
+              <li><span className="bold">⌘W / Ctrl+W</span> — Close current note</li>
+              <li><span className="bold">Tab</span> — Indent (insert tab character)</li>
+              <li><span className="bold">Shift+Tab</span> — Unindent (remove tab or spaces)</li>
+              <li className="muted">Multi-line selection: Tab/Shift+Tab indents/unindents all selected lines</li>
+            </ul>
+          </li>
+          <li>
+            <span className="bold">Notes List & Tabs</span>
+            <ul>
+              <li><span className="bold">⌘W / Ctrl+W</span> — Close note (when focused on list item)</li>
+              <li><span className="bold">⌘+Click / Ctrl+Click</span> — Open project associated with note (list or tab)</li>
+              <li><span className="bold">Drag & Drop</span> — Reorder tabs</li>
+              <li><span className="bold">Right-click</span> — Context menu (rename, close others, close all, delete)</li>
+            </ul>
+          </li>
+        </ul>
         <li className="headingSection headingFeatures"><span className="bold">Special Features</span></li>
         <ul>
           <li><span className="bold">AI Chat</span> — <span className="bold">⌘D</span> toggle open/close, <span className="bold">⌘⇧D</span> toggle docked sidebar</li>

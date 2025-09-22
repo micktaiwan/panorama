@@ -5,17 +5,32 @@ import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { navigateTo } from '/imports/ui/router.js';
 
 const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, isEditing, inputRef, editingTitle, setEditingTitle, onSubmit, onKeyDown }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tab.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
+  
+  const handleClick = (e) => {
+    if (e.metaKey || e.ctrlKey) {
+      // Cmd-Click or Ctrl-Click: open project
+      if (tab.note?.projectId) {
+        e.preventDefault();
+        navigateTo({ name: 'project', projectId: tab.note.projectId });
+      }
+    } else {
+      // Normal click: switch to tab
+      onClick();
+    }
+  };
+  
   return (
     <button
       ref={setNodeRef}
       style={style}
       key={tab.id}
       className={`note-tab ${isActive ? 'active' : ''}`}
-      onClick={onClick}
+      onClick={handleClick}
       onContextMenu={onContextMenu}
       type="button"
       {...attributes}
@@ -34,27 +49,25 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       ) : (
         <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{tab.title}</span>
       )}
-      <span
+      <button
         className="tab-close"
-        role="button"
         aria-label="Close tab"
-        tabIndex={0}
         onClick={onClose}
-        onKeyDown={(e) => {
-          const key = String(e.key || '').toLowerCase();
-          if (key === 'enter' || key === ' ') {
-            e.preventDefault();
-            onClose(e);
-          }
-        }}
+        type="button"
       >
         ×
-      </span>
+      </button>
     </button>
   );
 };
 SortableTab.propTypes = {
-  tab: PropTypes.shape({ id: PropTypes.string.isRequired, title: PropTypes.string }),
+  tab: PropTypes.shape({ 
+    id: PropTypes.string.isRequired, 
+    title: PropTypes.string,
+    note: PropTypes.shape({
+      projectId: PropTypes.string
+    })
+  }),
   isActive: PropTypes.bool,
   isDirty: PropTypes.bool,
   onClick: PropTypes.func.isRequired,

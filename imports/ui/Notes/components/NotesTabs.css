@@ -3,6 +3,29 @@
   background: #2d2d2d;
   border-bottom: 1px solid #404040;
   overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  flex-shrink: 0;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #555 #2d2d2d;
+}
+
+.notes-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.notes-tabs::-webkit-scrollbar-track {
+  background: #2d2d2d;
+}
+
+.notes-tabs::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.notes-tabs::-webkit-scrollbar-thumb:hover {
+  background: #666;
 }
 
 .note-tab {
@@ -15,6 +38,8 @@
   transition: background-color 0.2s;
   min-width: 120px;
   max-width: 200px;
+  width: auto;
+  flex-shrink: 0;
   border: none;
   text-align: left;
   color: #e5e7eb !important;
