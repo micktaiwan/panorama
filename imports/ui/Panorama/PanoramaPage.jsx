@@ -7,25 +7,95 @@ import { CSS } from '@dnd-kit/utilities';
 import { formatDate } from '/imports/ui/utils/date.js';
 import './PanoramaPage.css';
 
-export const PanoramaPage = () => {
-  const [periodDays, setPeriodDays] = useState(() => {
-    if (typeof localStorage === 'undefined') return 14;
-    const raw = localStorage.getItem('panorama_period_days');
-    const n = Number(raw);
-    return [7, 14, 30].includes(n) ? n : 14;
+// Utility functions to reduce code duplication
+const sortInactiveLast = (a, b) => {
+  if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1;
+  return 0;
+};
+
+const getHeatScore = (project) => {
+  return (project?.heat?.notes || 0) + (project?.heat?.tasksChanged || 0);
+};
+
+const getHealthScore = (project) => {
+  return project?.health?.score ?? 0;
+};
+
+const getActivityTime = (project) => {
+  return project.lastActivityAt ? new Date(project.lastActivityAt).getTime() : 0;
+};
+
+const createSortFunction = (primarySort, secondarySort = sortInactiveLast) => {
+  return (a, b) => {
+    const result = primarySort(a, b);
+    if (result !== 0) return result;
+    return secondarySort(a, b);
+  };
+};
+
+// Utility function for localStorage with fallback
+const useLocalStorage = (key, defaultValue, validator = null) => {
+  const [value, setValue] = useState(() => {
+    if (typeof localStorage === 'undefined') return defaultValue;
+    const stored = localStorage.getItem(key);
+    if (stored === null) return defaultValue;
+    
+    if (validator) {
+      return validator(stored) ? stored : defaultValue;
+    }
+    
+    return stored;
   });
-  const [query, setQuery] = useState(() => {
-    if (typeof localStorage === 'undefined') return '';
-    return localStorage.getItem('panorama_query') || '';
+  
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, String(value));
+    }
+  }, [key, value]);
+  
+  return [value, setValue];
+};
+
+// Utility functions for filtering
+const filterByQuery = (projects, query) => {
+  const q = query.trim().toLowerCase();
+  return projects.filter(p => 
+    (p.name || '').toLowerCase().includes(q) || 
+    (p.tags || []).some(t => t.toLowerCase().includes(q))
+  );
+};
+
+const filterByActivity = (projects, activityFilter) => {
+  if (activityFilter === 'all') return projects;
+  return projects.filter(p => 
+    activityFilter === 'active' ? !p.isInactive : p.isInactive
+  );
+};
+
+// Utility function for hotspots calculation
+const calculateHotspots = (projects) => {
+  return {
+    overdue: projects.filter(p => (p?.tasks?.overdue || 0) > 0),
+    inactive: projects.filter(p => p?.isInactive),
+    blockers: projects.filter(p => (p?.tasks?.blocked || 0) > 0 || (p?.notes?.blockers7d || 0) > 0)
+  };
+};
+
+export const PanoramaPage = () => {
+  const [periodDays, setPeriodDays] = useLocalStorage('panorama_period_days', 14, (value) => {
+    const n = Number(value);
+    return [7, 14, 30].includes(n);
+  });
+  const [query, setQuery] = useLocalStorage('panorama_query', '');
+  const [sortMode, setSortMode] = useLocalStorage('panorama_sort', 'custom', (value) => {
+    return ['custom','createdAtAsc','createdAtDesc','overdueDesc','activityDesc','heatDesc','healthDesc'].includes(value);
+  });
+  const [activityFilter, setActivityFilter] = useLocalStorage('panorama_activity', 'all', (value) => {
+    return ['all','active','inactive'].includes(value);
   });
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sortMode, setSortMode] = useState(() => {
-    if (typeof localStorage === 'undefined') return 'custom';
-    const v = localStorage.getItem('panorama_sort') || 'custom';
-    return ['custom','createdAtAsc','createdAtDesc','overdueDesc','activityDesc'].includes(v) ? v : 'custom';
-  }); // custom | createdAtAsc | createdAtDesc | overdueDesc | activityDesc
 
   useEffect(() => {
     setLoading(true);
@@ -41,75 +111,40 @@ export const PanoramaPage = () => {
       setLoading(false);
     });
   }, [periodDays]);
-
-  useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_sort', sortMode);
-  }, [sortMode]);
-
-  const [activityFilter, setActivityFilter] = useState(() => {
-    if (typeof localStorage === 'undefined') return 'all';
-    const v = localStorage.getItem('panorama_activity') || 'all';
-    return ['all','active','inactive'].includes(v) ? v : 'all';
-  }); // all | active | inactive
-
-  useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_activity', activityFilter);
-  }, [activityFilter]);
-
-  useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_query', query);
-  }, [query]);
-
-  useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_period_days', String(periodDays));
-  }, [periodDays]);
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let arr = data.filter(p => (p.name || '').toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)));
-    if (activityFilter !== 'all') {
-      arr = arr.filter(p => {
-        return activityFilter === 'active' ? !p.isInactive : p.isInactive;
-      });
-    }
-    return arr;
+    return filterByActivity(filterByQuery(data, query), activityFilter);
   }, [data, query, activityFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    if (sortMode === 'createdAtAsc') {
-      return arr.sort((a, b) => (new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()));
+    
+    // Define sort functions for each mode
+    const sortFunctions = {
+      createdAtAsc: (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+      createdAtDesc: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+      overdueDesc: (a, b) => (b?.tasks?.overdue || 0) - (a?.tasks?.overdue || 0),
+      activityDesc: (a, b) => getActivityTime(b) - getActivityTime(a),
+      heatDesc: (a, b) => getHeatScore(b) - getHeatScore(a),
+      healthDesc: (a, b) => getHealthScore(b) - getHealthScore(a),
+      custom: (a, b) => {
+        const ar = Number.isFinite(a.panoramaRank) ? a.panoramaRank : Number.POSITIVE_INFINITY;
+        const br = Number.isFinite(b.panoramaRank) ? b.panoramaRank : Number.POSITIVE_INFINITY;
+        if (ar !== br) return ar - br;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      }
+    };
+    
+    const primarySort = sortFunctions[sortMode] || sortFunctions.custom;
+    const shouldSortInactiveLast = ['activityDesc', 'heatDesc', 'healthDesc'].includes(sortMode);
+    
+    if (shouldSortInactiveLast) {
+      return arr.sort(createSortFunction(primarySort));
     }
-    if (sortMode === 'createdAtDesc') {
-      return arr.sort((a, b) => (new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
-    }
-    if (sortMode === 'overdueDesc') {
-      return arr.sort((a, b) => ((b?.tasks?.overdue || 0) - (a?.tasks?.overdue || 0)));
-    }
-    if (sortMode === 'activityDesc') {
-      return arr.sort((a, b) => {
-        const ba = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
-        const aa = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
-        if (ba !== aa) return ba - aa;
-        // Sort inactive projects last
-        if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1;
-        return 0;
-      });
-    }
-    // custom: by panoramaRank asc nulls last, then name
-    return arr.sort((a, b) => {
-      const ar = Number.isFinite(a.panoramaRank) ? a.panoramaRank : Number.POSITIVE_INFINITY;
-      const br = Number.isFinite(b.panoramaRank) ? b.panoramaRank : Number.POSITIVE_INFINITY;
-      if (ar !== br) return ar - br;
-      return String(a.name || '').localeCompare(String(b.name || ''));
-    });
+    
+    return arr.sort(primarySort);
   }, [filtered, sortMode]);
 
-  const hotspots = useMemo(() => {
-    const overdue = filtered.filter(p => (p?.tasks?.overdue || 0) > 0);
-    const inactive = filtered.filter(p => p?.isInactive);
-    const blockers = filtered.filter(p => (p?.tasks?.blocked || 0) > 0 || (p?.notes?.blockers7d || 0) > 0);
-    return { overdue, inactive, blockers };
-  }, [filtered]);
+  const hotspots = useMemo(() => calculateHotspots(filtered), [filtered]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }));
   const ids = useMemo(() => sorted.map(p => p._id), [sorted]);
@@ -174,6 +209,7 @@ export const PanoramaPage = () => {
         <div className="meta">
           <span>Last activity: {p.lastActivityAt ? formatDate(p.lastActivityAt) : '—'}</span>
           <span>Health: {p?.health?.score ?? '-'}</span>
+          <span>Heat: {p?.heat?.notes || 0}n / {p?.heat?.tasksChanged || 0}t</span>
         </div>
         <div className="next">
           <div className="sectionTitle">Next actions</div>
@@ -191,6 +227,7 @@ export const PanoramaPage = () => {
       name: PropTypes.string,
       isInactive: PropTypes.bool,
       lastActivityAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date), PropTypes.number, PropTypes.oneOf([null])]),
+      heat: PropTypes.shape({ notes: PropTypes.number, tasksChanged: PropTypes.number }),
       health: PropTypes.shape({ score: PropTypes.number }),
       tasks: PropTypes.shape({
         overdue: PropTypes.number,
@@ -220,6 +257,8 @@ export const PanoramaPage = () => {
             <option value="createdAtDesc">Created ↓</option>
             <option value="overdueDesc">Overdue ↓</option>
             <option value="activityDesc">Activity ↓</option>
+            <option value="heatDesc">Heat ↓</option>
+            <option value="healthDesc">Health ↓</option>
           </select>
           <label className="label" htmlFor="panorama_activity">Activity</label>
           <select id="panorama_activity" className="select" value={activityFilter} onChange={(e) => setActivityFilter(e.target.value)}>
