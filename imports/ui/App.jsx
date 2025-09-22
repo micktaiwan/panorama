@@ -863,11 +863,7 @@ function App() {
           })()}
         </span>
         <span>
-          <a href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>Panorama</a>
-          <span className="dot">·</span>
           <a href="#/help">Help</a>
-          <span className="dot">·</span>
-          <a href="#/dashboard" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'dashboard' }); }}>Overview</a>
           <span className="dot">·</span>
           <a href="#/alarms" onClick={(e) => { e.preventDefault(); goAlarms(); }}>Alarms</a>
           <span className="dot">·</span>
