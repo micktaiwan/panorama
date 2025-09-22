@@ -19,13 +19,13 @@
   font-size: 12px;
   display: flex;
   justify-content: space-between;
+  align-items: center;
 }
 
 .footerNextAlarm {
   display: block;
   text-align: center;
   font-size: 12px;
-  margin-top: 4px;
 }
 
 /* Tighter top spacing for the main title */
