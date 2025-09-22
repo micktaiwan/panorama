@@ -4,14 +4,33 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
 
+// Constants to replace magic numbers
+const CONSTANTS = {
+  DEFAULT_PERIOD_DAYS: 14,
+  MIN_PERIOD_DAYS: 1,
+  MAX_PERIOD_DAYS: 365,
+  DUE_SOON_DAYS: 3,
+  OVERDUE_PENALTY: 8,
+  DORMANT_PENALTY: 20,
+  NOTES_BONUS_MAX: 20,
+  NOTES_BONUS_MULTIPLIER: 2,
+  BLOCKED_STATUSES: ['blocked', 'waiting', 'on_hold']
+};
+
+// Helper function to determine if a task is blocked
+const isTaskBlocked = (task) => {
+  const status = (task.status || '').toLowerCase();
+  return CONSTANTS.BLOCKED_STATUSES.includes(status);
+};
+
 // Compute a simple health score based on overdue/dormancy and recent activity
 const computeHealth = ({ t = {}, n = {}, dormant = false }) => {
   let score = 100;
   const overdue = Number(t.overdue || 0);
   const notes7d = Number(n.notes7d || 0);
-  score -= overdue * 8;
-  if (dormant) score -= 20;
-  score += Math.min(20, notes7d * 2);
+  score -= overdue * CONSTANTS.OVERDUE_PENALTY;
+  if (dormant) score -= CONSTANTS.DORMANT_PENALTY;
+  score += Math.min(CONSTANTS.NOTES_BONUS_MAX, notes7d * CONSTANTS.NOTES_BONUS_MULTIPLIER);
   score = Math.max(0, Math.min(100, score));
   return { score };
 };
@@ -19,30 +38,46 @@ const computeHealth = ({ t = {}, n = {}, dormant = false }) => {
 Meteor.methods({
   async 'panorama.getOverview'(filters = {}) {
     check(filters, Object);
-    const periodDays = Number(filters.periodDays) || 14;
+    
+    // Bug 2 fix: Add validation for periodDays
+    const periodDays = Number(filters.periodDays) || CONSTANTS.DEFAULT_PERIOD_DAYS;
+    if (periodDays < CONSTANTS.MIN_PERIOD_DAYS || periodDays > CONSTANTS.MAX_PERIOD_DAYS) {
+      throw new Meteor.Error('invalid-period', `periodDays must be between ${CONSTANTS.MIN_PERIOD_DAYS} and ${CONSTANTS.MAX_PERIOD_DAYS}`);
+    }
+    
     const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
 
     const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, panoramaUpdatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
     const projects = await ProjectsCollection.find({}, projFields).fetchAsync();
     const projectIds = projects.map(p => p._id);
 
-    // Aggregate per-project task metrics using JS for simplicity first (optimize later)
+    // Bug 2 fix: Early return if no projects
+    if (projectIds.length === 0) {
+      return [];
+    }
+
+    // Bug 2 fix: Optimize queries - single query for tasks with better field selection
     const taskFields = { fields: { projectId: 1, status: 1, deadline: 1, updatedAt: 1, title: 1, statusChangedAt: 1, createdAt: 1, priorityRank: 1 } };
     const allTasks = await TasksCollection.find({ projectId: { $in: projectIds } }, taskFields).fetchAsync();
     const now = new Date();
-    const soon = new Date(Date.now() + 3 * 864e5);
+    const soon = new Date(Date.now() + CONSTANTS.DUE_SOON_DAYS * 864e5);
     const tasksByProject = new Map();
     for (const t of allTasks) {
       const pid = t.projectId || '';
-      if (!tasksByProject.has(pid)) tasksByProject.set(pid, { open: 0, overdue: 0, dueSoon: 0, lastTaskAt: null, next: [] });
+      if (!tasksByProject.has(pid)) tasksByProject.set(pid, { open: 0, overdue: 0, dueSoon: 0, blocked: 0, lastTaskAt: null, next: [] });
       const acc = tasksByProject.get(pid);
       const status = (t.status || 'todo');
       const isClosed = ['done', 'cancelled'].includes(status);
-      if (!isClosed) acc.open += 1;
+      if (!isClosed) {
+        acc.open += 1;
+        // Bug 5 fix: Implement blocked status calculation
+        if (isTaskBlocked(t)) {
+          acc.blocked += 1;
+        }
+      }
       const dl = t.deadline ? new Date(t.deadline) : null;
       if (!isClosed && dl && dl < now) acc.overdue += 1;
       if (!isClosed && dl && dl >= now && dl <= soon) acc.dueSoon += 1;
-      // Blocked flag not modeled yet → placeholder 0; could derive from status or notes later
       const upd = t.updatedAt ? new Date(t.updatedAt) : null;
       const statusChanged = t.statusChangedAt ? new Date(t.statusChangedAt) : null;
       const created = t.createdAt ? new Date(t.createdAt) : null;
@@ -85,13 +120,14 @@ Meteor.methods({
       acc.next = acc.next.slice(0, 5);
     }
 
-    // Notes aggregates (for last activity calculation and heat)
+    // Bug 2 fix: Optimize notes queries - single query instead of two separate ones
     const noteFields = { fields: { projectId: 1, createdAt: 1, updatedAt: 1 } };
-    const notesRecent = await NotesCollection.find({
-      projectId: { $in: projectIds },
-      $or: [ { createdAt: { $gte: since } }, { updatedAt: { $gte: since } } ]
-    }, noteFields).fetchAsync();
     const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, noteFields).fetchAsync();
+    const notesRecent = notesAll.filter(n => {
+      const created = n.createdAt ? new Date(n.createdAt) : null;
+      const updated = n.updatedAt ? new Date(n.updatedAt) : null;
+      return (created && created >= since) || (updated && updated >= since);
+    });
     const notesByProject = new Map();
     const notesLastByProject = new Map();
     for (const n of notesRecent) {
@@ -135,7 +171,11 @@ Meteor.methods({
         0 // avoid -Infinity
       );
       const lastActivityAt = maxTime > 0 ? new Date(maxTime) : null;
-      const isInactive = !lastActivityAt || (Date.now() - lastActivityAt.getTime()) > (periodDays * 864e5);
+      // Bug 3 fix: Improve isInactive logic - consider project creation date
+      const projectCreated = p.createdAt ? new Date(p.createdAt) : null;
+      const projectAge = projectCreated ? (Date.now() - projectCreated.getTime()) : 0;
+      const isNewProject = projectAge < (periodDays * 864e5); // Project created within the period
+      const isInactive = !lastActivityAt || (!isNewProject && (Date.now() - lastActivityAt.getTime()) > (periodDays * 864e5));
       const health = computeHealth({ t, n, dormant: isInactive });
       return {
         _id: p._id,
@@ -147,7 +187,7 @@ Meteor.methods({
         lastActivityAt,
         isInactive,
         heat: { notes: n.notes7d || 0, tasksChanged: t.changedInPeriod || 0 },
-        tasks: { open: t.open || 0, overdue: t.overdue || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
+        tasks: { open: t.open || 0, overdue: t.overdue || 0, dueSoon: t.dueSoon || 0, blocked: t.blocked || 0, next: t.next || [] },
         notes: { lastStatusAt: null, decisions7d: 0, risks7d: 0 },
         health
       };

@@ -154,10 +154,40 @@ export const PanoramaPage = () => {
     const oldIndex = ids.indexOf(active.id);
     const newIndex = ids.indexOf(over.id);
     const nextOrder = arrayMove(ids, oldIndex, newIndex);
-    // assign new ranks spaced by 10 for future inserts
-    nextOrder.forEach((id, idx) => { Meteor.call('panorama.setRank', id, idx * 10); });
+    
+    // Bug 4 fix: Prevent race conditions with optimistic updates
     const rankMap = new Map(nextOrder.map((id, idx) => [id, idx * 10]));
+    
+    // Update local state first (optimistic update)
     setData(prev => prev.map(p => (rankMap.has(p._id) ? { ...p, panoramaRank: rankMap.get(p._id) } : p)));
+    
+    // Then update server with error handling
+    const updatePromises = nextOrder.map((id, idx) => 
+      new Promise((resolve, reject) => {
+        Meteor.call('panorama.setRank', id, idx * 10, (error) => {
+          if (error) {
+            console.error('Failed to update rank for project:', id, error);
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      })
+    );
+    
+    // Handle any failures by reverting the optimistic update
+    Promise.allSettled(updatePromises).then((results) => {
+      const failures = results.filter(result => result.status === 'rejected');
+      if (failures.length > 0) {
+        console.error('Some rank updates failed, reverting optimistic update');
+        // Revert to previous state by refetching data
+        Meteor.call('panorama.getOverview', { periodDays }, (err, res) => {
+          if (!err && Array.isArray(res)) {
+            setData(res);
+          }
+        });
+      }
+    });
   };
 
   const ProjectCardItem = ({ p }) => {
