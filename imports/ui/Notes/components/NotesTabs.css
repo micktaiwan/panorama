@@ -1,0 +1,114 @@
+.notes-tabs {
+  display: flex;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
+  overflow-x: auto;
+}
+
+.note-tab {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #3a3a3a !important;
+  border-right: 1px solid #555;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  min-width: 120px;
+  max-width: 200px;
+  border: none;
+  text-align: left;
+  color: #e5e7eb !important;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.note-tab:hover {
+  background: #4a4a4a !important;
+}
+
+.note-tab.active {
+  background: #2563eb !important; /* blue-600 */
+  border-bottom: 2px solid #60a5fa !important; /* blue-400 */
+}
+
+.tab-title {
+  flex: 1;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+  color: inherit !important;
+}
+
+.tab-dirty {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444; /* red-500 */
+  margin-right: 6px;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+}
+
+.tab-close:hover {
+  background: #555;
+  color: #e5e7eb;
+}
+
+.tab-title-edit {
+  flex: 1;
+  background: transparent;
+  border: 1px solid #3b82f6;
+  border-radius: 3px;
+  color: #e5e7eb;
+  font-size: 13px;
+  padding: 2px 4px;
+  margin-right: 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.tab-context-menu {
+  background: #2d2d2d;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  min-width: 120px;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  color: #e5e7eb;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.context-menu-item:hover {
+  background: #3a3a3a;
+}

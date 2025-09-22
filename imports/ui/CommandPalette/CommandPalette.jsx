@@ -34,6 +34,12 @@ const Tabs = ({ active, onChange }) => {
         aria-selected={active === 2}
         onClick={() => onChange(2)}
       >Create Note</button>
+      <button
+        className={`cmdTab ml8${active === 3 ? ' active' : ''}`}
+        role="tab"
+        aria-selected={active === 3}
+        onClick={() => onChange(3)}
+      >Create Alarm</button>
       <span className="muted ml8">(Tab to switch)</span>
     </div>
   );
@@ -439,6 +445,94 @@ CreateNotePane.propTypes = {
   isOpen: PropTypes.bool,
 };
 
+const CreateAlarmPane = ({ isOpen = false }) => {
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [creating, setCreating] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (inputRef.current && typeof inputRef.current.focus === 'function') inputRef.current.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // reset fields when opening
+    setTitle('');
+    setDate('');
+    setTime('');
+  }, [isOpen]);
+
+  const handleCreateAlarm = () => {
+    const t = String(title || '').trim();
+    if (!t) { notify({ message: 'Please enter a title', kind: 'error' }); return; }
+    if (!date || !time) { notify({ message: 'Please select date and time', kind: 'error' }); return; }
+    if (creating) return;
+    const dt = new Date(`${date}T${time}:00`);
+    if (Number.isNaN(dt.getTime())) { notify({ message: 'Invalid date/time', kind: 'error' }); return; }
+    setCreating(true);
+    Meteor.call('alarms.insert', {
+      title: t,
+      nextTriggerAt: dt,
+      recurrence: { type: 'none' }
+    }, (err) => {
+      setCreating(false);
+      if (err) { notify({ message: err?.reason || err?.message || 'Alarm creation failed', kind: 'error' }); return; }
+      notify({ message: 'Alarm created', kind: 'success' });
+      setTitle(''); setDate(''); setTime('');
+      if (inputRef.current && typeof inputRef.current.focus === 'function') inputRef.current.focus();
+    });
+  };
+
+  return (
+    <div className="createTaskPane">
+      <div className="formRow">
+        <label htmlFor="cmd_new_alarm_title">Title</label>
+        <input
+          id="cmd_new_alarm_title"
+          ref={inputRef}
+          className="afInput"
+          placeholder="Alarm title…"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateAlarm(); } }}
+        />
+      </div>
+      <div className="formRow mt8">
+        <label htmlFor="cmd_new_alarm_date">Date</label>
+        <input
+          id="cmd_new_alarm_date"
+          className="afInput"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </div>
+      <div className="formRow mt8">
+        <label htmlFor="cmd_new_alarm_time">Time</label>
+        <input
+          id="cmd_new_alarm_time"
+          className="afInput"
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); handleCreateAlarm(); }
+          }}
+        />
+      </div>
+      <div className="formRow mt12">
+        <button className="btn btn-primary" disabled={creating} onClick={handleCreateAlarm}>Create alarm</button>
+        <span className="muted ml8">Enter to submit</span>
+      </div>
+    </div>
+  );
+};
+CreateAlarmPane.propTypes = {
+  isOpen: PropTypes.bool,
+};
+
 export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '' }) => {
   const [activeTab, setActiveTab] = useState(0); // 0 = Search, 1 = Create Task
 
@@ -449,7 +543,7 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
       try {
         const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('cmd_palette_last_tab') : null;
         const n = raw != null ? parseInt(raw, 10) : NaN;
-        return Number.isFinite(n) && (n === 0 || n === 1 || n === 2) ? n : 0;
+        return Number.isFinite(n) && (n === 0 || n === 1 || n === 2 || n === 3) ? n : 0;
       } catch (e) {
         console.error('cmd_palette_last_tab read failed', e?.message || e);
         return 0;
@@ -465,7 +559,7 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
     localStorage.setItem('cmd_palette_last_tab', String(activeTab));
   }, [open, activeTab]);
 
-  // Tab/Shift+Tab cycling across 3 tabs
+  // Tab/Shift+Tab cycling across 4 tabs
   useEffect(() => {
     if (!open) return;
     const onTabCycle = (e) => {
@@ -473,7 +567,7 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
       // Always hijack Tab inside the palette to switch tabs
       e.preventDefault();
       e.stopPropagation();
-      const tabsCount = 3;
+      const tabsCount = 4;
       setActiveTab((idx) => (e.shiftKey ? (idx - 1 + tabsCount) % tabsCount : (idx + 1) % tabsCount));
     };
     // Capture phase to run before browser focus traversal
@@ -490,7 +584,10 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
     if (activeTab === 1) {
       return <CreateTaskPane defaultProjectId={defaultProjectId} isOpen={open} />;
     }
-    return <CreateNotePane defaultProjectId={defaultProjectId} isOpen={open} />;
+    if (activeTab === 2) {
+      return <CreateNotePane defaultProjectId={defaultProjectId} isOpen={open} />;
+    }
+    return <CreateAlarmPane isOpen={open} />;
   };
 
   return (

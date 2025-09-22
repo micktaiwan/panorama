@@ -3,7 +3,7 @@ export const parseHashRoute = () => {
   const path = hash.replace(/^#/, '');
   const parts = path.split('/').filter(Boolean);
   if (parts.length === 0) return { name: 'home' };
-  if (parts[0] === 'dashboard') return { name: 'home' };
+  if (parts[0] === 'dashboard') return { name: 'dashboard' };
   if (parts[0] === 'help') return { name: 'help' };
   if (parts[0] === 'alarms') return { name: 'alarms' };
   // qdrant route removed; integrated into Preferences
@@ -23,6 +23,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'projects' && parts[1]) return { name: 'project', projectId: parts[1] };
   if (parts[0] === 'sessions' && parts[1]) return { name: 'session', sessionId: parts[1] };
   if (parts[0] === 'import-tasks') return { name: 'importTasks' };
+  if (parts[0] === 'notes') return { name: 'notes' };
   return { name: 'home' };
 };
 
@@ -38,7 +39,7 @@ export const navigateTo = (route) => {
       window.location.hash = `#/sessions/${route.sessionId}`;
       break;
     case 'dashboard':
-      window.location.hash = '#/';
+      window.location.hash = '#/dashboard';
       break;
     case 'help':
       window.location.hash = '#/help';
@@ -87,6 +88,9 @@ export const navigateTo = (route) => {
       break;
     case 'importTasks':
       window.location.hash = '#/import-tasks';
+      break;
+    case 'notes':
+      window.location.hash = '#/notes';
       break;
     default:
       window.location.hash = '#/';

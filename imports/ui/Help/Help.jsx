@@ -54,7 +54,7 @@ export const Help = () => {
             </ul>
           </li>
           <li><span className="bold">Go to screen</span> — <span className="bold">⌘G</span> (macOS) / <span className="bold">Ctrl+G</span> opens the palette; <span className="bold">↑/↓</span> navigate; <span className="bold">Enter</span> opens; or type the letter</li>
-          <li><span className="bold">Go to Dashboard</span> — <span className="bold">⌘⇧H</span> (macOS) / <span className="bold">Ctrl+Shift+H</span> (Windows/Linux)</li>
+          <li><span className="bold">Go to Dashboard</span> — <span className="bold">⌘⇧H</span> (macOS) / <span className="bold">Ctrl+Shift+H</span> (Windows/Linux) or <span className="bold">⌘G</span> then <span className="bold">O</span> (via Go to screen palette)</li>
           <li><span className="bold">Cycle favorite projects</span> — <span className="bold">Tab</span> cycles to next favorite; <span className="bold">Shift+Tab</span> cycles to previous. On <span className="bold">Dashboard</span>, <span className="bold">Tab</span> opens the first favorite. On a <span className="bold">project</span>, <span className="bold">Shift+Tab</span> from the first favorite goes to Dashboard. Ignored when editing fields or when the Command Palette is open.</li>
           <li><span className="bold">Back navigation</span> — <span className="bold">⌘ + ←</span> (macOS) / <span className="bold">Ctrl + ←</span> (Windows/Linux) goes back to previous page</li>
           <li><span className="bold">Forward navigation</span> — <span className="bold">⌘ + →</span> (macOS) / <span className="bold">Ctrl + →</span> (Windows/Linux) goes forward to next page</li>

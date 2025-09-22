@@ -7,16 +7,24 @@ import { CSS } from '@dnd-kit/utilities';
 import './PanoramaPage.css';
 
 export const PanoramaPage = () => {
-  const [periodDays, setPeriodDays] = useState(14);
-  const [query, setQuery] = useState('');
+  const [periodDays, setPeriodDays] = useState(() => {
+    if (typeof localStorage === 'undefined') return 14;
+    const raw = localStorage.getItem('panorama_period_days');
+    const n = Number(raw);
+    return [7, 14, 30].includes(n) ? n : 14;
+  });
+  const [query, setQuery] = useState(() => {
+    if (typeof localStorage === 'undefined') return '';
+    return localStorage.getItem('panorama_query') || '';
+  });
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sortMode, setSortMode] = useState(() => {
     if (typeof localStorage === 'undefined') return 'custom';
     const v = localStorage.getItem('panorama_sort') || 'custom';
-    return ['custom','createdAtAsc','createdAtDesc','overdueDesc'].includes(v) ? v : 'custom';
-  }); // custom | createdAtAsc | createdAtDesc | overdueDesc
+    return ['custom','createdAtAsc','createdAtDesc','overdueDesc','activityDesc'].includes(v) ? v : 'custom';
+  }); // custom | createdAtAsc | createdAtDesc | overdueDesc | activityDesc
 
   useEffect(() => {
     setLoading(true);
@@ -37,7 +45,23 @@ export const PanoramaPage = () => {
     if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_sort', sortMode);
   }, [sortMode]);
 
-  const [activityFilter, setActivityFilter] = useState('all'); // all | active | inactive
+  const [activityFilter, setActivityFilter] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'all';
+    const v = localStorage.getItem('panorama_activity') || 'all';
+    return ['all','active','inactive'].includes(v) ? v : 'all';
+  }); // all | active | inactive
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_activity', activityFilter);
+  }, [activityFilter]);
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_query', query);
+  }, [query]);
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('panorama_period_days', String(periodDays));
+  }, [periodDays]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let arr = data.filter(p => (p.name || '').toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)));

@@ -58,6 +58,7 @@ export const AlarmModal = ({ open = false, alarm = null, onClose, onBeforeAction
         <button key="s5" className="btn" onClick={() => handleSnooze(5)}>Snooze +5m</button>,
         <button key="s15" className="btn ml8" onClick={() => handleSnooze(15)}>+15m</button>,
         <button key="s60" className="btn ml8" onClick={() => handleSnooze(60)}>+1h</button>,
+        <button key="s180" className="btn ml8" onClick={() => handleSnooze(180)}>+3h</button>,
         <button key="dismiss" className="btn ml8" onClick={handleDismiss}>Dismiss</button>
       ]}
     >
