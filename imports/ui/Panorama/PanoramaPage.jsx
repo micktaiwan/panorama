@@ -83,7 +83,7 @@ const calculateHotspots = (projects) => {
 export const PanoramaPage = () => {
   const [periodDays, setPeriodDays] = useLocalStorage('panorama_period_days', 14, (value) => {
     const n = Number(value);
-    return [7, 14, 30].includes(n);
+    return [1, 7, 14, 30].includes(n);
   });
   const [query, setQuery] = useLocalStorage('panorama_query', '');
   const [sortMode, setSortMode] = useLocalStorage('panorama_sort', 'custom', (value) => {
@@ -231,7 +231,6 @@ export const PanoramaPage = () => {
               <option value="green">Green</option>
             </select>
             {!!p?.tasks?.overdue && <span className="chip danger">{p.tasks.overdue} overdue</span>}
-            {!!p?.tasks?.blocked && <span className="chip warn">{p.tasks.blocked} blocked</span>}
             {p.isInactive && <span className="chip idle">Inactive</span>}
           </div>
         </div>
@@ -260,7 +259,6 @@ export const PanoramaPage = () => {
       health: PropTypes.shape({ score: PropTypes.number }),
       tasks: PropTypes.shape({
         overdue: PropTypes.number,
-        blocked: PropTypes.number,
         next: PropTypes.arrayOf(PropTypes.shape({ _id: PropTypes.string.isRequired, title: PropTypes.string }))
       }),
       notes: PropTypes.shape({ lastStatusAt: PropTypes.any, decisions7d: PropTypes.number, risks7d: PropTypes.number })
@@ -297,6 +295,7 @@ export const PanoramaPage = () => {
           </select>
           <label className="label" htmlFor="panorama_period">Period</label>
           <select id="panorama_period" className="select" value={periodDays} onChange={(e) => setPeriodDays(Number(e.target.value) || 14)}>
+            <option value={1}>1 day</option>
             <option value={7}>7 days</option>
             <option value={14}>14 days</option>
             <option value={30}>30 days</option>
