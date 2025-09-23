@@ -13,14 +13,7 @@ const CONSTANTS = {
   OVERDUE_PENALTY: 8,
   DORMANT_PENALTY: 20,
   NOTES_BONUS_MAX: 20,
-  NOTES_BONUS_MULTIPLIER: 2,
-  BLOCKED_STATUSES: ['blocked', 'waiting', 'on_hold']
-};
-
-// Helper function to determine if a task is blocked
-const isTaskBlocked = (task) => {
-  const status = (task.status || '').toLowerCase();
-  return CONSTANTS.BLOCKED_STATUSES.includes(status);
+  NOTES_BONUS_MULTIPLIER: 2
 };
 
 // Compute a simple health score based on overdue/dormancy and recent activity
@@ -64,17 +57,11 @@ Meteor.methods({
     const tasksByProject = new Map();
     for (const t of allTasks) {
       const pid = t.projectId || '';
-      if (!tasksByProject.has(pid)) tasksByProject.set(pid, { open: 0, overdue: 0, dueSoon: 0, blocked: 0, lastTaskAt: null, next: [] });
+      if (!tasksByProject.has(pid)) tasksByProject.set(pid, { open: 0, overdue: 0, dueSoon: 0, lastTaskAt: null, next: [] });
       const acc = tasksByProject.get(pid);
       const status = (t.status || 'todo');
       const isClosed = ['done', 'cancelled'].includes(status);
-      if (!isClosed) {
-        acc.open += 1;
-        // Bug 5 fix: Implement blocked status calculation
-        if (isTaskBlocked(t)) {
-          acc.blocked += 1;
-        }
-      }
+      if (!isClosed) acc.open += 1;
       const dl = t.deadline ? new Date(t.deadline) : null;
       if (!isClosed && dl && dl < now) acc.overdue += 1;
       if (!isClosed && dl && dl >= now && dl <= soon) acc.dueSoon += 1;
@@ -187,7 +174,7 @@ Meteor.methods({
         lastActivityAt,
         isInactive,
         heat: { notes: n.notes7d || 0, tasksChanged: t.changedInPeriod || 0 },
-        tasks: { open: t.open || 0, overdue: t.overdue || 0, dueSoon: t.dueSoon || 0, blocked: t.blocked || 0, next: t.next || [] },
+        tasks: { open: t.open || 0, overdue: t.overdue || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
         notes: { lastStatusAt: null, decisions7d: 0, risks7d: 0 },
         health
       };
