@@ -17,6 +17,9 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
     console.log('VendorsIgnore subscription data updated:', data);
     return data;
   }, [vendorsIgnoreSubscription]);
+  
+  // Memoize the ignore data to prevent unnecessary re-renders
+  const memoizedIgnoreData = React.useMemo(() => vendorsIgnoreData, [vendorsIgnoreData]);
 
   const guessVendorFromLabel = (label, filename, extra) => {
     const base = String(label || extra || filename || '').trim();
@@ -37,6 +40,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
   });
   const [fetching, setFetching] = React.useState(false);
   const [apiCursor, setApiCursor] = React.useState('');
+  const [isProcessingIgnore, setIsProcessingIgnore] = React.useState(false);
   const [apiSearchVendor, setApiSearchVendor] = React.useState(() => {
     return localStorage.getItem('budget.apiSearchVendor') || '';
   });
@@ -70,9 +74,9 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
 
   // Helper function to filter ignored items (same logic as server)
   const filterIgnoredItems = (rows, ignoreList) => {
-    // Use vendorsIgnoreData from subscription if available, otherwise fallback to ignoreList
-    const list = vendorsIgnoreData && vendorsIgnoreData.length > 0 
-      ? vendorsIgnoreData 
+    // Use memoizedIgnoreData from subscription if available, otherwise fallback to ignoreList
+    const list = memoizedIgnoreData && memoizedIgnoreData.length > 0 
+      ? memoizedIgnoreData 
       : (Array.isArray(ignoreList && ignoreList.items) ? ignoreList.items : []);
     
     // Create sets for different types of ignore rules
@@ -230,11 +234,11 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         // Rely on API sorting; do not sort locally
         // Apply ignore rules client-side
         // Use subscription data if available, otherwise fallback to method call
-        if (vendorsIgnoreData && vendorsIgnoreData.length >= 0) {
-          console.log('Using subscription data for filtering:', vendorsIgnoreData);
+        if (memoizedIgnoreData && memoizedIgnoreData.length >= 0) {
+          console.log('Using subscription data for filtering:', memoizedIgnoreData);
           console.log('Items to filter:', mapped.length);
           
-          const filtered = filterIgnoredItems(mapped, { items: vendorsIgnoreData });
+          const filtered = filterIgnoredItems(mapped, { items: memoizedIgnoreData });
           const removed = mapped.length - filtered.length;
           
           console.log('After filtering:', filtered.length, 'removed:', removed);
@@ -569,7 +573,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                 if (vendorsIgnoreData && vendorsIgnoreData.length >= 0) {
                   console.log('Using subscription data for last updates filtering:', vendorsIgnoreData);
                   
-                  const filtered = filterIgnoredItems(mapped, { items: vendorsIgnoreData });
+                  const filtered = filterIgnoredItems(mapped, { items: memoizedIgnoreData });
                   const removed = mapped.length - filtered.length;
                   
                   setIgnored({ count: removed, examples: [] });
@@ -679,41 +683,43 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                       className="btn"
                       title={`Ignore ${r.vendor}`}
                       onClick={() => {
+                        // Prevent multiple simultaneous ignore operations
+                        if (isProcessingIgnore) return;
+                        
                         const isPhoto = String(r.vendor || '').toLowerCase() === 'photo/pdf';
                         const payload = r.supplierId
                           ? { type: 'supplier', supplierId: r.supplierId, vendorName: r.vendor }
                           : (isPhoto && r.publicFileUrl
                               ? { type: 'photo/pdf', publicFileUrl: r.publicFileUrl, vendorName: r.vendor }
                               : { type: 'label', vendorName: r.vendor });
+                        
+                        setIsProcessingIgnore(true);
+                        
+                        // Optimistic update: remove the row immediately for better UX
+                        const currentRows = [...apiRows];
+                        const filteredRows = currentRows.filter(row => row !== r);
+                        setApiRows(filteredRows);
+                        
+                        // Update ignored count optimistically
+                        const currentIgnoredCount = ignored.count + 1;
+                        const newExamples = [...ignored.examples];
+                        const vendorName = String(r.vendor || (r.supplierId ? `supplier#${r.supplierId}` : ''));
+                        if (!newExamples.includes(vendorName) && newExamples.length < 5) {
+                          newExamples.push(vendorName);
+                        }
+                        setIgnored({ count: currentIgnoredCount, examples: newExamples });
+                        
                         Meteor.call('budget.ignoreVendor', payload, (e4) => {
-                            if (e4) { console.error('ignoreVendor failed', e4); notify({ message: 'Ignore failed', kind: 'error' }); return; }
+                            setIsProcessingIgnore(false);
+                            if (e4) { 
+                              console.error('ignoreVendor failed', e4); 
+                              notify({ message: 'Ignore failed', kind: 'error' }); 
+                              // Revert optimistic update on error
+                              setApiRows(currentRows);
+                              setIgnored({ count: ignored.count, examples: ignored.examples });
+                              return; 
+                            }
                             notify({ message: `Ignored ${r.vendor}`, kind: 'info' });
-                            // refresh ignored banner and re-filter
-                            // Since we just added a new ignore rule, we need to refresh the data
-                            // The subscription should automatically update, but we'll trigger a re-filter
-                            setTimeout(() => {
-                              // Re-filter all rows using the updated ignore list
-                              const filtered = filterIgnoredItems(apiRows, { items: vendorsIgnoreData });
-                              const removedCount = apiRows.length - filtered.length;
-                              
-                              // Calculate examples
-                              const exampleNames = [];
-                              const seenExamples = new Set();
-                              for (const x of apiRows) {
-                                const nameLower = String(x.vendor || '').trim().toLowerCase();
-                                const isIgnored = !filtered.includes(x);
-                                if (!isIgnored) continue;
-                                const nm = String(x.vendor || (x.supplierId ? `supplier#${x.supplierId}` : ''));
-                                const key = `${x.supplierId || ''}|${nm.trim().toLowerCase()}`;
-                                if (seenExamples.has(key)) continue;
-                                seenExamples.add(key);
-                                exampleNames.push(nm);
-                                if (exampleNames.length >= 5) break;
-                              }
-                              
-                              setIgnored({ count: removedCount, examples: exampleNames.slice(0,5) });
-                              setApiRows(filtered);
-                            }, 100); // Small delay to ensure subscription data is updated
                           });
                       }}
                     >
