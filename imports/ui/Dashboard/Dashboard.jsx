@@ -204,7 +204,7 @@ export const Dashboard = () => {
             task={t}
             showProject={true}
             allowProjectChange
-            projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+            projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
             onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
             projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
             projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
@@ -250,7 +250,7 @@ export const Dashboard = () => {
                 task={t}
                 showProject={true}
                 allowProjectChange
-                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
                 onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
                 projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
                 projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
@@ -278,7 +278,7 @@ export const Dashboard = () => {
                 note={n}
                 showProject={true}
                 allowProjectChange
-                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
                 onMoveProject={(projectId) => Meteor.call('notes.update', n._id, { projectId })}
                 onUpdateTitle={(title) => Meteor.call('notes.update', n._id, { title })}
                 projectName={n.projectId ? (projectById[n.projectId] || 'Open project') : '—'}

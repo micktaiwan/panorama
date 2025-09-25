@@ -84,7 +84,7 @@ export const Eisenhower = () => {
                   projectColWidth="80px"
                   colGap="8px"
                   allowProjectChange
-                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
                   projectName={projectById[t.projectId]}
                   projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
@@ -117,7 +117,7 @@ export const Eisenhower = () => {
                   projectColWidth="100px"
                   colGap="12px"
                   allowProjectChange
-                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
                   projectName={projectById[t.projectId]}
                   projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
@@ -151,7 +151,7 @@ export const Eisenhower = () => {
                   projectColWidth="100px"
                   colGap="12px"
                   allowProjectChange
-                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
                   projectName={projectById[t.projectId]}
                   projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
@@ -184,7 +184,7 @@ export const Eisenhower = () => {
                   projectColWidth="100px"
                   colGap="12px"
                   allowProjectChange
-                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' }))}
+                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
                   onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
                   projectName={projectById[t.projectId]}
                   projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}

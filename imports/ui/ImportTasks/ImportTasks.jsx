@@ -96,7 +96,9 @@ export const ImportTasks = () => {
     const map = new Map();
     existing.forEach(o => { if (o.value) map.set(o.value, o); });
     created.forEach(o => { if (o.value && !map.has(o.value)) map.set(o.value, o); });
-    return Array.from(map.values());
+    const options = Array.from(map.values());
+    // Sort alphabetically by label
+    return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
   }, [existingProjects, createdProjects]);
 
   // Lowercase label → option map for fast lookup

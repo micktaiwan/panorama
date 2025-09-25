@@ -43,7 +43,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
   // Always call useFind in the same order; use a neutral selector when no projectId
   // Resolve project reactively by ID to avoid any cursor mishaps.
   const project = useDoc(() => (session && session.projectId ? ProjectsCollection.findOne({ _id: session.projectId }) : null));
-  const allProjects = useFind(() => ProjectsCollection.find({}, { sort: { updatedAt: -1 }, fields: { name: 1 } }));
+  const allProjects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1 } })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const pid = session && session.projectId ? session.projectId : '__none__';
   const openTasks = useFind(() => (
     TasksCollection.find(
