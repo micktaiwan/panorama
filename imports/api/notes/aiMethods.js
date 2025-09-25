@@ -1,0 +1,107 @@
+import { Meteor } from 'meteor/meteor';
+import { check } from 'meteor/check';
+import { getOpenAiApiKey } from '/imports/api/_shared/config';
+import { openAiChat } from '/imports/api/_shared/aiCore';
+
+Meteor.methods({
+  async 'ai.cleanNote'(noteId) {
+    check(noteId, String);
+
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const note = await NotesCollection.findOneAsync({ _id: noteId });
+    if (!note) throw new Meteor.Error('not-found', 'Note not found');
+
+    const apiKey = getOpenAiApiKey();
+    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+
+    const original = typeof note.content === 'string' ? note.content : '';
+    if (!original.trim()) {
+      return { content: original };
+    }
+
+    const system = `You are a text cleaner. Your job is to normalize notes without summarizing or translating.`;
+    const instructions = `
+    Rules for cleaning notes:
+    1. Remove all emojis.
+    2. Remove all markdown symbols (e.g. **, #, >, *) but keep the hierarchy: convert titles and subtitles to plain text lines.
+    3. Remove timestamps (e.g. "2 minutes ago", "9:14").
+    4. For email signatures: remove long blocks. Keep only the sender's name and date. Ignore job titles, phone numbers, or disclaimers.
+    5. Keep the conversation flow and speaker names if it's a dialogue.
+    6. Keep all original content, do NOT summarize, shorten, or translate.
+    7. Preserve the original language of the text.
+    8. Correct obvious spelling mistakes.
+    Output: plain text only, no markdown, no special formatting.
+    `;
+    const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
+
+    const cleaned = await openAiChat({ system, user, expectJson: false });
+
+    // Persist cleaned content
+    await NotesCollection.updateAsync(noteId, { $set: { content: cleaned, updatedAt: new Date() } });
+
+    // Update search vector and project updatedAt
+    try {
+      const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
+      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+      await upsertDoc({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null });
+      if (next && next.projectId) {
+        const { ProjectsCollection } = await import('/imports/api/projects/collections');
+        await ProjectsCollection.updateAsync(next.projectId, { $set: { updatedAt: new Date() } });
+      }
+    } catch (err) {
+      console.error('[ai.cleanNote] post-update side effects failed', err);
+    }
+
+    return { content: cleaned };
+  },
+
+  async 'ai.summarizeNote'(noteId) {
+    check(noteId, String);
+
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const note = await NotesCollection.findOneAsync({ _id: noteId });
+    if (!note) throw new Meteor.Error('not-found', 'Note not found');
+
+    const apiKey = getOpenAiApiKey();
+    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+
+    const original = typeof note.content === 'string' ? note.content : '';
+    if (!original.trim()) {
+      return { content: original };
+    }
+
+    const system = `You are a text summarizer. Your job is to create concise summaries while preserving key information.`;
+    const instructions = `
+    Rules for summarizing notes:
+    1. Create a concise summary that captures the main points and key information.
+    2. Preserve important details, decisions, and action items.
+    3. Maintain the original language of the text.
+    4. Keep the structure logical and easy to read.
+    5. Remove redundant information but keep essential context.
+    6. If the note contains lists or bullet points, preserve the most important ones.
+    7. For meeting notes, preserve key decisions and next steps.
+    8. Output: plain text summary, no markdown formatting.
+    `;
+    const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
+
+    const summarized = await openAiChat({ system, user, expectJson: false });
+
+    // Persist summarized content
+    await NotesCollection.updateAsync(noteId, { $set: { content: summarized, updatedAt: new Date() } });
+
+    // Update search vector and project updatedAt
+    try {
+      const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
+      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+      await upsertDoc({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null });
+      if (next && next.projectId) {
+        const { ProjectsCollection } = await import('/imports/api/projects/collections');
+        await ProjectsCollection.updateAsync(next.projectId, { $set: { updatedAt: new Date() } });
+      }
+    } catch (err) {
+      console.error('[ai.summarizeNote] post-update side effects failed', err);
+    }
+
+    return { content: summarized };
+  }
+});

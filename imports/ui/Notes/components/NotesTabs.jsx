@@ -8,7 +8,12 @@ import { CSS } from '@dnd-kit/utilities';
 import { navigateTo } from '/imports/ui/router.js';
 
 const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, isEditing, inputRef, editingTitle, setEditingTitle, onSubmit, onKeyDown }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tab.id });
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tab?.id || 'fallback-id' });
+  
+  // Defensive check: if tab.id is undefined, don't render the component
+  if (!tab?.id) {
+    return null;
+  }
   const style = { transform: CSS.Transform.toString(transform), transition };
   
   const handleClick = (e) => {
@@ -23,16 +28,25 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       onClick();
     }
   };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || (e.key === ' ' && !isEditing)) {
+      e.preventDefault();
+      handleClick(e);
+    }
+  };
   
   return (
-    <button
+    <div
       ref={setNodeRef}
       style={style}
       key={tab.id}
       className={`note-tab ${isActive ? 'active' : ''}`}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
-      type="button"
+      role="tab"
+      tabIndex={0}
       {...attributes}
       {...listeners}
     >
@@ -57,12 +71,12 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       >
         ×
       </button>
-    </button>
+    </div>
   );
 };
 SortableTab.propTypes = {
   tab: PropTypes.shape({ 
-    id: PropTypes.string.isRequired, 
+    id: PropTypes.string, 
     title: PropTypes.string,
     note: PropTypes.shape({
       projectId: PropTypes.string
@@ -81,7 +95,7 @@ SortableTab.propTypes = {
   onKeyDown: PropTypes.func.isRequired,
 };
 
-export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, onTabDelete, onCloseOthers, onCloseAll }) => {
+export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false }) => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
   const [editingTab, setEditingTab] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -93,7 +107,7 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
 
   useEffect(() => {
     setOrder(openTabs.map(t => t.id));
-  }, [JSON.stringify(openTabs.map(t => t.id))]);
+  }, [openTabs.length, openTabs.map(t => t.id).join(',')]);
 
   const handleContextMenu = (e, tabId) => {
     e.preventDefault();
@@ -137,7 +151,7 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
 
   const handleRenameSubmit = () => {
     if (editingTab && editingTitle.trim()) {
-      onTabRename(editingTab, editingTitle.trim());
+      onTabRename(editingTab, editingTitle);
     }
     setEditingTab(null);
     setEditingTitle('');
@@ -209,6 +223,15 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
                 onKeyDown={handleKeyDown}
               />
             ))}
+            <button
+              className="new-note-button"
+              onClick={onCreateNote}
+              disabled={isCreatingNote}
+              title={isCreatingNote ? "Creating note..." : "Create new note"}
+              type="button"
+            >
+              {isCreatingNote ? "..." : "+"}
+            </button>
           </div>
         </SortableContext>
       </DndContext>
@@ -279,4 +302,6 @@ NotesTabs.propTypes = {
   onTabDelete: PropTypes.func,
   onCloseOthers: PropTypes.func,
   onCloseAll: PropTypes.func,
+  onCreateNote: PropTypes.func,
+  isCreatingNote: PropTypes.bool,
 };

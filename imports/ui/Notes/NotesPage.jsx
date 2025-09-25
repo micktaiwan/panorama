@@ -10,6 +10,10 @@ import { NotesTabs } from './components/NotesTabs.jsx';
 import { NoteEditor } from './components/NoteEditor.jsx';
 import './NotesPage.css';
 
+// Constants
+const FOCUS_DELAY_MS = 200;
+const FOCUS_TIMEOUT_MS = 50;
+
 export const NotesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [openTabs, setOpenTabs] = useState([]);
@@ -18,6 +22,8 @@ export const NotesPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [renamedTabs, setRenamedTabs] = useState(new Set());
   const [touchedNotes, setTouchedNotes] = useState(new Set());
+  const [shouldFocusNote, setShouldFocusNote] = useState(null);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
 
   const parseLocalJson = (key, fallback) => {
     const raw = localStorage.getItem(key);
@@ -74,10 +80,12 @@ export const NotesPage = () => {
     const savedActiveTab = localStorage.getItem('notes-active-tab');
     const tabs = parseLocalJson('notes-open-tabs', []);
     if (tabs && Array.isArray(tabs) && tabs.length > 0) {
-      setOpenTabs(tabs);
+      // Filter out tabs without valid IDs to prevent prop validation errors
+      const validTabs = tabs.filter(tab => tab && typeof tab.id === 'string' && tab.id.trim() !== '');
+      setOpenTabs(validTabs);
       // Load content of open notes
       const contents = {};
-      tabs.forEach(tab => {
+      validTabs.forEach(tab => {
         const draft = getDraftFor(tab.id);
         const snapshotUpdatedAt = tab?.note?.updatedAt ? new Date(tab.note.updatedAt).getTime() : 0;
         if (draft) {
@@ -91,10 +99,10 @@ export const NotesPage = () => {
         }
       });
       setNoteContents(contents);
-      if (savedActiveTab && tabs.find(tab => tab.id === savedActiveTab)) {
+      if (savedActiveTab && validTabs.find(tab => tab.id === savedActiveTab)) {
         setActiveTabId(savedActiveTab);
-      } else if (tabs.length > 0) {
-        setActiveTabId(tabs[tabs.length - 1].id);
+      } else if (validTabs.length > 0) {
+        setActiveTabId(validTabs[validTabs.length - 1].id);
       }
     }
 
@@ -130,7 +138,7 @@ export const NotesPage = () => {
       const dbBaseline = notesById.get(noteId)?.content ?? openTabs.find(t => t.id === noteId)?.note?.content ?? '';
       setDraftFor(noteId, noteContents[noteId], dbBaseline);
     });
-  }, [noteContents, notesById, JSON.stringify(openTabs.map(t => [t.id, t?.note?.content || ''])), touchedNotes]);
+  }, [noteContents, notesById, openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), touchedNotes]);
 
   // Save renamed tabs to localStorage
   useEffect(() => {
@@ -162,7 +170,7 @@ export const NotesPage = () => {
       }
     }
     if (changed) setNoteContents(next);
-  }, [notesById, JSON.stringify(openTabs.map(t => t.id))]);
+  }, [notesById, openTabs.length, openTabs.map(t => t.id).join(',')]);
 
   // Clean localStorage on component unmount
   useEffect(() => {
@@ -171,14 +179,34 @@ export const NotesPage = () => {
     };
   }, []);
 
-  // Projects map for labels
-  const projectNamesById = useTracker(() => {
+  // Reset focus state after it has been applied
+  useEffect(() => {
+    if (shouldFocusNote) {
+      // Reset the focus state after a delay to allow the focus to be applied
+      const timer = setTimeout(() => {
+        setShouldFocusNote(null);
+      }, FOCUS_DELAY_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldFocusNote]);
+
+  // Projects data - single subscription to avoid duplication
+  const projects = useTracker(() => {
     Meteor.subscribe('projects');
-    const list = ProjectsCollection.find({}, { fields: { name: 1 } }).fetch();
-    const map = {};
-    list.forEach(p => { map[p._id] = p?.name || '(untitled project)'; });
-    return map;
+    return ProjectsCollection.find({}, { fields: { name: 1 } }).fetch();
   });
+
+  const projectNamesById = useMemo(() => {
+    const map = {};
+    projects.forEach(p => { map[p._id] = p?.name || '(untitled project)'; });
+    return map;
+  }, [projects]);
+
+  const projectOptions = useMemo(() => {
+    return projects
+      .map(p => ({ value: p._id, label: p?.name || '(untitled project)' }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [projects]);
 
   // Filter + sort by (updatedAt || createdAt) desc
   const filteredNotes = useMemo(() => {
@@ -201,10 +229,10 @@ export const NotesPage = () => {
       if (current !== dbBaseline) set.add(tab.id);
     }
     return set;
-  }, [JSON.stringify(openTabs.map(t => [t.id, t?.note?.content || ''].join(':'))), JSON.stringify(noteContents), notesById]);
+  }, [openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), Object.keys(noteContents).length, notesById]);
 
   // Open a note in a new tab
-  const openNote = (note) => {
+  const openNote = (note, shouldFocus = false) => {
     if (!openTabs.find(tab => tab.id === note._id)) {
       const newTab = {
         id: note._id,
@@ -221,9 +249,26 @@ export const NotesPage = () => {
         const draftIsNewerOrEqual = (draft.savedAt || 0) >= dbUpdatedAt;
         nextContent = draftIsNewerOrEqual ? draft.content : (note.content || '');
       }
-      setNoteContents(prev => ({ ...prev, [note._id]: nextContent }));
+      
+      // Set content first, then activeTabId in the same state update
+      setNoteContents(prev => {
+        const newContents = { ...prev, [note._id]: nextContent };
+        // Use setTimeout to ensure noteContents is updated before activeTabId
+        setTimeout(() => {
+          setActiveTabId(note._id);
+          if (shouldFocus) {
+            setShouldFocusNote(note._id);
+          }
+        }, 0);
+        return newContents;
+      });
+    } else {
+      // Tab already exists, just set activeTabId
+      setActiveTabId(note._id);
+      if (shouldFocus) {
+        setShouldFocusNote(note._id);
+      }
     }
-    setActiveTabId(note._id);
   };
 
   // Close a tab
@@ -263,10 +308,28 @@ export const NotesPage = () => {
     
     setIsSaving(true);
     try {
-      await Meteor.callAsync('notes.update', noteId, {
-        content: noteContents[noteId]
-      });
-      // Do not auto-update the tab title on save
+      const note = notesById.get(noteId);
+      const content = noteContents[noteId];
+      
+      // Check if this is the first save and note has no title
+      const isFirstSave = !note?.updatedAt || note.updatedAt === note.createdAt;
+      const hasNoTitle = !note?.title || note.title === 'New note' || note.title.trim() === '';
+      
+      let updateData = { content };
+      
+      // Auto-generate title from first line if it's first save and no title
+      if (isFirstSave && hasNoTitle && content.trim()) {
+        const firstLine = content.split('\n')[0].trim();
+        if (firstLine) {
+          updateData.title = firstLine;
+          // Update the tab title locally
+          setOpenTabs(prev => prev.map(tab => 
+            tab.id === noteId ? { ...tab, title: firstLine } : tab
+          ));
+        }
+      }
+      
+      await Meteor.callAsync('notes.update', noteId, updateData);
       
       // Clean localStorage after successful save
       localStorage.removeItem(`note-content-${noteId}`);
@@ -274,8 +337,9 @@ export const NotesPage = () => {
 
       // Update baseline content so the tab is no longer dirty
       setOpenTabs(prev => prev.map(tab => tab.id === noteId ? { ...tab, note: { ...(tab.note || {}), content: noteContents[noteId] } } : tab));
-    } catch {
-      notify('Error saving note', 'error');
+    } catch (error) {
+      console.error('Error saving note:', error);
+      notify({ message: 'Error saving note', kind: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -306,8 +370,9 @@ export const NotesPage = () => {
       setTouchedNotes(prev => { const n = new Set(prev); n.delete(noteId); return n; });
       // Close the tab if open
       closeTab(noteId);
-    } catch {
-      notify('Error deleting note', 'error');
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      notify({ message: 'Error deleting note', kind: 'error' });
     }
   };
 
@@ -358,8 +423,66 @@ export const NotesPage = () => {
       
       // Mark this tab as manually renamed
       setRenamedTabs(prev => new Set([...prev, tabId]));
-    } catch {
-      notify('Error renaming note', 'error');
+    } catch (error) {
+      console.error('Error renaming note:', error);
+      notify({ message: 'Error renaming note', kind: 'error' });
+    }
+  };
+
+  const handleMoveProject = async (noteId, projectId) => {
+    try {
+      await Meteor.callAsync('notes.update', noteId, { projectId });
+      notify({ message: 'Note moved to project', kind: 'success' });
+    } catch (error) {
+      console.error('Error moving note:', error);
+      notify({ message: 'Error moving note', kind: 'error' });
+    }
+  };
+
+  const handleDuplicateNote = async (noteId) => {
+    try {
+      const newNoteId = await Meteor.callAsync('notes.duplicate', noteId);
+      const newNote = notesById.get(newNoteId);
+      if (newNote) {
+        openNote(newNote);
+        notify({ message: 'Note duplicated successfully', kind: 'success' });
+      }
+    } catch (error) {
+      console.error('Error duplicating note:', error);
+      notify({ message: 'Error duplicating note', kind: 'error' });
+    }
+  };
+
+  const handleCreateNote = async () => {
+    if (isCreatingNote) return; // Prevent multiple simultaneous calls
+    
+    setIsCreatingNote(true);
+    try {
+      const newNoteId = await Meteor.callAsync('notes.insert', { 
+        title: 'New note',
+        content: ''
+      });
+      
+      if (!newNoteId) {
+        throw new Error('No ID returned from notes.insert');
+      }
+      
+      // Create note object directly since notesById might not be updated yet
+      const newNote = {
+        _id: newNoteId,
+        title: 'New note',
+        content: '',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      openNote(newNote, true); // true = shouldFocus
+      notify({ message: 'New note created', kind: 'success' });
+    } catch (error) {
+      console.error('Error creating note:', error);
+      notify({ message: 'Error creating note', kind: 'error' });
+    } finally {
+      setIsCreatingNote(false);
     }
   };
 
@@ -396,6 +519,8 @@ export const NotesPage = () => {
               onTabDelete={deleteNote}
               onCloseOthers={closeOtherTabs}
               onCloseAll={closeAllTabs}
+              onCreateNote={handleCreateNote}
+              isCreatingNote={isCreatingNote}
             />
             
             <div className="notes-content">
@@ -407,6 +532,12 @@ export const NotesPage = () => {
                 onSaveAll={saveAllNotes}
                 onClose={closeTab}
                 isSaving={isSaving}
+                activeNote={activeTabId ? (notesById.get(activeTabId) || openTabs.find(tab => tab.id === activeTabId)?.note) : null}
+                projectOptions={projectOptions}
+                onMoveProject={handleMoveProject}
+                onDuplicate={handleDuplicateNote}
+                shouldFocus={shouldFocusNote === activeTabId}
+                dirtySet={dirtySet}
               />
             </div>
           </>

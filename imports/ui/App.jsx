@@ -338,12 +338,8 @@ function App() {
       }
     };
     const onGoKeys = (e) => {
-      // Only handle keys when Go to screen is open and not in an input field
       const target = e.target;
-      const tag = (target?.tagName || '').toLowerCase();
-      const isEditable = target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
-      if (isEditable) return;
-
+      
       const key = String(e.key || '').toLowerCase();
       const hasMod = e.metaKey || e.ctrlKey;
       

@@ -6,6 +6,121 @@ import { filterByQuery } from '/imports/ui/Budget/utils/filters.js';
 import { Meteor } from 'meteor/meteor';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 
+// Notes Editor Component (reused from RecentLinesTab)
+const NotesEditor = ({ lineId, initialNotes, setToast }) => {
+  const [notes, setNotes] = React.useState(initialNotes);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setNotes(initialNotes);
+  }, [initialNotes]);
+
+  const handleSave = () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    
+    Meteor.call('budget.setNotes', lineId, notes, (err, res) => {
+      setIsSaving(false);
+      if (err) {
+        console.error('budget.setNotes failed', err);
+        setToast({ message: 'Failed to save notes', kind: 'error' });
+        return;
+      }
+      setIsEditing(false);
+      setToast({ message: 'Notes saved', kind: 'success' });
+    });
+  };
+
+  const handleCancel = () => {
+    setNotes(initialNotes);
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div style={{ minWidth: '200px' }}>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Add notes..."
+          style={{
+            width: '100%',
+            minHeight: '60px',
+            padding: '4px',
+            border: '1px solid var(--border)',
+            borderRadius: '3px',
+            fontSize: '12px',
+            resize: 'vertical',
+            background: '#0e1420',
+            color: 'var(--text)'
+          }}
+          autoFocus
+        />
+        <div style={{ marginTop: '4px' }}>
+          <button
+            className="btn"
+            onClick={handleSave}
+            disabled={isSaving}
+            style={{ fontSize: '11px', padding: '2px 6px' }}
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            className="btn ml4"
+            onClick={handleCancel}
+            disabled={isSaving}
+            style={{ fontSize: '11px', padding: '2px 6px' }}
+          >
+            Cancel
+          </button>
+        </div>
+        <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
+          Ctrl+Enter to save, Esc to cancel
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button 
+      onClick={() => setIsEditing(true)}
+      onKeyDown={(e) => e.key === 'Enter' && setIsEditing(true)}
+      style={{
+        minWidth: '200px',
+        minHeight: '20px',
+        padding: '4px',
+        border: '1px dashed var(--border)',
+        borderRadius: '3px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        backgroundColor: notes ? '#10141b' : '#0e1420',
+        color: 'var(--text)',
+        textAlign: 'left',
+        width: '100%'
+      }}
+      title={notes ? `Notes: ${notes}` : 'Click to add notes'}
+    >
+      {notes || 'Click to add notes...'}
+    </button>
+  );
+};
+
+NotesEditor.propTypes = {
+  lineId: PropTypes.string.isRequired,
+  initialNotes: PropTypes.string,
+  setToast: PropTypes.func.isRequired
+};
+
 export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onTeamChange, onSearchChange, setToast }) => {
   // Local search (vendor) on top of provided rows
   const searched = filterByQuery(rows, search);
@@ -103,6 +218,7 @@ export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onT
                   <th>Vendor</th>
                   <th>Amount TTC</th>
                   <th>Currency</th>
+                  <th>Notes</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -122,6 +238,13 @@ export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onT
                     </td>
                     <td>{fmtDisplayNoCents(r.amountCents)}</td>
                     <td>{r.currency || 'EUR'}</td>
+                    <td>
+                      <NotesEditor 
+                        lineId={r._id} 
+                        initialNotes={r.notes || ''} 
+                        setToast={setToast}
+                      />
+                    </td>
                     <td>
                       <button
                         className="btn danger"
