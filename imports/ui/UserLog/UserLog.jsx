@@ -307,7 +307,11 @@ export default function UserLog() {
 
   // Projects for task assignment
   const projectsReady = useTracker(() => Meteor.subscribe('projects').ready(), []);
-  const projects = useTracker(() => (projectsReady ? ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetch() : []), [projectsReady]);
+  const projects = useTracker(() => {
+    if (!projectsReady) return [];
+    const fetched = ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetch();
+    return fetched.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [projectsReady]);
   // Note: we only need project names to populate the select options below; no separate map needed.
   const handleLoadMore = useCallback(() => { setVisibleDays(d => (Number(d) || 1) + 1); }, []);
 

@@ -331,7 +331,7 @@ const CreateNotePane = ({ defaultProjectId = '', isOpen = false }) => {
   const contentRef = useRef(null);
   const userTouchedRef = useRef(false);
   const sub = useSubscribe('projects');
-  const projects = useFind(() => ProjectsCollection.find({}, { sort: { updatedAt: -1, name: 1 }, fields: { name: 1 } }));
+  const projects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1 } })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   useEffect(() => {
     if (inputRef.current && typeof inputRef.current.focus === 'function') inputRef.current.focus();
