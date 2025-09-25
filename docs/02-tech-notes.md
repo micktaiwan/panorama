@@ -142,6 +142,12 @@ volumes:
 - Exports should preserve stable ids and payload fields (`projectId`, `kind`).
 - On import, prefer re-computing embeddings for correctness; alternatively restore vectors only if dimensions match the configured collection size.
 
+### Calendar data exclusion from backups
+
+- The `calendarEvents` collection is **excluded from database exports** because it contains synchronized calendar data from external ICS sources (Google Calendar, etc.).
+- Calendar events can be fully restored by re-synchronizing from the configured ICS URL via the `calendar.syncFromIcs` method.
+- This prevents unnecessary backup bloat and ensures calendar data stays current with external sources.
+
 ### Async Collection API
 
 - Use async collection methods on the server:
@@ -260,7 +266,7 @@ export const Example = ({ sessionId }) => {
   // Stable order: always call hooks in the same sequence
   const session = useSingle(() => NoteSessionsCollection.find({ _id: sessionId }));
   const project = useSingle(() =>
-    ProjectsCollection.find(session && session.projectId ? { _id: session.projectId } : { _id: '__none__' })
+    ProjectsCollection.find(session?.projectId ? { _id: session.projectId } : { _id: '__none__' })
   );
   return <div>{project ? project.name : 'No project linked'}</div>;
 };
@@ -280,6 +286,11 @@ export const Example = ({ sessionId }) => {
 - Always use optional chaining for safe property access.
   - Example: prefer `e?.message` over `e && e.message`.
   - Similarly for deep access: use `obj?.foo?.bar` instead of manual chaining tests.
+  - Common patterns to avoid:
+    - `if (obj && obj.property)` → `if (obj?.property)`
+    - `obj && obj.method && obj.method()` → `obj?.method?.()`
+    - `data && data.user && data.user.name` → `data?.user?.name`
+  - Use with nullish coalescing: `obj?.property ?? 'default'` instead of `obj && obj.property || 'default'`
 
 ## Notifications and confirmations (UI)
 

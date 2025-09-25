@@ -167,7 +167,8 @@ export const BudgetPage = () => {
       invoiceNumber: r.invoiceNumber,
       analyticsCategory: r.analyticsCategory,
       analyticsWeight: r.analyticsWeight,
-      sourceRef: r.sourceRef
+      sourceRef: r.sourceRef,
+      notes: r.notes
     }));
     Meteor.call('budget.importLines', { importFile: (fileName && !String(fileName).endsWith('files')) ? fileName : 'multi-upload', lines }, (err, res) => {
       setImporting(false);
@@ -179,7 +180,8 @@ export const BudgetPage = () => {
       const extras = [];
       if (res?.skipped) extras.push(`skipped ${res.skipped}`);
       if (typeof res?.unknownDates === 'number') extras.push(`unknownDates ${res.unknownDates}`);
-      setMessage(`Imported ${res?.imported || 0} lines${extras.length ? `, ${extras.join(', ')}` : ''}`);
+      const message = `Imported ${res?.imported || 0} lines${extras.length ? `, ${extras.join(', ')}` : ''}`;
+      setMessage(message);
       
       setRows([]);
       setFileName('');

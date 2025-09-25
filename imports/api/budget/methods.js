@@ -140,6 +140,7 @@ Meteor.methods({
         analyticsCategory: raw.analyticsCategory ? String(raw.analyticsCategory) : undefined,
         analyticsWeight: Number.isFinite(Number(raw.analyticsWeight)) ? Number(raw.analyticsWeight) : undefined,
         sourceRef: raw.sourceRef ? String(raw.sourceRef) : undefined,
+        notes: raw.notes ? String(raw.notes).trim() : undefined,
         importBatch,
         importFile: payload.importFile,
         importedAt: now,
@@ -543,6 +544,19 @@ Meteor.methods({
   async 'budget.fetchVendorsIgnore'() {
     const rows = await VendorsIgnoreCollection.find({}).fetchAsync();
     return { items: rows };
+  },
+  async 'budget.setNotes'(lineId, notes) {
+    check(lineId, String);
+    check(notes, String);
+    const now = new Date();
+    const trimmedNotes = notes.trim();
+    await BudgetLinesCollection.updateAsync({ _id: lineId }, { 
+      $set: { 
+        notes: trimmedNotes || undefined, 
+        updatedAt: now 
+      } 
+    });
+    return { ok: 1 };
   }
 });
 

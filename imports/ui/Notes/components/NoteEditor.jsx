@@ -1,10 +1,109 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { Meteor } from 'meteor/meteor';
+import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
+import { formatDateTime } from '/imports/ui/utils/date.js';
+import { notify } from '/imports/ui/utils/notify.js';
 import './NoteEditor.css';
 
-export const NoteEditor = ({ activeTabId, noteContents, onContentChange, onSave, onSaveAll, onClose, isSaving }) => {
+// Constants
+const FOCUS_TIMEOUT_MS = 50;
+
+export const NoteEditor = ({ 
+  activeTabId, 
+  noteContents, 
+  onContentChange, 
+  onSave, 
+  onSaveAll, 
+  onClose, 
+  isSaving,
+  activeNote,
+  projectOptions = [],
+  onMoveProject,
+  onDuplicate,
+  shouldFocus = false,
+  dirtySet = new Set()
+}) => {
   const textAreaRef = useRef(null);
   const pendingSelectionRef = useRef(null);
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+
+  const handleCleanNote = () => {
+    if (!activeTabId || isCleaning) return;
+    
+    const key = `note:original:${activeTabId}`;
+    const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
+    const hadBackup = !!has;
+    
+    if (!hadBackup && typeof window !== 'undefined') {
+      sessionStorage.setItem(key, noteContents[activeTabId] || '');
+    }
+    
+    setIsCleaning(true);
+    Meteor.call('ai.cleanNote', activeTabId, (err) => {
+      setIsCleaning(false);
+      if (err) {
+        console.error('ai.cleanNote failed', err);
+        if (!hadBackup && typeof window !== 'undefined') {
+          sessionStorage.removeItem(key);
+        }
+        notify('Error cleaning note', 'error');
+        return;
+      }
+      notify('Note cleaned successfully', 'success');
+    });
+  };
+
+  const handleSummarizeNote = () => {
+    if (!activeTabId || isSummarizing) return;
+    
+    const key = `note:original:${activeTabId}`;
+    const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
+    const hadBackup = !!has;
+    
+    if (!hadBackup && typeof window !== 'undefined') {
+      sessionStorage.setItem(key, noteContents[activeTabId] || '');
+    }
+    
+    setIsSummarizing(true);
+    Meteor.call('ai.summarizeNote', activeTabId, (err) => {
+      setIsSummarizing(false);
+      if (err) {
+        console.error('ai.summarizeNote failed', err);
+        if (!hadBackup && typeof window !== 'undefined') {
+          sessionStorage.removeItem(key);
+        }
+        notify('Error summarizing note', 'error');
+        return;
+      }
+      notify('Note summarized successfully', 'success');
+    });
+  };
+
+  const handleDuplicateNote = () => {
+    if (!activeTabId || !onDuplicate) return;
+    onDuplicate(activeTabId);
+  };
+
+  const handleMoveProject = (projectId) => {
+    if (!activeTabId || !onMoveProject) return;
+    onMoveProject(activeTabId, projectId);
+  };
+
+  // Focus the textarea when shouldFocus is true
+  useEffect(() => {
+    if (shouldFocus && activeTabId) {
+      // Use a small delay to ensure the textarea is fully mounted and available
+      const timer = setTimeout(() => {
+        if (textAreaRef.current) {
+          textAreaRef.current.focus();
+        }
+      }, FOCUS_TIMEOUT_MS);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [shouldFocus, activeTabId]);
 
   useEffect(() => {
     if (!activeTabId) return;
@@ -50,6 +149,11 @@ export const NoteEditor = ({ activeTabId, noteContents, onContentChange, onSave,
               onSave(activeTabId);
             } else if (hasMod && key === 'w') {
               e.preventDefault();
+              // Check if note has unsaved changes before closing
+              if (dirtySet.has(activeTabId)) {
+                const shouldClose = window.confirm('This note has unsaved changes. Are you sure you want to close it?');
+                if (!shouldClose) return;
+              }
               if (typeof onClose === 'function') onClose(activeTabId);
             } else if (key === 'tab') {
               e.preventDefault();
@@ -117,20 +221,77 @@ export const NoteEditor = ({ activeTabId, noteContents, onContentChange, onSave,
       </div>
       
       <div className="notes-actions">
-        <button
-          className="save-button"
-          onClick={() => onSave(activeTabId)}
-          disabled={isSaving}
-        >
-          {isSaving ? 'Saving...' : 'Save'}
-        </button>
-        <button
-          className="save-all-button"
-          onClick={onSaveAll}
-          disabled={isSaving}
-        >
-          {isSaving ? 'Saving...' : 'Save All'}
-        </button>
+        <div className="notes-actions-left">
+          <button
+            className="save-button"
+            onClick={() => onSave(activeTabId)}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            className="save-all-button"
+            onClick={onSaveAll}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save All'}
+          </button>
+        </div>
+        
+        <div className="notes-actions-center">
+          {activeNote && (
+            <div className="note-metadata">
+              <span className="metadata-item">
+                Created: {formatDateTime(activeNote.createdAt)}
+              </span>
+              {activeNote.updatedAt && activeNote.updatedAt !== activeNote.createdAt && (
+                <span className="metadata-item">
+                  Updated: {formatDateTime(activeNote.updatedAt)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div className="notes-actions-right">
+          {projectOptions.length > 0 && (
+            <InlineEditable
+              as="select"
+              value={activeNote?.projectId || ''}
+              options={[{ value: '', label: '(no project)' }, ...projectOptions]}
+              className="project-select"
+              inputClassName="project-select"
+              onSubmit={(projectId) => handleMoveProject(projectId || null)}
+            />
+          )}
+          
+          <button
+            className="action-button clean-button"
+            onClick={handleCleanNote}
+            disabled={isCleaning || !activeTabId}
+            title="Clean note with AI"
+          >
+            {isCleaning ? 'Cleaning...' : 'Clean'}
+          </button>
+          
+          <button
+            className="action-button summarize-button"
+            onClick={handleSummarizeNote}
+            disabled={isSummarizing || !activeTabId}
+            title="Summarize note with AI"
+          >
+            {isSummarizing ? 'Summarizing...' : 'Summarize'}
+          </button>
+          
+          <button
+            className="action-button duplicate-button"
+            onClick={handleDuplicateNote}
+            disabled={!activeTabId}
+            title="Duplicate note"
+          >
+            Duplicate
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -144,4 +305,20 @@ NoteEditor.propTypes = {
   onSaveAll: PropTypes.func.isRequired,
   onClose: PropTypes.func,
   isSaving: PropTypes.bool.isRequired,
+  activeNote: PropTypes.shape({
+    _id: PropTypes.string,
+    title: PropTypes.string,
+    content: PropTypes.string,
+    projectId: PropTypes.string,
+    createdAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
+    updatedAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
+  }),
+  projectOptions: PropTypes.arrayOf(PropTypes.shape({
+    value: PropTypes.string,
+    label: PropTypes.string,
+  })),
+  onMoveProject: PropTypes.func,
+  onDuplicate: PropTypes.func,
+  shouldFocus: PropTypes.bool,
+  dirtySet: PropTypes.instanceOf(Set),
 };
