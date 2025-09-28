@@ -37,6 +37,7 @@ import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 import { CalendarPage } from '/imports/ui/Calendar/CalendarPage.jsx';
 import { PanoramaPage } from '/imports/ui/Panorama/PanoramaPage.jsx';
 import { NotesPage } from '/imports/ui/Notes/NotesPage.jsx';
+import { WebPage } from '/imports/ui/Web/WebPage.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -102,6 +103,7 @@ function App() {
     { key: 'l', label: 'Links', route: { name: 'links' } },
     { key: 'a', label: 'Alarms', route: { name: 'alarms' } },
     { key: 's', label: 'Situation Analyzer', route: { name: 'situationAnalyzer' } },
+    { key: 'w', label: 'Web Search', route: { name: 'web' } },
     { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
     { key: 't', label: 'Notes', route: { name: 'notes' } },
     { key: 'n', label: 'New Note Session', action: 'newSession' },
@@ -702,6 +704,11 @@ function App() {
       {route?.name === 'preferences' && (
         <div className="panel">
           <Preferences />
+        </div>
+      )}
+      {route?.name === 'web' && (
+        <div className="panel">
+          <WebPage />
         </div>
       )}
       {route?.name === 'importTasks' && (

@@ -65,7 +65,7 @@ The detailed list of collections and fields is maintained in `03-schemas.md`.
   - `imports/api/search/vectorStore.js`
     - `toPointId(kind, id)` → stable point id
     - `makePreview(text, max)` → short snippet used in UI
-    - `embedText(text)` → embedding (DEBUG can mock); query‑time LRU cache is implemented in search method
+    - `embedText(text)` → embedding (DEBUG can mock); query-time LRU cache is implemented in search method
     - `upsertDoc({ kind, id, text, projectId?, sessionId?, extraPayload? })` → upsert in Qdrant
     - `deleteDoc(kind, id)` / `deleteByProjectId(projectId)` / `deleteBySessionId(sessionId)`
 - Update rules (apply uniformly to all collections):
@@ -76,6 +76,7 @@ The detailed list of collections and fields is maintained in `03-schemas.md`.
 ### Qdrant installation (step-by-step)
 
 1. Install Docker (or use native binaries from Qdrant releases).
+
 2. Start Qdrant locally:
 
    ```bash
@@ -86,12 +87,12 @@ The detailed list of collections and fields is maintained in `03-schemas.md`.
 
    ```bash
    curl http://localhost:6333/healthz
-   # -> { "status": "ok" }
+   # Expected response: { "status": "ok" }
    ```
 
 4. Configure the app settings:
 
-   - In `settings.json`, add:
+   - Add to `settings.json`:
 
      ```json
      {
@@ -210,8 +211,9 @@ volumes:
 
 - Do not allow scroll chaining. Scrollable areas must not propagate scroll to the page when they reach their edge.
 - Use the global utility class `.scrollArea` for all scrollable containers. This class enforces `overscroll-behavior: contain` and consistent thin dark scrollbars.
-- Do not re‑implement per‑component scrollbar styles; rely on the shared utility.
-- Example:
+- Do not re-implement per-component scrollbar styles; rely on the shared utility.
+
+Example usage:
 
 ```jsx
 <div className="scrollArea" style={{ maxHeight: 360 }}>
@@ -237,12 +239,12 @@ The utility is defined in `client/main.css` and currently includes:
 
 ## Shortcuts (and Help page)
 
-- Enter — validate inline edits
-- Shift+Enter — validate a task title AND create/focus a new task
-- InlineEditable: unified submitOnEnter behavior for input/textarea/select; Escape cancels.
-- Click on deadline — open datepicker, Esc cancels, Enter validates
+- **Enter** — validate inline edits
+- **Shift+Enter** — validate a task title AND create/focus a new task
+- **InlineEditable**: unified submitOnEnter behavior for input/textarea/select; Escape cancels
+- **Click on deadline** — open datepicker, Esc cancels, Enter validates
 
-The Help page (`#/help`) must be updated when a new shortcut is added.
+**Important**: The Help page (`#/help`) must be updated when a new shortcut is added.
 
 ## React/Meteor Data Hooks
 
@@ -253,8 +255,8 @@ The Help page (`#/help`) must be updated when a new shortcut is added.
   - Never create hooks inside render-time branches (e.g., `if (...) { useState(...) }`). Prefer guards in effects or derive from existing state.
 - For Meteor reactive finds that return one document, use the helper hook:
   - `useSingle(getCursor)` → wraps `useFind` and returns the first document.
-  - Example: `const project = useSingle(() => ProjectsCollection.find({_id}))`.
-- When a selector may be absent, pass a neutral selector (e.g., `{ _id: '__none__' }`) to keep hook order consistent
+  - Example: `const project = useSingle(() => ProjectsCollection.find({ _id: projectId }))`.
+- When a selector may be absent, pass a neutral selector (e.g., `{ _id: '__none__' }`) to maintain consistent hook call order.
 - Example usage in a component:
 
 ```javascript
@@ -268,9 +270,21 @@ export const Example = ({ sessionId }) => {
   const project = useSingle(() =>
     ProjectsCollection.find(session?.projectId ? { _id: session.projectId } : { _id: '__none__' })
   );
-  return <div>{project ? project.name : 'No project linked'}</div>;
+  return <div>{project?.name || 'No project linked'}</div>;
 };
 ```
+
+## Security and LLM integration policy
+
+- **Local-first app**: This is a single-user, local-first application. Security concerns are minimal compared to multi-user web applications.
+- **LLM responses**: We do not validate or sanitize LLM responses (Perplexity AI, OpenAI, etc.) for the following reasons:
+  - LLMs are designed to return safe, formatted content
+  - Over-validation can break legitimate formatting and functionality
+  - The app runs locally with trusted data sources
+  - Users have full control over their environment
+- **API keys**: Store API keys in app preferences (MongoDB) or environment variables. No server-side validation of API key format.
+- **External content**: Trust external APIs (Perplexity, OpenAI) to return safe content. If an API returns malicious content, it's the API provider's responsibility.
+- **User input**: Basic validation for user queries (length limits, empty checks) but no content sanitization.
 
 ## Error handling policy
 
@@ -283,14 +297,14 @@ export const Example = ({ sessionId }) => {
 
 ### Optional Chaining (mandatory)
 
-- Always use optional chaining for safe property access.
-  - Example: prefer `e?.message` over `e && e.message`.
-  - Similarly for deep access: use `obj?.foo?.bar` instead of manual chaining tests.
-  - Common patterns to avoid:
+- Always use optional chaining (`?.`) for safe property access to prevent runtime errors.
+  - Basic usage: prefer `e?.message` over `e && e.message`.
+  - Deep access: use `obj?.foo?.bar` instead of manual null checks.
+  - Common patterns to replace:
     - `if (obj && obj.property)` → `if (obj?.property)`
     - `obj && obj.method && obj.method()` → `obj?.method?.()`
     - `data && data.user && data.user.name` → `data?.user?.name`
-  - Use with nullish coalescing: `obj?.property ?? 'default'` instead of `obj && obj.property || 'default'`
+  - Combine with nullish coalescing: `obj?.property ?? 'default'` instead of `obj && obj.property || 'default'`
 
 ## Notifications and confirmations (UI)
 

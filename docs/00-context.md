@@ -24,4 +24,4 @@ Code is the documentation. This page is only a quick orientation.
 
 ## User
 
-- Mickael, CTO
+- Mickael, lemlist's CTO

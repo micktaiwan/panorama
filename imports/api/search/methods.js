@@ -203,6 +203,110 @@ const runIndexJob = async (jobId) => {
 };
 
 Meteor.methods({
+  async 'search.instant'(query, opts = {}) {
+    check(query, String);
+    const kinds = Array.isArray(opts?.kinds) && opts.kinds.length > 0
+      ? opts.kinds.map(String)
+      : ['project', 'task', 'note'];
+    const limitPerKind = Math.max(1, Math.min(20, Number(opts?.limitPerKind) || 5));
+    const q = String(query || '').trim();
+    if (!q) return [];
+    // Build a safe, case-insensitive regex for substring matching
+    const escapeRegExp = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = escapeRegExp(q);
+    const re = new RegExp(pattern, 'i');
+
+    const results = [];
+
+    const want = new Set(kinds);
+    // Projects
+    if (want.has('project')) {
+      const { ProjectsCollection } = await import('/imports/api/projects/collections');
+      const proj = await ProjectsCollection.find(
+        { $or: [{ name: re }, { description: re }] },
+        { fields: { name: 1, description: 1 }, limit: limitPerKind }
+      ).fetchAsync();
+      for (const p of proj) {
+        results.push({
+          score: '⚡',
+          kind: 'project',
+          projectId: p._id,
+          projectName: p.name || null,
+          id: `project:${p._id}`,
+          text: makePreview(`${p.name || ''} ${p.description || ''}`),
+        });
+      }
+    }
+
+    // Tasks
+    let taskProjectIds = new Set();
+    let taskRows = [];
+    if (want.has('task')) {
+      const { TasksCollection } = await import('/imports/api/tasks/collections');
+      taskRows = await TasksCollection.find(
+        { title: re },
+        { fields: { title: 1, projectId: 1, status: 1 }, limit: limitPerKind }
+      ).fetchAsync();
+      taskRows.forEach(t => { if (t.projectId) taskProjectIds.add(String(t.projectId)); });
+    }
+
+    // Notes
+    let noteProjectIds = new Set();
+    let noteRows = [];
+    if (want.has('note')) {
+      const { NotesCollection } = await import('/imports/api/notes/collections');
+      noteRows = await NotesCollection.find(
+        { $or: [{ title: re }, { content: re }] },
+        { fields: { title: 1, content: 1, projectId: 1 }, limit: limitPerKind }
+      ).fetchAsync();
+      noteRows.forEach(n => { if (n.projectId) noteProjectIds.add(String(n.projectId)); });
+    }
+
+    // Resolve project names for tasks/notes in batch
+    const allProjIds = new Set([...taskProjectIds, ...noteProjectIds]);
+    const projectNameById = new Map();
+    if (allProjIds.size > 0) {
+      const { ProjectsCollection } = await import('/imports/api/projects/collections');
+      const list = await ProjectsCollection.find(
+        { _id: { $in: Array.from(allProjIds) } },
+        { fields: { name: 1 } }
+      ).fetchAsync();
+      for (const p of list) projectNameById.set(String(p._id), p.name || null);
+    }
+
+    // Format tasks
+    if (taskRows.length > 0) {
+      for (const t of taskRows) {
+        const pid = t.projectId ? String(t.projectId) : null;
+        results.push({
+          score: '⚡',
+          kind: 'task',
+          projectId: pid,
+          projectName: pid ? (projectNameById.get(pid) || null) : null,
+          id: `task:${t._id}`,
+          text: String(t.title || '').trim() || '(task)',
+          status: t?.status || null,
+        });
+      }
+    }
+
+    // Format notes
+    if (noteRows.length > 0) {
+      for (const n of noteRows) {
+        const pid = n.projectId ? String(n.projectId) : null;
+        results.push({
+          score: '⚡',
+          kind: 'note',
+          projectId: pid,
+          projectName: pid ? (projectNameById.get(pid) || null) : null,
+          id: `note:${n._id}`,
+          text: makePreview(`${n.title || ''} ${n.content || ''}`),
+        });
+      }
+    }
+
+    return results;
+  },
   async 'qdrant.health'() {
     const url = getQdrantUrl();
     if (!url) {

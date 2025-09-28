@@ -130,7 +130,6 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
   if (list.length === 0) return null;
   return (
     <div className={`searchResults${stale ? ' stale' : ''}`}>
-      <div className="searchResultsHeader"><h3>Search results</h3></div>
       <ul className="taskList">
           {list.map((r, idx) => {
             const isDone = r.kind === 'task' && (r.status === 'done');

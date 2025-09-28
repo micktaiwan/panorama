@@ -15,6 +15,21 @@
   overflow: hidden; /* Prevent overflow */
 }
 
+/* Split preview layout */
+.note-editor.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.note-preview {
+  min-width: 0;
+  overflow: auto;
+  padding: 20px;
+  border-left: 1px solid var(--border, #404040);
+  background: #20242e; /* slightly lighter than editor to separate visually */
+}
+
 .note-textarea {
   flex: 1;
   border: none;
@@ -24,7 +39,7 @@
   line-height: 1.6;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   resize: none;
-  background: #1a1a1a;
+  background: #171a21; /* darker background for editor */
   color: #e5e7eb;
   min-height: 0; /* Allow textarea to shrink */
   overflow-y: auto; /* Enable scrolling if content is too long */
