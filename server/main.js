@@ -1,52 +1,44 @@
 import { Meteor } from 'meteor/meteor';
+import { WebApp } from 'meteor/webapp';
+
+// Core Meteor modules
+// (already imported above)
+
+// Projects & Tasks
 import '/imports/api/projects/collections';
 import '/imports/api/projects/publications';
 import '/imports/api/projects/methods';
+import '/imports/api/projects/aiMethods';
 import '/imports/api/tasks/collections';
 import '/imports/api/tasks/publications';
 import '/imports/api/tasks/methods';
+import '/imports/api/tasks/aiMethods';
+
+// Notes & Documentation
 import '/imports/api/notes/collections';
 import '/imports/api/notes/publications';
 import '/imports/api/notes/methods';
+import '/imports/api/notes/aiMethods';
 import '/imports/api/noteSessions/collections';
 import '/imports/api/noteSessions/publications';
 import '/imports/api/noteSessions/methods';
 import '/imports/api/noteLines/collections';
 import '/imports/api/noteLines/publications';
 import '/imports/api/noteLines/methods';
-import '/imports/api/notes/aiMethods';
-import '/imports/api/userLogs/aiMethods';
-import '/imports/api/sessions/aiMethods';
-import '/imports/api/projects/aiMethods';
-import '/imports/api/tasks/aiMethods';
-import '/imports/api/export/methods';
-import '/imports/api/alarms/collections';
-import '/imports/api/alarms/publications';
-import '/imports/api/alarms/methods';
-import '/imports/api/links/collections';
-import '/imports/api/links/publications';
-import '/imports/api/links/methods';
-import '/imports/api/appPreferences/collections';
-import '/imports/api/appPreferences/publications';
-import '/imports/api/appPreferences/methods';
-import '/imports/api/files/collections';
-import '/imports/api/files/publications';
-import '/imports/api/files/methods';
-import '/imports/api/export/server';
-import '/imports/api/search/qdrantInit';
-import '/imports/api/search/methods';
-import '/imports/api/budget/collections';
-import '/imports/api/budget/publications';
-import '/imports/api/budget/methods';
-import '/imports/api/reporting/methods';
-import '/imports/api/reporting/ai';
-import '/imports/api/panorama/methods';
+
+// User Management & Teams
 import '/imports/api/teams/collections';
 import '/imports/api/teams/publications';
 import '/imports/api/teams/methods';
 import '/imports/api/people/collections';
 import '/imports/api/people/publications';
 import '/imports/api/people/methods';
+import '/imports/api/userLogs/collections';
+import '/imports/api/userLogs/publications';
+import '/imports/api/userLogs/methods';
+import '/imports/api/userLogs/aiMethods';
+
+// Situations & Analysis
 import '/imports/api/situations/collections';
 import '/imports/api/situations/publications';
 import '/imports/api/situations/methods';
@@ -63,22 +55,57 @@ import '/imports/api/situationQuestions/methods';
 import '/imports/api/situationSummaries/collections';
 import '/imports/api/situationSummaries/publications';
 import '/imports/api/situationSummaries/methods';
-import '/imports/api/errors/collections';
-import '/imports/api/errors/publications';
-import '/imports/api/errors/methods';
-import '/imports/api/errors/serverConsoleOverride';
+
+// Communication & Chat
 import '/imports/api/chat/methods';
 import '/imports/api/chats/collections';
 import '/imports/api/chats/publications';
 import '/imports/api/chats/methods';
-import '/imports/api/userLogs/collections';
-import '/imports/api/userLogs/publications';
-import '/imports/api/userLogs/methods';
-import '/imports/api/cron/jobs';
+
+// Budget & Financial
+import '/imports/api/budget/collections';
+import '/imports/api/budget/publications';
+import '/imports/api/budget/methods';
+
+// Calendar & Scheduling
 import '/imports/api/calendar/collections';
 import '/imports/api/calendar/publications';
 import '/imports/api/calendar/methods';
-import { WebApp } from 'meteor/webapp';
+import '/imports/api/alarms/collections';
+import '/imports/api/alarms/publications';
+import '/imports/api/alarms/methods';
+
+// Files & Links
+import '/imports/api/files/collections';
+import '/imports/api/files/publications';
+import '/imports/api/files/methods';
+import '/imports/api/links/collections';
+import '/imports/api/links/publications';
+import '/imports/api/links/methods';
+
+// Search & AI
+import '/imports/api/search/qdrantInit';
+import '/imports/api/search/methods';
+import '/imports/api/sessions/aiMethods';
+
+// Reporting & Export
+import '/imports/api/reporting/methods';
+import '/imports/api/reporting/ai';
+import '/imports/api/export/methods';
+import '/imports/api/export/server';
+
+// System & Utilities
+import '/imports/api/appPreferences/collections';
+import '/imports/api/appPreferences/publications';
+import '/imports/api/appPreferences/methods';
+import '/imports/api/panorama/methods';
+import '/imports/api/cron/jobs';
+
+// Error Handling & Logging
+import '/imports/api/errors/collections';
+import '/imports/api/errors/publications';
+import '/imports/api/errors/methods';
+import '/imports/api/errors/serverConsoleOverride';
 
 Meteor.startup(() => {
   // Place server-side initialization here as your app grows.

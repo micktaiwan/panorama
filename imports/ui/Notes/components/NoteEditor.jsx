@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { formatDateTime } from '/imports/ui/utils/date.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import './NoteEditor.css';
+import { marked } from 'marked';
 
 // Constants
 const FOCUS_TIMEOUT_MS = 50;
@@ -28,6 +29,19 @@ export const NoteEditor = ({
   const pendingSelectionRef = useRef(null);
   const [isCleaning, setIsCleaning] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [splitPreview, setSplitPreview] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem('notes.splitPreview') === 'true';
+    }
+    return false;
+  });
+
+  const renderedHtml = useMemo(() => {
+    const map = (noteContents && typeof noteContents === 'object') ? noteContents : {};
+    const key = String(activeTabId || '');
+    const md = Object.hasOwn(map, key) ? String(map[key] ?? '') : '';
+    return marked.parse(md);
+  }, [activeTabId, noteContents]);
 
   const handleCleanNote = () => {
     if (!activeTabId || isCleaning) return;
@@ -121,7 +135,7 @@ export const NoteEditor = ({
   if (!activeTabId) {
     return (
       <div className="note-editor-container">
-        <div className="note-editor">
+        <div className={`note-editor${splitPreview ? ' split' : ''}`}>
           <div style={{ padding: '20px', color: '#9ca3af' }}>
             No note selected
           </div>
@@ -136,7 +150,7 @@ export const NoteEditor = ({
 
   return (
     <div className="note-editor-container">
-      <div className="note-editor">
+      <div className={`note-editor${splitPreview ? ' split' : ''}`}>
         <textarea
           ref={textAreaRef}
           value={noteContents[activeTabId] || ''}
@@ -218,6 +232,9 @@ export const NoteEditor = ({
           placeholder="Start writing your note..."
           className="note-textarea"
         />
+        {splitPreview && (
+          <div className="note-preview aiMarkdown webMarkdown" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+        )}
       </div>
       
       <div className="notes-actions">
@@ -235,6 +252,19 @@ export const NoteEditor = ({
             disabled={isSaving}
           >
             {isSaving ? 'Saving...' : 'Save All'}
+          </button>
+          <button
+            className="action-button"
+            onClick={() => {
+              const next = !splitPreview;
+              setSplitPreview(next);
+              if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('notes.splitPreview', String(next));
+              }
+            }}
+            title="Toggle Markdown preview"
+          >
+            Split View
           </button>
         </div>
         

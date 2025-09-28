@@ -1,0 +1,138 @@
+.webPage {
+  padding: 24px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box; /* include padding in width to avoid horizontal overflow */
+}
+
+.webPage h2 {
+  color: var(--text);
+  margin-bottom: 24px;
+  font-size: 24px;
+}
+
+.apiKeyWarning {
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.apiKeyWarning p {
+  margin: 0;
+  color: var(--text);
+}
+
+.apiKeyWarning a {
+  color: var(--danger);
+  text-decoration: underline;
+}
+
+.webPage .webSearchSection { margin-bottom: 24px; }
+
+.webPage .webSearchInputContainer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: end; /* button natural height, textarea fills */
+  width: 100%;
+  min-width: 0;
+  /* Make this the single card containing both controls */
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-sizing: border-box; /* ensure padding/border don't push container past 100% */
+}
+
+.webPage .searchInput {
+  resize: vertical;
+  min-height: 96px;
+  max-height: 280px;
+  min-width: 0; /* allow grid/flex to shrink/expand fully */
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+/* Use global focus styles from client/main.css */
+
+.resultsSection {
+  margin-top: 24px;
+}
+
+.resultsSection h3 {
+  color: var(--text);
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.resultContent {
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+/* Web-specific markdown refinements */
+.webMarkdown {
+  line-height: 1.6;
+}
+.webMarkdown p { margin: 0 0 10px; }
+.webMarkdown ul, .webMarkdown ol { margin: 8px 0 14px 20px; }
+.webMarkdown li { margin: 2px 0; }
+.webMarkdown strong { font-weight: 600; }
+.webMarkdown a { color: #93c5fd; text-decoration: underline; }
+.webMarkdown blockquote { margin: 10px 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
+.webMarkdown h1, .webMarkdown h2, .webMarkdown h3 { margin: 10px 0 8px; }
+.webMarkdown h1 { font-size: 1.2rem; }
+.webMarkdown h2 { font-size: 1.1rem; }
+.webMarkdown h3 { font-size: 1.05rem; }
+.webMarkdown code, .webMarkdown pre { background: #0f172a; }
+
+.resultMeta {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.resultActions { margin: 8px 0 0; }
+.resultActions .btn { margin-top: 6px; }
+
+.resultCitations { margin-top: 12px; }
+.resultCitations h4 { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+.resultCitations ol { margin: 0; padding-left: 18px; }
+.resultCitations li { margin: 2px 0; }
+.resultCitations .srcTitle { display: block; color: var(--text); }
+.resultCitations .srcLink { display: block; color: #93c5fd; word-break: break-all; }
+
+.errorSection {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--panel);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+}
+
+.errorSection p {
+  margin: 0;
+  color: var(--danger);
+}
+
+/* Responsive: stack input and button on small screens */
+@media (max-width: 720px) {
+  .webPage .webSearchInputContainer {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .webPage .searchInput {
+    min-height: 120px;
+  }
+  .webPage h2 { font-size: 22px; }
+}

@@ -15,6 +15,7 @@ export const Preferences = () => {
   const [filesDir, setFilesDir] = React.useState('');
   const [devUrlMode, setDevUrlMode] = React.useState(false);
   const [openaiApiKey, setOpenaiApiKey] = React.useState('');
+  const [perplexityApiKey, setPerplexityApiKey] = React.useState('');
   const [pennyBaseUrl, setPennyBaseUrl] = React.useState('');
   const [pennyToken, setPennyToken] = React.useState('');
   const [qdrantUrl, setQdrantUrl] = React.useState('');
@@ -47,7 +48,7 @@ export const Preferences = () => {
         console.warn('[prefs] mobileTasksRoute.getStatus failed', err);
         return;
       }
-      const sv = !!(res && res.enabled);
+      const sv = !!(res?.enabled);
       setMobileTasksEnabled(sv);
       try { window.localStorage.setItem('panorama.mobileTasksEnabled', String(sv)); } catch (e2) { console.warn('[prefs] localStorage write failed (sync from server)', e2); }
     });
@@ -103,6 +104,7 @@ export const Preferences = () => {
     setFilesDir(pref.filesDir || '');
     setDevUrlMode(!!pref.devUrlMode);
     setOpenaiApiKey(pref.openaiApiKey || '');
+    setPerplexityApiKey(pref.perplexityApiKey || '');
     setPennyBaseUrl(pref.pennylaneBaseUrl || '');
     setPennyToken(pref.pennylaneToken || '');
     setQdrantUrl(pref.qdrantUrl || '');
@@ -197,6 +199,20 @@ export const Preferences = () => {
           </div>
         </div>
         <div className="prefsRow">
+          <div className="prefsLabel">Perplexity API Key</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={perplexityApiKey}
+              placeholder="(not set)"
+              fullWidth
+              onSubmit={(next) => {
+                setPerplexityApiKey(next);
+                Meteor.call('appPreferences.update', { perplexityApiKey: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
           <div className="prefsLabel">Google Calendar</div>
           <div className="prefsValue">
             <div>
@@ -214,7 +230,7 @@ export const Preferences = () => {
                 className="btn"
                 onClick={() => {
                   const url = String(calendarIcsUrl || '').trim();
-                  if (!url) { notify({ message: 'ICS URL manquant', kind: 'error' }); return; }
+                  if (!url) { notify({ message: 'ICS URL missing', kind: 'error' }); return; }
                   Meteor.call('calendar.setIcsUrl', url, (err) => {
                     if (err) { notify({ message: err?.reason || err?.message || 'Save failed', kind: 'error' }); return; }
                     notify({ message: 'ICS URL saved', kind: 'success' });

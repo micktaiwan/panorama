@@ -54,6 +54,8 @@ const SearchPane = ({ onClose }) => {
     return typeof localStorage !== 'undefined' ? (localStorage.getItem('global_search_q') || '') : '';
   });
   const [searchResults, setSearchResults] = useState([]);
+  const [instantResults, setInstantResults] = useState([]);
+  const [combinedResults, setCombinedResults] = useState([]);
   const [searchFiltered, setSearchFiltered] = useState([]);
   const [searchCached, setSearchCached] = useState(false);
   const [searchCacheSize, setSearchCacheSize] = useState(0);
@@ -94,16 +96,45 @@ const SearchPane = ({ onClose }) => {
     });
   };
 
+  // Debounced instant search via RPC
+  useEffect(() => {
+    const q = String(searchQ || '').trim();
+    if (!q) { setInstantResults([]); return undefined; }
+    const handle = setTimeout(() => {
+      Meteor.call('search.instant', q, { kinds: ['project','task','note'], limitPerKind: 5 }, (err, res) => {
+        if (err) { setInstantResults([]); return; }
+        const items = Array.isArray(res) ? res : [];
+        setInstantResults(items);
+      });
+    }, 120);
+    return () => clearTimeout(handle);
+  }, [searchQ]);
+
+  // Build combined results (instant first), dedupe by logical id
+  useEffect(() => {
+    const map = new Map();
+    for (const r of (instantResults || [])) {
+      const key = r && r.id ? String(r.id) : `${r?.kind}:${r?.text || ''}`;
+      if (!map.has(key)) map.set(key, r);
+    }
+    for (const r of (searchResults || [])) {
+      const key = r && r.id ? String(r.id) : `${r?.kind}:${r?.text || ''}`;
+      if (!map.has(key)) map.set(key, r);
+    }
+    setCombinedResults(Array.from(map.values()));
+  }, [JSON.stringify(instantResults), JSON.stringify(searchResults)]);
+
+  // Update counters and filtered list from combined results
   useEffect(() => {
     const counts = { project: 0, task: 0, note: 0, link: 0, file: 0, session: 0, alarm: 0, userlog: 0 };
-    for (const r of (searchResults || [])) {
+    for (const r of (combinedResults || [])) {
       const k = r?.kind;
       if (Object.hasOwn(counts, k)) counts[k] += 1;
     }
     setTypeCounts(counts);
 
     const hasInclude = Object.values(typeFilters).some(v => v === 1);
-    const filtered = (searchResults || []).filter(r => {
+    const filtered = (combinedResults || []).filter(r => {
       const k = r?.kind;
       const st = typeFilters[k];
       if (hasInclude) return st === 1;
@@ -111,7 +142,7 @@ const SearchPane = ({ onClose }) => {
     });
     setSearchFiltered(filtered);
     setSearchActiveIdx(idx => (idx >= 0 && idx < filtered.length ? idx : -1));
-  }, [JSON.stringify(searchResults), JSON.stringify(typeFilters)]);
+  }, [JSON.stringify(combinedResults), JSON.stringify(typeFilters)]);
 
   useEffect(() => {
     if (String(searchQ).trim() && searchResults.length === 0) {
@@ -180,16 +211,17 @@ const SearchPane = ({ onClose }) => {
         }}
         onSearch={(query) => { runSearch(query); }}
         onEscape={onClose}
-        resultsCount={searchResults.length}
+        resultsCount={combinedResults.length}
         cached={searchCached}
         loading={searchLoading}
         cacheSize={searchCacheSize}
+        placeholder="Search… (instant + semantic)"
         autoFocus
-        armSelectFirst={searchResults.length > 0 && !searchDirty}
+        armSelectFirst={combinedResults.length > 0 && !searchDirty}
         onSelectFirst={() => {
-          if (searchResults.length === 0) return;
-          const idx = (typeof searchActiveIdx === 'number' && searchActiveIdx >= 0 && searchActiveIdx < searchResults.length) ? searchActiveIdx : 0;
-          const selected = searchResults[idx];
+          if (combinedResults.length === 0) return;
+          const idx = (typeof searchActiveIdx === 'number' && searchActiveIdx >= 0 && searchActiveIdx < combinedResults.length) ? searchActiveIdx : 0;
+          const selected = combinedResults[idx];
           navigateForSearchResult(selected);
           onClose();
         }}
