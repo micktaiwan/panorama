@@ -1,5 +1,6 @@
 import { Meteor } from 'meteor/meteor';
 import { getQdrantUrl } from '/imports/api/_shared/config';
+import { COLLECTION, VECTOR_SIZE, DISTANCE } from './vectorStore';
 
 // Initialize Qdrant collection on server start (if configured)
 Meteor.startup(async () => {
@@ -9,10 +10,10 @@ Meteor.startup(async () => {
     return;
   }
 
-  // Optional settings overrides
-  const collectionName = (Meteor.settings.qdrantCollectionName || 'panorama');
-  const vectorSize = Number(Meteor.settings.qdrantVectorSize || 1536);
-  const distance = (Meteor.settings.qdrantDistance || 'Cosine');
+  // Use dynamic collection naming based on current AI config
+  const collectionName = COLLECTION();
+  const vectorSize = VECTOR_SIZE();
+  const distance = DISTANCE();
 
   try {
     const { QdrantClient } = await import('@qdrant/js-client-rest');
@@ -22,7 +23,7 @@ Meteor.startup(async () => {
     try {
       // Health endpoint is not in the client; do a lightweight fetch
       const resp = await fetch(`${url.replace(/\/$/, '')}/healthz`).catch(() => null);
-      if (!resp || !resp.ok) {
+      if (!resp?.ok) {
         console.error('[qdrant] Health check failed or non-OK response');
       }
     } catch (e) {
@@ -46,17 +47,12 @@ Meteor.startup(async () => {
       console.log(`[qdrant] Created collection '${collectionName}' (size=${vectorSize}, distance=${distance})`);
     } else {
       // Optionally validate vector size/distance (warn if mismatch)
-      try {
-        const info = await client.getCollection(collectionName);
-        const cfg = info?.config?.params?.vectors;
-        const size = cfg?.size || cfg?.config?.size;
-        const dist = cfg?.distance || cfg?.config?.distance;
-        if (Number(size) !== vectorSize || String(dist).toLowerCase() !== String(distance).toLowerCase()) {
-          console.error(`[qdrant] Collection '${collectionName}' exists but vector config differs (have size=${size}, distance=${dist}; expected size=${vectorSize}, distance=${distance})`);
-        }
-        // Removed success-level availability log
-      } catch (_e) {
-        // Ignore validation errors; collection exists
+      const info = await client.getCollection(collectionName);
+      const cfg = info?.config?.params?.vectors;
+      const size = cfg?.size || cfg?.config?.size;
+      const dist = cfg?.distance || cfg?.config?.distance;
+      if (Number(size) !== vectorSize || String(dist).toLowerCase() !== String(distance).toLowerCase()) {
+        console.error(`[qdrant] Collection '${collectionName}' exists but vector config differs (have size=${size}, distance=${dist}; expected size=${vectorSize}, distance=${distance})`);
       }
     }
   } catch (e) {

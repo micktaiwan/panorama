@@ -1,6 +1,6 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
+import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { toOneLine } from '/imports/api/_shared/aiCore';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
@@ -62,13 +62,8 @@ Meteor.methods({
 
     const prompt = buildPrompt({ project, lines });
 
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) {
-      throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
-    }
 
     // Lazy import to avoid client bundling
-    const { default: fetch } = await import('node-fetch');
     // Structured JSON output with citations
     const numbered = lines.map((l, idx) => `L${idx + 1}: ${l.content}`);
     const system = 'You summarize CTO project meeting notes strictly from provided content.';
@@ -80,76 +75,15 @@ Meteor.methods({
       'If a section has no content, return an empty array for that section (summary must not be empty).'
     ].join(' ');
 
-    const schema = {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        summary: { type: 'string' },
-        decisions: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              text: { type: 'string' },
-              cites: { type: 'array', items: { type: 'integer', minimum: 1 } }
-            },
-            required: ['text', 'cites']
-          }
-        },
-        risks: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              text: { type: 'string' },
-              cites: { type: 'array', items: { type: 'integer', minimum: 1 } }
-            },
-            required: ['text', 'cites']
-          }
-        },
-        nextSteps: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              text: { type: 'string' },
-              cites: { type: 'array', items: { type: 'integer', minimum: 1 } }
-            },
-            required: ['text', 'cites']
-          }
-        }
-      },
-      required: ['summary', 'decisions', 'risks', 'nextSteps']
-    };
 
     // Log final prompt messages for visibility
     const userContent = `${instructions}\n\nNotes (numbered):\n${numbered.join('\n')}`;
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'o4-mini',
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: userContent }
-        ],
-        response_format: { type: 'json_schema', json_schema: { name: 'session_summary', strict: false, schema } }
-      })
+    const result = await chatComplete({ 
+      system, 
+      messages: [{ role: 'user', content: userContent }] 
     });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('[ai.summarizeSession] OpenAI request failed', { status: resp.status, statusText: resp.statusText, body: errText });
-      throw new Meteor.Error('openai-failed', errText);
-    }
-
-    const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content || '{}';
-    const json = JSON.parse(content);
+    const json = JSON.parse(result.text);
 
     const toSection = (title, arr) => {
       if (!arr || arr.length === 0) return '';
@@ -184,9 +118,6 @@ Meteor.methods({
 
     const prompt = buildCoachPrompt({ project, lines });
 
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
-    const { default: fetch } = await import('node-fetch');
 
     // Build numbered notes from all session lines
     const numbered = lines.map((l, idx) => `L${idx + 1}: ${l.content}`);
@@ -209,49 +140,6 @@ Meteor.methods({
     const previousAnswersBlock = renderPrev(prevAnswers);
 
     // OpenAI structured outputs prefer an object root; wrap outputs in object fields
-    const schema = {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        questions: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              text: { type: 'string' },
-              cites: { type: 'array', items: { type: 'integer', minimum: 1 } }
-            },
-            required: ['text', 'cites']
-          }
-        },
-        ideas: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              text: { type: 'string' },
-              cites: { type: 'array', items: { type: 'integer', minimum: 1 } }
-            },
-            required: ['text', 'cites']
-          }
-        },
-        answers: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              text: { type: 'string' },
-              cites: { type: 'array', items: { type: 'integer', minimum: 1 } }
-            },
-            required: ['text', 'cites']
-          }
-        }
-      },
-      required: ['questions', 'ideas', 'answers']
-    };
 
     // Build final system and user contents once and log them
     const systemContent = 'You are a CTO project coach. Ask concise, high-signal questions, propose concrete ' +
@@ -262,34 +150,11 @@ Meteor.methods({
       `${previousQuestionsBlock}\n\nIdeas:\n${previousIdeasBlock}\n\nAnswers:\n${previousAnswersBlock}\n\n` +
       `Notes (numbered):\n${numbered.join('\n')}`;
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'o4-mini',
-        messages: [
-          { role: 'system', content: systemContent },
-          { role: 'user', content: userContent }
-        ],
-        response_format: { type: 'json_schema', json_schema: { name: 'coach_questions', strict: true, schema } }
-      })
+    const result = await chatComplete({ 
+      system: systemContent, 
+      messages: [{ role: 'user', content: userContent }] 
     });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('[ai.coachQuestions] OpenAI request failed', { status: resp.status, statusText: resp.statusText, body: errText });
-      throw new Meteor.Error('openai-failed', errText);
-    }
-
-    const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content || '{}';
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch (err) {
-      console.error('[ai.coachQuestions] Invalid JSON content from model', { content, error: err && err.message });
-      throw new Meteor.Error('openai-invalid-json', 'Invalid JSON content from model');
-    }
+    const parsed = JSON.parse(result.text);
     const qs = Array.isArray(parsed.questions) ? parsed.questions : [];
     const ideas = Array.isArray(parsed.ideas) ? parsed.ideas : [];
     const answers = Array.isArray(parsed.answers) ? parsed.answers : [];

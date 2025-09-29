@@ -53,7 +53,7 @@ The detailed list of collections and fields is maintained in `03-schemas.md`.
 - Vector store: Qdrant (local binary or Docker). Access via `@qdrant/js-client-rest`.
 - Meteor server talks to Qdrant over HTTP (no tight coupling).
 - Settings: `Meteor.settings.qdrantUrl` points to the Qdrant endpoint.
-- Store embeddings for: Projects, Tasks, Notes, Note Sessions, Note Lines, Alarms.
+- Store embeddings for: Projects, Tasks, Notes, Note Sessions, Note Lines.
 - Provide a `VectorStore` abstraction to allow backend swaps later.
 - Generate embeddings in background (`Meteor.defer()`/workers) to avoid blocking methods.
 - Vector dimension: the Qdrant collection `vectors.size` must exactly match the embedding model dimension (e.g., 1536 for `text-embedding-3-small`).

@@ -46,6 +46,12 @@ export const NoteEditor = ({
   const handleCleanNote = () => {
     if (!activeTabId || isCleaning) return;
     
+    // Check if note has unsaved changes
+    if (dirtySet.has(activeTabId)) {
+      notify({ message: 'Please save the note before cleaning it', kind: 'error' });
+      return;
+    }
+    
     const key = `note:original:${activeTabId}`;
     const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
     const hadBackup = !!has;
@@ -56,21 +62,28 @@ export const NoteEditor = ({
     
     setIsCleaning(true);
     Meteor.call('ai.cleanNote', activeTabId, (err) => {
+      console.log('ai.cleanNote result', err);
       setIsCleaning(false);
       if (err) {
         console.error('ai.cleanNote failed', err);
         if (!hadBackup && typeof window !== 'undefined') {
           sessionStorage.removeItem(key);
         }
-        notify('Error cleaning note', 'error');
+        notify({ message: 'Error cleaning note', kind: 'error' });
         return;
       }
-      notify('Note cleaned successfully', 'success');
+      notify({ message: 'Note cleaned successfully', kind: 'success' });
     });
   };
 
   const handleSummarizeNote = () => {
     if (!activeTabId || isSummarizing) return;
+    
+    // Check if note has unsaved changes
+    if (dirtySet.has(activeTabId)) {
+      notify({ message: 'Please save the note before summarizing it', kind: 'error' });
+      return;
+    }
     
     const key = `note:original:${activeTabId}`;
     const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
@@ -88,10 +101,10 @@ export const NoteEditor = ({
         if (!hadBackup && typeof window !== 'undefined') {
           sessionStorage.removeItem(key);
         }
-        notify('Error summarizing note', 'error');
+        notify({ message: 'Error summarizing note', kind: 'error' });
         return;
       }
-      notify('Note summarized successfully', 'success');
+      notify({ message: 'Note summarized successfully', kind: 'success' });
     });
   };
 
@@ -298,8 +311,8 @@ export const NoteEditor = ({
           <button
             className="action-button clean-button"
             onClick={handleCleanNote}
-            disabled={isCleaning || !activeTabId}
-            title="Clean note with AI"
+            disabled={isCleaning || !activeTabId || dirtySet.has(activeTabId)}
+            title={dirtySet.has(activeTabId) ? "Save the note before cleaning" : "Clean note with AI"}
           >
             {isCleaning ? 'Cleaning...' : 'Clean'}
           </button>
@@ -307,8 +320,8 @@ export const NoteEditor = ({
           <button
             className="action-button summarize-button"
             onClick={handleSummarizeNote}
-            disabled={isSummarizing || !activeTabId}
-            title="Summarize note with AI"
+            disabled={isSummarizing || !activeTabId || dirtySet.has(activeTabId)}
+            title={dirtySet.has(activeTabId) ? "Save the note before summarizing" : "Summarize note with AI"}
           >
             {isSummarizing ? 'Summarizing...' : 'Summarize'}
           </button>

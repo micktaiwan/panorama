@@ -5,7 +5,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { buildProjectByNameSelector, compileWhere, getListKeyForCollection, FIELD_ALLOWLIST } from '/imports/api/chat/helpers';
-import { buildCitationsFromMemory, buildCitationsFromToolResults, buildPlannerConfig, CHAT_TOOLS_DEFINITION } from '/imports/api/chat/tools_helpers';
+import { buildCitationsFromMemory, buildCitationsFromToolResults, buildPlannerConfig, buildResponsesFirstPayload, extractResponsesToolCalls } from '/imports/api/chat/tools_helpers';
 
 const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
 
@@ -488,7 +488,7 @@ Meteor.methods({
 
     // Mini planner: analyze intent → JSON plan (≤5 steps)
     await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning…', isStatus: true, createdAt: new Date() });
-    const { plannerPrompt, plannerMessages } = buildPlannerConfig(
+    const { plannerSchema, plannerPrompt, plannerMessages } = buildPlannerConfig(
       buildSystemPrompt(),
       user,
       Object.keys(TOOL_SCHEMAS)
@@ -498,20 +498,13 @@ Meteor.methods({
       const result = await chatComplete({
         system: plannerPrompt,
         messages: plannerMessages,
-        timeoutMs: 30000,
-        responseFormat: 'json'
+        model: 'o4-mini',
+        timeoutMs: 30000
       });
       plannerResp = { ok: true, json: () => Promise.resolve({ choices: [{ message: { content: result.content } }] }) };
     } catch (plannerError) {
       console.error('[chat.ask][planner] error:', plannerError);
-      
-      // Check if it's a tool calls not supported error
-      if (plannerError.reason?.includes('does not support tools')) {
-        console.log('[chat.ask][planner] Model does not support tool calls, falling back to auto tools');
-        await ChatsCollection.insertAsync({ role: 'assistant', content: 'Model does not support planning. Using auto tools instead.', isStatus: true, createdAt: new Date() });
-      } else {
-        await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning failed. Falling back to auto tools.', error: true, createdAt: new Date() });
-      }
+      await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning failed. Falling back to auto tools.', error: true, createdAt: new Date() });
       plannerResp = { ok: false };
     }
     let planned = null;
@@ -522,41 +515,14 @@ Meteor.methods({
       try {
         planned = JSON.parse(ptext);
         stopArtifacts = Array.isArray(planned?.stopWhen) ? planned.stopWhen : [];
-      } catch (ePlan) { 
-        console.error('[chat.ask] persist plan failed - model may not support tool calls:', ePlan.message);
-        console.log('[chat.ask] Raw planner response:', ptext.substring(0, 200) + '...');
-        
-        // Try to extract JSON from the response
-        try {
-          const jsonMatch = ptext.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            planned = JSON.parse(jsonMatch[0]);
-            stopArtifacts = Array.isArray(planned?.stopWhen) ? planned.stopWhen : [];
-            console.log('[chat.ask] Successfully extracted JSON from response');
-          } else {
-            planned = null;
-          }
-        } catch (extractError) {
-          console.error('[chat.ask] JSON extraction failed:', extractError.message);
-          planned = null;
-        }
-        
-        // If still no valid plan, reset to null to trigger fallback
-        if (!planned) {
-          await ChatsCollection.insertAsync({ role: 'assistant', content: 'Planning failed - falling back to auto tools.', isStatus: true, createdAt: new Date() });
-        }
-      }
+      } catch (ePlan) { console.error('[chat.ask] persist plan failed', ePlan); }
     } else {
-      console.error('[chat.ask][planner] Planner failed:', plannerResp);
-      await ChatsCollection.insertAsync({ role: 'assistant', content: `Planner error: temporarily unavailable. Falling back to auto tools.`, error: true, createdAt: new Date() });
+      const errText = await plannerResp.text();
+      console.error('[chat.ask][planner] OpenAI failed', { status: plannerResp.status, statusText: plannerResp.statusText, body: errText });
+      await ChatsCollection.insertAsync({ role: 'assistant', content: `Planner error (${plannerResp.status}): temporarily unavailable. Falling back to auto tools.`, error: true, createdAt: new Date() });
     }
     // If planner produced steps, execute them then synthesize; else fallback to auto tools
-    const rawSteps = (EXECUTE_PLANNER_STEPS && planned && Array.isArray(planned.steps) && planned.steps.length > 0) ? planned.steps : [];
-    // Filter out invalid tool names (like stopWhen.have, lists.tasks, etc.)
-    const execSteps = rawSteps.filter(step => {
-      const toolName = String(step.tool || '').trim();
-      return toolName && TOOL_HANDLERS[toolName] && !toolName.includes('.');
-    });
+    const execSteps = (EXECUTE_PLANNER_STEPS && planned && Array.isArray(planned.steps) && planned.steps.length > 0) ? planned.steps : [];
     if (execSteps && execSteps.length > 0) {
       await ChatsCollection.insertAsync({ role: 'assistant', content: 'Executing plan…', isStatus: true, createdAt: new Date() });
       const toolResults = [];
@@ -620,6 +586,7 @@ Meteor.methods({
               const result2 = await chatComplete({
                 system: `${buildSystemPrompt()} Allowed tools: ${Object.keys(TOOL_SCHEMAS).join(', ')}. ${plannerPrompt}`,
                 messages: replanMessages,
+                model: 'o4-mini',
                 timeoutMs: 30000
               });
               const ptext2 = result2.content || '';
@@ -640,38 +607,41 @@ Meteor.methods({
                   return prepared;
                 };
                   
-                // Execute the re-planned steps with remaining budget using generic executor
-                const remain = Math.max(0, MAX_STEPS - i);
-                for (let j = 0; j < Math.min(steps2.length, remain); j += 1) {
-                  try {
-                    const stepJ = steps2[j] || {};
-                    const argsJ = await prepareArgsForStep(stepJ);
-                    const schemaJ = TOOL_SCHEMAS[stepJ.tool];
-                    if (schemaJ && Array.isArray(schemaJ.required) && schemaJ.required.includes('projectId')) {
-                      const hasPid = String(argsJ?.projectId || '').trim();
-                      if (!hasPid) {
-                        // Skip quietly when projectId cannot be resolved, avoiding noisy errors
-                        toolResults.push({ 
-                          tool_call_id: `call_re_${j+1}`, 
-                          output: JSON.stringify({ skipped: true, reason: 'Missing projectId after resolution' }),
-                          tool: stepJ.tool,
-                          args: argsJ
-                        });
-                        continue;
+                  // Execute the re-planned steps with remaining budget using generic executor
+                  const remain = Math.max(0, MAX_STEPS - i);
+                  for (let j = 0; j < Math.min(steps2.length, remain); j += 1) {
+                    try {
+                      const stepJ = steps2[j] || {};
+                      const argsJ = await prepareArgsForStep(stepJ);
+                      const schemaJ = TOOL_SCHEMAS[stepJ.tool];
+                      if (schemaJ && Array.isArray(schemaJ.required) && schemaJ.required.includes('projectId')) {
+                        const hasPid = String(argsJ?.projectId || '').trim();
+                        if (!hasPid) {
+                          // Skip quietly when projectId cannot be resolved, avoiding noisy errors
+                          toolResults.push({ 
+                            tool_call_id: `call_re_${j+1}`, 
+                            output: JSON.stringify({ skipped: true, reason: 'Missing projectId after resolution' }),
+                            tool: stepJ.tool,
+                            args: argsJ
+                          });
+                          continue;
+                        }
                       }
+                      const replanResult = await executeStep({ tool: stepJ.tool, args: argsJ }, memory, `call_re_${j+1}`);
+                      toolResults.push(replanResult);
+                    } catch (replanError) {
+                      console.error('[chat.ask][replan] step failed', replanError);
+                      toolResults.push({ 
+                        tool_call_id: `call_re_${j+1}`, 
+                        output: JSON.stringify({ error: replanError?.message || String(replanError) }) 
+                      });
                     }
-                    const replanResult = await executeStep({ tool: stepJ.tool, args: argsJ }, memory, `call_re_${j+1}`);
-                    toolResults.push(replanResult);
-                  } catch (replanError) {
-                    console.error('[chat.ask][replan] step failed', replanError);
-                    toolResults.push({ 
-                      tool_call_id: `call_re_${j+1}`, 
-                      output: JSON.stringify({ error: replanError?.message || String(replanError) }) 
-                    });
                   }
+                } catch (e) {
+                  console.error('[chat.ask][replan] parse failed', e);
                 }
-              } catch (e) {
-                console.error('[chat.ask][replan] parse failed', e);
+              } else {
+                console.error('[chat.ask][replan] OpenAI failed');
               }
             } catch (fetchError) {
               console.error('[chat.ask][replan] error:', fetchError);
@@ -712,7 +682,7 @@ Meteor.methods({
           type: 'function', 
           function: { 
             name: tr.tool || 'unknown_tool', 
-            arguments: tr.args || {} 
+            arguments: JSON.stringify(tr.args || {}) 
           } 
         }))
       };
@@ -725,6 +695,7 @@ Meteor.methods({
       try {
         const result2 = await chatComplete({
           messages: cmplMessages,
+          model: 'o4-mini',
           timeoutMs: 30000
         });
         data2 = { choices: [{ message: { content: result2.content } }] };
@@ -739,63 +710,72 @@ Meteor.methods({
       return { text, citations };
     }
     
-    // Fallback path - use Chat Completions with tool calls via proxy
-    // Convert Responses API approach to standard Chat Completions with tools
-    const tools = CHAT_TOOLS_DEFINITION.map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.name,
-        description: tool.description || '',
-        parameters: tool.parameters || { type: 'object', properties: {} }
+    // Fallback path - this section uses the responses endpoint which is not supported by the proxy
+    // TODO: Migrate this to use the proxy when responses endpoint is supported
+    const firstPayload = buildResponsesFirstPayload(system, user);
+    
+    const { default: fetch } = await import('node-fetch');
+    const fetchWithTimeout = async (url, init = {}, ms = 30000) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ms);
+      try {
+        return await fetch(url, { ...(init || {}), signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
       }
-    }));
-
-    // First call to get tool calls
-    const result = await chatComplete({
-      system,
-      messages: [{ role: 'user', content: user }],
-      tools,
-      tool_choice: 'auto',
-      timeoutMs: 30000
-    });
-
-    const toolCalls = result.tool_calls || [];
-    let text = result.content || '';
+    };
+    
+    const { getOpenAiApiKey } = await import('/imports/api/_shared/config');
+    const apiKey = getOpenAiApiKey();
+    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+    
+    const resp = await fetchWithTimeout('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(firstPayload)
+    }, 30000);
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('[chat.ask] OpenAI failed', { status: resp.status, statusText: resp.statusText, body: errText });
+      throw new Meteor.Error('openai-failed', errText);
+    }
+    const data = await resp.json();
+    // Extract tool calls (Responses API emits 'function_call' items in output[])
+    const toolCalls = extractResponsesToolCalls(data);
+    
+    const outputArray = Array.isArray(data?.output) ? data.output : [];
+    let text = data?.output_text || (outputArray.length ? outputArray.map(p => p?.content?.[0]?.text || '').join('') : '') || '';
     let toolResults = [];
 
     if (toolCalls.length > 0) {
       toolResults = [];
       const memory = { ids: {}, entities: {}, lists: {}, params: {}, errors: [], projectId: null, projectName: null, tasks: [] };
-      
       for (const call of toolCalls) {
         try {
-          const exec = await executeStep({ 
-            tool: call.function.name, 
-            args: call.function.arguments || {} 
-          }, memory, call.id);
-          toolResults.push({ 
-            tool_call_id: call.id, 
-            output: exec.output 
-          });
+          const exec = await executeStep({ tool: call.name, args: call.arguments || {} }, memory, call.id || undefined);
+          toolResults.push({ tool_call_id: exec.tool_call_id, output: exec.output });
         } catch (e) {
-          console.error(`[chat.ask][${call?.function?.name || 'unknown_tool'}] execution error:`, e?.message || e);
-          toolResults.push({ 
-            tool_call_id: call.id || 'call_0', 
-            output: JSON.stringify({ error: e?.message || String(e) }) 
-          });
+          console.error(`[chat.ask][${call?.name || 'unknown_tool'}] execution error:`, e?.message || e);
+          toolResults.push({ tool_call_id: call.id || 'call_0', output: JSON.stringify({ error: e?.message || String(e) }) });
         }
       }
-      
-      // Final synthesis call via Chat Completions
+      // Final synthesis call via Chat Completions (stable tool result protocol)
+      const shortenId = (id) => {
+        const s = String(id || 'call_0');
+        return s.length > 40 ? s.slice(0, 40) : s;
+      };
+      const mappedCalls = toolCalls.map(tc => ({
+        origId: tc.id || 'call_0',
+        id: shortenId(tc.id || 'call_0'),
+        name: tc.name,
+        args: JSON.stringify(tc.arguments || {})
+      }));
+      const idMap = new Map(mappedCalls.map(c => [c.origId, c.id]));
       const assistantToolCallMsg = {
         role: 'assistant',
-        tool_calls: toolCalls
+        tool_calls: mappedCalls.map(c => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.args } }))
       };
-      const toolMsgs = toolResults.map(tr => ({ 
-        role: 'tool', 
-        tool_call_id: tr.tool_call_id, 
-        content: tr.output || '{}' 
-      }));
+      const toolMsgs = toolResults.map(tr => ({ role: 'tool', tool_call_id: idMap.get(tr.tool_call_id) || mappedCalls[0]?.id || 'call_0', content: tr.output || '{}' }));
       const synthesisGuidance = 'Use ONLY the tool results; list all returned items with concise human-friendly fields and include total counts where applicable. Do NOT show internal IDs.';
       const cmplMessages = [
         { role: 'system', content: system + ' ' + synthesisGuidance },
@@ -803,9 +783,9 @@ Meteor.methods({
         assistantToolCallMsg,
         ...toolMsgs
       ];
-      
       const result2 = await chatComplete({
         messages: cmplMessages,
+        model: 'o4-mini',
         timeoutMs: 30000
       });
       text = result2.content || '';

@@ -40,7 +40,8 @@ const getQueryVector = async (rawQuery) => {
 };
 
 // simple in-memory job tracking (server lifetime)
-const indexJobs = new Map(); // jobId -> { total, processed, upserts, errors, startedAt, finishedAt, done }
+const indexJobs = new Map(); // jobId -> { total, processed, upserts, errors, startedAt, finishedAt, done, cancelled }
+const jobCancellation = new Map(); // jobId -> AbortController
 
 const collectDocs = async () => {
   const docs = [];
@@ -54,7 +55,6 @@ const collectDocs = async () => {
   const { NotesCollection } = await import('/imports/api/notes/collections');
   const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
   const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
-  const { AlarmsCollection } = await import('/imports/api/alarms/collections');
   const { LinksCollection } = await import('/imports/api/links/collections');
   const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
 
@@ -72,8 +72,7 @@ const collectDocs = async () => {
   sessions.forEach(s => pushDoc(s._id, s.projectId, 'session', `${s.name || ''} ${s.aiSummary || ''}`));
   const lines = await NoteLinesCollection.find({}, { fields: { content: 1, sessionId: 1 } }).fetchAsync();
   lines.forEach(l => pushDoc(l._id, null, 'line', l.content || '', { sessionId: l.sessionId || null }));
-  const alarms = await AlarmsCollection.find({}, { fields: { title: 1 } }).fetchAsync();
-  alarms.forEach(a => pushDoc(a._id, null, 'alarm', a.title || ''));
+  // Alarms are not indexed - they are temporary notifications
   const links = await LinksCollection.find({}, { fields: { name: 1, url: 1, projectId: 1 } }).fetchAsync();
   links.forEach(l => pushDoc(l._id, l.projectId, 'link', `${l.name || ''} ${l.url || ''}`));
   const userLogs = await UserLogsCollection.find({}, { fields: { content: 1 } }).fetchAsync();
@@ -155,14 +154,46 @@ const runIndexJob = async (jobId) => {
   const collectionName = COLLECTION();
   const vectorSize = VECTOR_SIZE();
 
+  // Create cancellation controller for this job
+  const abortController = new AbortController();
+  jobCancellation.set(jobId, abortController);
+
   const docs = await collectDocs();
   const total = docs.length;
-  indexJobs.set(jobId, { total, processed: 0, upserts: 0, errors: 0, startedAt: new Date(), finishedAt: null, done: false });
+  
+  // Only initialize if job doesn't exist yet
+  if (!indexJobs.has(jobId)) {
+    indexJobs.set(jobId, { total, processed: 0, upserts: 0, errors: 0, startedAt: new Date(), finishedAt: null, done: false, cancelled: false });
+  } else {
+    // Update total if it was different
+    const existing = indexJobs.get(jobId);
+    if (existing.total !== total) {
+      existing.total = total;
+    }
+  }
 
+  console.log(`[runIndexJob] Starting job ${jobId} with ${docs.length} documents`);
+  console.log(`[runIndexJob] Collection: ${collectionName}, Vector size: ${vectorSize}`);
+  
   const BATCH = 64;
+  let batchErrors = 0;
+  
   for (let i = 0; i < docs.length; i += BATCH) {
+    // Check for cancellation
+    if (abortController.signal.aborted) {
+      console.log(`[runIndexJob] Job ${jobId} cancelled at batch ${i}`);
+      const st = indexJobs.get(jobId);
+      if (st) {
+        st.cancelled = true;
+        st.done = true;
+        st.finishedAt = new Date();
+      }
+      return indexJobs.get(jobId);
+    }
+
     const slice = docs.slice(i, i + BATCH);
     const points = [];
+    
     for (const d of slice) {
       try {
         const vector = await embedText(d.content);
@@ -175,30 +206,51 @@ const runIndexJob = async (jobId) => {
           const uniqueRaw = (d.meta && typeof d.meta.chunkIndex === 'number') ? `${rawId}#${d.meta.chunkIndex}` : rawId;
           const pointId = toPointId(d.kind, uniqueRaw);
           points.push({ id: pointId, vector: Array.from(vector), payload });
+        } else {
+          batchErrors++;
+          console.error(`[runIndexJob] Invalid vector for ${d.id}: length ${vector?.length}, expected ${vectorSize}`);
         }
       } catch (e) {
-        const st = indexJobs.get(jobId);
-        if (st) st.errors += 1;
+        batchErrors++;
         console.error('[qdrant.index job] embed failed', d.id, e?.message || e);
       }
       const st = indexJobs.get(jobId);
-      if (st) st.processed += 1;
+      if (st) {
+        st.processed = (st.processed || 0) + 1;
+      }
     }
+    
     if (points.length > 0) {
       try {
         await client.upsert(collectionName, { points });
         const st = indexJobs.get(jobId);
-        if (st) st.upserts += points.length;
+        if (st) {
+          st.upserts = (st.upserts || 0) + points.length;
+        }
       } catch (e) {
-        const st = indexJobs.get(jobId);
-        if (st) st.errors += points.length;
+        batchErrors += points.length;
         const body = e?.response?.data || e?.response || e?.message || e;
-        console.error('[qdrant.index job] upsert failed', { batch: points.length, sample: points[0] && { id: points[0].id, len: points[0].vector?.length, payload: points[0].payload }, error: body });
+        console.error('[qdrant.index job] upsert failed', { batch: points.length, error: body });
       }
     }
+    
+    // Update error count for this batch
+    const st = indexJobs.get(jobId);
+    if (st) {
+      st.errors = (st.errors || 0) + batchErrors;
+    }
+    batchErrors = 0; // Reset for next batch
   }
+  
   const st = indexJobs.get(jobId);
-  if (st) { st.done = true; st.finishedAt = new Date(); }
+  if (st) { 
+    st.done = true; 
+    st.finishedAt = new Date(); 
+  }
+  
+  // Clean up cancellation controller
+  jobCancellation.delete(jobId);
+  
   return indexJobs.get(jobId);
 };
 
@@ -314,15 +366,25 @@ Meteor.methods({
     }
     const client = await getQdrantClient();
     const name = COLLECTION();
-    const out = { url, collection: name, exists: false };
+    const expectedVectorSize = VECTOR_SIZE();
+    const out = { url, collection: name, exists: false, vectorSize: expectedVectorSize };
     try {
       const info = await client.getCollection(name);
       if (info) {
         out.exists = true;
         const cfg = info.config?.params?.vectors;
-        out.vectorSize = cfg?.size ?? cfg?.config?.size;
+        const actualVectorSize = cfg?.size ?? cfg?.config?.size;
+        out.vectorSize = actualVectorSize;
         out.distance = cfg?.distance ?? cfg?.config?.distance;
         out.status = info?.status;
+        
+        // Check if vector dimensions are compatible
+        if (actualVectorSize !== expectedVectorSize) {
+          out.incompatible = true;
+          out.expectedVectorSize = expectedVectorSize;
+          out.message = `Collection exists but vector config differs (have size=${actualVectorSize}, distance=${out.distance}; expected size=${expectedVectorSize}, distance=Cosine)`;
+        }
+        
         // Attempt to fetch total number of points
         try {
           const cnt = await client.count(name, { exact: true });
@@ -384,13 +446,31 @@ Meteor.methods({
     setTimeout(async () => {
       try {
         const client = await getQdrantClient();
-        // Drop and recreate collection to ensure a clean state
+        const collectionName = COLLECTION();
+        const vectorSize = VECTOR_SIZE();
+        const distance = DISTANCE();
+        
+        console.log(`[qdrant.indexStart] Creating collection: ${collectionName} (size: ${vectorSize}, distance: ${distance})`);
+        
+        // Check if collection exists and has correct dimensions
         try {
-          await client.deleteCollection(COLLECTION());
+          const existingInfo = await client.getCollection(collectionName);
+          const existingSize = existingInfo.config?.params?.vectors?.size || existingInfo.config?.vectors?.size;
+          if (existingSize === vectorSize) {
+            console.log(`[qdrant.indexStart] Collection ${collectionName} exists with correct dimensions, clearing it`);
+            // Clear existing points but keep collection
+            await client.delete(collectionName, { filter: { must: [] } });
+          } else {
+            console.log(`[qdrant.indexStart] Collection ${collectionName} has wrong dimensions (${existingSize} vs ${vectorSize}), recreating`);
+            await client.deleteCollection(collectionName);
+            await client.createCollection(collectionName, { vectors: { size: vectorSize, distance } });
+          }
         } catch {
-          // if it doesn't exist, ignore
+          // Collection doesn't exist, create it
+          console.log(`[qdrant.indexStart] Collection ${collectionName} doesn't exist, creating it`);
+          await client.createCollection(collectionName, { vectors: { size: vectorSize, distance } });
         }
-        await client.createCollection(COLLECTION(), { vectors: { size: VECTOR_SIZE(), distance: DISTANCE() } });
+        console.log(`[qdrant.indexStart] Collection ${collectionName} ready`);
       } catch (e) {
         console.error('[qdrant.indexStart] drop+create failed', e);
       }
@@ -445,23 +525,43 @@ Meteor.methods({
           try {
             await client.upsert(COLLECTION(), { points });
             const st = indexJobs.get(jobId);
-            if (st) st.upserts += points.length;
+            st?.upserts && (st.upserts += points.length);
           } catch (e) {
             const st = indexJobs.get(jobId);
-            if (st) st.errors += points.length;
+            st?.errors && (st.errors += points.length);
             const body = e?.response?.data || e?.response || e?.message || e;
             console.error('[qdrant.indexKind job] upsert failed', { batch: points.length, sample: points[0] && { id: points[0].id, len: points[0].vector?.length, payload: points[0].payload }, error: body });
           }
         }
       }
       const st = indexJobs.get(jobId);
-      if (st) { st.done = true; st.finishedAt = new Date(); }
+      if (st) { 
+        st.done = true; 
+        st.finishedAt = new Date(); 
+      }
     }, 0);
     return { jobId, total: docs.length };
   },
   async 'qdrant.indexStatus'(jobId) {
     const st = indexJobs.get(String(jobId));
-    return st || { total: 0, processed: 0, upserts: 0, errors: 0, done: true };
+    return st || { total: 0, processed: 0, upserts: 0, errors: 0, done: true, cancelled: false };
+  },
+
+  async 'qdrant.cancelIndex'(jobId) {
+    check(jobId, String);
+    const controller = jobCancellation.get(jobId);
+    if (controller) {
+      controller.abort();
+      const st = indexJobs.get(jobId);
+      if (st) {
+        st.cancelled = true;
+        st.done = true;
+        st.finishedAt = new Date();
+      }
+      jobCancellation.delete(jobId);
+      return { cancelled: true };
+    }
+    return { cancelled: false, reason: 'Job not found or already finished' };
   },
   async 'qdrant.indexKind'(kind) {
     check(kind, String);
@@ -499,10 +599,9 @@ Meteor.methods({
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       for (const it of items) { await upsertDoc({ kind: 'line', id: it._id, text: it.content || '', sessionId: it.sessionId || null }); processed += 1; }
     } else if (kind === 'alarm') {
-      const { AlarmsCollection } = await import('/imports/api/alarms/collections');
-      const items = await AlarmsCollection.find({}, { fields: { title: 1 } }).fetchAsync();
-      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      for (const it of items) { await upsertDoc({ kind: 'alarm', id: it._id, text: it.title || '' }); processed += 1; }
+      // Alarms are not indexed in Qdrant - they are temporary notifications
+      console.log('[qdrant.indexKind] Skipping alarm indexing - alarms are not searchable');
+      return { processed: 0 };
     } else if (kind === 'link') {
       const { LinksCollection } = await import('/imports/api/links/collections');
       const items = await LinksCollection.find({}, { fields: { name: 1, url: 1, projectId: 1 } }).fetchAsync();
@@ -520,6 +619,19 @@ Meteor.methods({
     check(query, String);
     const url = getQdrantUrl();
     if (!url) {
+      // In local mode, fallback to instant search when Qdrant is unavailable
+      const { getAIConfig } = require('/imports/api/_shared/config');
+      const config = getAIConfig();
+      if (config.mode === 'local') {
+        console.log('[search] Qdrant unavailable in local mode, falling back to instant search');
+        const instantResults = await Meteor.callAsync('search.instant', query, opts);
+        return { 
+          results: instantResults || [], 
+          cachedVector: false, 
+          cacheSize: 0, 
+          fallback: true 
+        };
+      }
       return { results: [], cachedVector: false, cacheSize: 0, disabled: true };
     }
     const client = await getQdrantClient();

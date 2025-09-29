@@ -1,7 +1,23 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
-import { openAiChat } from '/imports/api/_shared/aiCore';
+import { chatComplete } from '/imports/api/_shared/llmProxy';
+
+// Helper function to update note index and project timestamp
+const updateNoteIndex = async (noteId) => {
+  const { NotesCollection } = await import('/imports/api/notes/collections');
+  const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
+  const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+  await upsertDoc({ 
+    kind: 'note', 
+    id: noteId, 
+    text: `${next?.title || ''} ${next?.content || ''}`.trim(), 
+    projectId: next?.projectId || null 
+  });
+  if (next?.projectId) {
+    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    await ProjectsCollection.updateAsync(next.projectId, { $set: { updatedAt: new Date() } });
+  }
+};
 
 Meteor.methods({
   async 'ai.cleanNote'(noteId) {
@@ -10,9 +26,6 @@ Meteor.methods({
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const note = await NotesCollection.findOneAsync({ _id: noteId });
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
-
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
 
     const original = typeof note.content === 'string' ? note.content : '';
     if (!original.trim()) {
@@ -30,29 +43,28 @@ Meteor.methods({
     6. Keep all original content, do NOT summarize, shorten, or translate.
     7. Preserve the original language of the text.
     8. Correct obvious spelling mistakes.
-    Output: plain text only, no markdown, no special formatting.
+    Output: plain text only, no markdown, no special formatting, no added text compared to the original
     `;
     const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
 
-    const cleaned = await openAiChat({ system, user, expectJson: false });
-
-    // Persist cleaned content
-    await NotesCollection.updateAsync(noteId, { $set: { content: cleaned, updatedAt: new Date() } });
-
-    // Update search vector and project updatedAt
     try {
-      const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
-      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null });
-      if (next && next.projectId) {
-        const { ProjectsCollection } = await import('/imports/api/projects/collections');
-        await ProjectsCollection.updateAsync(next.projectId, { $set: { updatedAt: new Date() } });
-      }
-    } catch (err) {
-      console.error('[ai.cleanNote] post-update side effects failed', err);
-    }
+      const result = await chatComplete({ 
+        system, 
+        messages: [{ role: 'user', content: user }] 
+      });
+      const cleaned = result.text;
 
-    return { content: cleaned };
+      // Persist cleaned content
+      await NotesCollection.updateAsync(noteId, { $set: { content: cleaned, updatedAt: new Date() } });
+
+      // Update search vector and project updatedAt
+      await updateNoteIndex(noteId);
+
+      return { content: cleaned };
+    } catch (error) {
+      console.error('[ai.cleanNote] Error:', error);
+      throw new Meteor.Error('ai-clean-failed', `Failed to clean note: ${error.message}`);
+    }
   },
 
   async 'ai.summarizeNote'(noteId) {
@@ -61,9 +73,6 @@ Meteor.methods({
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const note = await NotesCollection.findOneAsync({ _id: noteId });
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
-
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
 
     const original = typeof note.content === 'string' ? note.content : '';
     if (!original.trim()) {
@@ -84,24 +93,23 @@ Meteor.methods({
     `;
     const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
 
-    const summarized = await openAiChat({ system, user, expectJson: false });
-
-    // Persist summarized content
-    await NotesCollection.updateAsync(noteId, { $set: { content: summarized, updatedAt: new Date() } });
-
-    // Update search vector and project updatedAt
     try {
-      const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
-      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null });
-      if (next && next.projectId) {
-        const { ProjectsCollection } = await import('/imports/api/projects/collections');
-        await ProjectsCollection.updateAsync(next.projectId, { $set: { updatedAt: new Date() } });
-      }
-    } catch (err) {
-      console.error('[ai.summarizeNote] post-update side effects failed', err);
-    }
+      const result = await chatComplete({ 
+        system, 
+        messages: [{ role: 'user', content: user }] 
+      });
+      const summarized = result.text;
 
-    return { content: summarized };
+      // Persist summarized content
+      await NotesCollection.updateAsync(noteId, { $set: { content: summarized, updatedAt: new Date() } });
+
+      // Update search vector and project updatedAt
+      await updateNoteIndex(noteId);
+
+      return { content: summarized };
+    } catch (error) {
+      console.error('[ai.summarizeNote] Error:', error);
+      throw new Meteor.Error('ai-summarize-failed', `Failed to summarize note: ${error.message}`);
+    }
   }
 });

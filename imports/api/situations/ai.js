@@ -5,30 +5,20 @@ import { PeopleCollection } from '/imports/api/people/collections';
 import { SituationQuestionsCollection } from '/imports/api/situationQuestions/collections';
 import { SituationNotesCollection } from '/imports/api/situationNotes/collections';
 import { SituationSummariesCollection } from '/imports/api/situationSummaries/collections';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
-import { buildKnownPeopleCatalog, buildRosterForQuestions, buildRosterForSummary, buildPriorBlock, buildNotesByActorBlock, extractActorsSchema, generateQuestionsSchema, toOneLine, logOpenAiPayload } from '/imports/api/situations/promptHelpers';
+import { chatComplete } from '/imports/api/_shared/llmProxy';
+import { buildKnownPeopleCatalog, buildRosterForQuestions, buildRosterForSummary, buildPriorBlock, buildNotesByActorBlock, logOpenAiPayload } from '/imports/api/situations/promptHelpers';
 
 const callOpenAi = async (system, user) => {
-  const apiKey = getOpenAiApiKey();
-  if (!apiKey) throw new Meteor.Error('missing-openai-key', 'OpenAI API key missing in settings');
-  const { default: fetch } = await import('node-fetch');
   try {
     console.log('[situations.callOpenAi] System:', system);
     console.log('[situations.callOpenAi] User:', user);
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: 'o4-mini', messages: [ { role: 'system', content: system }, { role: 'user', content: user } ] })
-  });
-  if (!resp.ok) {
-    const errText = await resp.text();
-    console.error('[situations.callOpenAi] OpenAI failed', { status: resp.status, statusText: resp.statusText, body: errText });
-    throw new Meteor.Error('openai-failed', errText);
-  }
-  const data = await resp.json();
-  const content = data?.choices?.[0]?.message?.content || '';
-  console.log('[situations.callOpenAi] Content length:', content.length);
-  return content;
+    const result = await chatComplete({
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const content = result.content || '';
+    console.log('[situations.callOpenAi] Content length:', content.length);
+    return content;
   } catch (e) {
     if (!(e instanceof Meteor.Error)) {
       console.error('[situations.callOpenAi] Unexpected error', e);
@@ -56,11 +46,6 @@ Meteor.methods({
       desc || '(none)'
     ].join('\n');
 
-    const schema = extractActorsSchema;
-
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) throw new Meteor.Error('missing-openai-key', 'OpenAI API key missing in settings');
-    const { default: fetch } = await import('node-fetch');
     const userContent = [
       user,
       '',
@@ -68,33 +53,28 @@ Meteor.methods({
       ...(catalogLines.length > 0 ? catalogLines : ['(none)'])
     ].join('\n');
     logOpenAiPayload('extractActors', system, userContent);
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'o4-mini',
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: userContent }
-        ],
-        response_format: { type: 'json_schema', json_schema: { name: 'situation_actors', strict: true, schema } }
-      })
+    const result = await chatComplete({
+      system,
+      messages: [{ role: 'user', content: userContent }]
     });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('[situations.extractActors] OpenAI failed', { status: resp.status, statusText: resp.statusText, body: errText });
-      throw new Meteor.Error('openai-failed', errText);
-    }
-    const data = await resp.json();
+    const data = { choices: [{ message: { content: result.content } }] };
     const content = data.choices?.[0]?.message?.content || '{}';
     console.log('[situations.extractActors] Content:', content);
     let parsed;
-    try { parsed = JSON.parse(content); } catch (e) { throw new Meteor.Error('parse-failed', 'Invalid JSON content from model'); }
+    try { 
+      parsed = JSON.parse(content); 
+    } catch { 
+      throw new Meteor.Error('parse-failed', 'Invalid JSON content from model'); 
+    }
     const list = Array.isArray(parsed?.actors) ? parsed.actors : [];
     const now = new Date();
     const normalize = (s) => {
       const base = String(s || '').trim().toLowerCase();
-      try { return base.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); } catch (_e) { return base; }
+      try { 
+        return base.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); 
+      } catch { 
+        return base; 
+      }
     };
     for (const item of list) {
       const personId = item?.personId ? String(item.personId) : '';
@@ -155,11 +135,10 @@ Meteor.methods({
     const actorIdToPrior = new Map((priorDocs || []).map(d => [String(d.actorId), Array.isArray(d.questions) ? d.questions : []]));
     // Load notes to attribute context per actor
     const notes = await SituationNotesCollection.find({ situationId }, { sort: { createdAt: -1 } }).fetchAsync();
-    const toOneLineLocal = toOneLine;
     const actorIdToNotes = new Map();
     const generalNotes = [];
     for (const n of (notes || [])) {
-      const line = toOneLine(n.content || '');
+      const line = String(n.content || '').replace(/\s+/g, ' ').trim();
       if (!line) continue;
       if (n.actorId) {
         const key = String(n.actorId);
@@ -198,31 +177,21 @@ Meteor.methods({
       'Generate 5–7 questions per actor.'
     ].join('\n');
 
-    const schema = generateQuestionsSchema;
 
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) throw new Meteor.Error('missing-openai-key', 'OpenAI API key missing in settings');
-    const { default: fetch } = await import('node-fetch');
     logOpenAiPayload('generateQuestions', system, user);
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'o4-mini',
-        messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-        response_format: { type: 'json_schema', json_schema: { name: 'situation_questions', strict: true, schema } }
-      })
+    const result = await chatComplete({
+      system,
+      messages: [{ role: 'user', content: user }],
     });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('[situations.generateQuestions] OpenAI failed', { status: resp.status, statusText: resp.statusText, body: errText });
-      throw new Meteor.Error('openai-failed', errText);
-    }
-    const data = await resp.json();
+    const data = { choices: [{ message: { content: result.content } }] };
     const content = data.choices?.[0]?.message?.content || '{}';
     console.log('[situations.generateQuestions] Content:', content);
     let parsed;
-    try { parsed = JSON.parse(content); } catch (e) { throw new Meteor.Error('parse-failed', 'Invalid JSON content from model'); }
+    try { 
+      parsed = JSON.parse(content); 
+    } catch { 
+      throw new Meteor.Error('parse-failed', 'Invalid JSON content from model'); 
+    }
     const list = Array.isArray(parsed?.items) ? parsed.items : [];
     for (const item of list) {
       let actor = null;
@@ -241,7 +210,7 @@ Meteor.methods({
               }
               return null;
             })
-            .filter(x => x && x.q)
+            .filter(x => x?.q)
         : [];
       if (qs.length === 0) continue;
       const now = new Date();
@@ -250,10 +219,14 @@ Meteor.methods({
         const existingQs = Array.isArray(existing.questions) ? existing.questions : [];
         const norm = (s) => {
           const base = String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-          try { return base.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); } catch (_e) { return base; }
+          try { 
+            return base.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); 
+          } catch { 
+            return base; 
+          }
         };
         const seen = new Set(existingQs.map(x => norm(x.q)));
-        const additions = qs.filter(x => !seen.has(norm(x.q)));
+        const additions = qs.filter(x => !seen.has(norm(x?.q)));
         const merged = existingQs.concat(additions);
         await SituationQuestionsCollection.updateAsync({ _id: existing._id }, { $set: { questions: merged, createdAt: now } });
       } else {
@@ -272,11 +245,10 @@ Meteor.methods({
     const allNotes = await SituationNotesCollection.find({ situationId }, { sort: { createdAt: -1 } }).fetchAsync();
     const priorDocs = await SituationQuestionsCollection.find({ situationId }).fetchAsync();
     const actorIdToPrior = new Map((priorDocs || []).map(d => [String(d.actorId), Array.isArray(d.questions) ? d.questions : []]));
-    const toOneLine2 = toOneLine;
     const actorIdToNotes = new Map();
     const generalNotes = [];
     for (const n of (allNotes || [])) {
-      const line = toOneLine(n.content || '');
+      const line = String(n.content || '').replace(/\s+/g, ' ').trim();
       if (!line) continue;
       if (n.actorId) {
         const key = String(n.actorId);
@@ -292,10 +264,16 @@ Meteor.methods({
     const renderPrior = () => {
       const blocks = [];
       for (const a of actors) {
-        const qs = actorIdToPrior.get(String(a._id)) || [];
+        const qs = actorIdToPrior.get(String(a?._id)) || [];
         if (!qs.length) continue;
-        const header = `Questions/Réponses — ${a.personId ? a.personId : ''} — ${a.name || ''}`.trim();
-        const lines = qs.map(q => `Q: ${q.q || ''}${(q.r && q.r.trim()) ? ` | R: ${q.r.trim()}` : ''}`);
+        const personId = a.personId ?? '';
+        const name = a.name ?? '';
+        const header = `Questions/Réponses — ${personId} — ${name}`.trim();
+        const lines = qs.map(q => {
+          const question = q.q ?? '';
+          const reply = q.r?.trim() ? ` | R: ${q.r.trim()}` : '';
+          return `Q: ${question}${reply}`;
+        });
         blocks.push([header, ...lines].join('\n'));
       }
       return blocks.length > 0 ? blocks.join('\n\n') : '(none)';

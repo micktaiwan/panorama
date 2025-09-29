@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
+import { getOpenAiApiKey, getAIConfig } from '/imports/api/_shared/config';
 
 // Normalize multi-line text to a single line
 export const toOneLine = (s) => String(s || '').replace(/\s+/g, ' ').trim();
@@ -32,8 +32,284 @@ export const buildEntriesBlock = (logs) => (logs || []).map(l => {
   return `- { id: ${l._id} } [${iso}] ${toOneLine(l.content || '')}`;
 }).join('\n');
 
-export const buildProjectsBlock = (catalog) => catalog.map(p => `- { id: ${p.id}, name: ${p.name}${p.description ? `, desc: ${p.description}` : ''} }`).join('\n');
+export const buildProjectsBlock = (catalog) => catalog.map(p => {
+  const desc = p.description ? `, desc: ${p.description}` : '';
+  return `- { id: ${p.id}, name: ${p.name}${desc} }`;
+}).join('\n');
 
+// AI Providers
+export const providers = {
+  ollama: {
+    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat } = {}) {
+      const config = getAIConfig();
+      const host = config.local.host;
+      const modelName = model || config.local.chatModel;
+      
+      console.log(`[ollama.chatComplete] Using host: ${host}, model: ${modelName}`);
+      
+      const { default: fetch } = await import('node-fetch');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      const allMessages = system ? [{ role: 'system', content: system }, ...messages] : messages;
+      
+      // Build request payload
+      const payload = {
+        model: modelName,
+        messages: allMessages,
+        stream: false,
+        options: {
+          temperature: temperature || config.temperature,
+          num_predict: maxTokens || config.maxTokens
+        }
+      };
+      
+      // Add tools support if provided
+      if (tools && tools.length > 0) {
+        payload.tools = tools;
+        if (tool_choice) {
+          payload.tool_choice = tool_choice;
+        }
+      }
+      
+      // Add response format if provided
+      if (responseFormat === 'json') {
+        payload.format = 'json';
+      }
+      
+      const response = await fetch(`${host}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[ollama.chatComplete] Request failed: ${response.status} ${errorText}`);
+        throw new Meteor.Error('ollama-failed', `Ollama request failed: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      return {
+        text: data.message?.content || '',
+        content: data.message?.content || '', // Alias for compatibility
+        tool_calls: data.message?.tool_calls || [],
+        usage: data.eval_count ? { total_tokens: data.eval_count } : null,
+        model: data.model || modelName,
+        finishReason: data.done ? 'stop' : 'length'
+      };
+    },
+
+    async embed(texts, { model, timeoutMs = 30000 } = {}) {
+      const config = getAIConfig();
+      const host = config.local.host;
+      const modelName = model || config.local.embeddingModel;
+      
+      // Ollama only processes one text at a time, so we'll process them sequentially
+      const textArray = Array.isArray(texts) ? texts : [texts];
+      const vectors = [];
+      
+      for (const text of textArray) {
+        const { default: fetch } = await import('node-fetch');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        const response = await fetch(`${host}/api/embed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: modelName,
+            input: text
+          }),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Meteor.Error('ollama-embed-failed', `Ollama embeddings failed: ${response.status} ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Ollama returns {embeddings: [...]} directly, not {data: [{embedding: [...]}]}
+        if (data.embeddings && Array.isArray(data.embeddings)) {
+          vectors.push(...data.embeddings);
+        } else if (data.embedding && Array.isArray(data.embedding)) {
+          vectors.push(data.embedding);
+        } else if (data.data && Array.isArray(data.data)) {
+          vectors.push(...data.data.map(d => d.embedding).filter(Boolean));
+        } else {
+          console.error('[Ollama embed] Unexpected response format:', data);
+          throw new Meteor.Error('ollama-embed-invalid', 'Invalid embedding response from Ollama');
+        }
+      }
+      
+      return {
+        vectors,
+        model: modelName
+      };
+    },
+
+    async healthCheck() {
+      const config = getAIConfig();
+      const host = config.local.host;
+      
+      const { default: fetch } = await import('node-fetch');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(`${host}/api/version`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        return { ok: false, details: `HTTP ${response.status}` };
+      }
+      
+      const data = await response.json();
+      return { ok: true, details: data };
+    }
+  },
+
+  openai: {
+    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat } = {}) {
+      const apiKey = getOpenAiApiKey();
+      if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+      
+      const config = getAIConfig();
+      const modelName = model || config.remote.chatModel;
+      
+      const { default: fetch } = await import('node-fetch');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      const allMessages = system ? [{ role: 'system', content: system }, ...messages] : messages;
+      
+      // Build request payload
+      const payload = {
+        model: modelName,
+        messages: allMessages,
+        temperature: temperature || config.temperature,
+        max_tokens: maxTokens || config.maxTokens
+      };
+      
+      // Add tools support if provided
+      if (tools && tools.length > 0) {
+        payload.tools = tools;
+        if (tool_choice) {
+          payload.tool_choice = tool_choice;
+        }
+      }
+      
+      // Add response format if provided
+      if (responseFormat === 'json') {
+        payload.response_format = { type: 'json_object' };
+      }
+      
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${apiKey}` 
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Meteor.Error('openai-failed', `OpenAI request failed: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      const choice = data.choices?.[0];
+      return {
+        text: choice?.message?.content || '',
+        content: choice?.message?.content || '', // Alias for compatibility
+        tool_calls: choice?.message?.tool_calls || [],
+        usage: data.usage || null,
+        model: data.model || modelName,
+        finishReason: choice?.finish_reason || 'stop'
+      };
+    },
+
+    async embed(texts, { model, timeoutMs = 30000 } = {}) {
+      const apiKey = getOpenAiApiKey();
+      if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
+      
+      const config = getAIConfig();
+      const modelName = model || config.remote.embeddingModel;
+      
+      const { default: fetch } = await import('node-fetch');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${apiKey}` 
+        },
+        body: JSON.stringify({
+          model: modelName,
+          input: Array.isArray(texts) ? texts : [texts]
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Meteor.Error('openai-embed-failed', `OpenAI embeddings failed: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      return {
+        vectors: data.data?.map(d => d.embedding) || [],
+        model: data.model || modelName
+      };
+    },
+
+    async healthCheck() {
+      const apiKey = getOpenAiApiKey();
+      if (!apiKey) {
+        return { ok: false, details: 'API key missing' };
+      }
+      
+      const { default: fetch } = await import('node-fetch');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch('https://api.openai.com/v1/models', {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        return { ok: false, details: `HTTP ${response.status}` };
+      }
+      
+      const data = await response.json();
+      return { ok: true, details: data };
+    }
+  }
+};
+
+// Legacy function for backward compatibility
 export async function openAiChat({ system, user, expectJson, schema }) {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
@@ -57,7 +333,7 @@ export async function openAiChat({ system, user, expectJson, schema }) {
   try {
     return JSON.parse(content);
   } catch (err) {
-    console.error('[openAiChat] invalid JSON', { content, error: err && err.message });
+    console.error('[openAiChat] invalid JSON', { content, error: err?.message });
     throw new Meteor.Error('openai-invalid-json', 'Invalid JSON content from model');
   }
 }
