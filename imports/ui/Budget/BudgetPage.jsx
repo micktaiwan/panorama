@@ -45,7 +45,7 @@ export const BudgetPage = () => {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   React.useEffect(() => {
-    setNotifyHandler((t) => notify(t));
+    setNotifyHandler((t) => setToast(t));
     return () => setNotifyHandler(null);
   }, []);
   React.useEffect(() => {
