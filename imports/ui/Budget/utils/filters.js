@@ -4,7 +4,8 @@ export const filterByQuery = (rows, query) => {
   const s = String(query || '').trim().toLowerCase();
   if (!s) return rows;
   const filtered = rows.filter((r) =>
-    String(r.vendor || '').toLowerCase().includes(s)
+    String(r.vendor || '').toLowerCase().includes(s) ||
+    String(r.notes || '').toLowerCase().includes(s)
   );
   // Debug logging to help identify filtering issues
   if (s === 'anthropic') {

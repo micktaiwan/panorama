@@ -25,6 +25,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'sessions' && parts[1]) return { name: 'session', sessionId: parts[1] };
   if (parts[0] === 'import-tasks') return { name: 'importTasks' };
   if (parts[0] === 'notes') return { name: 'notes' };
+  if (parts[0] === 'emails') return { name: 'emails' };
   return { name: 'home' };
 };
 
@@ -95,6 +96,9 @@ export const navigateTo = (route) => {
       break;
     case 'notes':
       window.location.hash = '#/notes';
+      break;
+    case 'emails':
+      window.location.hash = '#/emails';
       break;
     default:
       window.location.hash = '#/';

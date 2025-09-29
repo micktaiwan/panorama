@@ -107,6 +107,11 @@ import '/imports/api/errors/publications';
 import '/imports/api/errors/methods';
 import '/imports/api/errors/serverConsoleOverride';
 
+// Gmail Integration
+import '/imports/api/emails/collections';
+import '/imports/api/emails/publications';
+import '/imports/api/emails/methods';
+
 Meteor.startup(() => {
   // Place server-side initialization here as your app grows.
   const scriptSrc = Meteor.isDevelopment
