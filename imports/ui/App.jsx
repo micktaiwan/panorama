@@ -39,6 +39,7 @@ import { CalendarPage } from '/imports/ui/Calendar/CalendarPage.jsx';
 import { PanoramaPage } from '/imports/ui/Panorama/PanoramaPage.jsx';
 import { NotesPage } from '/imports/ui/Notes/NotesPage.jsx';
 import { WebPage } from '/imports/ui/Web/WebPage.jsx';
+import { EmailsPage } from '/imports/ui/Emails/EmailsPage.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -107,6 +108,7 @@ function App() {
     { key: 'w', label: 'Web Search', route: { name: 'web' } },
     { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
     { key: 't', label: 'Notes', route: { name: 'notes' } },
+    { key: 'm', label: 'Emails', route: { name: 'emails' } },
     { key: 'n', label: 'New Note Session', action: 'newSession' },
     { key: 'h', label: 'Help', route: { name: 'help' } },
     { key: 'g', label: 'Preferences', route: { name: 'preferences' } },
@@ -697,6 +699,11 @@ function App() {
           <NotesPage />
         </div>
       )}
+      {route?.name === 'emails' && (
+        <div className="panel">
+          <EmailsPage />
+        </div>
+      )}
       {route?.name === 'onboarding' && (
         <div className="panel">
           <Onboarding />
@@ -903,6 +910,8 @@ function App() {
           <a href="#/preferences" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'preferences' }); }}>Preferences</a>
           <span className="dot">·</span>
           <a href="#/userlog" onClick={(e) => { e.preventDefault(); goUserLog(); }}>Journal</a>
+          <span className="dot">·</span>
+          <a href="#/emails" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'emails' }); }}>Emails</a>
           <span className="dot">·</span>
           <a href="#/width" onClick={(e) => { e.preventDefault(); setWide(v => !v); }}>{wide ? 'Width: 90%' : 'Width: 1100px'}</a>
         </span>

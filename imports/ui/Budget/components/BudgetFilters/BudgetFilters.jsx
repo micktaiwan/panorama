@@ -41,7 +41,7 @@ export const BudgetFilters = ({
         </label>
       ) : null}
       {searchEnabled ? (
-        <input className="budgetSearch" placeholder="Search vendor" value={searchValue} onChange={(e) => onSearchChange && onSearchChange(e.target.value)} />
+        <input className="budgetSearch" placeholder="Search vendor or notes" value={searchValue} onChange={(e) => onSearchChange && onSearchChange(e.target.value)} />
       ) : null}
     </>
   );
