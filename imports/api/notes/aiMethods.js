@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { check } from 'meteor/check';
+import { check, Match } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 
 // Helper function to update note index and project timestamp
@@ -20,8 +20,9 @@ const updateNoteIndex = async (noteId) => {
 };
 
 Meteor.methods({
-  async 'ai.cleanNote'(noteId) {
+  async 'ai.cleanNote'(noteId, customPrompt = null) {
     check(noteId, String);
+    check(customPrompt, Match.Maybe(String));
 
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const note = await NotesCollection.findOneAsync({ _id: noteId });
@@ -33,7 +34,9 @@ Meteor.methods({
     }
 
     const system = `You are a text cleaner. Your job is to normalize notes without summarizing or translating.`;
-    const instructions = `
+    
+    // Use custom prompt if provided, otherwise use default instructions
+    const instructions = customPrompt || `
     Rules for cleaning notes:
     1. Remove all emojis.
     2. Remove all markdown symbols (e.g. **, #, >, *) but keep the hierarchy: convert titles and subtitles to plain text lines.
@@ -45,6 +48,7 @@ Meteor.methods({
     8. Correct obvious spelling mistakes.
     Output: plain text only, no markdown, no special formatting, no added text compared to the original
     `;
+    
     const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
 
     try {

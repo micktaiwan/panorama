@@ -4,6 +4,7 @@ import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { formatDateTime } from '/imports/ui/utils/date.js';
 import { notify } from '/imports/ui/utils/notify.js';
+import { CleanPromptModal } from './CleanPromptModal.jsx';
 import './NoteEditor.css';
 import { marked } from 'marked';
 
@@ -29,6 +30,8 @@ export const NoteEditor = ({
   const pendingSelectionRef = useRef(null);
   const [isCleaning, setIsCleaning] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [undoAvailable, setUndoAvailable] = useState(false);
+  const [showCleanModal, setShowCleanModal] = useState(false);
   const [splitPreview, setSplitPreview] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       return window.localStorage.getItem('notes.splitPreview') === 'true';
@@ -52,27 +55,38 @@ export const NoteEditor = ({
       return;
     }
     
-    const key = `note:original:${activeTabId}`;
-    const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
-    const hadBackup = !!has;
+    // Open the clean prompt modal
+    setShowCleanModal(true);
+  };
+
+  const handleCleanConfirm = (customPrompt) => {
+    if (!activeTabId) return;
     
-    if (!hadBackup && typeof window !== 'undefined') {
-      sessionStorage.setItem(key, noteContents[activeTabId] || '');
+    // Save current content for undo functionality
+    const undoKey = `note:undo:${activeTabId}`;
+    const currentContent = noteContents[activeTabId] || '';
+    
+    if (typeof window !== 'undefined') {
+      // Store timestamp and content for undo
+      const undoData = {
+        timestamp: Date.now(),
+        content: currentContent,
+        action: 'clean'
+      };
+      sessionStorage.setItem(undoKey, JSON.stringify(undoData));
+      setUndoAvailable(true);
     }
     
     setIsCleaning(true);
-    Meteor.call('ai.cleanNote', activeTabId, (err) => {
+    Meteor.call('ai.cleanNote', activeTabId, customPrompt, (err) => {
       console.log('ai.cleanNote result', err);
       setIsCleaning(false);
       if (err) {
         console.error('ai.cleanNote failed', err);
-        if (!hadBackup && typeof window !== 'undefined') {
-          sessionStorage.removeItem(key);
-        }
         notify({ message: 'Error cleaning note', kind: 'error' });
         return;
       }
-      notify({ message: 'Note cleaned successfully', kind: 'success' });
+      notify({ message: 'Note cleaned successfully. Press Cmd-Z to undo.', kind: 'success' });
     });
   };
 
@@ -85,12 +99,19 @@ export const NoteEditor = ({
       return;
     }
     
-    const key = `note:original:${activeTabId}`;
-    const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
-    const hadBackup = !!has;
+    // Save current content for undo functionality
+    const undoKey = `note:undo:${activeTabId}`;
+    const currentContent = noteContents[activeTabId] || '';
     
-    if (!hadBackup && typeof window !== 'undefined') {
-      sessionStorage.setItem(key, noteContents[activeTabId] || '');
+    if (typeof window !== 'undefined') {
+      // Store timestamp and content for undo
+      const undoData = {
+        timestamp: Date.now(),
+        content: currentContent,
+        action: 'summarize'
+      };
+      sessionStorage.setItem(undoKey, JSON.stringify(undoData));
+      setUndoAvailable(true);
     }
     
     setIsSummarizing(true);
@@ -98,13 +119,10 @@ export const NoteEditor = ({
       setIsSummarizing(false);
       if (err) {
         console.error('ai.summarizeNote failed', err);
-        if (!hadBackup && typeof window !== 'undefined') {
-          sessionStorage.removeItem(key);
-        }
         notify({ message: 'Error summarizing note', kind: 'error' });
         return;
       }
-      notify({ message: 'Note summarized successfully', kind: 'success' });
+      notify({ message: 'Note summarized successfully. Press Cmd-Z to undo.', kind: 'success' });
     });
   };
 
@@ -117,6 +135,47 @@ export const NoteEditor = ({
     if (!activeTabId || !onMoveProject) return;
     onMoveProject(activeTabId, projectId);
   };
+
+  const handleUndo = () => {
+    if (!activeTabId) return;
+    
+    const undoKey = `note:undo:${activeTabId}`;
+    if (typeof window === 'undefined') return;
+    
+    const undoDataStr = sessionStorage.getItem(undoKey);
+    if (!undoDataStr) {
+      notify({ message: 'No undo data available', kind: 'warning' });
+      return;
+    }
+    
+    try {
+      const undoData = JSON.parse(undoDataStr);
+      const { content, action } = undoData;
+      
+      // Restore the previous content
+      onContentChange(activeTabId, content);
+      
+      // Remove the undo data after using it
+      sessionStorage.removeItem(undoKey);
+      setUndoAvailable(false);
+      
+      notify({ message: `Undid ${action} action`, kind: 'success' });
+    } catch (error) {
+      console.error('Error parsing undo data:', error);
+      notify({ message: 'Error restoring previous version', kind: 'error' });
+    }
+  };
+
+  const hasUndoData = () => {
+    if (!activeTabId || typeof window === 'undefined') return false;
+    const undoKey = `note:undo:${activeTabId}`;
+    return !!sessionStorage.getItem(undoKey);
+  };
+
+  // Update undo availability when activeTabId changes
+  useEffect(() => {
+    setUndoAvailable(hasUndoData());
+  }, [activeTabId]);
 
   // Focus the textarea when shouldFocus is true
   useEffect(() => {
@@ -174,6 +233,9 @@ export const NoteEditor = ({
             if (hasMod && key === 's') {
               e.preventDefault();
               onSave(activeTabId);
+            } else if (hasMod && key === 'z') {
+              e.preventDefault();
+              handleUndo();
             } else if (hasMod && key === 'w') {
               e.preventDefault();
               // Check if note has unsaved changes before closing
@@ -327,6 +389,15 @@ export const NoteEditor = ({
           </button>
           
           <button
+            className="action-button undo-button"
+            onClick={handleUndo}
+            disabled={!activeTabId || !undoAvailable}
+            title={undoAvailable ? "Undo last AI action (Cmd-Z)" : "No undo data available"}
+          >
+            Undo
+          </button>
+          
+          <button
             className="action-button duplicate-button"
             onClick={handleDuplicateNote}
             disabled={!activeTabId}
@@ -336,6 +407,23 @@ export const NoteEditor = ({
           </button>
         </div>
       </div>
+      
+      <CleanPromptModal
+        open={showCleanModal}
+        onClose={() => setShowCleanModal(false)}
+        onConfirm={handleCleanConfirm}
+        defaultPrompt={`Rules for cleaning notes:
+1. Remove all emojis.
+2. Remove all markdown symbols (e.g. **, #, >, *) but keep the hierarchy: convert titles and subtitles to plain text lines.
+3. Remove timestamps (e.g. "2 minutes ago", "9:14").
+4. For email signatures: remove long blocks. Keep only the sender's name and date. Ignore job titles, phone numbers, or disclaimers.
+5. Keep the conversation flow and speaker names if it's a dialogue.
+6. Keep all original content, do NOT summarize, shorten, or translate.
+7. Preserve the original language of the text.
+8. Correct obvious spelling mistakes.
+Output: plain text only, no markdown, no special formatting, no added text compared to the original`}
+        noteContent={noteContents[activeTabId] || ''}
+      />
     </div>
   );
 };
