@@ -5,9 +5,8 @@ export const setNotifyHandler = (fn) => {
 };
 
 export const notify = ({ message, kind = 'info', durationMs } = {}) => {
+  console.log(`[notify] ${kind}: ${message}`);
   if (handler) {
     handler({ message, kind, durationMs });
-  } else {
-    console.log(`[notify] ${kind}: ${message}`);
   }
 };

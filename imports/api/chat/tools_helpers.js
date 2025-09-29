@@ -13,7 +13,7 @@ export const buildCitationsFromToolResults = (toolCalls, toolResults) => {
   for (let i = 0; i < calls.length; i += 1) {
     const call = calls[i];
     if (call && call.name === 'chat_semanticSearch') {
-      const match = results.find((r) => r && r.tool_call_id === (call.id || 'chat_semanticSearch'));
+      const match = results.find((r) => r?.tool_call_id === (call.id || 'chat_semanticSearch'));
       if (match && match.output) {
         try {
           const parsed = JSON.parse(match.output);
@@ -192,7 +192,7 @@ export const buildPlannerConfig = (system, user, toolNames) => {
     'Use chat_semanticSearch for finding relevant documents by content.',
     'IMPORTANT: Include stopWhen.have to avoid unnecessary steps. Examples: ["lists.tasks"] after getting tasks, ["ids.projectId"] after finding project, ["lists.*"] when any list is populated.',
     'Leverage variable binding: use {"var":"ids.projectId"} to reference previously found IDs.',
-    'Output JSON only that matches the schema. Keep at most 5 steps.'
+    'CRITICAL: Respond with ONLY valid JSON that matches the schema. No prose, no markdown, no arrays outside the schema. Respond with just the JSON object. Keep at most 5 steps.'
   ].join(' ');
 
   const plannerMessages = [

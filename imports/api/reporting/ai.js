@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
+import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { check } from 'meteor/check';
 
 const windowKeyToMs = (key) => {
@@ -17,8 +17,6 @@ Meteor.methods({
     if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
     if (userPrompt !== undefined && typeof userPrompt !== 'string') throw new Meteor.Error('invalid-arg', 'userPrompt must be a string');
     if (options && typeof options !== 'object') throw new Meteor.Error('invalid-arg', 'options must be an object');
-    const apiKey = getOpenAiApiKey();
-
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const { TasksCollection } = await import('/imports/api/tasks/collections');
@@ -59,10 +57,9 @@ Meteor.methods({
     for (const t of tasksDone) push('task_done', new Date(t.statusChangedAt).toISOString(), t.title || '(untitled task)', t.projectId || '');
     for (const n of notes) push('note_created', new Date(n.createdAt).toISOString(), n.title || '(note)', n.projectId || '');
 
-    // Fallback: if no key or no rows, return a simple rendering respecting format
-    if (!apiKey || rows.length === 0) {
+    // Fallback: if no rows, return a simple rendering respecting format
+    if (rows.length === 0) {
       const lang = (options && typeof options.lang === 'string') ? options.lang.toLowerCase() : 'fr';
-      const format = (options && typeof options.format === 'string') ? options.format.toLowerCase() : 'text';
       const headerText = lang === 'en' ? `Activity report — ${windowKey}` : `Rapport d'activité — ${windowKey}`;
       const headerMd = `# ${headerText}`;
       if (rows.length === 0) {
@@ -152,26 +149,12 @@ Meteor.methods({
     const system = userPrompt && userPrompt.trim() ? userPrompt : defaultSystem;
     const user = userPrompt && userPrompt.trim() ? `${itemsBlock}\n\n${notesBlock}\n\n${outputConstraints}` : defaultUser;
 
-    // Removed verbose prompt and meta logs
-
-    const { default: fetch } = await import('node-fetch');
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'o4-mini',
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user }
-        ]
-      })
+    // Use LLM proxy for AI generation
+    const result = await chatComplete({
+      system,
+      messages: [{ role: 'user', content: user }]
     });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Meteor.Error('openai-failed', errText);
-    }
-    const data = await resp.json();
-    const raw = data.choices?.[0]?.message?.content || '';
+    const raw = result.content || '';
     const markdown = wantsMarkdown ? raw : '';
     const text = wantsMarkdown ? raw.replace(/^#+\s*/gm, '').replace(/^-\s*/gm, '• ') : raw;
     return { text, markdown };

@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
-import { getOpenAiApiKey } from '/imports/api/_shared/config';
-import { openAiChat, toOneLine, formatAnchors, buildEntriesBlock, buildProjectsBlock } from '/imports/api/_shared/aiCore';
+import { chatComplete } from '/imports/api/_shared/llmProxy';
+import { toOneLine, formatAnchors, buildEntriesBlock, buildProjectsBlock } from '/imports/api/_shared/aiCore';
 
 Meteor.methods({
   async 'ai.cleanUserLog'(logId) {
@@ -11,15 +11,10 @@ Meteor.methods({
     const entry = await UserLogsCollection.findOneAsync({ _id: logId });
     if (!entry) throw new Meteor.Error('not-found', 'UserLog entry not found');
 
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
-
     const original = typeof entry.content === 'string' ? entry.content : '';
     if (!original.trim()) {
       return { content: original };
     }
-
-    const { default: fetch } = await import('node-fetch');
 
     const system = 'You fix spelling and basic grammar without changing meaning or tone.';
     const instructions = [
@@ -28,37 +23,32 @@ Meteor.methods({
       'Fix obvious spelling and simple grammar issues. Keep emojis as-is.',
       'Return the corrected text only.'
     ].join(' ');
-    const user = `${instructions}\n\nOriginal entry:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
+    const user = `${instructions}\n\nOriginal entry:\n\n\`\`\`\n${original}\n\`\`\``;
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'o4-mini',
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user }
-        ]
-      })
-    });
+    try {
+      const result = await chatComplete({ 
+        system, 
+        messages: [{ role: 'user', content: user }] 
+      });
+      const cleaned = result.text;
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('[ai.cleanUserLog] OpenAI request failed', { status: resp.status, statusText: resp.statusText, body: errText });
-      throw new Meteor.Error('openai-failed', errText);
+      await UserLogsCollection.updateAsync(logId, { $set: { content: cleaned, updatedAt: new Date() } });
+      return { content: cleaned };
+    } catch (error) {
+      console.error('[ai.cleanUserLog] Error:', error);
+      throw new Meteor.Error('ai-clean-failed', `Failed to clean user log: ${error.message}`);
     }
-
-    const data = await resp.json();
-    const cleaned = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? String(data.choices[0].message.content) : '';
-
-    await UserLogsCollection.updateAsync(logId, { $set: { content: cleaned, updatedAt: new Date() } });
-    return { content: cleaned };
   },
 
   async 'userLogs.summarizeWindow'(windowKey, hours, options) {
     check(windowKey, String);
     const n = Number(hours);
-    const promptOverride = (typeof options === 'string') ? options : (options && typeof options.promptOverride === 'string' ? options.promptOverride : '');
+    let promptOverride = '';
+    if (typeof options === 'string') {
+      promptOverride = options;
+    } else if (options?.promptOverride && typeof options.promptOverride === 'string') {
+      promptOverride = options.promptOverride;
+    }
     const rangeHours = Number.isFinite(n) && n > 0 ? n : 3;
 
     const now = new Date();
@@ -104,29 +94,6 @@ Meteor.methods({
       '- Prefer fewer, well-grounded suggestions over many weak ones.'
     ].join('\n');
 
-    const schema = {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        summary: { type: 'string' },
-        tasks: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              title: { type: 'string' },
-              notes: { type: 'string' },
-              projectId: { type: 'string' },
-              deadline: { type: 'string' },
-              sourceLogIds: { type: 'array', items: { type: 'string' } }
-            },
-            required: ['title', 'projectId', 'sourceLogIds']
-          }
-        }
-      },
-      required: ['summary', 'tasks']
-    };
 
     // If a custom prompt override is provided, ignore the default prompt and schema.
     // Send only the override instruction and the journal entries; return plain text.
@@ -151,13 +118,15 @@ Meteor.methods({
       ].join('\n');
       
 
-      const content = await openAiChat({ system: customSystem, user: customUser, expectJson: false });
+      const result = await chatComplete({ system: customSystem, messages: [{ role: 'user', content: customUser }] });
+      const content = result.text;
       parsed = { summary: String(content || '').trim(), tasks: [] };
     } else {
       // Default behavior: structured JSON with summary and task suggestions
       
 
-      const json = await openAiChat({ system, user: instructions, expectJson: true, schema });
+      const result = await chatComplete({ system, messages: [{ role: 'user', content: instructions }] });
+      const json = JSON.parse(result.text);
       parsed = json;
       if (!parsed.tasks) parsed.tasks = [];
     }

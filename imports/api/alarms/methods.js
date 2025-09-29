@@ -26,10 +26,7 @@ Meteor.methods({
     };
     check(alarm.recurrence.type, RecurrenceType);
     const _id = await AlarmsCollection.insertAsync(alarm);
-    try {
-      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'alarm', id: _id, text: alarm.title || '' });
-    } catch (e) { console.error('[search][alarms.insert] upsert failed', e); }
+    // Alarms are not indexed in Qdrant - they are temporary notifications
     return _id;
   },
   async 'alarms.update'(alarmId, modifier) {
@@ -40,17 +37,13 @@ Meteor.methods({
     if (set.nextTriggerAt) set.nextTriggerAt = new Date(set.nextTriggerAt);
     if (set.snoozedUntilAt) set.snoozedUntilAt = new Date(set.snoozedUntilAt);
     const res = await AlarmsCollection.updateAsync(alarmId, { $set: set });
-    try {
-      const next = await AlarmsCollection.findOneAsync(alarmId, { fields: { title: 1 } });
-      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'alarm', id: alarmId, text: next?.title || '' });
-    } catch (e) { console.error('[search][alarms.update] upsert failed', e); }
+    // Alarms are not indexed in Qdrant - they are temporary notifications
     return res;
   },
   async 'alarms.remove'(alarmId) {
     check(alarmId, String);
     const res = await AlarmsCollection.removeAsync(alarmId);
-    try { const { deleteDoc } = await import('/imports/api/search/vectorStore.js'); await deleteDoc('alarm', alarmId); } catch (e) { console.error('[search][alarms.remove] delete failed', e); }
+    // Alarms are not indexed in Qdrant - no need to delete from vector store
     return res;
   },
   async 'alarms.toggleEnabled'(alarmId, enabled) {
@@ -104,21 +97,12 @@ Meteor.methods({
   async 'alarms.markFiredIfDue'(alarmId) {
     check(alarmId, String);
     const now = new Date();
-    const selector = {
-      _id: alarmId,
-      enabled: true,
-      $or: [
-        { snoozedUntilAt: { $lte: now } },
-        { snoozedUntilAt: { $exists: false }, nextTriggerAt: { $lte: now } }
-      ],
-      $or_acked: true
-    };
     // Mongo doesn't support two $or at same level mixed with others in our shape; emulate acknowledgedAt null/absent check
     const doc = await AlarmsCollection.findOneAsync(alarmId);
     if (!doc) return 0;
     const effective = doc.snoozedUntilAt ? new Date(doc.snoozedUntilAt) : new Date(doc.nextTriggerAt);
     if (!doc.enabled) return 0;
-    if (!(effective.getTime() <= now.getTime())) return 0;
+    if (effective.getTime() > now.getTime()) return 0;
     const res = await AlarmsCollection.updateAsync(alarmId, { $set: { snoozedUntilAt: null, lastFiredAt: now, enabled: false, done: true, acknowledgedAt: null, updatedAt: now } });
     return res;
   }

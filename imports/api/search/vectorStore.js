@@ -1,10 +1,61 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey, getQdrantUrl } from '/imports/api/_shared/config';
+import { getQdrantUrl } from '/imports/api/_shared/config';
+import { embed as llmEmbed } from '/imports/api/_shared/llmProxy';
 import { ErrorsCollection } from '/imports/api/errors/collections';
 import crypto from 'crypto';
 
-export const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
-export const VECTOR_SIZE = () => Number(Meteor.settings?.qdrantVectorSize || 1536);
+export const COLLECTION = () => {
+  const baseName = String(Meteor.settings?.qdrantCollectionName || 'panorama');
+  
+  const { getAIConfig } = require('/imports/api/_shared/config');
+  const config = getAIConfig();
+  
+  // In remote mode, always use base collection name (no model suffix)
+  if (config.mode === 'remote') {
+    return baseName;
+  }
+  
+  // In local/auto mode, use model-suffixed collection name
+  const model = config.mode === 'local' ? config.local.embeddingModel : config.remote.embeddingModel;
+  const collectionName = `${baseName}_${model.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  return collectionName;
+};
+// Dynamic vector size based on current embedding model
+export const VECTOR_SIZE = () => {
+  // Default sizes for common models
+  const modelSizes = {
+    'text-embedding-3-small': 1536,
+    'text-embedding-3-large': 3072,
+    'text-embedding-ada-002': 1536,
+    'nomic-embed-text': 768,
+    'nomic-embed-text:latest': 768,
+    'mxbai-embed-large': 1024,
+    'all-MiniLM-L6-v2': 384,
+    'all-minilm:l6-v2': 384
+  };
+  
+  // Try to get from settings first
+  const fromSettings = Meteor.settings?.qdrantVectorSize;
+  if (fromSettings) return Number(fromSettings);
+  
+  // Try to get from current AI config
+  const { getAIConfig } = require('/imports/api/_shared/config');
+  const config = getAIConfig();
+  const model = config.mode === 'local' ? config.local.embeddingModel : config.remote.embeddingModel;
+  
+  // Try exact match first
+  if (modelSizes[model]) {
+    return modelSizes[model];
+  }
+  
+  // Try to match by base name (without version tag)
+  const baseModel = model.split(':')[0];
+  if (modelSizes[baseModel]) {
+    return modelSizes[baseModel];
+  }
+  
+  return 1536; // fallback to OpenAI default
+};
 export const DISTANCE = () => String(Meteor.settings?.qdrantDistance || 'Cosine');
 
 let singletonClient = null;
@@ -29,42 +80,21 @@ export const makePreview = (text, max = 180) => {
 };
 
 export const embedText = async (text) => {
-  const apiKey = getOpenAiApiKey();
-  if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
-  const { default: fetch } = await import('node-fetch');
-  const payload = { model: 'text-embedding-3-small', input: String(text || '') };
-  const res = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    const err = new Meteor.Error('openai-failed', txt);
-    try {
-      await ErrorsCollection.insertAsync({
-        kind: 'vectorization',
-        message: 'OpenAI embeddings HTTP error',
-        context: { status: res.status, statusText: res.statusText, payloadModel: payload.model },
-        createdAt: new Date(),
-      });
-    } catch (e) { console.error('[errors][log] failed to record openai-failed', e); }
-    throw err;
+  const result = await llmEmbed([String(text || '')]);
+  const vec = result.vectors?.[0];
+  
+  if (!Array.isArray(vec)) {
+    console.error('[embedText] Invalid embedding response:', {
+      result,
+      vectors: result.vectors,
+      firstVector: vec,
+      textLength: String(text || '').length
+    });
+    throw new Meteor.Error('embedding-invalid', `Invalid embedding response from LLM proxy. Got: ${typeof vec}, expected: Array`);
   }
-  const data = await res.json();
-  const vec = data?.data?.[0]?.embedding;
-  if (!Array.isArray(vec) || vec.length !== VECTOR_SIZE()) {
-    const err = new Meteor.Error('openai-invalid', `Invalid embedding vector length ${Array.isArray(vec) ? vec.length : typeof vec}`);
-    try {
-      await ErrorsCollection.insertAsync({
-        kind: 'vectorization',
-        message: 'Invalid embedding vector length',
-        context: { length: Array.isArray(vec) ? vec.length : null },
-        createdAt: new Date(),
-      });
-    } catch (e) { console.error('[errors][log] failed to record openai-invalid', e); }
-    throw err;
-  }
+  
+  // Note: We don't validate vector length here anymore since different models have different dimensions
+  // The VECTOR_SIZE() check should be done at the collection level or when upserting
   return vec;
 };
 
@@ -77,27 +107,14 @@ const ensureCollectionIfNeeded = async () => {
 
 export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = null, extraPayload = {} }) => {
   const client = await getQdrantClient();
-  try {
-    await ensureCollectionIfNeeded();
-    const vector = await embedText(text);
-    const nowMs = Date.now();
-    const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
-    if (projectId) payload.projectId = projectId;
-    if (sessionId) payload.sessionId = sessionId;
-    const pointId = toPointId(kind, id);
-    await client.upsert(COLLECTION(), { points: [{ id: pointId, vector: Array.from(vector), payload }] });
-  } catch (e) {
-    // Log and rethrow to let callers decide how to handle indexing failures
-    try {
-      await ErrorsCollection.insertAsync({
-        kind: 'vectorization',
-        message: e?.message || String(e),
-        context: { kind, id, hasProjectId: !!projectId, hasSessionId: !!sessionId },
-        createdAt: new Date(),
-      });
-    } catch (_e) { console.error('[errors][log] failed to record vectorization error', _e); }
-    throw e;
-  }
+  await ensureCollectionIfNeeded();
+  const vector = await embedText(text);
+  const nowMs = Date.now();
+  const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
+  if (projectId) payload.projectId = projectId;
+  if (sessionId) payload.sessionId = sessionId;
+  const pointId = toPointId(kind, id);
+  await client.upsert(COLLECTION(), { points: [{ id: pointId, vector: Array.from(vector), payload }] });
 };
 
 export const deleteDoc = async (kind, id) => {
@@ -124,14 +141,26 @@ export const deleteByKind = async (kind) => {
 
 export const ensureCollection = async () => {
   const client = await getQdrantClient();
+  const collectionName = COLLECTION();
+  const vectorSize = VECTOR_SIZE();
+  const distance = DISTANCE();
+  
   try {
-    await client.createCollection(COLLECTION(), { vectors: { size: VECTOR_SIZE(), distance: DISTANCE() } });
+    // Check if collection already exists
+    await client.getCollection(collectionName);
+    console.log(`[qdrant] Collection '${collectionName}' already exists`);
   } catch (e) {
-    const status = e && (e.response?.status || e.status);
-    const msg = e && (e.response?.data || e.message || String(e));
-    const isExists = (status === 409) || (String(msg || '').toLowerCase().includes('exist'));
-    if (isExists) return; // collection already exists; benign
-    throw e;
+    // Collection doesn't exist, create it
+    try {
+      await client.createCollection(collectionName, { vectors: { size: vectorSize, distance } });
+      console.log(`[qdrant] Created collection '${collectionName}' (size=${vectorSize}, distance=${distance})`);
+    } catch (createError) {
+      if (createError?.data?.status?.error?.includes('already exists')) {
+        console.log(`[qdrant] Collection '${collectionName}' was created by another process`);
+      } else {
+        throw createError;
+      }
+    }
   }
 };
 

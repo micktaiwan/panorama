@@ -29,6 +29,7 @@ import { AlarmModal } from '/imports/ui/Alarms/AlarmModal.jsx';
 import { NotifyProvider } from '/imports/ui/components/Notify/NotifyManager.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
 import { timeUntilPrecise } from '/imports/ui/utils/date.js';
+import { AIStatusIndicator } from '/imports/ui/components/AIStatusIndicator/AIStatusIndicator.jsx';
 import { CommandPalette } from '/imports/ui/CommandPalette/CommandPalette.jsx';
 import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
@@ -863,7 +864,6 @@ function App() {
         defaultProjectId={cmdDefaultProjectId}
       />
       <footer className="appFooter">
-        <span>Panorama — get a clear view of your projects</span>
         <span className="footerNextAlarm">
           {(() => {
             const effective = (a) => (a.snoozedUntilAt ? new Date(a.snoozedUntilAt) : new Date(a.nextTriggerAt));
@@ -873,6 +873,7 @@ function App() {
             return next ? `Next alarm: ${timeUntilPrecise(effective(next))}` : '';
           })()}
         </span>
+        <AIStatusIndicator />
         <span>
           <a href="#/help">Help</a>
           <span className="dot">·</span>

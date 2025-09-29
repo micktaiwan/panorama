@@ -40,6 +40,24 @@ export const Preferences = () => {
     }
   });
   const [lanIp, setLanIp] = React.useState('');
+  
+  // AI Backend preferences
+  const [aiMode, setAiMode] = React.useState('local');
+  const [aiFallback, setAiFallback] = React.useState('remote');
+  const [aiTimeoutMs, setAiTimeoutMs] = React.useState(30000);
+  const [aiMaxTokens, setAiMaxTokens] = React.useState(4000);
+  const [aiTemperature, setAiTemperature] = React.useState(0.7);
+  const [aiLocalHost, setAiLocalHost] = React.useState('http://127.0.0.1:11434');
+  const [aiLocalChatModel, setAiLocalChatModel] = React.useState('llama3.1:latest');
+  const [aiLocalEmbeddingModel, setAiLocalEmbeddingModel] = React.useState('nomic-embed-text:latest');
+  const [aiRemoteProvider, setAiRemoteProvider] = React.useState('openai');
+  const [aiRemoteChatModel, setAiRemoteChatModel] = React.useState('gpt-4o-mini');
+  const [aiRemoteEmbeddingModel, setAiRemoteEmbeddingModel] = React.useState('text-embedding-3-small');
+  const [aiRemoteApiKey, setAiRemoteApiKey] = React.useState('');
+  const [aiHealthStatus, setAiHealthStatus] = React.useState(null);
+  const [aiTesting, setAiTesting] = React.useState({ ollama: false, openai: false });
+  const [ollamaModels, setOllamaModels] = React.useState([]);
+  const [loadingModels, setLoadingModels] = React.useState(false);
 
   // Ensure UI reflects actual server toggle on mount
   React.useEffect(() => {
@@ -65,6 +83,75 @@ export const Preferences = () => {
       setLanIp(first);
     });
   }, []);
+
+  // Load AI preferences on mount
+  React.useEffect(() => {
+    if (pref?.ai) {
+      setAiMode(pref.ai.mode || 'local');
+      setAiFallback(pref.ai.fallback || 'remote');
+      setAiTimeoutMs(pref.ai.timeoutMs || 30000);
+      setAiMaxTokens(pref.ai.maxTokens || 4000);
+      setAiTemperature(pref.ai.temperature || 0.7);
+      if (pref.ai.local) {
+        setAiLocalHost(pref.ai.local.host || 'http://127.0.0.1:11434');
+        setAiLocalChatModel(pref.ai.local.chatModel || 'llama3.1:latest');
+        setAiLocalEmbeddingModel(pref.ai.local.embeddingModel || 'nomic-embed-text:latest');
+      }
+      if (pref.ai.remote) {
+        setAiRemoteProvider(pref.ai.remote.provider || 'openai');
+        setAiRemoteChatModel(pref.ai.remote.chatModel || 'gpt-4o-mini');
+        setAiRemoteEmbeddingModel(pref.ai.remote.embeddingModel || 'text-embedding-3-small');
+      }
+      
+      // Refresh Qdrant health to show correct collection name
+      Meteor.call('qdrant.health', (err, res) => {
+        if (!err && res) {
+          setHealth(res);
+        }
+      });
+    }
+  }, [pref]);
+
+  // Manual AI health check function
+  const checkAIHealth = React.useCallback(() => {
+    Meteor.call('ai.healthcheck', (err, result) => {
+      if (err) {
+        console.warn('[prefs] AI health check failed', err);
+        setAiHealthStatus(null);
+        notify({ 
+          message: `AI health check failed: ${err.reason || err.message}`, 
+          kind: 'error' 
+        });
+      } else {
+        setAiHealthStatus(result);
+        notify({ 
+          message: 'AI health status updated', 
+          kind: 'success' 
+        });
+      }
+    });
+  }, []);
+
+  const loadOllamaModels = React.useCallback(() => {
+    setLoadingModels(true);
+    Meteor.call('ai.listOllamaModels', (err, result) => {
+      setLoadingModels(false);
+      if (err) {
+        console.error('[loadOllamaModels] Failed to load models:', err);
+        notify({
+          message: `Failed to load Ollama models: ${err.reason || err.message}`,
+          kind: 'error'
+        });
+      } else {
+        setOllamaModels(result.models || []);
+      }
+    });
+  }, []);
+
+  // Load Ollama models on mount
+  React.useEffect(() => {
+    loadOllamaModels();
+  }, [loadOllamaModels]);
 
   const pollIndexStatus = React.useCallback((jobId) => {
     Meteor.call('qdrant.indexStatus', jobId, (e2, st) => {
@@ -99,6 +186,149 @@ export const Preferences = () => {
       pollIndexStatus(res.jobId);
     });
   }, [pollIndexStatus]);
+
+  // AI test methods
+  const testAIProvider = React.useCallback((provider) => {
+    setAiTesting(prev => ({ ...prev, [provider]: true }));
+    
+    const testOptions = {
+      messages: [{ role: 'user', content: 'Hello, this is a test message.' }],
+      texts: ['Test embedding text']
+    };
+    
+    Meteor.call('ai.testProvider', provider, testOptions, (err, result) => {
+      setAiTesting(prev => ({ ...prev, [provider]: false }));
+      
+      if (err) {
+        console.error(`[testAIProvider] ${provider} test failed:`, err);
+        notify({ 
+          message: `${provider} test failed: ${err.reason || err.message}`, 
+          kind: 'error' 
+        });
+      } else {
+        console.log(`[testAIProvider] ${provider} test successful:`, result);
+        notify({ 
+          message: `${provider} test successful`, 
+          kind: 'success' 
+        });
+      }
+    });
+  }, []);
+
+  // Centralized preferences generation
+  const generateAIPreferences = React.useCallback(() => ({
+    mode: aiMode,
+    fallback: aiFallback,
+    timeoutMs: aiTimeoutMs,
+    maxTokens: aiMaxTokens,
+    temperature: aiTemperature,
+    local: {
+      host: aiLocalHost,
+      chatModel: aiLocalChatModel,
+      embeddingModel: aiLocalEmbeddingModel
+    },
+    remote: {
+      provider: aiRemoteProvider,
+      chatModel: aiRemoteChatModel,
+      embeddingModel: aiRemoteEmbeddingModel
+    }
+  }), [aiMode, aiFallback, aiTimeoutMs, aiMaxTokens, aiTemperature, aiLocalHost, aiLocalChatModel, aiLocalEmbeddingModel, aiRemoteProvider, aiRemoteChatModel, aiRemoteEmbeddingModel]);
+
+  // Centralized save function with debounce
+  const saveAIPreferences = React.useCallback((showNotification = true) => {
+    const preferences = generateAIPreferences();
+    
+    Meteor.call('ai.updatePreferences', preferences, (err) => {
+      if (err) {
+        if (showNotification) {
+          notify({ 
+            message: `Failed to save AI preferences: ${err.reason || err.message}`, 
+            kind: 'error' 
+          });
+        } else {
+          console.error('Auto-save failed:', err);
+        }
+        return;
+      }
+      
+      if (showNotification) {
+        notify({ 
+          message: 'AI preferences saved successfully', 
+          kind: 'success' 
+        });
+      }
+      
+      // Refresh Qdrant health to show updated collection name
+      Meteor.call('qdrant.health', (err2, res) => {
+        if (!err2 && res) {
+          setHealth(res);
+        }
+      });
+    });
+  }, [generateAIPreferences]);
+
+  // Debounced auto-save
+  const debouncedAutoSave = React.useMemo(
+    () => {
+      let timeoutId;
+      return () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => saveAIPreferences(false), 500);
+      };
+    },
+    [saveAIPreferences]
+  );
+
+  // Auto-save when AI mode changes (only on user interaction, not on load)
+  React.useEffect(() => {
+    // Only auto-save if this is a user-initiated change, not initial load
+    if (aiMode && pref?.ai && aiMode !== pref.ai.mode) {
+      debouncedAutoSave();
+    }
+  }, [aiMode, debouncedAutoSave]);
+
+  // Auto-save when embedding model changes (only on user interaction, not on load)
+  React.useEffect(() => {
+    // Only auto-save if this is a user-initiated change, not initial load
+    if (aiLocalEmbeddingModel && pref?.ai?.local && aiLocalEmbeddingModel !== pref.ai.local.embeddingModel) {
+      debouncedAutoSave();
+    }
+  }, [aiLocalEmbeddingModel, debouncedAutoSave]);
+
+  // Auto-save when timeout changes
+  React.useEffect(() => {
+    if (aiTimeoutMs && pref?.ai && aiTimeoutMs !== pref.ai.timeoutMs) {
+      debouncedAutoSave();
+    }
+  }, [aiTimeoutMs, debouncedAutoSave]);
+
+  // Auto-save when max tokens changes
+  React.useEffect(() => {
+    if (aiMaxTokens && pref?.ai && aiMaxTokens !== pref.ai.maxTokens) {
+      debouncedAutoSave();
+    }
+  }, [aiMaxTokens, debouncedAutoSave]);
+
+  // Auto-save when temperature changes
+  React.useEffect(() => {
+    if (aiTemperature !== undefined && pref?.ai && aiTemperature !== pref.ai.temperature) {
+      debouncedAutoSave();
+    }
+  }, [aiTemperature, debouncedAutoSave]);
+
+  // Update Qdrant health when embedding model changes (for footer display)
+  React.useEffect(() => {
+    if (aiMode === 'local' || aiMode === 'auto') {
+      Meteor.call('qdrant.health', (err, res) => {
+        if (!err && res) {
+          setHealth(res);
+        }
+      });
+    }
+  }, [aiLocalEmbeddingModel, aiMode]);
+
+
+
   React.useEffect(() => {
     if (!pref) return;
     setFilesDir(pref.filesDir || '');
@@ -296,6 +526,221 @@ export const Preferences = () => {
         </div>
       </div>
 
+      <h3>AI Backend</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Mode</div>
+          <div className="prefsValue">
+            <InlineEditable
+              as="select"
+              value={aiMode}
+              options={[
+                { value: 'local', label: 'Local (Ollama)' },
+                { value: 'remote', label: 'Remote (OpenAI)' },
+                { value: 'auto', label: 'Auto (Local with Remote fallback)' }
+              ]}
+              onSubmit={(next) => setAiMode(next)}
+            />
+          </div>
+        </div>
+        
+        {aiMode === 'auto' && (
+          <div className="prefsRow">
+            <div className="prefsLabel">Fallback</div>
+            <div className="prefsValue">
+              <InlineEditable
+                as="select"
+                value={aiFallback}
+                options={[
+                  { value: 'none', label: 'None' },
+                  { value: 'local', label: 'Local' },
+                  { value: 'remote', label: 'Remote' }
+                ]}
+                onSubmit={(next) => setAiFallback(next)}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="prefsRow">
+          <div className="prefsLabel">Timeout (ms)</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={aiTimeoutMs.toString()}
+              onSubmit={(next) => setAiTimeoutMs(parseInt(next) || 30000)}
+            />
+          </div>
+        </div>
+
+        <div className="prefsRow">
+          <div className="prefsLabel">Max Tokens</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={aiMaxTokens.toString()}
+              onSubmit={(next) => setAiMaxTokens(parseInt(next) || 4000)}
+            />
+          </div>
+        </div>
+
+        <div className="prefsRow">
+          <div className="prefsLabel">Temperature</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={aiTemperature.toString()}
+              onSubmit={(next) => setAiTemperature(parseFloat(next) || 0.7)}
+            />
+          </div>
+        </div>
+
+
+        <div className="prefsRow">
+          <div className="prefsLabel">Health Status</div>
+          <div className="prefsValue">
+            <button
+              className="btn"
+              onClick={checkAIHealth}
+              style={{ marginRight: '8px' }}
+            >
+              Check Health
+            </button>
+            {aiHealthStatus ? (
+              <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+                <span style={{ color: aiHealthStatus.local?.ok ? 'var(--success)' : 'var(--error)' }}>
+                  Local: {aiHealthStatus.local?.ok ? '✓' : '✗'}
+                </span>
+                <span style={{ color: aiHealthStatus.remote?.ok ? 'var(--success)' : 'var(--error)' }}>
+                  Remote: {aiHealthStatus.remote?.ok ? '✓' : '✗'}
+                </span>
+              </div>
+            ) : (
+              <span style={{ color: 'var(--muted)', marginTop: '8px', display: 'block' }}>No status available</span>
+            )}
+          </div>
+        </div>
+
+        <div className="prefsRow">
+          <div className="prefsLabel">Actions</div>
+          <div className="prefsValue">
+            <button
+              className="btn"
+              onClick={() => testAIProvider('ollama')}
+              disabled={aiTesting.ollama}
+              style={{ marginRight: '8px' }}
+            >
+              {aiTesting.ollama ? 'Testing...' : 'Test Local'}
+            </button>
+            <button
+              className="btn"
+              onClick={() => testAIProvider('openai')}
+              disabled={aiTesting.openai}
+            >
+              {aiTesting.openai ? 'Testing...' : 'Test Remote'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <h3>Local AI (Ollama)</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Host</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={aiLocalHost}
+              fullWidth
+              onSubmit={(next) => setAiLocalHost(next)}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Chat Model</div>
+          <div className="prefsValue" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select
+              value={aiLocalChatModel}
+              onChange={(e) => setAiLocalChatModel(e.target.value)}
+              style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="">Select a model...</option>
+              {ollamaModels.map((model) => (
+                <option key={model.name} value={model.name}>
+                  {model.name} {model.parameterSize ? `(${model.parameterSize})` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              className="btn"
+              onClick={loadOllamaModels}
+              disabled={loadingModels}
+              style={{ padding: '4px 8px', fontSize: '12px' }}
+            >
+              {loadingModels ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Embedding Model</div>
+          <div className="prefsValue" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select
+              value={aiLocalEmbeddingModel}
+              onChange={(e) => setAiLocalEmbeddingModel(e.target.value)}
+              style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="">Select a model...</option>
+              {ollamaModels.map((model) => (
+                <option key={model.name} value={model.name}>
+                  {model.name} {model.parameterSize ? `(${model.parameterSize})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <h3>Remote AI (OpenAI)</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Provider</div>
+          <div className="prefsValue">
+            <InlineEditable
+              as="select"
+              value={aiRemoteProvider}
+              options={[
+                { value: 'openai', label: 'OpenAI' }
+              ]}
+              onSubmit={(next) => setAiRemoteProvider(next)}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">API Key</div>
+          <div className="prefsValue">
+            <span style={{ color: 'var(--muted)' }}>
+              Configurez la clé OpenAI dans la section « Secrets » ci‑dessus.
+            </span>
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Chat Model</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={aiRemoteChatModel}
+              fullWidth
+              onSubmit={(next) => setAiRemoteChatModel(next)}
+            />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Embedding Model</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={aiRemoteEmbeddingModel}
+              fullWidth
+              onSubmit={(next) => setAiRemoteEmbeddingModel(next)}
+            />
+          </div>
+        </div>
+      </div>
+
       <h3>Test notify</h3>
       <div className="prefsSection">
         <div className="prefsRow">
@@ -353,6 +798,47 @@ export const Preferences = () => {
             <button className="btn ml8" disabled={indexing} onClick={() => setConfirmIndex(true)}>{indexing ? 'Indexing…' : 'Rebuild index'}</button>
           </div>
         </div>
+
+        {health?.collection && (
+          <div className="prefsRow">
+            <div className="prefsLabel">Active Collection</div>
+            <div className="prefsValue">
+              <code style={{ 
+                background: 'var(--bg-secondary)', 
+                padding: '4px 8px', 
+                borderRadius: '4px',
+                fontSize: '14px',
+                color: 'var(--text-primary)'
+              }}>
+                {health.collection}
+              </code>
+              <span style={{ marginLeft: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                {aiMode === 'remote' ? 'Base collection (no model suffix)' : 'Model-specific collection'}
+              </span>
+              {health.incompatible && (
+                <div style={{ 
+                  marginTop: '8px', 
+                  padding: '8px 12px', 
+                  background: 'var(--warning-bg)', 
+                  border: '1px solid var(--warning-border)', 
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  color: 'var(--warning-text)'
+                }}>
+                  ⚠️ Collection incompatible with current model. Expected {health.expectedVectorSize} dimensions, but collection has {health.vectorSize} dimensions.
+                  <br />
+                  <button 
+                    className="btn" 
+                    style={{ marginTop: '4px', fontSize: '12px', padding: '2px 8px' }}
+                    onClick={() => setConfirmIndex(true)}
+                  >
+                    Recreate Collection
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="prefsRow">
           <div className="prefsLabel">Debug last indexed</div>
@@ -447,6 +933,19 @@ export const Preferences = () => {
         ]}
       >
         <p>This will drop and recreate the collection, then reindex all documents.</p>
+        <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+          <strong>Collection:</strong> <code style={{ 
+            background: 'var(--bg-secondary)', 
+            padding: '2px 6px', 
+            borderRadius: '3px',
+            fontSize: '13px'
+          }}>
+            {aiMode === 'remote' ? 'panorama' : `panorama_${aiLocalEmbeddingModel.replace(/[^a-zA-Z0-9]/g, '_')}`}
+          </code>
+          <span style={{ marginLeft: '8px', fontSize: '12px' }}>
+            ({aiMode === 'remote' ? 'Base collection' : 'Model-specific collection'})
+          </span>
+        </p>
       </Modal>
       
       <div className="prefsFooter">

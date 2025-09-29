@@ -13,7 +13,7 @@ Users can:
 
 - Search with natural language; misspellings should still return relevant results.
 - Ask questions in the search bar and receive contextual answers (AI mode).
-- Get cross‑entity results: projects, tasks, notes, note sessions, note lines, and alarms.
+- Get cross‑entity results: projects, tasks, notes, note sessions, and note lines.
 - Toggle between plain semantic search and AI‑assisted search.
 
 The rest of this document is intentionally concise; the code is the source of truth.
@@ -35,6 +35,24 @@ How it works (very short):
 
 ## Settings (minimal)
 See `settings.json` keys used in code: `qdrantUrl`, `qdrantCollectionName`, `qdrantVectorSize`, `qdrantDistance`, `openai.apiKey`.
+
+## Collection Naming Strategy
+
+The system uses different collection naming strategies based on AI mode:
+
+- **Remote mode**: Always uses the base collection name (e.g., `panorama` or configured `qdrantCollectionName`)
+- **Local mode**: Uses model-specific collection names (e.g., `panorama_nomic_embed_text_latest`)
+- **Legacy mode**: Uses base collection name when `qdrantUseLegacyCollectionName` is enabled
+
+This ensures dimension compatibility while allowing seamless switching between local and remote models.
+
+## Manual Reindexing
+
+When AI mode or embedding model changes, you need to manually trigger reindexing:
+
+- Use the "Rebuild index" button in Preferences → Qdrant
+- Or call `Meteor.call('qdrant.indexStart')` programmatically
+- Falls back to `search.instant` when Qdrant is unavailable in local mode
 
 ## Roadmap: Hybrid BM25 + Vector
 
