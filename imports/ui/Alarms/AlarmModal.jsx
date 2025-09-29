@@ -48,6 +48,20 @@ export const AlarmModal = ({ open = false, alarm = null, onClose, onBeforeAction
     });
   };
 
+  const handleDelete = () => {
+    const id = alarm?._id;
+    if (!id) return;
+    onBeforeAction?.(id);
+    Meteor.call('alarms.remove', id, (err) => {
+      if (err) {
+        notify({ message: 'Delete failed', kind: 'error' });
+      } else {
+        notify({ message: 'Alarm deleted', kind: 'success' });
+      }
+      onClose?.();
+    });
+  };
+
   return (
     <Modal
       open={!!open}
@@ -59,7 +73,8 @@ export const AlarmModal = ({ open = false, alarm = null, onClose, onBeforeAction
         <button key="s15" className="btn ml8" onClick={() => handleSnooze(15)}>+15m</button>,
         <button key="s60" className="btn ml8" onClick={() => handleSnooze(60)}>+1h</button>,
         <button key="s180" className="btn ml8" onClick={() => handleSnooze(180)}>+3h</button>,
-        <button key="dismiss" className="btn ml8" onClick={handleDismiss}>Dismiss</button>
+        <button key="dismiss" className="btn ml8" onClick={handleDismiss}>Dismiss</button>,
+        <button key="delete" className="btn btn-danger ml8" onClick={handleDelete}>Delete</button>
       ]}
     >
       {body}
