@@ -101,7 +101,7 @@ const SearchPane = ({ onClose }) => {
     const q = String(searchQ || '').trim();
     if (!q) { setInstantResults([]); return undefined; }
     const handle = setTimeout(() => {
-      Meteor.call('search.instant', q, { kinds: ['project','task','note'], limitPerKind: 5 }, (err, res) => {
+      Meteor.call('search.instant', q, { kinds: ['project','task','note','email'], limitPerKind: 5 }, (err, res) => {
         if (err) { setInstantResults([]); return; }
         const items = Array.isArray(res) ? res : [];
         setInstantResults(items);
@@ -126,7 +126,7 @@ const SearchPane = ({ onClose }) => {
 
   // Update counters and filtered list from combined results
   useEffect(() => {
-    const counts = { project: 0, task: 0, note: 0, link: 0, file: 0, session: 0, alarm: 0, userlog: 0 };
+    const counts = { project: 0, task: 0, note: 0, link: 0, file: 0, session: 0, alarm: 0, userlog: 0, email: 0 };
     for (const r of (combinedResults || [])) {
       const k = r?.kind;
       if (Object.hasOwn(counts, k)) counts[k] += 1;
@@ -195,6 +195,7 @@ const SearchPane = ({ onClose }) => {
       note: (r) => (r?.projectId ? { name: 'project', projectId: r.projectId } : null),
       session: (r) => (r?.id ? { name: 'session', sessionId: idFrom(r.id) } : null),
       alarm: () => ({ name: 'alarms' }),
+      email: () => ({ name: 'emails' }),
     };
     const route = routeByKind[result?.kind]?.(result) || { name: 'home' };
     navigateTo(route);

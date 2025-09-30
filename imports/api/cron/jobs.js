@@ -24,7 +24,6 @@ async function urgentTasksReporting() {
   console.log('[cron] Starting urgent tasks reporting...');
   
   try {
-    // Get all non-completed urgent tasks
     const urgentTasks = await TasksCollection.find({
       isUrgent: true,
       $or: [
@@ -49,7 +48,6 @@ async function urgentTasksReporting() {
 
     console.log(`[cron] Found ${urgentTasks.length} urgent tasks`);
 
-    // Prepare context for AI analysis
     const tasksContext = urgentTasks.map(task => ({
       title: task.title || 'Untitled',
       notes: task.notes || '',
@@ -59,7 +57,6 @@ async function urgentTasksReporting() {
       statusChangedAt: task.statusChangedAt
     }));
 
-    // Call local LLM to analyze urgent tasks
     const systemPrompt = `You are a productivity assistant. Analyze the user's urgent tasks and generate a personalized reminder question that starts with "Have you thought about...".
 
 Rules:
@@ -78,7 +75,7 @@ ${JSON.stringify(tasksContext, null, 2)}`;
         role: 'user',
         content: 'Generate a reminder question based on my urgent tasks.'
       }],
-      route: 'local', // Force local LLM usage
+      route: 'local',
       temperature: 0.7,
       maxTokens: 150
     });
@@ -88,7 +85,6 @@ ${JSON.stringify(tasksContext, null, 2)}`;
     if (reminderQuestion) {
       console.log('[cron] Generated reminder question:', reminderQuestion);
       
-      // Create temporary alarm to trigger notification
       const now = new Date();
       const alarmData = {
         title: reminderQuestion,
@@ -96,16 +92,14 @@ ${JSON.stringify(tasksContext, null, 2)}`;
         nextTriggerAt: now,
         recurrence: { type: 'none' },
         done: false,
-        userId: null, // Global notification
+        userId: null,
         createdAt: now,
         updatedAt: now
       };
       
-      // Insert alarm that will be automatically handled by existing system
       const { AlarmsCollection } = await import('/imports/api/alarms/collections');
       const alarmId = await AlarmsCollection.insertAsync(alarmData);
       
-      // Mark alarm as fired immediately
       await AlarmsCollection.updateAsync(alarmId, {
         $set: {
           lastFiredAt: now,
@@ -129,10 +123,9 @@ function registerJobs() {
   const cronSettings = Meteor.settings?.cron || {};
   const timezone = cronSettings.timezone || 'Europe/Paris';
   
-  // Cron job for urgent tasks - every 3 hours
   scheduleNoOverlap(
     'urgent-tasks-reporting',
-    '0 */3 * * *', // Every 3 hours
+    '0 */3 * * *',
     timezone,
     urgentTasksReporting
   );
@@ -140,7 +133,6 @@ function registerJobs() {
   console.log('[cron] Jobs registered - urgent tasks reporting every 3 hours');
 }
 
-// Test method to manually trigger the cron job
 Meteor.methods({
   async 'cron.testUrgentTasksReporting'() {
     console.log('[cron] Manual trigger of urgent tasks reporting...');
@@ -152,7 +144,5 @@ Meteor.methods({
 Meteor.startup(() => {
   if (cronJobsStarted) return;
   cronJobsStarted = true;
-  registerJobs();
+  // registerJobs();
 });
-
-

@@ -874,6 +874,7 @@ export const Preferences = () => {
               <option value="alarm">Alarms</option>
               <option value="link">Links</option>
               <option value="userlog">Logs</option>
+              <option value="email">Emails</option>
             </select>
             <button
               className="btn ml8"
@@ -904,7 +905,7 @@ export const Preferences = () => {
                 <div className="progressBarFill" style={{ width: `${Math.min(100, Math.round(((indexJob.processed || 0) / Math.max(1, indexJob.total || 0)) * 100))}%` }} />
               </div>
               <div className="progressText">
-                {`${indexJob.processed || 0}/${indexJob.total || 0} processed · ${indexJob.upserts || 0} upserts · ${indexJob.errors || 0} errors`}
+                {`${indexJob.processed || 0}/${indexJob.total || 0} chunks processed · ${indexJob.upserts || 0} upserts · ${indexJob.errors || 0} errors`}
               </div>
             </div>
           </div>

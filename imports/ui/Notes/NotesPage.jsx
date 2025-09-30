@@ -4,6 +4,7 @@ import { Meteor } from 'meteor/meteor';
 import { NotesCollection } from '/imports/api/notes/collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { notify } from '/imports/ui/utils/notify.js';
+import { parseHashRoute } from '/imports/ui/router.js';
 import { NotesSearch } from './components/NotesSearch.jsx';
 import { NotesList } from './components/NotesList.jsx';
 import { NotesTabs } from './components/NotesTabs.jsx';
@@ -485,6 +486,18 @@ export const NotesPage = () => {
       setIsCreatingNote(false);
     }
   };
+
+  // Effect to handle URL parameter for opening specific note
+  useEffect(() => {
+    const route = parseHashRoute();
+    if (route.name === 'notes' && route.noteId) {
+      const note = notesById.get(route.noteId);
+      if (note && !openTabs.find(tab => tab.id === note._id)) {
+        // Open the note with focus
+        openNote(note, true);
+      }
+    }
+  }, [notesById, openTabs]);
 
   return (
     <div className="notes-page">

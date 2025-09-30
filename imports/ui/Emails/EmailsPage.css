@@ -1,11 +1,17 @@
 .emailsToolbar {
   margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .searchForm {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex: 1;
+  min-width: 300px;
 }
 
 .searchInput {
@@ -23,6 +29,32 @@
   border-color: var(--primary);
 }
 
+.searchOptions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.checkboxLabel span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .connectSection {
   text-align: center;
   padding: 24px;
@@ -38,25 +70,124 @@
   color: var(--text-muted);
 }
 
+/* API Statistics */
+.apiStats {
+  padding: 16px;
+}
+
+.apiStats h3 {
+  margin-bottom: 16px;
+  color: var(--text);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.statItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--hover);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.statLabel {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.statValue {
+  font-weight: 500;
+  color: var(--text);
+  font-family: monospace;
+}
+
 .emailsList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 1px;
+}
+
+.emailsListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.emailsCount {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.threadExplanation {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
 }
 
 .emailRow {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-  transition: background-color 0.2s;
+  align-items: center;
+  padding: 4px 10px;
+  background: transparent;
+  min-height: 32px;
+}
+
+.emailRow.clickable {
+  cursor: pointer;
 }
 
 .emailRow:hover {
-  background: var(--hover);
+  background: #1f232d;
+}
+
+.emailRow.clickable:hover {
+  background: #1f232d;
+}
+
+/* Unread emails styling */
+.emailRow.unread {
+  font-weight: bold;
+}
+
+.emailRow.unread .emailFrom,
+.emailRow.unread .emailSubject {
+  color: var(--text);
+  font-weight: bold;
+}
+
+.emailRow.unread .emailSnippet {
+  color: var(--text);
+  font-weight: bold;
+}
+
+/* Read emails styling */
+.emailRow.read {
+  font-weight: normal;
+}
+
+.emailRow.read .emailFrom,
+.emailRow.read .emailSubject {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.emailRow.read .emailSnippet {
+  color: var(--text-muted);
+  font-weight: normal;
 }
 
 .emailRow.loading,
@@ -69,62 +200,186 @@
 .emailContent {
   flex: 1;
   min-width: 0;
-}
-
-.emailHeader {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  gap: 8px;
 }
 
 .emailFrom {
   font-weight: 500;
   color: var(--text);
-}
-
-.emailDate {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 150px;
 }
 
 .emailSubject {
   font-weight: 500;
-  margin-bottom: 4px;
   color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.threadCount {
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--border);
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-weight: normal;
-}
-
-.emailSnippet {
   font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.4;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  margin: 0 4px;
+}
+
+.emailSnippet {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin: 0 4px;
+}
+
+.threadCount {
+  font-size: 11px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin: 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+  transition: all 0.2s ease;
+}
+
+.threadCount:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+
+.threadIcon {
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+.conversationIndicator {
+  font-size: 12px;
+  margin-right: 6px;
+  opacity: 0.7;
+  vertical-align: middle;
+}
+
+.emailLabels {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+.emailLabel {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.label-inbox {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.label-unread {
+  background: #fff3e0;
+  color: #f57c00;
+  font-weight: 600;
+}
+
+.label-important {
+  background: #ffebee;
+  color: #d32f2f;
+}
+
+.label-starred {
+  background: #fff8e1;
+  color: #f9a825;
+}
+
+.label-sent {
+  background: #e8f5e8;
+  color: #388e3c;
+}
+
+.label-draft {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.label-spam {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.label-trash {
+  background: #fafafa;
+  color: #616161;
+}
+
+.emailDate {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 80px;
+  text-align: right;
 }
 
 .emailActions {
   display: flex;
-  gap: 8px;
-  margin-left: 12px;
+  gap: 4px;
+  margin-left: 8px;
   flex-shrink: 0;
 }
 
 .btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: 3px 6px;
+  font-size: 11px;
+  min-width: auto;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.btn:disabled:hover {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.btn-analyze {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  font-weight: 500;
+}
+
+.btn-analyze:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-analyze:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
 }
 
 /* Modal styles */
@@ -145,9 +400,9 @@
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  max-width: 80vw;
-  max-height: 80vh;
-  width: 600px;
+  max-width: 90vw;
+  max-height: 90vh;
+  width: 800px;
   display: flex;
   flex-direction: column;
 }
@@ -158,15 +413,25 @@
   align-items: center;
   padding: 16px;
   border-bottom: 1px solid var(--border);
+  gap: 16px;
 }
 
 .modalHeader h3 {
   margin: 0;
   color: var(--text);
   flex: 1;
-  margin-right: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.threadInfo {
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--hover);
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   white-space: nowrap;
 }
 
@@ -197,10 +462,256 @@
   overflow: auto;
 }
 
+/* Thread styles */
+.threadContainer {
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.threadMessage {
+  border-bottom: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.threadMessage.lastMessage {
+  border-bottom: none;
+}
+
+.threadMessageHeader {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+  border-radius: var(--radius);
+  margin: 6px;
+  position: relative;
+}
+
+.threadMessageHeader:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.threadMessageHeader.expanded {
+  background: linear-gradient(135deg, #1976d2 0%, #7b1fa2 100%);
+  color: white;
+  margin-bottom: 8px;
+  border: 1px solid #1565c0;
+}
+
+.threadMessageHeader.collapsed {
+  background: linear-gradient(135deg, #c2185b 0%, #ad1457 100%);
+  color: white;
+  border: 1px solid #ad1457;
+}
+
+.threadMessageHeader.collapsed:hover {
+  background: linear-gradient(135deg, #0277bd 0%, #01579b 100%);
+  border: 1px solid #01579b;
+}
+
+.threadSeparator {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+.threadMessageHeader {
+  margin-bottom: 12px;
+}
+
+.threadMessageMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  flex: 1;
+}
+
+.threadMessageMeta span {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  font-weight: 500;
+}
+
+.expandIndicator {
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 8px;
+  transition: transform 0.2s ease;
+}
+
+.threadMessageBody {
+  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--background);
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  margin: 6px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.threadMessageBody pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  margin: 0;
+}
+
+
 .modalFooter {
   display: flex;
   gap: 8px;
   padding: 16px;
   border-top: 1px solid var(--border);
   justify-content: flex-end;
+}
+
+/* Analysis Modal Styles */
+.analysisModal {
+  max-width: 90vw;
+  width: 700px;
+}
+
+.analysisEmailInfo {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.analysisEmailMeta {
+  background: var(--hover);
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.analysisEmailMeta div {
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.analysisEmailMeta div:last-child {
+  margin-bottom: 0;
+}
+
+.analysisContent {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.analysisLoading {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--border);
+  border-top: 4px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.analysisLoading p {
+  color: var(--text-muted);
+  font-size: 16px;
+  margin: 0;
+}
+
+.analysisError {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--error);
+}
+
+.analysisError h4 {
+  color: var(--error);
+  margin-bottom: 12px;
+}
+
+.analysisError p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.analysisResult {
+  padding: 20px 0;
+}
+
+.analysisResult h4 {
+  color: var(--text);
+  margin-bottom: 16px;
+  font-size: 18px;
+  border-bottom: 2px solid var(--primary);
+  padding-bottom: 8px;
+}
+
+.analysisText {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  margin-bottom: 16px;
+}
+
+.analysisTimestamp {
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .emailsToolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .searchForm {
+    min-width: auto;
+  }
+  
+  .searchOptions {
+    justify-content: center;
+  }
 }
