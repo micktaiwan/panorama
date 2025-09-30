@@ -469,6 +469,12 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           }}
                         >{cleaningNoteIds[n._id] ? 'Cleaning…' : 'Clean'}</button>
                       </Tooltip>
+                      <Tooltip content="Open in note editor">
+                        <button
+                          className="btn ml8"
+                          onClick={() => navigateTo({ name: 'notes', noteId: n._id })}
+                        >Open in note editor</button>
+                      </Tooltip>
                       <Tooltip content="Undo last clean">
                         <button
                           className="btn ml8"

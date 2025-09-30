@@ -57,6 +57,7 @@ const collectDocs = async () => {
   const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
   const { LinksCollection } = await import('/imports/api/links/collections');
   const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
+  const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
 
   const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
   projects.forEach(p => pushDoc(p._id, p._id, 'project', `${p.name || ''} ${p.description || ''}`));
@@ -77,6 +78,13 @@ const collectDocs = async () => {
   links.forEach(l => pushDoc(l._id, l.projectId, 'link', `${l.name || ''} ${l.url || ''}`));
   const userLogs = await UserLogsCollection.find({}, { fields: { content: 1 } }).fetchAsync();
   userLogs.forEach(ul => pushDoc(ul._id, null, 'userlog', ul.content || ''));
+  // Gmail messages
+  const emails = await GmailMessagesCollection.find({}, { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1 } }).fetchAsync();
+  emails.forEach(e => {
+    const base = `${e.from || ''} ${e.to || ''} ${e.subject || ''} ${e.snippet || ''} ${e.body || ''}`;
+    const chunks = splitIntoChunks(base);
+    chunks.forEach((chunk, i) => pushDoc(e.id, null, 'email', chunk, { chunkIndex: i, threadId: e.threadId }));
+  });
   return docs;
 };
 
@@ -139,6 +147,16 @@ const collectDocsByKind = async (kind) => {
       const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
       const items = await UserLogsCollection.find({}, { fields: { content: 1 } }).fetchAsync();
       items.forEach(ul => pushDoc(ul._id, null, 'userlog', ul.content || ''));
+      break;
+    }
+    case 'email': {
+      const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const items = await GmailMessagesCollection.find({}, { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 } }).fetchAsync();
+      items.forEach(e => {
+        const base = `${e.from || ''} ${e.to || ''} ${e.subject || ''} ${e.snippet || ''} ${e.body || ''}`;
+        const chunks = splitIntoChunks(base);
+        chunks.forEach((chunk, i) => pushDoc(e.id, null, 'email', chunk, { chunkIndex: i, threadId: e.threadId }));
+      });
       break;
     }
     default:
@@ -257,9 +275,9 @@ const runIndexJob = async (jobId) => {
 Meteor.methods({
   async 'search.instant'(query, opts = {}) {
     check(query, String);
-    const kinds = Array.isArray(opts?.kinds) && opts.kinds.length > 0
-      ? opts.kinds.map(String)
-      : ['project', 'task', 'note'];
+  const kinds = Array.isArray(opts?.kinds) && opts.kinds.length > 0
+    ? opts.kinds.map(String)
+    : ['project', 'task', 'note', 'email'];
     const limitPerKind = Math.max(1, Math.min(20, Number(opts?.limitPerKind) || 5));
     const q = String(query || '').trim();
     if (!q) return [];
@@ -353,6 +371,31 @@ Meteor.methods({
           projectName: pid ? (projectNameById.get(pid) || null) : null,
           id: `note:${n._id}`,
           text: makePreview(`${n.title || ''} ${n.content || ''}`),
+        });
+      }
+    }
+
+    // Emails
+    if (want.has('email')) {
+      const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const emailRows = await GmailMessagesCollection.find(
+        { $or: [{ from: re }, { to: re }, { subject: re }, { snippet: re }, { body: re }] },
+        { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1, gmailDate: 1 }, limit: limitPerKind, sort: { gmailDate: -1 } }
+      ).fetchAsync();
+      
+      for (const e of emailRows) {
+        const preview = makePreview(`${e.subject || ''} ${e.snippet || ''}`);
+        results.push({
+          score: '⚡',
+          kind: 'email',
+          projectId: null,
+          projectName: null,
+          id: `email:${e.id}`,
+          text: preview,
+          from: e.from || '',
+          subject: e.subject || '',
+          date: e.gmailDate || new Date(),
+          threadId: e.threadId || null,
         });
       }
     }
@@ -480,7 +523,7 @@ Meteor.methods({
   },
   async 'qdrant.indexKindStart'(kind) {
     check(kind, String);
-    const allowed = new Set(['project', 'task', 'note', 'session', 'line', 'alarm', 'link', 'userlog']);
+    const allowed = new Set(['project', 'task', 'note', 'session', 'line', 'alarm', 'link', 'userlog', 'email']);
     if (!allowed.has(kind)) {
       throw new Meteor.Error('invalid-kind', `Unsupported kind: ${kind}`);
     }
@@ -565,7 +608,7 @@ Meteor.methods({
   },
   async 'qdrant.indexKind'(kind) {
     check(kind, String);
-    const allowed = new Set(['project', 'task', 'note', 'session', 'line', 'alarm', 'link', 'userlog']);
+    const allowed = new Set(['project', 'task', 'note', 'session', 'line', 'alarm', 'link', 'userlog', 'email']);
     if (!allowed.has(kind)) {
       throw new Meteor.Error('invalid-kind', `Unsupported kind: ${kind}`);
     }
@@ -612,6 +655,15 @@ Meteor.methods({
       const items = await UserLogsCollection.find({}, { fields: { content: 1 } }).fetchAsync();
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       for (const it of items) { await upsertDoc({ kind: 'userlog', id: it._id, text: it.content || '' }); processed += 1; }
+    } else if (kind === 'email') {
+      const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const items = await GmailMessagesCollection.find({}, { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 } }).fetchAsync();
+      const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+      for (const it of items) { 
+        const text = `${it.from || ''} ${it.to || ''} ${it.subject || ''} ${it.snippet || ''} ${it.body || ''}`;
+        await upsertDocChunks({ kind: 'email', id: it.id, text, threadId: it.threadId || null }); 
+        processed += 1; 
+      }
     }
     return { processed };
   },
@@ -687,6 +739,13 @@ Meteor.methods({
           const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
           const u = await UserLogsCollection.findOneAsync({ _id: id }, { fields: { content: 1 } });
           return (u?.content || '').trim() || '(userlog)';
+        }
+        case 'email': {
+          const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+          const e = await GmailMessagesCollection.findOneAsync({ id: id }, { fields: { from: 1, subject: 1, snippet: 1, body: 1 } });
+          if (!e) return null;
+          const s = `${e.from || ''} ${e.subject || ''} ${e.snippet || ''} ${e.body || ''}`.trim();
+          return s || '(email)';
         }
         default:
           return null;

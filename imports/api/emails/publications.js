@@ -6,5 +6,10 @@ Meteor.publish('gmail.tokens', function() {
 });
 
 Meteor.publish('gmail.messages', function() {
-  return GmailMessagesCollection.find({});
+  // Only publish messages that have the INBOX label (not archived)
+  return GmailMessagesCollection.find({
+    labelIds: { $in: ['INBOX'] }
+  }, {
+    sort: { gmailDate: -1 }
+  });
 });

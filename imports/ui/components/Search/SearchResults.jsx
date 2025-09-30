@@ -123,6 +123,11 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
       if (onAfterNavigate) onAfterNavigate(index);
       return;
     }
+    if (r.kind === 'email') {
+      navigateTo({ name: 'emails' });
+      if (onAfterNavigate) onAfterNavigate(index);
+      return;
+    }
     navigateTo({ name: 'home' });
     if (onAfterNavigate) onAfterNavigate(index);
   };
@@ -161,6 +166,9 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
               case 'userlog':
                 icon = (<svg className="kindIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h10v12H3zM4 3v10h8V3zM5 5h6v1H5zm0 2h6v1H5zm0 2h6v1H5z"/></svg>);
                 break;
+              case 'email':
+                icon = (<svg className="kindIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 3h12v10H2zM3 4v8h10V4zM4 5h8v1H4zm0 2h8v1H4zm0 2h6v1H4z"/></svg>);
+                break;
               default:
                 icon = null;
             }
@@ -185,9 +193,25 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
                     <span className="searchProject">{r.projectName}</span>
                   </Tooltip>
                 ) : null}
-                <span className={`searchText${isDone ? ' muted' : ''}`}>{r.text || r.id}</span>
+                <span className={`searchText${isDone ? ' muted' : ''}`}>
+                  {r.kind === 'email' && r.from ? (
+                    <span>
+                      <strong>{r.from}</strong>: {r.text || r.id}
+                    </span>
+                  ) : (
+                    r.text || r.id
+                  )}
+                </span>
               </div>
-            <div className="taskRight"><div className="taskMeta taskMetaDefault">{typeof r.score === 'number' ? r.score.toFixed(3) : r.score}</div></div>
+            <div className="taskRight">
+              <div className="taskMeta taskMetaDefault">
+                {r.kind === 'email' && r.date ? (
+                  <span>{new Date(r.date).toLocaleDateString()}</span>
+                ) : (
+                  typeof r.score === 'number' ? r.score.toFixed(3) : r.score
+                )}
+              </div>
+            </div>
           </li>
         ); })}
       </ul>
