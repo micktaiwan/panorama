@@ -25,6 +25,7 @@
 .taskNotesClickable:hover { text-decoration: underline; color: var(--text); }
 .taskInlineActions { display: inline-flex; align-items: center; gap: 6px; }
 .taskNotesButton { font-size: 12px; color: var(--muted); transition: opacity 120ms ease-in-out; }
+.taskRankDebug { font-size: 10px; color: var(--muted); background: rgba(0,0,0,0.1); padding: 1px 4px; border-radius: 3px; margin-left: 6px; }
 
 /* Notes modal */
 .taskNotesTextarea { width: 100%; display: block; box-sizing: border-box; }

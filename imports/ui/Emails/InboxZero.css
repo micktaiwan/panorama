@@ -1,0 +1,524 @@
+/* InboxZero Styles - Completely isolated from EmailsPage styles */
+
+/* Container styles */
+.inboxZero-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+  background: var(--background);
+  min-height: 100vh;
+}
+
+.inboxZero-header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding: 20px;
+  background: var(--panel);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+.inboxZero-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.inboxZero-subtitle {
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.inboxZero-threadInfo {
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.inboxZero-lastAction {
+  background: var(--success-light);
+  color: var(--success);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 12px;
+  border: 1px solid var(--success);
+  animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-10px); }
+  20% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+.inboxZero-stats {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.inboxZero-processedCount {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.inboxZero-speed {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Email card styles */
+.inboxZero-emailCard {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.inboxZero-emailCard:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.inboxZero-emailHeader {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}
+
+.inboxZero-emailSubject {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+  line-height: 1.3;
+}
+
+.inboxZero-emailMeta {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.inboxZero-emailFrom {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.inboxZero-emailDate {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.inboxZero-emailLabels {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inboxZero-emailLabel {
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Email body styles */
+.inboxZero-emailBody {
+  margin-bottom: 32px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.inboxZero-emailSnippet {
+  background: var(--background);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--primary);
+  font-style: italic;
+  margin-bottom: 20px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.inboxZero-emailBodyPreview {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* CTA section styles */
+.inboxZero-ctaSection {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 2px solid var(--border);
+}
+
+.inboxZero-ctaButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 32px;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 160px;
+  justify-content: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.inboxZero-ctaButtonPrimary {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 4px 16px rgba(var(--primary-rgb), 0.3);
+}
+
+.inboxZero-ctaButtonPrimary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(var(--primary-rgb), 0.4);
+}
+
+.inboxZero-ctaButtonSecondary {
+  background: var(--panel);
+  color: var(--text);
+  border: 2px solid var(--border);
+}
+
+.inboxZero-ctaButtonSecondary:hover {
+  background: var(--background);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.inboxZero-ctaButtonDanger {
+  background: var(--danger);
+  color: white;
+  box-shadow: 0 4px 16px rgba(var(--danger-rgb), 0.3);
+}
+
+.inboxZero-ctaButtonDanger:hover {
+  background: var(--danger-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(var(--danger-rgb), 0.4);
+}
+
+.inboxZero-ctaButtonSuccess {
+  background: var(--success);
+  color: white;
+  box-shadow: 0 4px 16px rgba(var(--success-rgb), 0.3);
+}
+
+.inboxZero-ctaButtonSuccess:hover {
+  background: var(--success-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(var(--success-rgb), 0.4);
+}
+
+/* Dropdown styles */
+.inboxZero-ctaDropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.inboxZero-ctaDropdownButton {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  color: var(--text);
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.inboxZero-ctaDropdownButton:hover {
+  background: var(--background);
+  border-color: var(--primary);
+}
+
+.inboxZero-ctaDropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.inboxZero-ctaDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.inboxZero-ctaDropdownItem:hover {
+  background: var(--background);
+}
+
+.inboxZero-ctaDropdownItem.danger {
+  color: var(--danger);
+}
+
+.inboxZero-ctaDropdownItem.success {
+  color: var(--success);
+}
+
+.inboxZero-ctaDropdownItem.primary {
+  color: var(--primary);
+}
+
+/* Tooltip styles */
+.inboxZero-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.inboxZero-tooltipContent {
+  visibility: hidden;
+  width: 350px;
+  background: var(--panel-dark);
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  position: absolute;
+  z-index: 1001;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -175px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.inboxZero-tooltipContent::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -8px;
+  border-width: 8px;
+  border-style: solid;
+  border-color: var(--panel-dark) transparent transparent transparent;
+}
+
+.inboxZero-tooltip:hover .inboxZero-tooltipContent {
+  visibility: visible;
+}
+
+.inboxZero-confidenceScore {
+  font-weight: 700;
+  margin-left: 6px;
+  font-size: 16px;
+}
+
+.inboxZero-confidenceHigh {
+  color: var(--success);
+}
+
+.inboxZero-confidenceMedium {
+  color: var(--warning);
+}
+
+.inboxZero-confidenceLow {
+  color: var(--danger);
+}
+
+/* Loading and empty states */
+.inboxZero-loadingState {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-secondary);
+}
+
+.inboxZero-loadingSpinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  animation: inboxZero-spin 1s ease-in-out infinite;
+  margin-right: 12px;
+}
+
+@keyframes inboxZero-spin {
+  to { transform: rotate(360deg); }
+}
+
+.inboxZero-emptyState {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-secondary);
+}
+
+.inboxZero-emptyStateIcon {
+  font-size: 64px;
+  margin-bottom: 24px;
+  opacity: 0.5;
+}
+
+.inboxZero-emptyStateTitle {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.inboxZero-emptyStateMessage {
+  font-size: 18px;
+  margin-bottom: 32px;
+}
+
+.inboxZero-refreshButton {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  border-radius: var(--radius-lg);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.inboxZero-refreshButton:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+/* Shortcuts panel */
+.inboxZero-shortcuts {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--panel-dark);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.inboxZero-shortcutsTitle {
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.inboxZero-shortcut {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.inboxZero-shortcutKey {
+  background: var(--background);
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* Progress bar */
+.inboxZero-progressBar {
+  width: 100%;
+  height: 6px;
+  background: var(--background);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.inboxZero-progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+  transition: width 0.5s ease;
+  width: var(--progress-width, 0%);
+}
+
+.inboxZero-refreshButton--topMargin {
+  margin-top: 12px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .inboxZero-container {
+    padding: 16px;
+  }
+  
+  .inboxZero-emailCard {
+    padding: 20px;
+  }
+  
+  .inboxZero-emailSubject {
+    font-size: 20px;
+  }
+  
+  .inboxZero-ctaButton {
+    min-width: 120px;
+    padding: 12px 24px;
+    font-size: 16px;
+  }
+  
+  .inboxZero-shortcuts {
+    bottom: 16px;
+    right: 16px;
+    padding: 16px;
+  }
+}

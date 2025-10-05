@@ -12,7 +12,8 @@ export const EmailsToolbar = ({
   onSyncLabels,
   isSyncingLabels,
   onToggleApiStats, 
-  showApiStats 
+  showApiStats,
+  onNavigateToInboxZero
 }) => {
   return (
     <div className="emailsToolbar">
@@ -61,6 +62,13 @@ export const EmailsToolbar = ({
       >
         📊 API Stats
       </button>
+      <button 
+        className="btn btn-primary" 
+        onClick={onNavigateToInboxZero}
+        title="Open Inbox Zero mode"
+      >
+        🎯 Inbox Zero
+      </button>
     </div>
   );
 };
@@ -76,5 +84,6 @@ EmailsToolbar.propTypes = {
   onSyncLabels: PropTypes.func.isRequired,
   isSyncingLabels: PropTypes.bool.isRequired,
   onToggleApiStats: PropTypes.func.isRequired,
-  showApiStats: PropTypes.bool.isRequired
+  showApiStats: PropTypes.bool.isRequired,
+  onNavigateToInboxZero: PropTypes.func.isRequired
 };

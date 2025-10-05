@@ -3,6 +3,12 @@ import { check } from 'meteor/check';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
+import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
+import { NoteLinesCollection } from '/imports/api/noteLines/collections';
+import { LinksCollection } from '/imports/api/links/collections';
+import { UserLogsCollection } from '/imports/api/userLogs/collections';
+import { GmailMessagesCollection } from '/imports/api/emails/collections';
+import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { getHealthStatus, testProvider } from '/imports/api/_shared/llmProxy';
 import { getAIConfig } from '/imports/api/_shared/config';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
@@ -17,6 +23,15 @@ const CONSTANTS = {
   DORMANT_PENALTY: 20,
   NOTES_BONUS_MAX: 20,
   NOTES_BONUS_MULTIPLIER: 2
+};
+
+// Function to estimate token count based on text length
+// Approximate estimation: 1 token ≈ 3.5 characters for French
+const estimateTokens = (text) => {
+  if (!text || typeof text !== 'string') return 0;
+  // Normalize text (remove multiple spaces, etc.)
+  const normalizedText = text.trim().replace(/\s+/g, ' ');
+  return Math.ceil(normalizedText.length / 3.5);
 };
 
 // Compute a simple health score based on overdue/dormancy and recent activity
@@ -326,6 +341,142 @@ Meteor.methods({
     })) || [];
     
     return { models };
+  },
+
+  async 'panorama.countAllTokens'() {
+    
+    // Define collections and their text fields
+    const collections = [
+      { 
+        name: 'Projects', 
+        collection: ProjectsCollection, 
+        fields: ['name', 'description'],
+        description: 'Projects with name and description'
+      },
+      { 
+        name: 'Tasks', 
+        collection: TasksCollection, 
+        fields: ['title', 'notes'],
+        description: 'Tasks with title and notes'
+      },
+      { 
+        name: 'Notes', 
+        collection: NotesCollection, 
+        fields: ['title', 'content'],
+        description: 'Notes with title and content'
+      },
+      { 
+        name: 'NoteSessions', 
+        collection: NoteSessionsCollection, 
+        fields: ['name', 'aiSummary'],
+        description: 'Note sessions with name and AI summary'
+      },
+      { 
+        name: 'NoteLines', 
+        collection: NoteLinesCollection, 
+        fields: ['content'],
+        description: 'Note lines with content'
+      },
+      { 
+        name: 'Links', 
+        collection: LinksCollection, 
+        fields: ['name', 'url'],
+        description: 'Links with name and URL'
+      },
+      { 
+        name: 'UserLogs', 
+        collection: UserLogsCollection, 
+        fields: ['content'],
+        description: 'User logs with content'
+      },
+      { 
+        name: 'GmailMessages', 
+        collection: GmailMessagesCollection, 
+        fields: ['from', 'to', 'subject', 'snippet', 'body'],
+        description: 'Gmail messages with metadata and content'
+      },
+      { 
+        name: 'Alarms', 
+        collection: AlarmsCollection, 
+        fields: ['title'],
+        description: 'Alarms with title'
+      }
+    ];
+    
+    const results = {};
+    let totalTokens = 0;
+    let totalItems = 0;
+    let totalCharacters = 0;
+    
+    for (const { name, collection, fields, description } of collections) {
+      try {
+        const items = await collection.find({}).fetchAsync();
+        let collectionTokens = 0;
+        let collectionCharacters = 0;
+        let itemsWithContent = 0;
+        
+        for (const item of items) {
+          // Concatenate all text fields of the item
+          const text = fields
+            .map(field => item[field] || '')
+            .join(' ')
+            .trim();
+          
+          if (text) {
+            const tokens = estimateTokens(text);
+            const characters = text.length;
+            
+            collectionTokens += tokens;
+            collectionCharacters += characters;
+            itemsWithContent += 1;
+          }
+        }
+        
+        results[name] = {
+          description,
+          totalItems: items.length,
+          itemsWithContent,
+          tokens: collectionTokens,
+          characters: collectionCharacters,
+          avgTokensPerItem: itemsWithContent > 0 ? Math.round(collectionTokens / itemsWithContent) : 0,
+          avgCharsPerItem: itemsWithContent > 0 ? Math.round(collectionCharacters / itemsWithContent) : 0
+        };
+        
+        totalTokens += collectionTokens;
+        totalCharacters += collectionCharacters;
+        totalItems += items.length;
+        
+      } catch (error) {
+        console.error(`[panorama.countAllTokens] Error processing ${name}:`, error);
+        results[name] = {
+          description,
+          error: error.message,
+          totalItems: 0,
+          itemsWithContent: 0,
+          tokens: 0,
+          characters: 0,
+          avgTokensPerItem: 0,
+          avgCharsPerItem: 0
+        };
+      }
+    }
+    
+    // Calculate global statistics
+    const globalStats = {
+      totalCollections: collections.length,
+      totalItems,
+      totalTokens,
+      totalCharacters,
+      avgTokensPerItem: totalItems > 0 ? Math.round(totalTokens / totalItems) : 0,
+      avgCharsPerItem: totalItems > 0 ? Math.round(totalCharacters / totalItems) : 0,
+      tokensPerChar: totalCharacters > 0 ? (totalTokens / totalCharacters).toFixed(3) : 0
+    };
+    
+    return {
+      collections: results,
+      globalStats,
+      generatedAt: new Date().toISOString()
+    };
   }
 });
 

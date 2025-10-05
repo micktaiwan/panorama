@@ -41,6 +41,11 @@ export const Dashboard = () => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
     const statusRank = (s) => (s === 'in_progress' ? 0 : 1); // in_progress before other statuses
     return [...rawTasks].sort((a, b) => {
+      // First sort by priorityRank (lower rank = higher priority)
+      const ar = Number.isFinite(a.priorityRank) ? a.priorityRank : Number.POSITIVE_INFINITY;
+      const br = Number.isFinite(b.priorityRank) ? b.priorityRank : Number.POSITIVE_INFINITY;
+      if (ar !== br) return ar - br; // lower priorityRank first
+      
       const ad = toTime(a.deadline);
       const bd = toTime(b.deadline);
       if (ad !== bd) return ad - bd; // earlier deadlines first; nulls go last (Infinity)

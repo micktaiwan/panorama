@@ -2,6 +2,8 @@ import { Meteor } from 'meteor/meteor';
 import cron from 'node-cron';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
+import { GmailMessagesCollection } from '/imports/api/emails/collections';
+import { suggestCtaInternal } from '/imports/api/emails/methods';
 
 let cronJobsStarted = false;
 const jobLocks = new Map();
@@ -119,6 +121,63 @@ ${JSON.stringify(tasksContext, null, 2)}`;
   }
 }
 
+async function prepareEmailCta() {
+  console.log('[cron] Starting email CTA preparation...');
+  
+  try {
+    // Check if we already have 20 prepared emails
+    const preparedCount = await GmailMessagesCollection.find({
+      ctaPrepared: true
+    }).countAsync();
+    
+    if (preparedCount >= 20) {
+      console.log(`[cron] Already have ${preparedCount} prepared emails, skipping`);
+      return;
+    }
+    
+    // Check if any email is currently being prepared
+    const preparingCount = await GmailMessagesCollection.find({
+      ctaPreparing: true
+    }).countAsync();
+    
+    if (preparingCount > 0) {
+      console.log(`[cron] ${preparingCount} emails currently being prepared, skipping`);
+      return;
+    }
+    
+    // Find the most recent email in Inbox that needs CTA preparation
+    const candidateEmail = await GmailMessagesCollection.findOneAsync({
+      labelIds: { $in: ['INBOX'] },
+      ctaPrepared: { $ne: true },
+      ctaPreparing: { $ne: true }
+    }, {
+      sort: { gmailDate: -1 },
+      fields: { _id: 1, subject: 1, from: 1 }
+    });
+    
+    if (!candidateEmail) {
+      console.log('[cron] No candidate emails found for CTA preparation');
+      return;
+    }
+    
+    console.log(`[cron] Preparing CTA for email: ${candidateEmail.subject} from ${candidateEmail.from}`);
+    
+    // Call the internal suggestCta function directly
+    const result = await suggestCtaInternal(candidateEmail._id);
+    
+    if (result.success) {
+      console.log(`[cron] Successfully prepared CTA for email ${candidateEmail._id}: ${result.suggestion.action}`);
+    } else if (result.alreadyPrepared || result.alreadyPreparing) {
+      console.log(`[cron] Email ${candidateEmail._id} already prepared/preparing`);
+    } else {
+      console.log(`[cron] Failed to prepare CTA for email ${candidateEmail._id}`);
+    }
+    
+  } catch (error) {
+    console.error('[cron] Error in email CTA preparation:', error);
+  }
+}
+
 function registerJobs() {
   const cronSettings = Meteor.settings?.cron || {};
   const timezone = cronSettings.timezone || 'Europe/Paris';
@@ -130,7 +189,14 @@ function registerJobs() {
     urgentTasksReporting
   );
   
-  console.log('[cron] Jobs registered - urgent tasks reporting every 3 hours');
+  scheduleNoOverlap(
+    'email-cta-preparation',
+    '* * * * *', // Every minute
+    timezone,
+    prepareEmailCta
+  );
+  
+  console.log('[cron] Jobs registered - urgent tasks reporting every 3 hours, email CTA preparation every minute');
 }
 
 Meteor.methods({
@@ -138,11 +204,17 @@ Meteor.methods({
     console.log('[cron] Manual trigger of urgent tasks reporting...');
     await urgentTasksReporting();
     return { success: true, message: 'Urgent tasks reporting executed manually' };
+  },
+  
+  async 'cron.testEmailCtaPreparation'() {
+    console.log('[cron] Manual trigger of email CTA preparation...');
+    await prepareEmailCta();
+    return { success: true, message: 'Email CTA preparation executed manually' };
   }
 });
 
 Meteor.startup(() => {
   if (cronJobsStarted) return;
   cronJobsStarted = true;
-  // registerJobs();
+  //registerJobs();
 });
