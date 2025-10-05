@@ -137,6 +137,12 @@
   font-size: 12px;
 }
 
+.keyboardShortcuts {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
 .emailRow {
   display: flex;
   justify-content: space-between;
@@ -158,6 +164,12 @@
   background: #1f232d;
 }
 
+.emailRow.selected {
+  background: var(--primary-light);
+  border-left: 3px solid var(--primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
 /* Unread emails styling */
 .emailRow.unread {
   font-weight: bold;
@@ -169,10 +181,6 @@
   font-weight: bold;
 }
 
-.emailRow.unread .emailSnippet {
-  color: var(--text);
-  font-weight: bold;
-}
 
 /* Read emails styling */
 .emailRow.read {
@@ -183,6 +191,11 @@
 .emailRow.read .emailSubject {
   color: var(--text-muted);
   font-weight: normal;
+}
+
+.emailRow.unread .emailSnippet {
+  color: var(--text);
+  font-weight: bold;
 }
 
 .emailRow.read .emailSnippet {
@@ -382,6 +395,81 @@
   box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
 }
 
+.btn-danger {
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  color: white;
+  border: none;
+  font-weight: 500;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.btn-danger:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+/* API Stats styles */
+.statValue--error {
+  color: #ff6b6b;
+}
+
+.statValue--success {
+  color: #4ecdc4;
+}
+
+.statValue--warning {
+  color: #f39c12;
+}
+
+.apiStats-ctaSection {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.apiStats-breakdown {
+  margin-top: 12px;
+}
+
+.apiStats-tags {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.apiStats-tag {
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.apiStats-warning {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #856404;
+}
+
+.apiStats-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.apiStats-cleanupButton {
+  background: #ff6b6b;
+  color: white;
+}
+
 /* Modal styles */
 .modalOverlay {
   position: fixed;
@@ -519,10 +607,6 @@
   height: 1px;
   background: var(--border);
   margin: 16px 0;
-}
-
-.threadMessageHeader {
-  margin-bottom: 12px;
 }
 
 .threadMessageMeta {
@@ -700,6 +784,188 @@
   font-style: italic;
 }
 
+/* CTA Styles for EmailRow - Scoped to email context only */
+.emailRow .ctaSection {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.emailRow .ctaButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.emailRow .ctaButtonPrimary {
+  background: var(--primary);
+  color: white;
+}
+
+.emailRow .ctaButtonPrimary:hover {
+  background: var(--primary-dark);
+}
+
+.emailRow .ctaButtonSecondary {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.emailRow .ctaButtonSecondary:hover {
+  background: var(--background);
+  border-color: var(--primary);
+}
+
+.emailRow .ctaButtonDanger {
+  background: var(--danger);
+  color: white;
+}
+
+.emailRow .ctaButtonDanger:hover {
+  background: var(--danger-dark);
+}
+
+.emailRow .ctaButtonSuccess {
+  background: var(--success);
+  color: white;
+}
+
+.emailRow .ctaButtonSuccess:hover {
+  background: var(--success-dark);
+}
+
+.emailRow .ctaDropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.emailRow .ctaDropdownButton {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  min-width: 24px;
+  justify-content: center;
+}
+
+.emailRow .ctaDropdownButton:hover {
+  background: var(--background);
+}
+
+.emailRow .ctaDropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 100px;
+  overflow: hidden;
+}
+
+.emailRow .ctaDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s ease;
+}
+
+.emailRow .ctaDropdownItem:hover {
+  background: var(--background);
+}
+
+.emailRow .ctaDropdownItem.danger {
+  color: var(--danger);
+}
+
+.emailRow .ctaDropdownItem.success {
+  color: var(--success);
+}
+
+.emailRow .ctaDropdownItem.primary {
+  color: var(--primary);
+}
+
+.emailRow .tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.emailRow .tooltipContent {
+  visibility: hidden;
+  width: 250px;
+  background: var(--panel-dark);
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--radius);
+  padding: 8px;
+  position: absolute;
+  z-index: 1001;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -125px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.emailRow .tooltipContent::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: var(--panel-dark) transparent transparent transparent;
+}
+
+.emailRow .tooltip:hover .tooltipContent {
+  visibility: visible;
+}
+
+.emailRow .confidenceScore {
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.emailRow .confidenceHigh {
+  color: var(--success);
+}
+
+.emailRow .confidenceMedium {
+  color: var(--warning);
+}
+
+.emailRow .confidenceLow {
+  color: var(--danger);
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .emailsToolbar {
@@ -713,5 +979,22 @@
   
   .searchOptions {
     justify-content: center;
+  }
+  
+  .emailRow .ctaSection {
+    gap: 4px;
+    margin-right: 6px;
+  }
+  
+  .emailRow .ctaButton {
+    min-width: 50px;
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+  
+  .emailRow .ctaDropdownButton {
+    min-width: 20px;
+    padding: 3px 4px;
+    font-size: 10px;
   }
 }

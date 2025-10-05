@@ -40,6 +40,7 @@ import { PanoramaPage } from '/imports/ui/Panorama/PanoramaPage.jsx';
 import { NotesPage } from '/imports/ui/Notes/NotesPage.jsx';
 import { WebPage } from '/imports/ui/Web/WebPage.jsx';
 import { EmailsPage } from '/imports/ui/Emails/EmailsPage.jsx';
+import { InboxZero } from '/imports/ui/Emails/InboxZero.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -702,6 +703,11 @@ function App() {
       {route?.name === 'emails' && (
         <div className="panel">
           <EmailsPage />
+        </div>
+      )}
+      {route?.name === 'inboxZero' && (
+        <div className="panel">
+          <InboxZero />
         </div>
       )}
       {route?.name === 'onboarding' && (

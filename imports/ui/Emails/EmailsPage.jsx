@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
-import { GmailTokensCollection, GmailMessagesCollection } from '../../api/emails/collections';
+import { GmailTokensCollection } from '../../api/emails/collections';
 import { Card } from '../components/Card/Card.jsx';
 import { notify } from '../utils/notify.js';
 import { MessageModal } from './MessageModal.jsx';
@@ -9,6 +9,7 @@ import { EmailRow } from './EmailRow.jsx';
 import { AnalysisModal } from './AnalysisModal.jsx';
 import { EmailsToolbar } from './EmailsToolbar.jsx';
 import { ApiStats } from './ApiStats.jsx';
+import { navigateTo } from '../router.js';
 import './EmailsPage.css';
 
 
@@ -21,29 +22,69 @@ export const EmailsPage = () => {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [apiStats, setApiStats] = useState(null);
   const [emailStats, setEmailStats] = useState(null);
+  const [ctaStats, setCtaStats] = useState(null);
   const [showApiStats, setShowApiStats] = useState(false);
   const [analysisModal, setAnalysisModal] = useState(null);
   const [archivedMessages, setArchivedMessages] = useState(new Set());
+  const [deletedMessages, setDeletedMessages] = useState(new Set());
+  const [locallyArchivedMessages, setLocallyArchivedMessages] = useState(new Set());
+  const [messages, setMessages] = useState([]);
+  const [isLoadingThreads, setIsLoadingThreads] = useState(true);
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
   const subTokens = useSubscribe('gmail.tokens');
-  const subMessages = useSubscribe('gmail.messages');
   const tokens = useFind(() => GmailTokensCollection.find({}))[0];
-  const inboxMessages = useFind(() => GmailMessagesCollection.find({}, { sort: { gmailDate: -1 } }));
   
 
   const isConnected = !!tokens?.access_token;
 
-  // Filter messages based on search query (DB search) and exclude locally archived messages
+  // ✅ Fonction pour charger les threads avec contexte complet
+  const loadEmailsPageThreads = useCallback(async () => {
+    if (!isConnected) return;
+    
+    try {
+      setIsLoadingThreads(true);
+      const result = await Meteor.callAsync('emails.getEmailsPageThreads');
+      
+      console.log('[EMAILS PAGE] Loaded threads:', result);
+      setMessages(result.threads || []);
+      
+    } catch (error) {
+      console.error('[EMAILS PAGE] Failed to load threads:', error);
+      notify({ message: `Failed to load emails: ${error.message}`, kind: 'error' });
+    } finally {
+      setIsLoadingThreads(false);
+    }
+  }, [isConnected]);
+
+  // Load threads when connected
+  useEffect(() => {
+    if (isConnected) {
+      loadEmailsPageThreads();
+    }
+  }, [isConnected, loadEmailsPageThreads]);
+
+  // Filter messages based on search query and exclude locally archived/deleted messages
   const filteredMessages = useMemo(() => {
-    // Filter out locally archived messages (INBOX filtering is now done in the subscription)
-    const nonArchivedMessages = inboxMessages.filter(message => !archivedMessages.has(message.id));
+    // Filter out locally archived and deleted messages
+    const visibleMessages = messages.filter(thread => {
+      const messageId = thread.message.id;
+      const isArchived = archivedMessages.has(messageId);
+      const isDeleted = deletedMessages.has(messageId);
+      const isLocallyArchived = locallyArchivedMessages.has(messageId);
+      
+      
+      return !isArchived && !isDeleted && !isLocallyArchived;
+    });
+    
     
     if (!searchQuery.trim()) {
-      return nonArchivedMessages;
+      return visibleMessages;
     }
 
     const query = searchQuery.toLowerCase();
-    return nonArchivedMessages.filter(message => {
+    return visibleMessages.filter(thread => {
+      const message = thread.message;
       const from = (message.from || '').toLowerCase();
       const subject = (message.subject || '').toLowerCase();
       const snippet = (message.snippet || '').toLowerCase();
@@ -54,36 +95,22 @@ export const EmailsPage = () => {
              snippet.includes(query) || 
              body.includes(query);
     });
-  }, [inboxMessages, searchQuery, archivedMessages]);
+  }, [messages, searchQuery, archivedMessages, deletedMessages, locallyArchivedMessages]);
 
-  // Deduplicate by threadId and count messages per thread
-  const messages = useMemo(() => {
-    const threadMap = new Map();
-    
-    filteredMessages.forEach(message => {
-      const threadId = message.threadId;
-      
-      if (!threadMap.has(threadId)) {
-        threadMap.set(threadId, {
-          message: message,
-          count: 0
-        });
-      }
-      
-      // Always keep the most recent message for this thread
-      const existing = threadMap.get(threadId);
-      if (message.gmailDate > existing.message.gmailDate) {
-        existing.message = message;
-      }
-      
-      // Increment count
-      existing.count++;
+  // Function to move to next message after action
+  const moveToNextMessage = () => {
+    setCurrentMessageIndex(prev => {
+      const nextIndex = prev + 1;
+      return nextIndex < filteredMessages.length ? nextIndex : 0; // Loop back to start
     });
-    
-    // Convert to array and sort by the most recent message date
-    return Array.from(threadMap.values())
-      .sort((a, b) => b.message.gmailDate - a.message.gmailDate);
-  }, [filteredMessages]);
+  };
+
+  // Reset index when filtered messages change
+  useEffect(() => {
+    if (currentMessageIndex >= filteredMessages.length && filteredMessages.length > 0) {
+      setCurrentMessageIndex(0);
+    }
+  }, [filteredMessages.length, currentMessageIndex]);
 
   useEffect(() => {
     if (isConnected) {
@@ -92,23 +119,49 @@ export const EmailsPage = () => {
     }
   }, [isConnected]);
 
-  // Keyboard shortcut for refresh (F5 or Ctrl+R)
+  // Keyboard shortcuts for navigation and refresh
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
         e.preventDefault();
         loadMessages();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveToNextMessage();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCurrentMessageIndex(prev => prev > 0 ? prev - 1 : filteredMessages.length - 1);
+      } else if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (filteredMessages[currentMessageIndex]) {
+          handleArchiveMessage(filteredMessages[currentMessageIndex].message.id);
+        }
+      } else if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (filteredMessages[currentMessageIndex]) {
+          const messageId = filteredMessages[currentMessageIndex].message.id;
+          handleDeleteMessage(messageId);
+        }
+      } else if (e.key === 'z' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (filteredMessages[currentMessageIndex]) {
+          const messageId = filteredMessages[currentMessageIndex].message.id;
+          handleArchiveLocally(messageId);
+        }
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [filteredMessages, currentMessageIndex]);
 
   const loadMessages = async () => {
     if (isRefreshing) return; // Prevent multiple simultaneous calls
     
     setIsRefreshing(true);
+    
+    // Store current selection before refresh
+    const currentMessageId = filteredMessages[currentMessageIndex]?.message?.id;
     
     try {
       const result = await Meteor.callAsync('gmail.listMessages', '', 20);
@@ -145,6 +198,16 @@ export const EmailsPage = () => {
           kind: 'info' 
         });
       }
+      
+      // Restore selection after refresh if possible
+      if (currentMessageId) {
+        setTimeout(() => {
+          const newIndex = filteredMessages.findIndex(thread => thread.message.id === currentMessageId);
+          if (newIndex !== -1) {
+            setCurrentMessageIndex(newIndex);
+          }
+        }, 100); // Small delay to ensure state is updated
+      }
     } catch (error) {
       console.error('Failed to load messages:', error);
       notify({ message: `Failed to load messages: ${error?.message || 'Unknown error'}`, kind: 'error' });
@@ -156,12 +219,14 @@ export const EmailsPage = () => {
 
   const loadApiStats = async () => {
     try {
-      const [apiStatsData, emailStatsData] = await Promise.all([
+      const [apiStatsData, emailStatsData, ctaStatsData] = await Promise.all([
         Meteor.callAsync('gmail.getApiStats'),
-        Meteor.callAsync('gmail.getEmailStats')
+        Meteor.callAsync('gmail.getEmailStats'),
+        Meteor.callAsync('emails.getCtaStats')
       ]);
       setApiStats(apiStatsData);
       setEmailStats(emailStatsData);
+      setCtaStats(ctaStatsData);
     } catch (error) {
       console.error('Failed to load stats:', error);
     }
@@ -255,6 +320,10 @@ export const EmailsPage = () => {
     }
   };
 
+  const handleNavigateToInboxZero = () => {
+    navigateTo({ name: 'inboxZero' });
+  };
+
   const handleConnect = async () => {
     setIsConnecting(true);
     try {
@@ -279,7 +348,7 @@ export const EmailsPage = () => {
       const errorMessage = error?.message || 'Unknown error';
       const errorType = error?.error;
       
-      let userMessage = 'Failed to connect to Gmail';
+      let userMessage;
       
       if (errorType === 'network-error') {
         userMessage = 'Network error connecting to Gmail. Please check your internet connection and try again.';
@@ -342,12 +411,14 @@ export const EmailsPage = () => {
 
   const handleOpenMessage = async (messageId) => {
     try {
-      // Find the message to get its threadId (use inboxMessages since we're opening from the inbox)
-      const message = inboxMessages.find(m => m.id === messageId);
-      if (!message) {
+      // Find the message to get its threadId (use messages since we're opening from the inbox)
+      const thread = messages.find(t => t.message.id === messageId);
+      if (!thread) {
         notify({ message: 'Message not found', kind: 'error' });
         return;
       }
+      
+      const message = thread.message;
 
       // Get all messages in the same thread via RPC
       const threadMessages = await Meteor.callAsync('gmail.getThreadMessages', message.threadId);
@@ -382,49 +453,146 @@ export const EmailsPage = () => {
     }
   };
 
-  const handleArchiveMessage = async (messageId) => {
+  const handleArchiveMessage = (messageId) => {
     // Optimistic UI: immediately remove from UI
     setArchivedMessages(prev => new Set([...prev, messageId]));
     notify({ message: 'Message archived', kind: 'success' });
     
-    // Call API in background
-    try {
-      await Meteor.callAsync('gmail.archiveMessage', messageId);
-      // API call successful, the message is already removed from UI
-    } catch (error) {
-      console.error('Failed to archive message:', error);
-      
-      // Revert optimistic UI on error
-      setArchivedMessages(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(messageId);
-        return newSet;
-      });
-      
-      // Check if it's an OAuth2/token error
-      const errorMessage = error?.message || 'Unknown error';
-      const isOAuthError = error?.error === 'oauth-expired' ||
-                          errorMessage.includes('oauth2') || 
-                          errorMessage.includes('token') || 
-                          errorMessage.includes('unauthorized') ||
-                          errorMessage.includes('authentication') ||
-                          errorMessage.includes('Gmail connection expired');
-      
-      if (isOAuthError) {
-        notify({ 
-          message: 'Gmail connection expired. Please reconnect to Gmail to archive messages.', 
-          kind: 'error',
-          duration: 8000
+    // Move to next message immediately - but ensure we don't go out of bounds
+    setCurrentMessageIndex(prev => {
+      // After archiving, the current index will point to the next message
+      // If we're at the end, go back to the beginning
+      const newIndex = prev < filteredMessages.length - 1 ? prev : 0;
+      return newIndex;
+    });
+    
+    // Call API in background without blocking UI
+    Meteor.callAsync('gmail.archiveMessage', messageId)
+      .then(() => {
+        // No need to reload - optimistic UI already handles the display
+      })
+      .catch((error) => {
+        console.error('Failed to archive message:', error);
+        
+        // Revert optimistic UI on error
+        setArchivedMessages(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(messageId);
+          return newSet;
         });
-        // Optionally, you could trigger a reconnection flow here
-        // or redirect to the connection page
-      } else {
+        
+        // Check if it's an OAuth2/token error
+        const errorMessage = error?.message || 'Unknown error';
+        const isOAuthError = error?.error === 'oauth-expired' ||
+                            errorMessage.includes('oauth2') || 
+                            errorMessage.includes('token') || 
+                            errorMessage.includes('unauthorized') ||
+                            errorMessage.includes('authentication') ||
+                            errorMessage.includes('Gmail connection expired');
+        
+        if (isOAuthError) {
+          notify({ 
+            message: 'Gmail connection expired. Please reconnect to Gmail to archive messages.', 
+            kind: 'error',
+            duration: 8000
+          });
+        } else {
+          notify({ 
+            message: `Failed to archive: ${errorMessage}`, 
+            kind: 'error' 
+          });
+        }
+      });
+  };
+
+  const handleDeleteMessage = (messageId) => {
+    // Optimistic UI: immediately remove from UI
+    setDeletedMessages(prev => {
+      const newSet = new Set([...prev, messageId]);
+      return newSet;
+    });
+    notify({ message: 'Message deleted', kind: 'success' });
+    
+    // Move to next message immediately - but ensure we don't go out of bounds
+    setCurrentMessageIndex(prev => {
+      // After deletion, the current index will point to the next message
+      // If we're at the end, go back to the beginning
+      const newIndex = prev < filteredMessages.length - 1 ? prev : 0;
+      return newIndex;
+    });
+    
+    // Call API in background without blocking UI
+    Meteor.callAsync('emails.moveToTrash', messageId)
+      .then(() => {
+        // No need to reload - optimistic UI already handles the display
+      })
+      .catch((error) => {
+        console.error('Failed to delete message:', error);
+        
+        // Revert optimistic UI on error
+        setDeletedMessages(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(messageId);
+          return newSet;
+        });
+        
+        // Check if it's an OAuth2/token error
+        const errorMessage = error?.message || 'Unknown error';
+        const isOAuthError = error?.error === 'oauth-expired' ||
+                            errorMessage.includes('oauth2') || 
+                            errorMessage.includes('token') || 
+                            errorMessage.includes('unauthorized') ||
+                            errorMessage.includes('authentication') ||
+                            errorMessage.includes('Gmail connection expired');
+        
+        if (isOAuthError) {
+          notify({ 
+            message: 'Gmail connection expired. Please reconnect to Gmail to delete messages.', 
+            kind: 'error',
+            duration: 8000
+          });
+        } else {
+          notify({ 
+            message: `Failed to delete: ${errorMessage}`, 
+            kind: 'error' 
+          });
+        }
+      });
+  };
+
+  const handleArchiveLocally = (messageId) => {
+    // Optimistic UI: immediately remove from UI
+    setLocallyArchivedMessages(prev => new Set([...prev, messageId]));
+    notify({ message: 'Message archived locally', kind: 'success' });
+    
+    // Move to next message immediately - but ensure we don't go out of bounds
+    setCurrentMessageIndex(prev => {
+      // After local archiving, the current index will point to the next message
+      // If we're at the end, go back to the beginning
+      const newIndex = prev < filteredMessages.length - 1 ? prev : 0;
+      return newIndex;
+    });
+    
+    // Call API in background without blocking UI
+    Meteor.callAsync('emails.archiveLocally', messageId)
+      .then(() => {
+        // No need to reload - optimistic UI already handles the display
+      })
+      .catch((error) => {
+        console.error('Failed to archive message locally:', error);
+        
+        // Revert optimistic UI on error
+        setLocallyArchivedMessages(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(messageId);
+          return newSet;
+        });
+        
         notify({ 
-          message: `Failed to archive: ${errorMessage}`, 
+          message: `Failed to archive locally: ${error?.message || 'Unknown error'}`, 
           kind: 'error' 
         });
-      }
-    }
+      });
   };
 
   const handleAddLabel = async (messageId, labelId) => {
@@ -518,7 +686,7 @@ export const EmailsPage = () => {
     return header?.value || '';
   };
 
-  if (subTokens() || subMessages()) {
+  if (subTokens() || isLoadingThreads) {
     return <div>Loading…</div>;
   }
 
@@ -559,6 +727,7 @@ export const EmailsPage = () => {
         isSyncingLabels={isSyncingLabels}
         onToggleApiStats={() => setShowApiStats(!showApiStats)}
         showApiStats={showApiStats}
+        onNavigateToInboxZero={handleNavigateToInboxZero}
       />
 
       {showApiStats && (
@@ -566,35 +735,49 @@ export const EmailsPage = () => {
           apiStats={apiStats}
           emailStats={emailStats}
           threadsCount={messages.length}
+          ctaStats={ctaStats}
           onRefreshStats={loadApiStats}
           onCleanupDuplicates={handleCleanupDuplicates}
         />
       )}
 
-      {messages.length === 0 ? (
+      {filteredMessages.length === 0 ? (
         <div>No emails found.</div>
       ) : (
         <div className="emailsList">
           <div className="emailsListHeader">
             <span className="emailsCount">
-              {messages.length} conversation{messages.length > 1 ? 's' : ''} 
-              ({filteredMessages.length} inbox messages)
+              {filteredMessages.length} conversation{filteredMessages.length > 1 ? 's' : ''} 
+              {filteredMessages.some(thread => thread.threadTotalCount > 1) && (
+                <span className="threadContextInfo">
+                  • {filteredMessages.reduce((total, thread) => total + thread.threadTotalCount, 0)} total messages in threads
+                </span>
+              )}
             </span>
             <span className="threadExplanation">
-              💬 Conversations are grouped by thread • Only inbox messages shown
+              💬 Conversations are grouped by thread • Complete thread context shown
+              <br />
+              <span className="keyboardShortcuts">
+                ⌨️ Navigation: ↑↓ • Actions: A (archive) • D (delete) • Z (archive locally) • Refresh: F5
+                <br />
+                💡 Use keyboard shortcuts for quick actions (buttons removed for cleaner interface)
+              </span>
             </span>
           </div>
-          {messages.map((thread) => (
+          {filteredMessages.map((thread, index) => (
             <EmailRow
               key={thread.message.threadId}
               message={thread.message}
-              threadCount={thread.count}
+              threadCount={thread.threadTotalCount}
               onOpen={handleOpenMessage}
               onArchive={handleArchiveMessage}
+              onDelete={handleDeleteMessage}
               onAddLabel={handleAddLabel}
               onAnalyze={handleAnalyzeEmail}
               labels={[]}
               formatDate={formatDate}
+              threadContext={thread.threadContext}
+              isSelected={index === currentMessageIndex}
             />
           ))}
         </div>

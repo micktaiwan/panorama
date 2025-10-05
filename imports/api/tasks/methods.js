@@ -110,6 +110,91 @@ Meteor.methods({
       await ProjectsCollection.updateAsync(task.projectId, { $set: { updatedAt: new Date() } });
     }
     return res;
+  },
+  async 'tasks.promoteToTop'(taskId) {
+    check(taskId, String);
+    const task = await TasksCollection.findOneAsync(taskId);
+    
+    if (!task) {
+      throw new Meteor.Error('task-not-found', 'Task not found');
+    }
+    
+    // Get all open tasks sorted by current priorityRank
+    const globalOpenSelector = {
+      $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ]
+    };
+    
+    const allOpenTasks = await TasksCollection.find(globalOpenSelector).fetchAsync();
+    
+    // Sort using the original logic: deadline -> status -> priorityRank -> createdAt
+    const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
+    const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
+    
+    allOpenTasks.sort((a, b) => {
+      const ad = toTime(a.deadline);
+      const bd = toTime(b.deadline);
+      if (ad !== bd) return ad - bd; // earlier deadlines first
+      
+      const as = statusRank(a.status || 'todo');
+      const bs = statusRank(b.status || 'todo');
+      if (as !== bs) return as - bs; // in_progress before others
+      
+      const ar = Number.isFinite(a.priorityRank) ? a.priorityRank : Number.POSITIVE_INFINITY;
+      const br = Number.isFinite(b.priorityRank) ? b.priorityRank : Number.POSITIVE_INFINITY;
+      if (ar !== br) return ar - br; // lower priorityRank first
+      
+      const ac = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return ac - bc; // earlier created first
+    });
+    
+    // Set target task to rank 0 first
+    await TasksCollection.updateAsync(taskId, { 
+      $set: { priorityRank: 0, updatedAt: new Date() } 
+    });
+    
+    // Now sort again with the updated rank
+    allOpenTasks.forEach(t => {
+      if (t._id === taskId) {
+        t.priorityRank = 0; // Update the local copy
+      }
+    });
+    
+    // Re-sort with the new rank
+    allOpenTasks.sort((a, b) => {
+      const ad = toTime(a.deadline);
+      const bd = toTime(b.deadline);
+      if (ad !== bd) return ad - bd;
+      
+      const as = statusRank(a.status || 'todo');
+      const bs = statusRank(b.status || 'todo');
+      if (as !== bs) return as - bs;
+      
+      const ar = Number.isFinite(a.priorityRank) ? a.priorityRank : Number.POSITIVE_INFINITY;
+      const br = Number.isFinite(b.priorityRank) ? b.priorityRank : Number.POSITIVE_INFINITY;
+      if (ar !== br) return ar - br;
+      
+      const ac = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return ac - bc;
+    });
+    
+    // Recalculate ranks based on the final sorted order
+    const updates = allOpenTasks.map((t, index) => 
+      TasksCollection.updateAsync(t._id, { 
+        $set: { priorityRank: index, updatedAt: new Date() } 
+      })
+    );
+    
+    // Execute all updates
+    await Promise.all(updates);
+    
+    // Update project timestamp if task belongs to a project
+    if (task.projectId) {
+      await ProjectsCollection.updateAsync(task.projectId, { $set: { updatedAt: new Date() } });
+    }
+    
+    return true;
   }
   
 });

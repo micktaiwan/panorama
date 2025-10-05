@@ -53,11 +53,18 @@ export const Preferences = () => {
   const [aiRemoteProvider, setAiRemoteProvider] = React.useState('openai');
   const [aiRemoteChatModel, setAiRemoteChatModel] = React.useState('gpt-4o-mini');
   const [aiRemoteEmbeddingModel, setAiRemoteEmbeddingModel] = React.useState('text-embedding-3-small');
-  const [aiRemoteApiKey, setAiRemoteApiKey] = React.useState('');
+  
+  // Email CTA preferences
+  const [ctaEnabled, setCtaEnabled] = React.useState(true);
+  const [ctaModel, setCtaModel] = React.useState('local');
   const [aiHealthStatus, setAiHealthStatus] = React.useState(null);
   const [aiTesting, setAiTesting] = React.useState({ ollama: false, openai: false });
   const [ollamaModels, setOllamaModels] = React.useState([]);
   const [loadingModels, setLoadingModels] = React.useState(false);
+  
+  // Token counting state
+  const [tokenStats, setTokenStats] = React.useState(null);
+  const [countingTokens, setCountingTokens] = React.useState(false);
 
   // Ensure UI reflects actual server toggle on mount
   React.useEffect(() => {
@@ -101,6 +108,12 @@ export const Preferences = () => {
         setAiRemoteProvider(pref.ai.remote.provider || 'openai');
         setAiRemoteChatModel(pref.ai.remote.chatModel || 'gpt-4o-mini');
         setAiRemoteEmbeddingModel(pref.ai.remote.embeddingModel || 'text-embedding-3-small');
+      }
+      
+      // Load CTA preferences
+      if (pref.cta) {
+        setCtaEnabled(pref.cta.enabled !== false);
+        setCtaModel(pref.cta.model || 'local');
       }
       
       // Refresh Qdrant health to show correct collection name
@@ -327,7 +340,29 @@ export const Preferences = () => {
     }
   }, [aiLocalEmbeddingModel, aiMode]);
 
-
+  // Token counting function
+  const countTokens = React.useCallback(() => {
+    setCountingTokens(true);
+    setTokenStats(null);
+    
+    Meteor.call('panorama.countAllTokens', (err, result) => {
+      setCountingTokens(false);
+      
+      if (err) {
+        console.error('[countTokens] Failed to count tokens:', err);
+        notify({
+          message: `Failed to count tokens: ${err.reason || err.message}`,
+          kind: 'error'
+        });
+      } else {
+        setTokenStats(result);
+        notify({
+          message: `Token count completed: ${result.globalStats.totalTokens} tokens across ${result.globalStats.totalItems} items`,
+          kind: 'success'
+        });
+      }
+    });
+  }, []);
 
   React.useEffect(() => {
     if (!pref) return;
@@ -784,6 +819,129 @@ export const Preferences = () => {
             }}>Fail method</button>
           </div>
         </div>
+      </div>
+
+      <h3>Email CTA Suggestions</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Enable CTA Suggestions</div>
+          <div className="prefsValue">
+            <InlineEditable
+              as="select"
+              value={ctaEnabled ? 'true' : 'false'}
+              options={[
+                { value: 'true', label: 'Enabled' },
+                { value: 'false', label: 'Disabled' }
+              ]}
+              onSubmit={(next) => {
+                const enabled = next === 'true';
+                setCtaEnabled(enabled);
+                Meteor.call('appPreferences.update', { cta: { enabled } }, () => {});
+              }}
+            />
+          </div>
+        </div>
+        
+        {ctaEnabled && (
+          <div className="prefsRow">
+            <div className="prefsLabel">Model for CTA Suggestions</div>
+            <div className="prefsValue">
+              <InlineEditable
+                as="select"
+                value={ctaModel}
+                options={[
+                  { value: 'local', label: 'Local (Ollama)' },
+                  { value: 'remote', label: 'Remote (OpenAI)' }
+                ]}
+                onSubmit={(next) => {
+                  setCtaModel(next);
+                  Meteor.call('appPreferences.update', { cta: { model: next } }, () => {});
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <h3>Token Statistics</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Count Tokens</div>
+          <div className="prefsValue">
+            <button 
+              className="btn" 
+              disabled={countingTokens} 
+              onClick={countTokens}
+            >
+              {countingTokens ? 'Counting…' : 'Count All Tokens'}
+            </button>
+            <span style={{ marginLeft: '8px', color: 'var(--muted)', fontSize: '14px' }}>
+              Analyze text content from all collections
+            </span>
+          </div>
+        </div>
+        
+        {tokenStats && (
+          <>
+            <div className="prefsRow">
+              <div className="prefsLabel">Global Summary</div>
+              <div className="prefsValue">
+                <div style={{ 
+                  background: 'var(--bg-secondary)', 
+                  padding: '12px', 
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  lineHeight: '1.5'
+                }}>
+                  <div><strong>Total:</strong> {tokenStats.globalStats.totalTokens.toLocaleString()} tokens</div>
+                  <div><strong>Items:</strong> {tokenStats.globalStats.totalItems.toLocaleString()} items</div>
+                  <div><strong>Characters:</strong> {tokenStats.globalStats.totalCharacters.toLocaleString()}</div>
+                  <div><strong>Average:</strong> {tokenStats.globalStats.avgTokensPerItem} tokens/item</div>
+                  <div><strong>Ratio:</strong> {tokenStats.globalStats.tokensPerChar} tokens/character</div>
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Generated on {new Date(tokenStats.generatedAt).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="prefsRow">
+              <div className="prefsLabel">Collection Details</div>
+              <div className="prefsValue">
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {Object.entries(tokenStats.collections).map(([collectionName, stats]) => (
+                    <div key={collectionName} style={{ 
+                      marginBottom: '12px', 
+                      padding: '8px 12px', 
+                      background: 'var(--bg-secondary)', 
+                      borderRadius: '4px',
+                      fontSize: '13px'
+                    }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                        {collectionName}
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        {stats.description}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', fontSize: '12px' }}>
+                        <div><strong>Items:</strong> {stats.totalItems}</div>
+                        <div><strong>With content:</strong> {stats.itemsWithContent}</div>
+                        <div><strong>Tokens:</strong> {stats.tokens.toLocaleString()}</div>
+                        <div><strong>Characters:</strong> {stats.characters.toLocaleString()}</div>
+                        <div><strong>Average:</strong> {stats.avgTokensPerItem}</div>
+                      </div>
+                      {stats.error && (
+                        <div style={{ color: 'var(--error)', marginTop: '4px', fontSize: '11px' }}>
+                          Error: {stats.error}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <h3>Qdrant</h3>

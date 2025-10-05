@@ -143,8 +143,6 @@ export const MessageModal = ({ message, onClose, onArchive, onAddLabel, onAnalyz
         
         <div className="modalFooter">
           <button className="btn btn-analyze" onClick={() => onAnalyze({ message, threadMessages })}>Analyse Thread</button>
-          <button className="btn" onClick={() => { onArchive(message.id); onClose(); }}>Archive</button>
-          <button className="btn" onClick={() => onAddLabel(message.id, 'IMPORTANT')}>Mark Important</button>
         </div>
       </div>
     </div>

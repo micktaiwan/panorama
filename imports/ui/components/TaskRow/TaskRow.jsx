@@ -135,6 +135,11 @@ export const TaskRow = ({
             inputClassName={`taskRowTitle${status === 'in_progress' ? ' inProgress' : ''}`}
             onSubmit={(next) => { onUpdateTitle?.(String(next || '').trim()); }}
           />
+          {Number.isFinite(task.priorityRank) ? (
+            <span className="taskRankDebug" title={`Priority rank: ${task.priorityRank}`}>
+              #{task.priorityRank}
+            </span>
+          ) : null}
           <span className="taskInlineActions">
             {inlineActions && showUrgentImportant ? (
               <>
@@ -232,6 +237,11 @@ export const TaskRow = ({
             >important</button>
           </span>
         ) : null}
+        <button 
+          className="iconButton" 
+          title="Promote to top priority" 
+          onClick={() => Meteor.call('tasks.promoteToTop', task._id)}
+        >↑</button>
         {showClearDeadline && task.deadline ? (
           <button className="iconButton" title="Clear deadline" onClick={() => onClearDeadline?.()}>✕</button>
         ) : null}

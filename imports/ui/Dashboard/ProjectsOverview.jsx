@@ -15,17 +15,21 @@ const withinDays = (date, n) => {
 export const ProjectsOverview = () => {
   const subP = useSubscribe('projects');
   const subT = useSubscribe('tasks');
-  const projects = useFind(() => ProjectsCollection.find({}, { sort: { updatedAt: -1 } })).sort((a, b) => {
-    const aHas = !!a.targetDate;
-    const bHas = !!b.targetDate;
-    if (aHas !== bHas) return bHas - aHas; // items with targetDate first
-    const at = a.targetDate ? new Date(a.targetDate).getTime() : 0;
-    const bt = b.targetDate ? new Date(b.targetDate).getTime() : 0;
-    if (at !== bt) return at - bt; // ASC by targetDate
-    const au = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-    const bu = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-    return bu - au; // fallback to recent update
-  });
+  const projectsRaw = useFind(() => ProjectsCollection.find({}, { sort: { updatedAt: -1 } }));
+  
+  const projects = useMemo(() => {
+    return [...projectsRaw].sort((a, b) => {
+      const aHas = !!a.targetDate;
+      const bHas = !!b.targetDate;
+      if (aHas !== bHas) return bHas - aHas; // items with targetDate first
+      const at = a.targetDate ? new Date(a.targetDate).getTime() : 0;
+      const bt = b.targetDate ? new Date(b.targetDate).getTime() : 0;
+      if (at !== bt) return at - bt; // ASC by targetDate
+      const au = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const bu = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return bu - au; // fallback to recent update
+    });
+  }, [projectsRaw]);
   const tasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $ne: 'done' } } ] }));
 
   const byProjectOpenTasks = useMemo(() => {

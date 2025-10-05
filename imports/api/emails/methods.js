@@ -1,7 +1,9 @@
 import { Meteor } from 'meteor/meteor';
 import { WebApp } from 'meteor/webapp';
 import { google } from 'googleapis';
-import { GmailTokensCollection, GmailMessagesCollection } from './collections.js';
+import { GmailTokensCollection, GmailMessagesCollection, EmailActionLogsCollection } from './collections.js';
+import { chatComplete } from '/imports/api/_shared/llmProxy.js';
+import { AppPreferencesCollection } from '/imports/api/appPreferences/collections.js';
 
 // OAuth2 configuration
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'];
@@ -827,5 +829,553 @@ WebApp.connectHandlers.use('/oauth2callback', async (req, res) => {
     
     res.writeHead(500, { 'Content-Type': 'text/html' });
     res.end(errorHtml);
+  }
+});
+
+// ===== CTA SUGGESTION METHODS =====
+
+// Internal function for server-side CTA suggestion (used by cron job)
+export async function suggestCtaInternal(emailId) {
+  // Check if email exists and is not already prepared/preparing
+  const email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
+  if (!email) {
+    throw new Meteor.Error('email-not-found', 'Email not found');
+  }
+
+  if (email.ctaPrepared || email.ctaPreparing) {
+    return { alreadyPrepared: true };
+  }
+
+  // Atomically set ctaPreparing to true
+  const updateResult = await GmailMessagesCollection.updateAsync(
+    { _id: emailId, ctaPreparing: { $ne: true } },
+    { $set: { ctaPreparing: true } }
+  );
+
+  if (updateResult === 0) {
+    // Another process is already preparing this email
+    return { alreadyPreparing: true };
+  }
+
+  try {
+    // Get CTA preferences
+    const prefs = await AppPreferencesCollection.findOneAsync({}) || {};
+    const ctaPrefs = prefs.cta || {};
+    
+    // Check if CTA is enabled
+    if (ctaPrefs.enabled === false) {
+      throw new Meteor.Error('cta-disabled', 'CTA suggestions are disabled');
+    }
+    
+    // Build prompt with email context
+    const emailContext = {
+      subject: email.subject || 'No subject',
+      from: email.from || 'Unknown sender',
+      date: email.gmailDate ? new Date(email.gmailDate).toLocaleString() : 'Unknown date',
+      labels: email.labelIds || [],
+      snippet: email.snippet || '',
+      bodyPreview: email.bodyPreview ? email.bodyPreview.substring(0, 2000) : ''
+    };
+
+    const systemPrompt = `You are an email assistant that suggests the most appropriate action for each email to help achieve inbox zero. 
+
+Available actions:
+- "delete": Move to trash (for spam, newsletters, promotional emails, or emails that don't require any action)
+- "archive": Archive the email (for emails that are read and don't require further action, but might be useful to keep)
+- "reply": Mark for reply (for emails that require a response from the user)
+
+Consider the email content, sender, subject, and context to determine the most appropriate action. Be conservative - prefer archive over delete unless it's clearly spam or promotional content.
+
+Respond with a JSON object containing:
+- "action": one of "delete", "archive", or "reply"
+- "confidence": a number between 0 and 1 indicating your confidence
+- "rationale": a brief explanation of why you chose this action
+
+Example response:
+{"action": "archive", "confidence": 0.8, "rationale": "This appears to be a read notification that doesn't require further action"}`;
+
+    const userPrompt = `Email to analyze:
+Subject: ${emailContext.subject}
+From: ${emailContext.from}
+Date: ${emailContext.date}
+Labels: ${emailContext.labels.join(', ')}
+Snippet: ${emailContext.snippet}
+Body preview: ${emailContext.bodyPreview}`;
+
+    // Call LLM
+    const response = await chatComplete({
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      temperature: 0.1,
+      maxTokens: 200,
+      route: ctaPrefs.model || 'local'
+    });
+
+    let suggestion;
+    try {
+      suggestion = JSON.parse(response.content);
+    } catch {
+      // Fallback if JSON parsing fails
+      suggestion = {
+        action: 'archive',
+        confidence: 0.5,
+        rationale: 'Unable to parse LLM response, defaulting to archive'
+      };
+    }
+
+    // Validate action
+    if (!['delete', 'archive', 'reply'].includes(suggestion.action)) {
+      suggestion.action = 'archive';
+    }
+
+    // Update email with suggestion
+    await GmailMessagesCollection.updateAsync(emailId, {
+      $set: {
+        ctaPrepared: true,
+        ctaPreparing: false,
+        ctaSuggestion: {
+          action: suggestion.action,
+          confidence: Math.max(0, Math.min(1, suggestion.confidence || 0.5)),
+          rationale: suggestion.rationale || 'No rationale provided',
+          model: ctaPrefs.model || 'local',
+          suggestedAt: new Date()
+        }
+      }
+    });
+
+    return { success: true, suggestion };
+
+  } catch (error) {
+    console.error('Error suggesting CTA for email:', emailId, error);
+    
+    // Reset preparing flag on error
+    await GmailMessagesCollection.updateAsync(emailId, {
+      $set: { ctaPreparing: false }
+    });
+
+    throw new Meteor.Error('suggestion-failed', `Failed to suggest CTA: ${error.message}`);
+  }
+}
+
+Meteor.methods({
+  async 'emails.suggestCta'(emailId) {
+    return await suggestCtaInternal(emailId);
+  },
+
+  async 'emails.moveToTrash'(emailId) {
+    console.log('[MOVE TO TRASH] Starting deletion for emailId:', emailId);
+    // Try to find by Gmail ID first, then by MongoDB _id
+    let email = await GmailMessagesCollection.findOneAsync({ id: emailId });
+    if (!email) {
+      email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
+    }
+    if (!email) {
+      console.error('[MOVE TO TRASH] Email not found for id:', emailId);
+      throw new Meteor.Error('email-not-found', 'Email not found');
+    }
+    console.log('[MOVE TO TRASH] Found email:', email.id, 'subject:', email.subject);
+
+    // Log the action
+    await EmailActionLogsCollection.insertAsync({
+      emailId,
+      suggestedAction: email.ctaSuggestion?.action || null,
+      chosenAction: 'delete',
+      confidence: email.ctaSuggestion?.confidence || null,
+      accepted: email.ctaSuggestion?.action === 'delete',
+      executedAt: new Date(),
+      model: email.ctaSuggestion?.model || null,
+      rationale: email.ctaSuggestion?.rationale || null
+    });
+
+    // Move to trash via Gmail API
+    return ensureValidTokens().then(async (credentials) => {
+      oauth2Client.setCredentials(credentials);
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      
+      console.log('[MOVE TO TRASH] Calling Gmail API to trash message:', email.id);
+      await gmail.users.messages.trash({
+        userId: 'me',
+        id: email.id
+      });
+      console.log('[MOVE TO TRASH] Gmail API call successful');
+
+      // Update local collection
+      console.log('[MOVE TO TRASH] Updating local collection for:', email._id);
+      await GmailMessagesCollection.updateAsync({ _id: email._id }, {
+        $set: { 
+          labelIds: email.labelIds.filter(label => label !== 'INBOX'),
+          needsReply: false
+        }
+      });
+      console.log('[MOVE TO TRASH] Local collection updated successfully');
+
+      return { success: true };
+    });
+  },
+
+  async 'emails.archive'(emailId) {
+    const email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
+    if (!email) {
+      throw new Meteor.Error('email-not-found', 'Email not found');
+    }
+
+    // Log the action
+    await EmailActionLogsCollection.insertAsync({
+      emailId,
+      suggestedAction: email.ctaSuggestion?.action || null,
+      chosenAction: 'archive',
+      confidence: email.ctaSuggestion?.confidence || null,
+      accepted: email.ctaSuggestion?.action === 'archive',
+      executedAt: new Date(),
+      model: email.ctaSuggestion?.model || null,
+      rationale: email.ctaSuggestion?.rationale || null
+    });
+
+    // Archive via Gmail API
+    return ensureValidTokens().then(async (credentials) => {
+      oauth2Client.setCredentials(credentials);
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: email.id,
+        resource: {
+          removeLabelIds: ['INBOX']
+        }
+      });
+
+      // Update local collection
+      await GmailMessagesCollection.updateAsync(emailId, {
+        $set: { 
+          labelIds: email.labelIds.filter(label => label !== 'INBOX'),
+          needsReply: false
+        }
+      });
+
+      return { success: true };
+    });
+  },
+
+  async 'emails.markReply'(emailId) {
+    const email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
+    if (!email) {
+      throw new Meteor.Error('email-not-found', 'Email not found');
+    }
+
+    // Log the action
+    await EmailActionLogsCollection.insertAsync({
+      emailId,
+      suggestedAction: email.ctaSuggestion?.action || null,
+      chosenAction: 'reply',
+      confidence: email.ctaSuggestion?.confidence || null,
+      accepted: email.ctaSuggestion?.action === 'reply',
+      executedAt: new Date(),
+      model: email.ctaSuggestion?.model || null,
+      rationale: email.ctaSuggestion?.rationale || null
+    });
+
+    // Mark as needs reply
+    await GmailMessagesCollection.updateAsync(emailId, {
+      $set: { needsReply: true }
+    });
+
+    // Generate Gmail thread URL
+    const threadUrl = `https://mail.google.com/mail/u/0/#inbox/${email.threadId}`;
+
+    return { success: true, threadUrl };
+  },
+
+  async 'emails.getCtaStats'() {
+    try {
+      console.log('[emails.getCtaStats] Loading CTA statistics');
+
+      // Count prepared emails
+      const preparedCount = await GmailMessagesCollection.find({
+        ctaPrepared: true
+      }).countAsync();
+
+      // Count preparing emails
+      const preparingCount = await GmailMessagesCollection.find({
+        ctaPreparing: true
+      }).countAsync();
+
+      // Count total eligible emails (in inbox, not archived/deleted)
+      const totalEligibleCount = await GmailMessagesCollection.find({
+        $and: [
+          { labelIds: { $in: ['INBOX'] } },
+          { labelIds: { $nin: ['TRASH'] } }
+        ]
+      }).countAsync();
+
+      // Get action logs for acceptance rate
+      const actionLogs = await EmailActionLogsCollection.find({}).fetchAsync();
+      const totalActions = actionLogs.length;
+      const acceptedActions = actionLogs.filter(log => log.accepted).length;
+      const acceptanceRate = totalActions > 0 ? (acceptedActions / totalActions) : 0;
+
+      // Count by action type
+      const actionCounts = actionLogs.reduce((acc, log) => {
+        acc[log.chosenAction] = (acc[log.chosenAction] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Count by suggestion type
+      const suggestionCounts = actionLogs.reduce((acc, log) => {
+        if (log.suggestedAction) {
+          acc[log.suggestedAction] = (acc[log.suggestedAction] || 0) + 1;
+        }
+        return acc;
+      }, {});
+
+      const stats = {
+        preparedCount,
+        preparingCount,
+        totalEligibleCount,
+        totalActions,
+        acceptedActions,
+        acceptanceRate: Math.round(acceptanceRate * 100),
+        actionCounts,
+        suggestionCounts
+      };
+
+      console.log('[emails.getCtaStats] Stats loaded successfully:', stats);
+      return stats;
+
+    } catch (error) {
+      console.error('[emails.getCtaStats] Error loading CTA stats:', error);
+      throw new Meteor.Error('stats-load-failed', `Failed to load CTA stats: ${error.message}`);
+    }
+  },
+
+  // ✅ Méthode pour EmailsPage : Résoudre le problème des threads avec emails archivés
+  async 'emails.getEmailsPageThreads'() {
+    logApiCall('GET', '/emails-page-threads', 'Get threads for EmailsPage with complete context');
+    
+    try {
+      // Get all messages to have complete thread context
+      const allMessages = await GmailMessagesCollection.find({}, {
+        sort: { gmailDate: -1 }
+      }).fetchAsync();
+      
+      console.log(`[EMAILS PAGE] Found ${allMessages.length} total messages`);
+      
+      // Group messages by threadId
+      const threadMap = new Map();
+      
+      allMessages.forEach(message => {
+        const threadId = message.threadId;
+        if (!threadId) return; // Skip messages without threadId
+        
+        if (!threadMap.has(threadId)) {
+          threadMap.set(threadId, []);
+        }
+        threadMap.get(threadId).push(message);
+      });
+      
+      console.log(`[EMAILS PAGE] Found ${threadMap.size} unique threads`);
+      
+      // For each thread, create thread data with complete context
+      const threadData = [];
+      
+      threadMap.forEach((threadMessages, threadId) => {
+        // Sort messages in thread by date (most recent first)
+        const sortedMessages = threadMessages.toSorted((a, b) => 
+          new Date(b.gmailDate) - new Date(a.gmailDate)
+        );
+        
+        // Find the most recent message that is in INBOX and not in TRASH and not archived locally
+        const inboxMessage = sortedMessages.find(message => 
+          message.labelIds?.includes('INBOX') && 
+          !message.labelIds?.includes('TRASH') &&
+          !message.archivedLocally
+        );
+        
+        if (inboxMessage) {
+          // Count messages in different states
+          const inboxCount = threadMessages.filter(msg => 
+            msg.labelIds?.includes('INBOX') && 
+            !msg.labelIds?.includes('TRASH') &&
+            !msg.archivedLocally
+          ).length;
+          
+          const archivedCount = threadMessages.filter(msg => 
+            !msg.labelIds?.includes('INBOX') && 
+            !msg.labelIds?.includes('TRASH')
+          ).length;
+          
+          const trashCount = threadMessages.filter(msg => 
+            msg.labelIds?.includes('TRASH')
+          ).length;
+          
+          // Create thread data similar to EmailsPage structure
+          threadData.push({
+            message: inboxMessage, // The representative message (most recent INBOX)
+            count: threadMessages.length, // Total messages in thread
+            threadId: threadId,
+            threadTotalCount: threadMessages.length,
+            threadInboxCount: inboxCount,
+            threadArchivedCount: archivedCount,
+            threadTrashCount: trashCount,
+            threadContext: {
+              hasArchivedMessages: archivedCount > 0,
+              hasTrashMessages: trashCount > 0,
+              isMultiMessageThread: threadMessages.length > 1,
+              // Additional context for EmailsPage
+              allMessages: threadMessages, // All messages in thread for context
+              mostRecentMessage: sortedMessages[0], // Most recent regardless of status
+              oldestMessage: sortedMessages[sortedMessages.length - 1] // Oldest message
+            }
+          });
+        }
+      });
+      
+      // Sort by the most recent message date in each thread
+      const sortedThreads = threadData.toSorted((a, b) => 
+        new Date(b.message.gmailDate) - new Date(a.message.gmailDate)
+      );
+      
+      console.log(`[EMAILS PAGE] Returning ${sortedThreads.length} threads for EmailsPage`);
+      
+      return {
+        threads: sortedThreads,
+        totalThreads: sortedThreads.length,
+        totalMessages: allMessages.length,
+        timestamp: new Date().toISOString()
+      };
+      
+    } catch (error) {
+      console.error('[EMAILS PAGE ERROR] Failed to get threads:', error);
+      throw new Meteor.Error('emails-page-threads-failed', `Failed to get EmailsPage threads: ${error.message}`);
+    }
+  },
+
+  // ✅ Méthode pour InboxZero : Garder la méthode existante
+  async 'emails.getInboxZeroThreads'() {
+    logApiCall('GET', '/inbox-zero-threads', 'Get threads for InboxZero with complete context');
+    
+    try {
+      // Get all messages to have complete thread context
+      const allMessages = await GmailMessagesCollection.find({}, {
+        sort: { gmailDate: -1 }
+      }).fetchAsync();
+      
+      console.log(`[INBOX ZERO] Found ${allMessages.length} total messages`);
+      
+      // Group messages by threadId
+      const threadMap = new Map();
+      
+      allMessages.forEach(message => {
+        const threadId = message.threadId;
+        if (!threadId) return; // Skip messages without threadId
+        
+        if (!threadMap.has(threadId)) {
+          threadMap.set(threadId, []);
+        }
+        threadMap.get(threadId).push(message);
+      });
+      
+      console.log(`[INBOX ZERO] Found ${threadMap.size} unique threads`);
+      
+      // For each thread, find the most recent INBOX message and add context
+      const threadRepresentatives = [];
+      
+      threadMap.forEach((threadMessages, threadId) => {
+        // Sort messages in thread by date (most recent first)
+        const sortedMessages = threadMessages.toSorted((a, b) => 
+          new Date(b.gmailDate) - new Date(a.gmailDate)
+        );
+        
+        // Find the most recent message that is in INBOX and not in TRASH and not archived locally
+        const inboxMessage = sortedMessages.find(message => 
+          message.labelIds?.includes('INBOX') && 
+          !message.labelIds?.includes('TRASH') &&
+          !message.archivedLocally
+        );
+        
+        if (inboxMessage) {
+          // Count messages in different states
+          const inboxCount = threadMessages.filter(msg => 
+            msg.labelIds?.includes('INBOX') && 
+            !msg.labelIds?.includes('TRASH') &&
+            !msg.archivedLocally
+          ).length;
+          
+          const archivedCount = threadMessages.filter(msg => 
+            !msg.labelIds?.includes('INBOX') && 
+            !msg.labelIds?.includes('TRASH')
+          ).length;
+          
+          const trashCount = threadMessages.filter(msg => 
+            msg.labelIds?.includes('TRASH')
+          ).length;
+          
+          // Add thread context information
+          threadRepresentatives.push({
+            ...inboxMessage,
+            threadId: threadId,
+            threadTotalCount: threadMessages.length,
+            threadInboxCount: inboxCount,
+            threadArchivedCount: archivedCount,
+            threadTrashCount: trashCount,
+            threadContext: {
+              hasArchivedMessages: archivedCount > 0,
+              hasTrashMessages: trashCount > 0,
+              isMultiMessageThread: threadMessages.length > 1
+            }
+          });
+        }
+      });
+      
+      // Sort by the most recent message date in each thread
+      const sortedThreads = threadRepresentatives.toSorted((a, b) => 
+        new Date(b.gmailDate) - new Date(a.gmailDate)
+      );
+      
+      console.log(`[INBOX ZERO] Returning ${sortedThreads.length} threads for InboxZero`);
+      
+      return {
+        threads: sortedThreads,
+        totalThreads: sortedThreads.length,
+        totalMessages: allMessages.length,
+        timestamp: new Date().toISOString()
+      };
+      
+    } catch (error) {
+      console.error('[INBOX ZERO ERROR] Failed to get threads:', error);
+      throw new Meteor.Error('threads-failed', `Failed to get InboxZero threads: ${error.message}`);
+    }
+  },
+
+  async 'emails.archiveLocally'(messageId) {
+    // Try to find by Gmail ID first, then by MongoDB _id
+    let email = await GmailMessagesCollection.findOneAsync({ id: messageId });
+    if (!email) {
+      email = await GmailMessagesCollection.findOneAsync({ _id: messageId });
+    }
+    if (!email) {
+      throw new Meteor.Error('email-not-found', 'Email not found');
+    }
+
+    // Log the action
+    await EmailActionLogsCollection.insertAsync({
+      emailId: messageId,
+      suggestedAction: email.ctaSuggestion?.action || null,
+      chosenAction: 'archiveLocally',
+      confidence: email.ctaSuggestion?.confidence || null,
+      accepted: false, // Local archive is not a Gmail action
+      executedAt: new Date(),
+      model: email.ctaSuggestion?.model || null,
+      rationale: email.ctaSuggestion?.rationale || null
+    });
+
+    // Update local collection with archivedLocally flag
+    await GmailMessagesCollection.updateAsync({ _id: email._id }, {
+      $set: { 
+        archivedLocally: true,
+        needsReply: false
+      }
+    });
+
+    return { success: true };
   }
 });

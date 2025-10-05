@@ -26,6 +26,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'import-tasks') return { name: 'importTasks' };
   if (parts[0] === 'notes') return { name: 'notes', noteId: parts[1] };
   if (parts[0] === 'emails') return { name: 'emails' };
+  if (parts[0] === 'inbox-zero') return { name: 'inboxZero' };
   return { name: 'home' };
 };
 
@@ -99,6 +100,9 @@ export const navigateTo = (route) => {
       break;
     case 'emails':
       window.location.hash = '#/emails';
+      break;
+    case 'inboxZero':
+      window.location.hash = '#/inbox-zero';
       break;
     default:
       window.location.hash = '#/';

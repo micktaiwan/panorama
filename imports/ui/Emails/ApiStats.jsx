@@ -2,7 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Card } from '../components/Card/Card.jsx';
 
-export const ApiStats = ({ apiStats, emailStats, threadsCount, onRefreshStats, onCleanupDuplicates }) => {
+export const ApiStats = ({ apiStats, emailStats, threadsCount, ctaStats, onRefreshStats, onCleanupDuplicates }) => {
   if (!apiStats) return null;
 
   return (
@@ -32,25 +32,77 @@ export const ApiStats = ({ apiStats, emailStats, threadsCount, onRefreshStats, o
           </div>
           <div className="statItem">
             <span className="statLabel">Messages with Errors:</span>
-            <span className="statValue" style={{ color: (emailStats?.errorMessages || 0) > 0 ? '#ff6b6b' : '#4ecdc4' }}>
+            <span className={`statValue ${(emailStats?.errorMessages || 0) > 0 ? 'statValue--error' : 'statValue--success'}`}>
               {emailStats?.errorMessages || 0}
             </span>
           </div>
         </div>
+        
+        {/* CTA Statistics */}
+        {ctaStats && (
+          <div className="apiStats-ctaSection">
+            <h4>CTA Suggestions</h4>
+            <div className="statsGrid">
+              <div className="statItem">
+                <span className="statLabel">Prepared Emails:</span>
+                <span className="statValue">{ctaStats.preparedCount}</span>
+              </div>
+              <div className="statItem">
+                <span className="statLabel">Preparing:</span>
+                <span className="statValue">{ctaStats.preparingCount}</span>
+              </div>
+              <div className="statItem">
+                <span className="statLabel">Total Eligible:</span>
+                <span className="statValue">{ctaStats.totalEligibleCount}</span>
+              </div>
+              <div className="statItem">
+                <span className="statLabel">Actions Taken:</span>
+                <span className="statValue">{ctaStats.totalActions}</span>
+              </div>
+              <div className="statItem">
+                <span className="statLabel">Acceptance Rate:</span>
+                <span className={`statValue ${ctaStats.acceptanceRate >= 70 ? 'statValue--success' : ctaStats.acceptanceRate >= 50 ? 'statValue--warning' : 'statValue--error'}`}>
+                  {ctaStats.acceptanceRate}%
+                </span>
+              </div>
+            </div>
+            
+            {/* Action breakdown */}
+            {ctaStats.actionCounts && Object.keys(ctaStats.actionCounts).length > 0 && (
+              <div className="apiStats-breakdown">
+                <h5>Actions Taken:</h5>
+                <div className="apiStats-tags">
+                  {Object.entries(ctaStats.actionCounts).map(([action, count]) => (
+                    <span key={action} className="apiStats-tag">
+                      {action}: {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Suggestion breakdown */}
+            {ctaStats.suggestionCounts && Object.keys(ctaStats.suggestionCounts).length > 0 && (
+              <div className="apiStats-breakdown">
+                <h5>Suggestions Made:</h5>
+                <div className="apiStats-tags">
+                  {Object.entries(ctaStats.suggestionCounts).map(([action, count]) => (
+                    <span key={action} className="apiStats-tag">
+                      {action}: {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
         {(emailStats?.errorMessages || 0) > 0 && (
-          <div style={{ 
-            marginTop: '12px', 
-            padding: '8px 12px', 
-            background: '#fff3cd', 
-            border: '1px solid #ffeaa7', 
-            borderRadius: '4px',
-            fontSize: '13px',
-            color: '#856404'
-          }}>
+          <div className="apiStats-warning">
             ⚠️ {emailStats.errorMessages} message{emailStats.errorMessages > 1 ? 's' : ''} failed to load completely. Check console for details.
           </div>
         )}
-        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+        <div className="apiStats-actions">
           <button 
             className="btn btn-sm" 
             onClick={onRefreshStats}
@@ -58,9 +110,8 @@ export const ApiStats = ({ apiStats, emailStats, threadsCount, onRefreshStats, o
             Refresh Stats
           </button>
           <button 
-            className="btn btn-sm" 
+            className="btn btn-sm apiStats-cleanupButton" 
             onClick={onCleanupDuplicates}
-            style={{ background: '#ff6b6b', color: 'white' }}
           >
             Clean Duplicates
           </button>
@@ -83,6 +134,16 @@ ApiStats.propTypes = {
     timestamp: PropTypes.string
   }),
   threadsCount: PropTypes.number.isRequired,
+  ctaStats: PropTypes.shape({
+    preparedCount: PropTypes.number,
+    preparingCount: PropTypes.number,
+    totalEligibleCount: PropTypes.number,
+    totalActions: PropTypes.number,
+    acceptedActions: PropTypes.number,
+    acceptanceRate: PropTypes.number,
+    actionCounts: PropTypes.object,
+    suggestionCounts: PropTypes.object
+  }),
   onRefreshStats: PropTypes.func.isRequired,
   onCleanupDuplicates: PropTypes.func.isRequired
 };
