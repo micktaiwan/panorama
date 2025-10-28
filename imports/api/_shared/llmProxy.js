@@ -81,7 +81,7 @@ async function selectProvider(routeOverride = null) {
 /**
  * Chat completion with automatic provider selection
  */
-export async function chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs, route, tools, tool_choice, responseFormat } = {}) {
+export async function chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs, route, tools, tool_choice, responseFormat, schema } = {}) {
   const config = getAIConfig();
   const provider = await selectProvider(route);
   
@@ -94,7 +94,8 @@ export async function chatComplete({ system, messages, model, temperature, maxTo
     timeoutMs: timeoutMs || config.timeoutMs,
     tools,
     tool_choice,
-    responseFormat
+    responseFormat,
+    schema
   };
   
   return await providers[provider].chatComplete(options);

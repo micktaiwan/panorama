@@ -30,14 +30,29 @@ Meteor.methods({
     check(modifier, Object);
     const note = await NotesCollection.findOneAsync(noteId);
     const sanitized = sanitizeNoteDoc(modifier);
-    const res = await NotesCollection.updateAsync(noteId, { $set: { ...sanitized, updatedAt: new Date() } });
+
+    // Check if content has actually changed
+    let hasChanged = false;
+    for (const key of Object.keys(sanitized)) {
+      if (sanitized[key] !== note?.[key]) {
+        hasChanged = true;
+        break;
+      }
+    }
+
+    // Only update updatedAt if content has changed
+    const updateDoc = hasChanged ? { ...sanitized, updatedAt: new Date() } : sanitized;
+    const res = await NotesCollection.updateAsync(noteId, { $set: updateDoc });
+
     try {
       const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
       const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       await deleteByDocId('note', noteId);
       await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, minChars: 800, maxChars: 1200, overlap: 150 });
     } catch (e) { console.error('[search][notes.update] upsert failed', e); }
-    if (note?.projectId) {
+
+    // Only update project timestamp if note content changed
+    if (hasChanged && note?.projectId) {
       await ProjectsCollection.updateAsync(note.projectId, { $set: { updatedAt: new Date() } });
     }
     return res;

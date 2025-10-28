@@ -65,4 +65,14 @@ export const getQdrantUrl = () => {
   return url?.trim() || null;
 };
 
+export const getGoogleCalendarConfig = () => {
+  const pref = getPrefs();
+  const clientId = pref?.googleCalendar?.clientId?.trim() || process.env.GOOGLE_CALENDAR_CLIENT_ID || Meteor.settings?.googleCalendar?.clientId || null;
+  const clientSecret = pref?.googleCalendar?.clientSecret?.trim() || process.env.GOOGLE_CALENDAR_CLIENT_SECRET || Meteor.settings?.googleCalendar?.clientSecret || null;
+  const refreshToken = pref?.googleCalendar?.refreshToken?.trim() || process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || Meteor.settings?.googleCalendar?.refreshToken || null;
+  const redirectUri = pref?.googleCalendar?.redirectUri?.trim() || process.env.GOOGLE_CALENDAR_REDIRECT_URI || Meteor.settings?.googleCalendar?.redirectUri || 'http://localhost:3000/oauth/google-calendar/callback';
+
+  return { clientId, clientSecret, refreshToken, redirectUri };
+};
+
 

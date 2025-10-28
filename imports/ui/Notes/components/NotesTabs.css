@@ -65,6 +65,14 @@
   border-bottom: 2px solid #60a5fa !important; /* blue-400 */
 }
 
+.tab-draggable {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
 .tab-title {
   flex: 1;
   font-size: 13px;

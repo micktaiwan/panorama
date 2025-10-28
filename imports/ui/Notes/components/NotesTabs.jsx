@@ -8,8 +8,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { navigateTo } from '/imports/ui/router.js';
 
 const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, isEditing, inputRef, editingTitle, setEditingTitle, onSubmit, onKeyDown }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tab?.id || 'fallback-id' });
-  
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+    id: tab?.id || 'fallback-id',
+    disabled: isEditing // Disable dragging while editing
+  });
+
   // Defensive check: if tab.id is undefined, don't render the component
   if (!tab?.id) {
     return null;
@@ -42,14 +45,17 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       style={style}
       key={tab.id}
       className={`note-tab ${isActive ? 'active' : ''}`}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
       role="tab"
       tabIndex={0}
-      {...attributes}
-      {...listeners}
     >
+      <div
+        className="tab-draggable"
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        {...attributes}
+        {...listeners}
+      >
       {isEditing ? (
         <input
           ref={inputRef}
@@ -63,10 +69,23 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       ) : (
         <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{tab.title}</span>
       )}
+      </div>
       <button
         className="tab-close"
         aria-label="Close tab"
-        onClick={onClose}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose(e);
+        }}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         type="button"
       >
         ×
@@ -106,7 +125,16 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }));
 
   useEffect(() => {
-    setOrder(openTabs.map(t => t.id));
+    const ids = openTabs.map(t => t.id);
+    const uniqueIds = [...new Set(ids)];
+
+    // Warn if duplicates detected (should never happen with our deduplication)
+    if (ids.length !== uniqueIds.length) {
+      console.error('[NotesTabs] Duplicate tab IDs detected:', ids);
+      console.error('[NotesTabs] This should not happen - check deduplication in NotesPage');
+    }
+
+    setOrder(ids);
   }, [openTabs.length, openTabs.map(t => t.id).join(',')]);
 
   const handleContextMenu = (e, tabId) => {

@@ -27,7 +27,10 @@ export const mergeIntervals = (list) => {
   let cur = { ...sorted[0] };
   for (let i = 1; i < sorted.length; i++) {
     const x = sorted[i];
-    if (x.start <= cur.end) {
+    // Only merge if there's actual overlap (not just touching)
+    // Allow 1 minute tolerance for rounding
+    const overlapMs = cur.end.getTime() - x.start.getTime();
+    if (overlapMs > 60000) { // More than 1 minute overlap
       cur.end = new Date(Math.max(cur.end.getTime(), x.end.getTime()));
     } else {
       out.push(cur); cur = { ...x };

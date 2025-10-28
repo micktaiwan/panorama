@@ -67,10 +67,19 @@ Meteor.methods({
     const { tz, sinceLocalIso, nowLocalIso, startLocal, endLocal } = formatAnchors(now, since);
 
     const system = ([
-      'You analyze short journal entries and produce: (1) a structured summary organized by subject, (2) task suggestions.',
+      'You analyze short journal entries and produce: (1) a structured summary organized by subject in simple text format, (2) task suggestions.',
       'Do NOT invent facts. Use the provided entries only. Keep original language (typically French).',
       'Return STRICT JSON matching the provided schema. No Markdown, no extra text.',
-      'Time policy: When mentioning times, format them in 24-hour local time as HH:mm. Only include a calendar date if it is not today, and format it human-readably (e.g., 12 Sep 2025). Never output raw ISO timestamps or timezone offsets in the summary.'
+      'Time policy: When mentioning times, format them in 24-hour local time as HH:mm. Only include a calendar date if it is not today, and format it human-readably (e.g., 12 Sep 2025). Never output raw ISO timestamps or timezone offsets in the summary.',
+      '',
+      'TASK GENERATION RULES:',
+      '- Extract actionable items from journal entries that represent concrete tasks to be done.',
+      '- Each task MUST include sourceLogIds array with the journal entry IDs that justify this task.',
+      '- If no clear actionable items exist, return empty tasks array.',
+      '- Task titles should be clear, concise action statements (e.g., "Call client about project status", "Review budget proposal").',
+      '- Assign appropriate projectId if the task clearly relates to an existing project, otherwise leave empty.',
+      '- Extract deadlines only if explicitly mentioned in the entries, otherwise leave empty.',
+      '- Focus on quality over quantity: prefer fewer, well-grounded tasks over many weak suggestions.'
     ].join(' '));
 
     const entriesBlock = buildEntriesBlock(logs);
@@ -124,11 +133,91 @@ Meteor.methods({
     } else {
       // Default behavior: structured JSON with summary and task suggestions
       
+      // Define JSON schema for structured output
+      const schema = {
+        type: "object",
+        properties: {
+          summary: {
+            type: "string",
+            description: "Structured summary organized by subject"
+          },
+          tasks: {
+            type: "array",
+            description: "Array of task suggestions",
+            items: {
+              type: "object",
+              properties: {
+                title: {
+                  type: "string",
+                  description: "Clear, concise action title"
+                },
+                notes: {
+                  type: "string",
+                  description: "Optional additional details"
+                },
+                projectId: {
+                  type: "string",
+                  description: "ID of existing project or empty string"
+                },
+                deadline: {
+                  type: "string",
+                  description: "ISO date (YYYY-MM-DD) or empty string"
+                },
+                sourceLogIds: {
+                  type: "array",
+                  description: "Array of journal entry IDs that ground this task",
+                  items: {
+                    type: "string"
+                  }
+                }
+              },
+              required: ["title", "sourceLogIds"]
+            }
+          }
+        },
+        required: ["summary", "tasks"]
+      };
 
-      const result = await chatComplete({ system, messages: [{ role: 'user', content: instructions }] });
-      const json = JSON.parse(result.text);
+      const result = await chatComplete({ 
+        system, 
+        messages: [{ role: 'user', content: instructions }],
+        responseFormat: 'json',
+        schema: schema
+      });
+      
+      let json;
+      try {
+        json = JSON.parse(result.text);
+      } catch (parseError) {
+        console.error('[userLogs.summarizeWindow] JSON parse error:', parseError, 'Raw text:', result.text);
+        // Fallback: try to extract JSON from text if it's wrapped in markdown
+        const jsonMatch = result.text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+        if (jsonMatch) {
+          try {
+            json = JSON.parse(jsonMatch[1]);
+          } catch {
+            throw new Meteor.Error('json-parse-failed', 'Failed to parse JSON response from AI');
+          }
+        } else {
+          throw new Meteor.Error('json-parse-failed', 'Failed to parse JSON response from AI');
+        }
+      }
+      
       parsed = json;
       if (!parsed.tasks) parsed.tasks = [];
+      
+      // Validate and normalize tasks
+      if (Array.isArray(parsed.tasks)) {
+        parsed.tasks = parsed.tasks.map(task => ({
+          title: String(task.title || '').trim(),
+          notes: String(task.notes || '').trim(),
+          projectId: String(task.projectId || ''),
+          deadline: String(task.deadline || ''),
+          sourceLogIds: Array.isArray(task.sourceLogIds) ? task.sourceLogIds.map(String) : []
+        })).filter(task => task.title.length > 0); // Remove empty tasks
+      } else {
+        parsed.tasks = [];
+      }
     }
 
     

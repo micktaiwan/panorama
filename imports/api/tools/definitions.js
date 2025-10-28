@@ -1,5 +1,7 @@
-// Pure helpers for building citations used by chat methods.
+// Tool definitions in OpenAI function calling format
+// Used by both Chat and MCP server
 
+// Pure helpers for building citations used by chat methods.
 export const buildCitationsFromMemory = (memory) => {
   const list = memory?.lists?.searchResults;
   if (!Array.isArray(list) || list.length === 0) return [];
@@ -12,8 +14,8 @@ export const buildCitationsFromToolResults = (toolCalls, toolResults) => {
   const citations = [];
   for (let i = 0; i < calls.length; i += 1) {
     const call = calls[i];
-    if (call && call.name === 'chat_semanticSearch') {
-      const match = results.find((r) => r?.tool_call_id === (call.id || 'chat_semanticSearch'));
+    if (call && call.name === 'tool_semanticSearch') {
+      const match = results.find((r) => r?.tool_call_id === (call.id || 'tool_semanticSearch'));
       if (match && match.output) {
         try {
           const parsed = JSON.parse(match.output);
@@ -23,7 +25,7 @@ export const buildCitationsFromToolResults = (toolCalls, toolResults) => {
             citations.push({ id: it.id, title: it.title, kind: it.kind, url: it.url || null });
           }
         } catch (err) {
-          console.error('[tools_helpers] parse tool result failed', err);
+          console.error('[tools/definitions] parse tool result failed', err);
         }
       }
     }
@@ -31,11 +33,11 @@ export const buildCitationsFromToolResults = (toolCalls, toolResults) => {
   return citations;
 };
 
-// Exported tool definitions for Responses API
-export const CHAT_TOOLS_DEFINITION = [
+// Exported tool definitions for Chat and MCP
+export const TOOL_DEFINITIONS = [
   {
     type: 'function',
-    name: 'chat_listTools',
+    name: 'tool_listTools',
     description: 'List all available tools with their descriptions and parameters. Use when the user asks about available tools, capabilities, or what the assistant can do.',
     parameters: {
       type: 'object',
@@ -45,19 +47,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_overdue',
-    description: 'Return non-completed tasks with deadline <= now. Use when the user asks for overdue or late items. Defaults to current time if now is not provided.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        now: { type: 'string', description: 'ISO date/time (optional). Defaults to current time.' }
-      }
-    }
-  },
-  {
-    type: 'function',
-    name: 'chat_tasksByProject',
+    name: 'tool_tasksByProject',
     description: 'Return non-completed tasks for a specific project. Use when the user mentions a project or asks for tasks within a project.',
     parameters: {
       type: 'object',
@@ -70,7 +60,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_tasksFilter',
+    name: 'tool_tasksFilter',
     description: 'List and filter tasks by any combination of: deadline, status, project, tags, urgency, importance. Examples: {} (all tasks), {dueBefore:"2025-01-30"} (due before date), {important:true} (important only), {urgent:true,projectId:"abc"} (urgent in project), {status:"done"} (completed), {tag:"home"} (tagged home), {dueBefore:"2025-01-27",urgent:true} (due soon and urgent). Leave empty for no filtering.',
     parameters: {
       type: 'object',
@@ -87,7 +77,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_projectsList',
+    name: 'tool_projectsList',
     description: 'List projects (name, description). Use for project discovery or selection.',
     parameters: {
       type: 'object',
@@ -97,7 +87,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_projectByName',
+    name: 'tool_projectByName',
     description: 'Fetch a single project by its name (case-insensitive). Use when the user names a project.',
     parameters: {
       type: 'object',
@@ -110,7 +100,22 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_semanticSearch',
+    name: 'tool_createProject',
+    description: 'Create a new project with a name and optional description.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        name: { type: 'string', description: 'Project name (required)' },
+        description: { type: 'string', description: 'Project description (optional)' },
+        status: { type: 'string', description: 'Project status (optional, e.g., active, archived)' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_semanticSearch',
     description: 'Semantic search over workspace items (projects, tasks, notes, links). Returns top matches with titles and optional URLs.',
     parameters: {
       type: 'object',
@@ -124,7 +129,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_notesByProject',
+    name: 'tool_notesByProject',
     description: 'Return notes for a specific project. Use when the user asks about notes or documentation within a project.',
     parameters: {
       type: 'object',
@@ -137,7 +142,20 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_noteSessionsByProject',
+    name: 'tool_noteById',
+    description: 'Fetch a single note by ID with full content (title, content, projectId, createdAt, updatedAt). Use when you need to read the content of a specific note and assess its freshness.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        noteId: { type: 'string', description: 'Note ID' }
+      },
+      required: ['noteId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_noteSessionsByProject',
     description: 'Return note sessions for a specific project. Use when the user asks about note sessions or meeting notes within a project.',
     parameters: {
       type: 'object',
@@ -150,7 +168,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_noteLinesBySession',
+    name: 'tool_noteLinesBySession',
     description: 'Return note lines for a specific note session. Use when the user asks for details or content of a specific note session.',
     parameters: {
       type: 'object',
@@ -163,7 +181,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_linksByProject',
+    name: 'tool_linksByProject',
     description: 'Return links for a specific project. Use when the user asks about bookmarks, URLs, or references within a project.',
     parameters: {
       type: 'object',
@@ -176,7 +194,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_peopleList',
+    name: 'tool_peopleList',
     description: 'List all people in the workspace. Use when the user asks about contacts, people, or team members.',
     parameters: {
       type: 'object',
@@ -186,7 +204,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_teamsList',
+    name: 'tool_teamsList',
     description: 'List all teams in the workspace. Use when the user asks about teams, groups, or organizational structure.',
     parameters: {
       type: 'object',
@@ -196,7 +214,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_filesByProject',
+    name: 'tool_filesByProject',
     description: 'Return files for a specific project. Use when the user asks about documents, attachments, or uploaded files within a project.',
     parameters: {
       type: 'object',
@@ -209,7 +227,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_alarmsList',
+    name: 'tool_alarmsList',
     description: 'List alarms (reminders). Use when the user asks about alarms, reminders, or scheduled notifications. Optionally filter by enabled status.',
     parameters: {
       type: 'object',
@@ -221,7 +239,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_collectionQuery',
+    name: 'tool_collectionQuery',
     description: 'Generic read-only query across collections with a validated where DSL. Use to filter items by fields.',
     parameters: {
       type: 'object',
@@ -238,7 +256,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_createTask',
+    name: 'tool_createTask',
     description: 'Create a new task. Optionally associate with a project, set status (todo/doing/done), add notes, deadline, and urgency/importance flags.',
     parameters: {
       type: 'object',
@@ -257,7 +275,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_updateTask',
+    name: 'tool_updateTask',
     description: 'Update a task. Change title, notes, status (use "done" to mark as completed), deadline, project association, or urgency/importance flags. All fields are optional except taskId.',
     parameters: {
       type: 'object',
@@ -277,7 +295,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_createNote',
+    name: 'tool_createNote',
     description: 'Create a new note with title and optional content. Associate with a project if needed. Content can be markdown formatted.',
     parameters: {
       type: 'object',
@@ -292,7 +310,7 @@ export const CHAT_TOOLS_DEFINITION = [
   },
   {
     type: 'function',
-    name: 'chat_updateNote',
+    name: 'tool_updateNote',
     description: 'Update a note\'s title, content, or project association. All fields except noteId are optional.',
     parameters: {
       type: 'object',
@@ -304,6 +322,40 @@ export const CHAT_TOOLS_DEFINITION = [
         projectId: { type: 'string', description: 'New project ID (optional)' }
       },
       required: ['noteId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_createLink',
+    description: 'Create a new web link/bookmark with a name and URL. Optionally associate with a project.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        name: { type: 'string', description: 'Link name/title (required)' },
+        url: { type: 'string', description: 'Link URL (required). Will automatically add https:// if no scheme is provided.' },
+        projectId: { type: 'string', description: 'Project ID to associate link with (optional)' }
+      },
+      required: ['name', 'url']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_userLogsFilter',
+    description: 'List user logs with optional filter on recent days. Use when the user asks about their journal entries, logs, or activity history.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        lastDays: {
+          type: 'number',
+          description: 'Get logs from the last N days (e.g., 7 for last week, 30 for last month). When specified, returns all logs from that period (up to 1000). Without this filter, returns the 50 most recent logs.'
+        },
+        limit: {
+          type: 'number',
+          description: 'Max number of logs to return (max: 1000). Overrides default behavior.'
+        }
+      }
     }
   },
 ];
@@ -363,25 +415,24 @@ export const buildPlannerConfig = (system, user, toolNames) => {
     '',
     '=== Tool Selection Guidelines ===',
     'For "latest/recent important subjects/topics/items":',
-    '  - Use chat_overdue for overdue tasks',
-    '  - OR chat_tasks (returns non-completed tasks by default)',
-    '  - OR chat_tasksFilter with isImportant/isUrgent filters',
+    '  - Use tool_overdue for overdue tasks',
+    '  - OR tool_tasksFilter with isImportant/isUrgent filters',
     '  - DO NOT use semantic search for this - use structured task queries',
     '',
     'For "tasks in project X":',
-    '  - First: chat_projectByName(name="X")',
-    '  - Then: chat_tasksByProject (projectId will be auto-bound)',
+    '  - First: tool_projectByName(name="X")',
+    '  - Then: tool_tasksByProject (projectId will be auto-bound)',
     '',
     'For "find/search for content about X":',
-    '  - Use chat_semanticSearch(query="X") for semantic content search',
+    '  - Use tool_semanticSearch(query="X") for semantic content search',
     '  - Best for: finding notes, documents, or content by keywords',
     '',
     'For status/tag filters:',
-    '  - Use chat_tasksFilter(status="todo/doing/done", tag="...")',
+    '  - Use tool_tasksFilter(status="todo/doing/done", tag="...")',
     '',
     '=== Planning Strategy ===',
-    'Plan 2-3 tools when possible for robustness (e.g., try chat_overdue AND chat_tasks).',
-    'Use chat_semanticSearch as a fallback, not as primary for structured queries.',
+    'Plan 2-3 tools when possible for robustness (e.g., try tool_overdue AND tool_tasksFilter).',
+    'Use tool_semanticSearch as a fallback, not as primary for structured queries.',
     '',
     '=== Technical Details ===',
     'IMPORTANT: Include stopWhen.have to avoid unnecessary steps.',
@@ -403,7 +454,7 @@ export const buildResponsesFirstPayload = (system, user) => {
     model: 'o4-mini',
     instructions: system,
     input: [ { role: 'user', content: [ { type: 'input_text', text: user } ] } ],
-    tools: CHAT_TOOLS_DEFINITION,
+    tools: TOOL_DEFINITIONS,
     tool_choice: 'auto'
   };
 };

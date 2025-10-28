@@ -62,6 +62,9 @@ import '/imports/api/chats/collections';
 import '/imports/api/chats/publications';
 import '/imports/api/chats/methods';
 
+// MCP Server (Model Context Protocol)
+import '/imports/api/mcp/server/routes';
+
 // Budget & Financial
 import '/imports/api/budget/collections';
 import '/imports/api/budget/publications';
@@ -134,5 +137,68 @@ Meteor.startup(() => {
   WebApp.connectHandlers.use((req, res, next) => {
     res.setHeader('Content-Security-Policy', csp);
     next();
+  });
+
+  // Google Calendar OAuth callback
+  WebApp.connectHandlers.use('/oauth/google-calendar/callback', async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const code = url.searchParams.get('code');
+    const error = url.searchParams.get('error');
+
+    if (error) {
+      res.writeHead(400, { 'Content-Type': 'text/html' });
+      res.end(`<html><body><h1>OAuth Error</h1><p>${error}</p><p>You can close this window.</p></body></html>`);
+      return;
+    }
+
+    if (!code) {
+      res.writeHead(400, { 'Content-Type': 'text/html' });
+      res.end('<html><body><h1>Missing Code</h1><p>You can close this window.</p></body></html>');
+      return;
+    }
+
+    try {
+      const { exchangeCodeForTokens } = await import('/imports/api/calendar/googleCalendarClient.js');
+      const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections.js');
+
+      const tokens = await exchangeCodeForTokens(code);
+      const now = new Date();
+      const pref = await AppPreferencesCollection.findOneAsync({});
+
+      if (!pref) {
+        await AppPreferencesCollection.insertAsync({
+          createdAt: now,
+          updatedAt: now,
+          googleCalendar: {
+            refreshToken: tokens.refresh_token,
+            lastSyncAt: null
+          }
+        });
+      } else {
+        await AppPreferencesCollection.updateAsync(pref._id, {
+          $set: {
+            'googleCalendar.refreshToken': tokens.refresh_token,
+            updatedAt: now
+          }
+        });
+      }
+
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(`
+        <html>
+          <body>
+            <h1>✓ Connected to Google Calendar</h1>
+            <p>You can close this window and return to Panorama.</p>
+            <script>
+              setTimeout(() => window.close(), 2000);
+            </script>
+          </body>
+        </html>
+      `);
+    } catch (e) {
+      console.error('[OAuth callback] Failed to exchange code', e);
+      res.writeHead(500, { 'Content-Type': 'text/html' });
+      res.end(`<html><body><h1>Error</h1><p>${e?.message || 'Failed to complete OAuth'}</p></body></html>`);
+    }
   });
 });
