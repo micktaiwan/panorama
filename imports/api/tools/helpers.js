@@ -1,4 +1,4 @@
-// Pure helpers for chat tools. No Meteor imports here.
+// Pure helpers for tools. No Meteor imports here.
 
 export const buildTasksSelector = (search = {}) => {
   const selector = {};
@@ -111,32 +111,32 @@ const resolveVariable = (value, memory) => {
 export const bindArgsWithMemory = (toolName, rawArgs, memory) => {
   const args = { ...(rawArgs || {}) };
   const mem = memory || {};
-  
+
   // Process all args for variable resolution
   Object.keys(args).forEach(key => {
     args[key] = resolveVariable(args[key], mem);
   });
-  
+
   // Generic fallbacks for common missing arguments
-  if (toolName === 'chat_tasksByProject' && !args.projectId) {
+  if (toolName === 'tool_tasksByProject' && !args.projectId) {
     args.projectId = mem.ids?.projectId || mem.projectId;
   }
-  if (toolName === 'chat_notesByProject' && !args.projectId) {
+  if (toolName === 'tool_notesByProject' && !args.projectId) {
     args.projectId = mem.ids?.projectId || mem.projectId;
   }
-  if (toolName === 'chat_noteSessionsByProject' && !args.projectId) {
+  if (toolName === 'tool_noteSessionsByProject' && !args.projectId) {
     args.projectId = mem.ids?.projectId || mem.projectId;
   }
-  if (toolName === 'chat_noteLinesBySession' && !args.sessionId) {
+  if (toolName === 'tool_noteLinesBySession' && !args.sessionId) {
     args.sessionId = mem.ids?.sessionId || mem.sessionId;
   }
-  if (toolName === 'chat_linksByProject' && !args.projectId) {
+  if (toolName === 'tool_linksByProject' && !args.projectId) {
     args.projectId = mem.ids?.projectId || mem.projectId;
   }
-  if (toolName === 'chat_filesByProject' && !args.projectId) {
+  if (toolName === 'tool_filesByProject' && !args.projectId) {
     args.projectId = mem.ids?.projectId || mem.projectId;
   }
-  if (toolName === 'chat_semanticSearch') {
+  if (toolName === 'tool_semanticSearch') {
     // Check if query is missing or empty string
     const queryStr = String(args.query || '').trim();
     if (!queryStr && mem.params?.userQuery) {
@@ -238,6 +238,28 @@ export const getListKeyForCollection = (collection) => {
 export const compileWhere = (collection, where = {}) => {
   const allowed = FIELD_ALLOWLIST[String(collection)];
   const isAllowedField = (f) => Array.isArray(allowed) && allowed.includes(String(f));
+
+  // Helper to convert date values to Date objects for MongoDB comparison
+  const convertDateValue = (value) => {
+    // Handle { $date: "ISO string" } format (JSON Extended)
+    if (value && typeof value === 'object' && value.$date) {
+      const d = new Date(value.$date);
+      return Number.isNaN(d.getTime()) ? value : d;
+    }
+    // Handle ISO string format
+    if (typeof value === 'string') {
+      const d = new Date(value);
+      // Only convert if it's a valid date string (ISO 8601)
+      if (!Number.isNaN(d.getTime()) && value.match(/^\d{4}-\d{2}-\d{2}T/)) {
+        return d;
+      }
+    }
+    return value;
+  };
+
+  // Date fields that should have their values converted to Date objects
+  const dateFields = ['createdAt', 'updatedAt', 'deadline', 'when', 'snoozedUntilAt'];
+
   const compileNode = (node) => {
     if (!node || typeof node !== 'object') return {};
     const sel = {};
@@ -253,19 +275,21 @@ export const compileWhere = (collection, where = {}) => {
       if (k === 'and' || k === 'or') return;
       if (!isAllowedField(k)) return;
       const v = node[k];
+      const isDateField = dateFields.includes(k);
+
       if (v && typeof v === 'object' && !Array.isArray(v)) {
         const ops = {};
-        if (Object.hasOwn(v, 'eq')) ops.$eq = v.eq;
-        if (Object.hasOwn(v, 'ne')) ops.$ne = v.ne;
-        if (Object.hasOwn(v, 'lt')) ops.$lt = v.lt;
-        if (Object.hasOwn(v, 'lte')) ops.$lte = v.lte;
-        if (Object.hasOwn(v, 'gt')) ops.$gt = v.gt;
-        if (Object.hasOwn(v, 'gte')) ops.$gte = v.gte;
+        if (Object.hasOwn(v, 'eq')) ops.$eq = isDateField ? convertDateValue(v.eq) : v.eq;
+        if (Object.hasOwn(v, 'ne')) ops.$ne = isDateField ? convertDateValue(v.ne) : v.ne;
+        if (Object.hasOwn(v, 'lt')) ops.$lt = isDateField ? convertDateValue(v.lt) : v.lt;
+        if (Object.hasOwn(v, 'lte')) ops.$lte = isDateField ? convertDateValue(v.lte) : v.lte;
+        if (Object.hasOwn(v, 'gt')) ops.$gt = isDateField ? convertDateValue(v.gt) : v.gt;
+        if (Object.hasOwn(v, 'gte')) ops.$gte = isDateField ? convertDateValue(v.gte) : v.gte;
         if (Object.hasOwn(v, 'in')) ops.$in = Array.isArray(v.in) ? v.in : [v.in];
         if (Object.hasOwn(v, 'nin')) ops.$nin = Array.isArray(v.nin) ? v.nin : [v.nin];
         if (Object.keys(ops).length > 0) sel[k] = ops;
       } else {
-        sel[k] = v;
+        sel[k] = isDateField ? convertDateValue(v) : v;
       }
     });
     return sel;

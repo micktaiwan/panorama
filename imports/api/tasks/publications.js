@@ -57,3 +57,22 @@ Meteor.publish('tasks.calendar.scheduled', function publishTasksForCalendarSched
   };
   return TasksCollection.find(schedSelector, schedOptions);
 });
+
+// 3) Open tasks for calendar suggestions (no project filters)
+Meteor.publish('tasks.calendar.open.unfiltered', function publishTasksForCalendarOpenUnfiltered() {
+  const openSelector = {
+    $and: [
+      { $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ] },
+      { $or: [ { scheduledAt: { $exists: false } }, { scheduledAt: null } ] }
+    ]
+  };
+  const openOptions = {
+    sort: { isUrgent: -1, isImportant: -1, deadline: 1, createdAt: 1 },
+    limit: 50,
+    fields: {
+      title: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1,
+      projectId: 1, createdAt: 1, scheduledAt: 1, scheduledDurationMin: 1
+    }
+  };
+  return TasksCollection.find(openSelector, openOptions);
+});

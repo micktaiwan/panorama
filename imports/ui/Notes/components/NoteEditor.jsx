@@ -5,6 +5,7 @@ import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { formatDateTime } from '/imports/ui/utils/date.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { CleanPromptModal } from './CleanPromptModal.jsx';
+import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import './NoteEditor.css';
 import { marked } from 'marked';
 
@@ -32,6 +33,7 @@ export const NoteEditor = ({
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [undoAvailable, setUndoAvailable] = useState(false);
   const [showCleanModal, setShowCleanModal] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [splitPreview, setSplitPreview] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       return window.localStorage.getItem('notes.splitPreview') === 'true';
@@ -240,10 +242,10 @@ export const NoteEditor = ({
               e.preventDefault();
               // Check if note has unsaved changes before closing
               if (dirtySet.has(activeTabId)) {
-                const shouldClose = window.confirm('This note has unsaved changes. Are you sure you want to close it?');
-                if (!shouldClose) return;
+                setShowCloseConfirm(true);
+              } else {
+                if (typeof onClose === 'function') onClose(activeTabId);
               }
-              if (typeof onClose === 'function') onClose(activeTabId);
             } else if (key === 'tab') {
               e.preventDefault();
               const textarea = e.target;
@@ -424,6 +426,28 @@ export const NoteEditor = ({
 Output: plain text only, no markdown, no special formatting, no added text compared to the original`}
         noteContent={noteContents[activeTabId] || ''}
       />
+
+      <Modal
+        open={showCloseConfirm}
+        onClose={() => setShowCloseConfirm(false)}
+        title="Unsaved changes"
+        actions={[
+          <button key="cancel" className="btn" type="button" onClick={() => setShowCloseConfirm(false)}>Cancel</button>,
+          <button
+            key="close"
+            className="btn btn-primary"
+            type="button"
+            onClick={() => {
+              setShowCloseConfirm(false);
+              if (typeof onClose === 'function') onClose(activeTabId);
+            }}
+          >
+            Close without saving
+          </button>,
+        ]}
+      >
+        This note has unsaved changes. Are you sure you want to close it?
+      </Modal>
     </div>
   );
 };

@@ -80,7 +80,14 @@ export const makePreview = (text, max = 180) => {
 };
 
 export const embedText = async (text) => {
-  const result = await llmEmbed([String(text || '')]);
+  const normalizedText = String(text || '').trim();
+  
+  // If text is empty after normalization, return null to indicate no embedding needed
+  if (!normalizedText) {
+    return null;
+  }
+  
+  const result = await llmEmbed([normalizedText]);
   const vec = result.vectors?.[0];
   
   if (!Array.isArray(vec)) {
@@ -88,7 +95,7 @@ export const embedText = async (text) => {
       result,
       vectors: result.vectors,
       firstVector: vec,
-      textLength: String(text || '').length
+      textLength: normalizedText.length
     });
     throw new Meteor.Error('embedding-invalid', `Invalid embedding response from LLM proxy. Got: ${typeof vec}, expected: Array`);
   }
@@ -109,6 +116,13 @@ export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = 
   const client = await getQdrantClient();
   await ensureCollectionIfNeeded();
   const vector = await embedText(text);
+  
+  // If no vector was generated (empty text), skip indexing
+  if (!vector) {
+    console.log(`[upsertDoc] Skipping indexing for ${kind}:${id} - no content to embed`);
+    return;
+  }
+  
   const nowMs = Date.now();
   const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
   if (projectId) payload.projectId = projectId;
@@ -149,7 +163,7 @@ export const ensureCollection = async () => {
     // Check if collection already exists
     await client.getCollection(collectionName);
     console.log(`[qdrant] Collection '${collectionName}' already exists`);
-  } catch (e) {
+  } catch {
     // Collection doesn't exist, create it
     try {
       await client.createCollection(collectionName, { vectors: { size: vectorSize, distance } });
@@ -234,6 +248,13 @@ export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessio
     try {
       const chunk = chunks[i];
       const vector = await embedText(chunk);
+      
+      // Skip chunks that couldn't be embedded (empty content)
+      if (!vector) {
+        console.log(`[upsertDocChunks] Skipping chunk ${i} for ${kind}:${id} - no content to embed`);
+        continue;
+      }
+      
       const nowMs = Date.now();
       const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(chunk), chunkIndex: i, indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
       if (projectId) payload.projectId = projectId;

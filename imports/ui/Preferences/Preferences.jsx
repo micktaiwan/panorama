@@ -20,6 +20,11 @@ export const Preferences = () => {
   const [pennyToken, setPennyToken] = React.useState('');
   const [qdrantUrl, setQdrantUrl] = React.useState('');
   const [calendarIcsUrl, setCalendarIcsUrl] = React.useState('');
+  const [googleCalendarClientId, setGoogleCalendarClientId] = React.useState('');
+  const [googleCalendarClientSecret, setGoogleCalendarClientSecret] = React.useState('');
+  const [googleCalendarConnected, setGoogleCalendarConnected] = React.useState(false);
+  const [googleCalendarAuthUrl, setGoogleCalendarAuthUrl] = React.useState('');
+  const [googleCalendarLastSync, setGoogleCalendarLastSync] = React.useState(null);
   const [health, setHealth] = React.useState(null);
   const [checking, setChecking] = React.useState(false);
   const [indexing, setIndexing] = React.useState(false);
@@ -374,6 +379,10 @@ export const Preferences = () => {
     setPennyToken(pref.pennylaneToken || '');
     setQdrantUrl(pref.qdrantUrl || '');
     setCalendarIcsUrl(pref.calendarIcsUrl || '');
+    setGoogleCalendarClientId(pref.googleCalendar?.clientId || '');
+    setGoogleCalendarClientSecret(pref.googleCalendar?.clientSecret || '');
+    setGoogleCalendarConnected(!!(pref.googleCalendar?.refreshToken));
+    setGoogleCalendarLastSync(pref.googleCalendar?.lastSyncAt || null);
   }, [pref?._id]);
   if (sub()) return <div>Loading…</div>;
   return (
@@ -478,7 +487,79 @@ export const Preferences = () => {
           </div>
         </div>
         <div className="prefsRow">
-          <div className="prefsLabel">Google Calendar</div>
+          <div className="prefsLabel">Google Calendar API</div>
+          <div className="prefsValue">
+            {googleCalendarConnected ? (
+              <div>
+                <div style={{ color: '#0b6', marginBottom: '8px' }}>✓ Connected to Google Calendar</div>
+                {googleCalendarLastSync ? (
+                  <div className="muted" style={{ fontSize: '13px', marginBottom: '8px' }}>
+                    Last sync: {new Date(googleCalendarLastSync).toLocaleString()}
+                  </div>
+                ) : null}
+                <button
+                  className="btn"
+                  onClick={() => {
+                    Meteor.call('calendar.google.sync', null, (err, res) => {
+                      if (err) { notify({ message: err?.reason || err?.message || 'Sync failed', kind: 'error' }); return; }
+                      notify({ message: `Synced ${res?.upserts || 0} events from ${res?.calendars || 0} calendars`, kind: 'success' });
+                    });
+                  }}
+                >Sync Now</button>
+                <a className="btn-link ml8" href="#/calendar" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'calendar' }); }}>Open Calendar</a>
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom: '12px' }}>
+                  <input
+                    className="afInput"
+                    type="text"
+                    placeholder="Client ID"
+                    value={googleCalendarClientId}
+                    onChange={(e) => setGoogleCalendarClientId(e.target.value)}
+                    style={{ width: '100%', marginBottom: '8px' }}
+                  />
+                  <input
+                    className="afInput"
+                    type="password"
+                    placeholder="Client Secret"
+                    value={googleCalendarClientSecret}
+                    onChange={(e) => setGoogleCalendarClientSecret(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    if (!googleCalendarClientId?.trim() || !googleCalendarClientSecret?.trim()) {
+                      notify({ message: 'Client ID and Secret required', kind: 'error' });
+                      return;
+                    }
+                    Meteor.call('appPreferences.update', {
+                      googleCalendar: {
+                        clientId: googleCalendarClientId.trim(),
+                        clientSecret: googleCalendarClientSecret.trim()
+                      }
+                    }, (err) => {
+                      if (err) { notify({ message: err?.reason || err?.message || 'Save failed', kind: 'error' }); return; }
+                      Meteor.call('calendar.google.getAuthUrl', (err2, res) => {
+                        if (err2) { notify({ message: err2?.reason || err2?.message || 'Auth URL failed', kind: 'error' }); return; }
+                        setGoogleCalendarAuthUrl(res?.url || '');
+                        window.open(res?.url, '_blank');
+                        notify({ message: 'Complete OAuth in the new window', kind: 'info' });
+                      });
+                    });
+                  }}
+                >Connect Google Calendar</button>
+                <div className="muted mt8" style={{ fontSize: '12px' }}>
+                  <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Get credentials from Google Cloud Console</a>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Google Calendar (Legacy ICS)</div>
           <div className="prefsValue">
             <div>
               <input
@@ -501,8 +582,7 @@ export const Preferences = () => {
                     notify({ message: 'ICS URL saved', kind: 'success' });
                   });
                 }}
-              >Link with GCal</button>
-              <a className="btn-link ml8" href="#/calendar" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'calendar' }); }}>Open Calendar</a>
+              >Link with GCal (ICS)</button>
             </div>
           </div>
         </div>

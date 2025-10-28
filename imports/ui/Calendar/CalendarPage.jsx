@@ -31,8 +31,8 @@ export const CalendarPage = () => {
   });
   const includeIds = React.useMemo(() => Object.entries(projFilters).filter(([, v]) => v === 1).map(([k]) => k), [JSON.stringify(projFilters)]);
   const excludeIds = React.useMemo(() => Object.entries(projFilters).filter(([, v]) => v === -1).map(([k]) => k), [JSON.stringify(projFilters)]);
-  // Tasks subscriptions filtered server-side by project tri-state
-  const subTasksOpen = useSubscribe('tasks.calendar.open', includeIds, excludeIds);
+  // Tasks subscriptions: unfiltered for suggestions, filtered for scheduled tasks
+  const subTasksOpen = useSubscribe('tasks.calendar.open.unfiltered');
   const subTasksScheduled = useSubscribe('tasks.calendar.scheduled', includeIds, excludeIds);
   // Projects for filter UI
   const subProjects = useSubscribe('projects');
@@ -42,6 +42,21 @@ export const CalendarPage = () => {
   const [syncing, setSyncing] = React.useState(false);
   const [showRaw, setShowRaw] = React.useState(false);
   const [editEstimateTaskId, setEditEstimateTaskId] = React.useState('');
+  const [hideMultiDay, setHideMultiDay] = React.useState(() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('calendar_hide_multi_day') : null;
+      return raw === 'true';
+    } catch (e) { return false; }
+  });
+  const [availableCalendars, setAvailableCalendars] = React.useState([]);
+  const [loadingCalendars, setLoadingCalendars] = React.useState(false);
+  const [showCalendarFilters, setShowCalendarFilters] = React.useState(false);
+  const [hiddenCalendars, setHiddenCalendars] = React.useState(() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('calendar_hidden_calendars') : null;
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  });
   // Lightweight change keys to avoid costly JSON.stringify deps
   const eventsKey = React.useMemo(
     () => (events || []).map(e => `${e?._id || ''}:${e?.start || ''}:${e?.end || ''}`).join('|'),
@@ -62,20 +77,51 @@ export const CalendarPage = () => {
     }
   }, [showRaw]);
 
+  const loadCalendars = React.useCallback(() => {
+    setLoadingCalendars(true);
+    Meteor.call('calendar.google.listCalendars', (err, res) => {
+      setLoadingCalendars(false);
+      if (err) {
+        notify({ message: err?.reason || err?.message || 'Failed to load calendars', kind: 'error' });
+        return;
+      }
+      setAvailableCalendars(res?.calendars || []);
+    });
+  }, []);
+
   const onSync = () => {
     setSyncing(true);
-    Meteor.call('calendar.syncFromIcs', (err, res) => {
+    Meteor.call('calendar.google.sync', null, (err, res) => {
       setSyncing(false);
       if (err) { notify({ message: err?.reason || err?.message || 'Sync failed', kind: 'error' }); return; }
-      notify({ message: `Synced ${res?.upserts || 0} events`, kind: 'success' });
+      notify({ message: `Synced ${res?.upserts || 0} events from ${res?.calendars || 0} calendars`, kind: 'success' });
     });
   };
+
+  const toggleCalendarVisibility = (calendarId) => {
+    setHiddenCalendars((prev) => {
+      const next = prev.includes(calendarId)
+        ? prev.filter(id => id !== calendarId)
+        : [...prev, calendarId];
+      try {
+        localStorage.setItem('calendar_hidden_calendars', JSON.stringify(next));
+      } catch (err) {
+        console.warn('[calendar] localStorage write failed', err);
+      }
+      return next;
+    });
+  };
+
+  // Load calendars on mount
+  React.useEffect(() => {
+    loadCalendars();
+  }, [loadCalendars]);
 
   // Suggestion logic (Phase 1): pick top tasks and propose slots in free windows
   const { suggestions, debug } = React.useMemo(() => {
     const now = new Date();
     const horizon = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-    const bufferMin = 10; // minutes before/after events
+    const bufferMin = 0; // minutes before/after events (removed to maximize free slots)
     const minSlotMin = 15; // minimum slot length
 
     const days = [];
@@ -83,10 +129,17 @@ export const CalendarPage = () => {
       days.push(new Date(dt));
     }
 
-    // Base busy intervals from calendar events
+    // Base busy intervals from calendar events (exclude transparent/all-day events that don't block time)
     const eventIntervals = events
       .filter(e => e?.start && e?.end)
-      .map(e => ({ start: new Date(e.start), end: new Date(e.end) }));
+      .filter(e => {
+        // Exclude all-day events - they don't block work time
+        if (e.allDay) return false;
+        // Exclude transparent events (like "Office" working location)
+        if (e.transparency === 'transparent') return false;
+        return true;
+      })
+      .map(e => ({ start: new Date(e.start), end: new Date(e.end), title: e.title }));
 
     // Add scheduled tasks as busy too
     const scheduledIntervals = tasks
@@ -95,7 +148,7 @@ export const CalendarPage = () => {
         const start = new Date(t.scheduledAt);
         const minutes = Number.isFinite(Number(t.scheduledDurationMin)) ? Math.max(15, Number(t.scheduledDurationMin)) : 60;
         const end = new Date(start.getTime() + minutes * 60000);
-        return { start, end };
+        return { start, end, title: t.title, source: 'task' };
       });
 
     const baseIntervals = [...eventIntervals, ...scheduledIntervals]
@@ -122,15 +175,12 @@ export const CalendarPage = () => {
       const arr = baseIntervals
         .filter(e => e.end > boundsStart && e.start < boundsEnd)
         .map(e => ({ start: clamp(e.start, boundsStart, boundsEnd), end: clamp(e.end, boundsStart, boundsEnd) }));
-      // Add lunch break 12:00–14:00 as busy
-      const lunchStartRaw = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0, 0);
-      const lunchEndRaw = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 14, 0, 0, 0);
-      const lunchStart = clamp(lunchStartRaw, boundsStart, boundsEnd);
-      const lunchEnd = clamp(lunchEndRaw, boundsStart, boundsEnd);
-      if (lunchEnd > lunchStart) arr.push({ start: lunchStart, end: lunchEnd });
-      // Ensure busy intervals are sorted before merging (lunch was appended)
+
+      // Don't add lunch break as busy by default - only real calendar events count
+      // (The shiftOutOfLunch helper will handle lunch conflicts when placing tasks)
       arr.sort((a, b) => a.start - b.start);
       const busy = mergeIntervals(arr).filter(b => b.end > b.start);
+
       let cursor = boundsStart;
       for (const b of busy) {
         if (b.start > cursor) freeWindows.push({ start: new Date(cursor), end: new Date(b.start) });
@@ -282,16 +332,37 @@ export const CalendarPage = () => {
 
   const grouped = React.useMemo(() => {
     const map = new Map();
-    // Calendar events
-    const eventItems = events.map((e) => ({
-      type: 'event',
-      _id: e._id,
-      title: e.title || 'Busy',
-      start: e.start ? new Date(e.start) : null,
-      end: e.end ? new Date(e.end) : null,
-      allDay: !!e.allDay,
-      location: e.location,
-    }));
+    // Helper to check if event is multi-day
+    const isMultiDay = (e) => {
+      if (!e.start || !e.end) return false;
+      const start = new Date(e.start);
+      const end = new Date(e.end);
+      // Check if duration > 24h OR starts and ends on different days
+      const durationMs = end.getTime() - start.getTime();
+      const moreThan24h = durationMs > 24 * 60 * 60 * 1000;
+      const differentDays = start.getDate() !== end.getDate() ||
+                            start.getMonth() !== end.getMonth() ||
+                            start.getFullYear() !== end.getFullYear();
+      return moreThan24h || (differentDays && e.allDay);
+    };
+    // Calendar events (filter multi-day if option enabled AND filter hidden calendars)
+    const eventItems = events
+      .filter((e) => !hideMultiDay || !isMultiDay(e))
+      .filter((e) => !hiddenCalendars.includes(e.calendarId))
+      .map((e) => {
+        // Find calendar color
+        const calendar = availableCalendars.find(cal => cal.id === e.calendarId);
+        return {
+          type: 'event',
+          _id: e._id,
+          title: e.title || 'Busy',
+          start: e.start ? new Date(e.start) : null,
+          end: e.end ? new Date(e.end) : null,
+          allDay: !!e.allDay,
+          location: e.location,
+          calendarColor: calendar?.backgroundColor,
+        };
+      });
     // Scheduled tasks (accepted)
     const scheduledItems = tasks
       .filter((t) => !!t.scheduledAt)
@@ -303,7 +374,7 @@ export const CalendarPage = () => {
       });
     // Suggested tasks (not yet accepted)
     const suggestedItems = (suggestions || []).map((s) => ({
-      type: 'task-suggested', _id: `suggest-${s.task._id}`, title: s.task.title || 'Task', start: s.start, end: s.end, minutes: s.minutes, why: s.why, task: s.task
+      type: 'task-suggested', _id: `suggest-${s.task._id}`, title: s.task.title || 'Task', start: s.start, end: s.end, minutes: s.minutes, why: s.why, task: s.task, needsEstimate: s.needsEstimate
     }));
 
     const all = [...eventItems, ...scheduledItems, ...suggestedItems].filter(it => it.start);
@@ -316,6 +387,9 @@ export const CalendarPage = () => {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [
     eventsKey,
+    hideMultiDay,
+    JSON.stringify(hiddenCalendars),
+    JSON.stringify(availableCalendars),
     React.useMemo(() => (tasks || []).map(t => `${t?._id || ''}:${t?.scheduledAt || ''}:${t?.scheduledDurationMin || ''}`).join('|'), [tasks]),
     React.useMemo(() => (suggestions || []).map(s => `${s?.task?._id || ''}:${s?.start?.toISOString?.() || ''}:${s?.end?.toISOString?.() || ''}:${s?.minutes || ''}`).join('|'), [suggestions]),
     localDayKey
@@ -343,12 +417,47 @@ export const CalendarPage = () => {
 
   const acceptSuggestion = (s) => {
     const { task, start, minutes } = s;
-    const fields = { scheduledAt: start, scheduledDurationMin: minutes };
-    Meteor.call('tasks.update', task._id, fields, (err) => {
-      if (err) { notify({ message: err?.reason || err?.message || 'Schedule failed', kind: 'error' }); return; }
-      Meteor.call('alarms.insert', { title: `Task: ${task.title}`, nextTriggerAt: start, enabled: true, recurrence: { type: 'none' } }, (alarmErr) => {
-        if (alarmErr) { notify({ message: alarmErr?.reason || alarmErr?.message || 'Task scheduled, but alarm failed', kind: 'warning' }); return; }
-        notify({ message: 'Task scheduled', kind: 'success' });
+    const end = new Date(start.getTime() + minutes * 60000);
+
+    // First, create event in Google Calendar
+    Meteor.call('calendar.google.createEvent', {
+      summary: task.title,
+      description: task.notes || '',
+      start: start.toISOString(),
+      end: end.toISOString()
+    }, (gcalErr, gcalResult) => {
+      if (gcalErr) {
+        notify({ message: gcalErr?.reason || gcalErr?.message || 'Failed to create Google Calendar event', kind: 'error' });
+        return;
+      }
+
+      // Store Google Calendar event ID in task
+      const fields = {
+        scheduledAt: start,
+        scheduledDurationMin: minutes,
+        googleCalendarEventId: gcalResult?.eventId
+      };
+
+      // Then, update task in Panorama
+      Meteor.call('tasks.update', task._id, fields, (err) => {
+        if (err) {
+          notify({ message: err?.reason || err?.message || 'Schedule failed', kind: 'error' });
+          return;
+        }
+
+        // Finally, create alarm
+        Meteor.call('alarms.insert', {
+          title: `Task: ${task.title}`,
+          nextTriggerAt: start,
+          enabled: true,
+          recurrence: { type: 'none' }
+        }, (alarmErr) => {
+          if (alarmErr) {
+            notify({ message: 'Task scheduled, but alarm failed', kind: 'warning' });
+            return;
+          }
+          notify({ message: 'Task scheduled and added to Google Calendar', kind: 'success' });
+        });
       });
     });
   };
@@ -363,10 +472,36 @@ export const CalendarPage = () => {
   };
 
   const unscheduleTask = (taskId) => {
-    Meteor.call('tasks.update', taskId, { scheduledAt: null }, (err) => {
-      if (err) { notify({ message: err?.reason || err?.message || 'Failed to unschedule', kind: 'error' }); return; }
-      notify({ message: 'Unscheduled', kind: 'success' });
-    });
+    // Find the task to get googleCalendarEventId
+    const task = tasks.find(t => t._id === taskId);
+    const googleEventId = task?.googleCalendarEventId;
+
+    // Delete from Google Calendar if event ID exists
+    if (googleEventId) {
+      Meteor.call('calendar.google.deleteEvent', googleEventId, (gcalErr) => {
+        if (gcalErr) {
+          notify({ message: 'Failed to delete from Google Calendar: ' + (gcalErr?.reason || gcalErr?.message), kind: 'warning' });
+        }
+
+        // Still unschedule in Panorama even if Google Calendar delete fails
+        Meteor.call('tasks.update', taskId, { scheduledAt: null, googleCalendarEventId: null }, (err) => {
+          if (err) {
+            notify({ message: err?.reason || err?.message || 'Failed to unschedule', kind: 'error' });
+            return;
+          }
+          notify({ message: 'Unscheduled and removed from Google Calendar', kind: 'success' });
+        });
+      });
+    } else {
+      // No Google Calendar event, just unschedule in Panorama
+      Meteor.call('tasks.update', taskId, { scheduledAt: null }, (err) => {
+        if (err) {
+          notify({ message: err?.reason || err?.message || 'Failed to unschedule', kind: 'error' });
+          return;
+        }
+        notify({ message: 'Unscheduled', kind: 'success' });
+      });
+    }
   };
 
   const markTaskDone = (taskId) => {
@@ -390,7 +525,110 @@ export const CalendarPage = () => {
       <div className="calendarToolbar">
         <button className="btn" disabled={syncing} onClick={onSync}>{syncing ? 'Syncing…' : 'Sync events'}</button>
         <button type="button" className="btn ml8" onClick={() => setShowRaw(v => !v)}>{showRaw ? 'Hide raw' : 'Show raw'}</button>
+        <button type="button" className="btn ml8" onClick={() => setShowCalendarFilters(v => !v)}>
+          {showCalendarFilters ? 'Hide calendars' : 'Show calendars'}
+        </button>
+        <label style={{ marginLeft: '16px', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={hideMultiDay}
+            onChange={(e) => {
+              const val = e.target.checked;
+              setHideMultiDay(val);
+              try {
+                localStorage.setItem('calendar_hide_multi_day', String(val));
+              } catch (err) {
+                console.warn('[calendar] localStorage write failed', err);
+              }
+            }}
+            style={{ marginRight: '6px' }}
+          />
+          <span>Hide multi-day events</span>
+        </label>
+        {debug?.openTasks !== undefined ? (
+          <span style={{ marginLeft: '16px', fontSize: '12px', color: '#6b7280' }}>
+            {debug.openTasks} tasks · {debug.windows} free slots
+          </span>
+        ) : null}
       </div>
+      {showCalendarFilters && (
+        <div style={{
+          marginTop: '16px',
+          padding: '16px',
+          background: 'var(--bg-secondary)',
+          borderRadius: '8px',
+          marginBottom: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ margin: 0, fontSize: '16px' }}>Calendars</h3>
+            <button
+              className="btn ml8"
+              disabled={loadingCalendars}
+              onClick={loadCalendars}
+              style={{ fontSize: '12px', padding: '4px 8px' }}
+            >
+              {loadingCalendars ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
+          {availableCalendars.length === 0 ? (
+            <div style={{ color: 'var(--muted)', fontSize: '14px' }}>
+              {loadingCalendars ? 'Loading calendars…' : 'No calendars found'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {availableCalendars.map((cal) => {
+                const isHidden = hiddenCalendars.includes(cal.id);
+                return (
+                  <label
+                    key={cal.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      background: isHidden ? 'transparent' : 'var(--bg-primary)',
+                      border: `1px solid ${isHidden ? 'var(--border)' : 'var(--primary)'}`
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!isHidden}
+                      onChange={() => toggleCalendarVisibility(cal.id)}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: cal.primary ? 'bold' : 'normal',
+                        color: isHidden ? 'var(--muted)' : 'var(--text-primary)'
+                      }}>
+                        {cal.summary}{cal.primary ? ' (Primary)' : ''}
+                      </div>
+                      {cal.description && (
+                        <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                          {cal.description}
+                        </div>
+                      )}
+                    </div>
+                    {cal.backgroundColor && (
+                      <div
+                        style={{
+                          width: '16px',
+                          height: '16px',
+                          borderRadius: '50%',
+                          background: cal.backgroundColor,
+                          marginLeft: '8px'
+                        }}
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       <ProjectFilters
         projects={projects}
         storageKey="calendar_proj_filters"
@@ -431,12 +669,27 @@ export const CalendarPage = () => {
                       return (<li key={it._id} className="calNowLine" aria-label="Now" />);
                     }
                   if (it.type === 'event') {
+                    const evt = events.find(e => e._id === it._id);
                     return (
-                      <li key={it._id} className="calItem">
+                      <li
+                        key={it._id}
+                        className="calItem"
+                        style={{
+                          borderLeft: it.calendarColor ? `4px solid ${it.calendarColor}` : undefined,
+                          paddingLeft: it.calendarColor ? '12px' : undefined
+                        }}
+                      >
                         <span className="calTime">{it.start ? new Date(it.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
                         <span className="calTitle">{it.title || 'Busy'}</span>
                         {(() => { const d = formatDuration(it); return d ? <span className="calDur">· {d}</span> : null; })()}
                         {it.location ? <span className="calLoc">· {it.location}</span> : null}
+                        {evt?.attendees?.length > 0 ? <span className="calMuted">· {evt.attendees.length} attendee{evt.attendees.length > 1 ? 's' : ''}</span> : null}
+                        {evt?.conferenceData?.entryPoints?.length > 0 ? (
+                          <a href={evt.conferenceData.entryPoints[0].uri} target="_blank" rel="noopener noreferrer" className="calLink ml8">Join</a>
+                        ) : null}
+                        {evt?.htmlLink ? (
+                          <a href={evt.htmlLink} target="_blank" rel="noopener noreferrer" className="calLink ml8">View</a>
+                        ) : null}
                       </li>
                     );
                   }

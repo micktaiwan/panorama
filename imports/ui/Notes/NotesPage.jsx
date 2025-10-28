@@ -81,8 +81,17 @@ export const NotesPage = () => {
     const savedActiveTab = localStorage.getItem('notes-active-tab');
     const tabs = parseLocalJson('notes-open-tabs', []);
     if (tabs && Array.isArray(tabs) && tabs.length > 0) {
-      // Filter out tabs without valid IDs to prevent prop validation errors
-      const validTabs = tabs.filter(tab => tab && typeof tab.id === 'string' && tab.id.trim() !== '');
+      // Filter out tabs without valid IDs and deduplicate by ID
+      const seenIds = new Set();
+      const validTabs = tabs.filter(tab => {
+        if (!tab || typeof tab.id !== 'string' || tab.id.trim() === '') return false;
+        if (seenIds.has(tab.id)) {
+          console.warn('[NotesPage] Duplicate tab ID detected and removed:', tab.id);
+          return false;
+        }
+        seenIds.add(tab.id);
+        return true;
+      });
       setOpenTabs(validTabs);
       // Load content of open notes
       const contents = {};
@@ -113,9 +122,26 @@ export const NotesPage = () => {
     }
   }, []);
 
-  // Save open tabs to localStorage
+  // Save open tabs to localStorage (with deduplication check)
   useEffect(() => {
     if (openTabs.length > 0) {
+      // Deduplicate tabs before saving (safety check)
+      const seenIds = new Set();
+      const uniqueTabs = openTabs.filter(tab => {
+        if (seenIds.has(tab.id)) {
+          console.warn('[NotesPage] Preventing duplicate tab from being saved:', tab.id);
+          return false;
+        }
+        seenIds.add(tab.id);
+        return true;
+      });
+
+      // If we found duplicates, update the state
+      if (uniqueTabs.length !== openTabs.length) {
+        setOpenTabs(uniqueTabs);
+        return; // Let the next effect save the deduplicated list
+      }
+
       localStorage.setItem('notes-open-tabs', JSON.stringify(openTabs));
     } else {
       localStorage.removeItem('notes-open-tabs');
@@ -355,11 +381,17 @@ export const NotesPage = () => {
     setTouchedNotes(prev => new Set([...prev, noteId]));
   };
 
-  // Save all open notes
+  // Save all open notes (only dirty ones)
   const saveAllNotes = async () => {
-    for (const tab of openTabs) {
+    const dirtyTabs = openTabs.filter(tab => dirtySet.has(tab.id));
+    if (dirtyTabs.length === 0) {
+      notify({ message: 'No unsaved changes to save', kind: 'info' });
+      return;
+    }
+    for (const tab of dirtyTabs) {
       await saveNote(tab.id);
     }
+    notify({ message: `Saved ${dirtyTabs.length} note${dirtyTabs.length > 1 ? 's' : ''}`, kind: 'success' });
   };
 
   // Delete a note (DB + UI cleanup)

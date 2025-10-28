@@ -4,6 +4,52 @@
 
 Provide a global AI chat interface that can be used to ask questions about the workspace. The chat uses the vector database to be context-aware and relevant.
 
+## Architecture
+
+### AI Proxy System
+
+The AI Proxy provides a unified interface for all AI operations (chat completions and embeddings) with automatic routing between local (Ollama) and remote (OpenAI) providers based on user preferences and health checks.
+
+#### Core Components
+
+1. **LLM Proxy** (`imports/api/_shared/llmProxy.js`)
+   - Central routing logic for all AI calls
+   - Health check management with 5-minute caching
+   - Automatic fallback handling
+   - Provider selection based on mode and health
+
+2. **Providers** (`imports/api/_shared/aiCore.js`)
+   - `ollama`: Local Ollama integration with Metal acceleration
+   - `openai`: Remote OpenAI API integration
+   - Normalized response format across providers
+
+3. **Configuration** (`imports/api/_shared/config.js`)
+   - Dynamic AI preferences management
+   - Default values and validation
+   - Integration with AppPreferences collection
+
+4. **UI Integration** (`imports/ui/Preferences/Preferences.jsx`)
+   - Comprehensive settings interface
+   - Real-time health monitoring
+   - Provider testing capabilities
+
+#### Provider Selection Logic
+
+- **Local mode**: Always use Ollama (offline-first)
+- **Remote mode**: Always use OpenAI (requires API key)
+- **Auto mode**: Use local if healthy, fallback to remote if configured
+
+### Vector Store Integration
+
+The system automatically handles different embedding dimensions and collection naming:
+
+- **Dynamic vector size detection** based on current model
+- **Collection naming strategy**:
+  - Remote mode: Uses base collection name (e.g., `panorama`)
+  - Local mode: Uses model-specific collections (e.g., `panorama_nomic_embed_text_latest`)
+- **Manual reindexing** required when switching models or AI modes
+- **Fallback search** to `search.instant` when Qdrant is unavailable in local mode
+
 ## Scope (MVP)
 
 - UI: popup button in the bottom-right corner of the screen (open on click).
@@ -28,26 +74,104 @@ Provide a global AI chat interface that can be used to ask questions about the w
 - Responses render with optional citations (links).
 - Errors are surfaced in the conversation.
 
-## Notes
+## Configuration
 
-- A temporary server stub `chat.ask` may return an echo response while the AI backend is WIP.
+### AI Preferences Schema
+
+```javascript
+{
+  mode: 'local' | 'remote' | 'auto',        // Default: 'remote'
+  fallback: 'none' | 'local' | 'remote',    // Default: 'local'
+  timeoutMs: number,                        // Default: 30000
+  maxTokens: number,                        // Default: 4000
+  temperature: number,                      // Default: 0.7
+  local: {
+    host: string,                           // Default: 'http://127.0.0.1:11434'
+    chatModel: string,                      // Default: 'llama3.1:8b-instruct'
+    embeddingModel: string                  // Default: 'nomic-embed-text'
+  },
+  remote: {
+    provider: 'openai',                     // Default: 'openai'
+    chatModel: string,                      // Default: 'gpt-4o-mini'
+    embeddingModel: string                  // Default: 'text-embedding-3-small'
+  }
+}
+```
+
+### OpenAI API Key
+
+- Configure the key in Preferences → Secrets → "OpenAI API Key".
+- The key is read by the server via `getOpenAiApiKey()` (order: AppPreferences → env vars → Meteor settings).
+- The "Remote AI (OpenAI) → API Key" UI field is not used; keep Secrets as the single place to configure the key.
 
 ## Implementation notes
 
-- Server:
-  - Uses Responses API (no streaming) for the first pass; logs system/user prompts and response meta.
-  - Executes tool calls and logs selectors/results size.
-  - Uses Chat Completions for the final synthesis with `assistant.tool_calls` + `tool` messages; guidance forces using ONLY tool results and listing all items + total count.
-  - System prompt includes the current date/time and timezone (e.g., `Current date/time: 2025-09-08T22:30:00.000Z (Europe/Paris)`).
-- Retrieval uses Qdrant (embeddings: `text-embedding-3-small`). Top‑k results are returned as citations.
+### Server
+
+- Uses Responses API (no streaming) for the first pass; logs system/user prompts and response meta.
+- Executes tool calls and logs selectors/results size.
+- Uses Chat Completions for the final synthesis with `assistant.tool_calls` + `tool` messages; guidance forces using ONLY tool results and listing all items + total count.
+- System prompt includes the current date/time and timezone (e.g., `Current date/time: 2025-09-08T22:30:00.000Z (Europe/Paris)`).
+
+### Client
+
 - History persistence: flat `ChatsCollection` storing individual messages for reload resilience.
 - UI feedback: user message appears instantly; header shows "Sending…"; a temporary assistant "Thinking…" bubble is displayed while waiting.
+- LocalStorage persistence for panel state (open/docked).
+
+### Retrieval
+
+- Uses Qdrant (embeddings: `text-embedding-3-small` for remote, `nomic-embed-text` for local).
+- Top‑k results are returned as citations.
 
 ## Tools
 
 The source code is the reference. See `imports/api/chat/tools_helpers.js` for the up-to-date definition of tools exposed to the model (Responses API) and `TOOL_HANDLERS` in `imports/api/chat/methods.js` for their server-side implementation.
 
 Detailed descriptions (inputs/outputs/behaviors) are auto-documented in the code (schemas and selectors). Avoid duplication here.
+
+## Usage
+
+### Chat Completions
+
+```javascript
+import { chatComplete } from '/imports/api/_shared/llmProxy';
+
+const result = await chatComplete({
+  system: 'You are a helpful assistant.',
+  messages: [{ role: 'user', content: 'Hello!' }],
+  temperature: 0.7,
+  maxTokens: 1000
+});
+
+console.log(result.text); // Generated response
+```
+
+### Embeddings
+
+```javascript
+import { embed } from '/imports/api/_shared/llmProxy';
+
+const result = await embed(['Text to embed', 'Another text']);
+console.log(result.vectors); // Array of embedding vectors
+```
+
+### Health Checks
+
+```javascript
+import { getHealthStatus } from '/imports/api/_shared/llmProxy';
+
+const health = await getHealthStatus();
+console.log(health.local.ok);   // true/false
+console.log(health.remote.ok);  // true/false
+```
+
+### Server Methods
+
+- `ai.healthcheck()` — Returns health status for both providers.
+- `ai.testProvider(provider, options)` — Tests a specific provider with sample data.
+- `ai.saveRemoteKey(apiKey)` — Securely stores OpenAI API key server-side.
+- `ai.updatePreferences(preferences)` — Updates AI configuration preferences.
 
 ## Planner roadmap
 
@@ -142,7 +266,7 @@ Detailed descriptions (inputs/outputs/behaviors) are auto-documented in the code
 
 ### Acceptance
 
-- Given “donne‑moi les tâches du projet data”, the agent calls `chat_projectByName`, binds `projectId`, calls `chat_tasksByProject`, and returns tasks + total count.
+- Given "donne‑moi les tâches du projet data", the agent calls `chat_projectByName`, binds `projectId`, calls `chat_tasksByProject`, and returns tasks + total count.
 - If the project does not exist, it stops with a concise message and suggests available projects.
 
 ### Current status (implemented)
@@ -172,15 +296,15 @@ Detailed descriptions (inputs/outputs/behaviors) are auto-documented in the code
   - Unit: binding, mapping, cap 5 tool-calls.
   - Integration (with mocked OpenAI): two-step chain project-by-name → tasks-by-project; re-plan path on missing args.
 
-## Chat
+## Future mutations
 
 Here is a pragmatic, Planner-first prioritized proposal to cover "all" collections with coherent and generic tools.
 
-Priority 1 — Read-only (quick coverage, useful for the Planner)
+### Priority 1 — Read-only (quick coverage, useful for the Planner)
 
-- See `TOOL_HANDLERS` for the effective list of read-only tools (tasks, projects, notes, links, people, teams, files, alarms) and `CHAT_TOOLS_DEFINITION` for model exposure.
+See `TOOL_HANDLERS` for the effective list of read-only tools (tasks, projects, notes, links, people, teams, files, alarms) and `CHAT_TOOLS_DEFINITION` for model exposure.
 
-Priority 2 — Essential mutations (with confirmation)
+### Priority 2 — Essential mutations (with confirmation)
 
 - Tasks
   - [ ] chat_createTask({ projectId, title, deadline? }) [confirm]
@@ -201,7 +325,7 @@ Priority 2 — Essential mutations (with confirmation)
   - [ ] chat_toggleAlarmEnabled({ alarmId, enabled }) [confirm]
   - [ ] chat_snoozeAlarm({ alarmId, until }) [confirm]
 
-Conventions (for any new tool)
+### Conventions (for any new tool)
 
 - Input
   - Strict validation (ISO dates, enums), no ambiguous optional fields.
@@ -214,20 +338,72 @@ Conventions (for any new tool)
   - ids.* for identifiers (e.g. ids.projectId)
   - params.* for useful parameters (e.g. params.tag)
 - stopWhen
-  - Use artifacts (“lists.tasks”, “entities.project”, “ids.projectId”), not heuristics.
+  - Use artifacts ("lists.tasks", "entities.project", "ids.projectId"), not heuristics.
 
-Recommended implementation order
+### Recommended implementation order
 
-1) Read-only coverage: tasks, projects, notes, links (most requested by the Planner).
-2) Semantic tool (already done) + search on notes/links if needed.
-3) Task mutations (create/update/status/deadline/tags) with confirmation.
-4) Note/link mutations (create/append), alarms (create/toggle/snooze).
-5) People/teams/files/situations if needed by your prompts.
+1. Read-only coverage: tasks, projects, notes, links (most requested by the Planner).
+2. Semantic tool (already done) + search on notes/links if needed.
+3. Task mutations (create/update/status/deadline/tags) with confirmation.
+4. Note/link mutations (create/append), alarms (create/toggle/snooze).
+5. People/teams/files/situations if needed by your prompts.
 
-Unit tests (to duplicate for each new tool)
+### Unit tests (to duplicate for each new tool)
 
 - Memory mapping: lists.* / entities.* / ids.* filled correctly (and legacy compatibility if necessary).
 - Argument validation (OK / KO).
 - stopWhen: that the expected artifact correctly stops the executor.
 
-If you want, I can start by creating the missing Read-only batch (notes/links/people/teams/files/alarms) in the same vein as those already in place.
+## Security
+
+- API keys are never stored client-side
+- All sensitive operations are server-side only
+- Health checks are cached to prevent excessive API calls
+- Input validation on all server methods
+
+## Model Compatibility
+
+### Local Models (Ollama)
+
+- **Chat**: `llama3.1:8b-instruct`, `mistral:7b-instruct`
+- **Embeddings**: `nomic-embed-text` (768 dims), `all-MiniLM-L6-v2` (384 dims)
+
+### Remote Models (OpenAI)
+
+- **Chat**: `gpt-4o-mini`, `gpt-4o`
+- **Embeddings**: `text-embedding-3-small` (1536 dims), `text-embedding-3-large` (3072 dims)
+
+## Performance
+
+- Health checks cached for 5 minutes
+- Automatic timeout handling (30s default)
+- Metal acceleration on Apple Silicon (M1/M2/M3)
+- Efficient error handling without silent catches
+
+## Troubleshooting
+
+### Local Provider Issues
+
+1. Ensure Ollama is running: `ollama serve`
+2. Check model availability: `ollama list`
+3. Verify health status in Preferences UI
+
+### Remote Provider Issues
+
+1. Verify API key is set correctly
+2. Check network connectivity
+3. Monitor rate limits and usage
+
+### Vector Store Issues
+
+1. Ensure Qdrant is running locally
+2. Check vector dimensions match current model
+3. Reindex if switching embedding models
+
+## Future Enhancements
+
+- Support for additional providers (Anthropic, Cohere)
+- Streaming responses
+- Custom model fine-tuning
+- Advanced caching strategies
+- Multi-modal support (images, audio)

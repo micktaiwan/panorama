@@ -40,7 +40,7 @@ export const buildProjectsBlock = (catalog) => catalog.map(p => {
 // AI Providers
 export const providers = {
   ollama: {
-    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat } = {}) {
+    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat, schema } = {}) {
       const config = getAIConfig();
       const host = config.local.host;
       const modelName = model || config.local.chatModel;
@@ -75,6 +75,11 @@ export const providers = {
       // Add response format if provided
       if (responseFormat === 'json') {
         payload.format = 'json';
+        // Add schema if provided (Ollama supports JSON schema)
+        if (schema) {
+          payload.options = payload.options || {};
+          payload.options.json_schema = schema;
+        }
       }
       
       const response = await fetch(`${host}/api/chat`, {
@@ -180,7 +185,7 @@ export const providers = {
   },
 
   openai: {
-    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat } = {}) {
+    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat, schema } = {}) {
       const apiKey = getOpenAiApiKey();
       if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
       
@@ -211,7 +216,18 @@ export const providers = {
       
       // Add response format if provided
       if (responseFormat === 'json') {
-        payload.response_format = { type: 'json_object' };
+        if (schema) {
+          payload.response_format = { 
+            type: 'json_schema', 
+            json_schema: { 
+              name: 'userlog_summary', 
+              strict: false, 
+              schema 
+            } 
+          };
+        } else {
+          payload.response_format = { type: 'json_object' };
+        }
       }
       
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -250,6 +266,37 @@ export const providers = {
       const config = getAIConfig();
       const modelName = model || config.remote.embeddingModel;
       
+      // Clean and validate input texts
+      const textArray = Array.isArray(texts) ? texts : [texts];
+      const cleanedTexts = textArray.map(text => {
+        if (!text || typeof text !== 'string') {
+          return '';
+        }
+        // Clean text: normalize whitespace and remove problematic characters
+        let cleaned = String(text);
+        // Remove non-printable characters except spaces, tabs, and newlines
+        cleaned = cleaned.replace(/[^\x20-\x7E\s]/g, '');
+        // Normalize whitespace
+        cleaned = cleaned.replace(/\s+/g, ' ');
+        return cleaned.trim();
+      }).filter(text => text.length > 0); // Remove empty strings
+      
+      if (cleanedTexts.length === 0) {
+        // Return empty vectors array instead of throwing error for empty texts
+        return {
+          vectors: [],
+          model: modelName
+        };
+      }
+      
+      // Check text length limits (OpenAI has a limit of ~8192 tokens, roughly 32000 characters)
+      const maxLength = 30000;
+      const validTexts = cleanedTexts.filter(text => text.length <= maxLength);
+      
+      if (validTexts.length === 0) {
+        throw new Meteor.Error('openai-embed-too-long', 'All texts exceed maximum length for embedding');
+      }
+      
       const { default: fetch } = await import('node-fetch');
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -262,7 +309,7 @@ export const providers = {
         },
         body: JSON.stringify({
           model: modelName,
-          input: Array.isArray(texts) ? texts : [texts]
+          input: validTexts
         }),
         signal: controller.signal
       });
