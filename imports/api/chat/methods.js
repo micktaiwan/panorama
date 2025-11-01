@@ -6,8 +6,7 @@ import { TOOL_HANDLERS } from '/imports/api/tools/handlers';
 import { TOOL_SCHEMAS } from '/imports/api/tools/schemas';
 import { bindArgsWithMemory, evaluateStopWhen, capToolCalls, mapToolCallsForChatCompletions, buildProjectByNameSelector } from '/imports/api/tools/helpers';
 import { TOOL_DEFINITIONS, buildCitationsFromMemory, buildCitationsFromToolResults, buildPlannerConfig } from '/imports/api/tools/definitions';
-
-const COLLECTION = () => String(Meteor.settings?.qdrantCollectionName || 'panorama');
+import { COLLECTION } from '/imports/api/search/vectorStore';
 
 const buildSystemPrompt = () => {
   const now = new Date();

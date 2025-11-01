@@ -2,6 +2,18 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 
+/**
+ * Clean AI response by removing Markdown code blocks (```json...```)
+ * and other formatting artifacts that prevent JSON parsing
+ */
+function cleanJsonResponse(text) {
+  let cleaned = String(text || '').trim();
+  // Remove ```json...``` or ```...``` code blocks
+  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '');
+  cleaned = cleaned.replace(/\n?```\s*$/i, '');
+  return cleaned.trim();
+}
+
 Meteor.methods({
   async 'ai.project.improvementQuestions'(projectId) {
     check(projectId, String);
@@ -16,15 +28,43 @@ Meteor.methods({
     const user = [
       'Given the project below, ask up to 6 high-signal questions that would help clarify scope, outcomes, constraints, and first steps.',
       'Keep questions concise and concrete. Use the same language as the user content when possible (often French).',
-      'Return STRICT JSON matching the schema.',
+      'Return STRICT JSON with this exact structure: {"questions": ["question 1", "question 2", ...]}',
+      'The questions array should contain 3-6 strings.',
       '',
       `Project name: ${name || '(untitled)'}`,
       `Current description: ${desc || '(empty)'}`
     ].join('\n');
 
-    const result = await chatComplete({ system, messages: [{ role: 'user', content: user }] });
-    const json = JSON.parse(result.text);
+    const schema = {
+      type: 'object',
+      properties: {
+        questions: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 3,
+          maxItems: 6,
+          description: 'Array of clarifying questions to improve the project description'
+        }
+      },
+      required: ['questions'],
+      additionalProperties: false
+    };
+
+    const result = await chatComplete({
+      system,
+      messages: [{ role: 'user', content: user }],
+      responseFormat: 'json',
+      schema
+    });
+
+    console.log('[ai.project.improvementQuestions] Raw result:', result.text?.substring(0, 200));
+    const cleaned = cleanJsonResponse(result.text);
+    console.log('[ai.project.improvementQuestions] Cleaned result:', cleaned?.substring(0, 200));
+
+    const json = JSON.parse(cleaned);
     const qs = Array.isArray(json?.questions) ? json.questions.filter(q => typeof q === 'string' && q.trim()) : [];
+    console.log('[ai.project.improvementQuestions] Parsed questions count:', qs.length);
+
     return { questions: qs };
   },
 
@@ -43,7 +83,7 @@ Meteor.methods({
 
     const system = 'You improve project descriptions and propose initial actionable tasks.';
     const rules = [
-      'Return STRICT JSON using the provided schema. No Markdown.',
+      'Return STRICT JSON with this exact structure: {"appendedDescription": "text to append", "starterTasks": [{"title": "task", "notes": "optional notes"}, ...]}',
       'Language: respond in the same language as the user inputs and project description (often French).',
       'Improved description should APPEND to the existing description, not replace it. Provide only the appended paragraph(s), not the full description.',
       'Task suggestions must be concrete, short, and feasible as first steps (3–8 items). Do not invent deadlines.'
@@ -60,8 +100,41 @@ Meteor.methods({
       freeText ? `\nAdditional notes:\n${freeText}` : ''
     ].join('\n');
 
-    const result = await chatComplete({ system, messages: [{ role: 'user', content: user }] });
-    const json = JSON.parse(result.text);
+    const schema = {
+      type: 'object',
+      properties: {
+        appendedDescription: {
+          type: 'string',
+          description: 'Text to append to the existing project description'
+        },
+        starterTasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Task title' },
+              notes: { type: 'string', description: 'Optional task notes or context' }
+            },
+            required: ['title'],
+            additionalProperties: false
+          },
+          minItems: 3,
+          maxItems: 8,
+          description: 'Array of suggested starter tasks'
+        }
+      },
+      required: ['appendedDescription', 'starterTasks'],
+      additionalProperties: false
+    };
+
+    const result = await chatComplete({
+      system,
+      messages: [{ role: 'user', content: user }],
+      responseFormat: 'json',
+      schema
+    });
+    const cleaned = cleanJsonResponse(result.text);
+    const json = JSON.parse(cleaned);
     const appended = String(json?.appendedDescription || '').trim();
     const tasks = Array.isArray(json?.starterTasks) ? json.starterTasks : [];
 

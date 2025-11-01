@@ -33,6 +33,7 @@ import { AIStatusIndicator } from '/imports/ui/components/AIStatusIndicator/AISt
 import { CommandPalette } from '/imports/ui/CommandPalette/CommandPalette.jsx';
 import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
+import { SearchQuality } from '/imports/ui/Preferences/SearchQuality/SearchQuality.jsx';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 import { CalendarPage } from '/imports/ui/Calendar/CalendarPage.jsx';
@@ -718,6 +719,11 @@ function App() {
       {route?.name === 'preferences' && (
         <div className="panel">
           <Preferences />
+        </div>
+      )}
+      {route?.name === 'searchQuality' && (
+        <div className="panel">
+          <SearchQuality />
         </div>
       )}
       {route?.name === 'web' && (

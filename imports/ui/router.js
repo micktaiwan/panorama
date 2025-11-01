@@ -11,6 +11,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'links') return { name: 'links' };
   if (parts[0] === 'files') return { name: 'files' };
   if (parts[0] === 'onboarding') return { name: 'onboarding' };
+  if (parts[0] === 'preferences' && parts[1] === 'search-quality') return { name: 'searchQuality' };
   if (parts[0] === 'preferences') return { name: 'preferences' };
   if (parts[0] === 'web') return { name: 'web' };
   if (parts[0] === 'reporting') return { name: 'reporting' };
@@ -64,6 +65,9 @@ export const navigateTo = (route) => {
       break;
     case 'preferences':
       window.location.hash = '#/preferences';
+      break;
+    case 'searchQuality':
+      window.location.hash = '#/preferences/search-quality';
       break;
     case 'web':
       window.location.hash = '#/web';

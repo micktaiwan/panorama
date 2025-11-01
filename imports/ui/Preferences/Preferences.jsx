@@ -99,8 +99,8 @@ export const Preferences = () => {
   // Load AI preferences on mount
   React.useEffect(() => {
     if (pref?.ai) {
-      setAiMode(pref.ai.mode || 'local');
-      setAiFallback(pref.ai.fallback || 'remote');
+      setAiMode(pref.ai.mode || 'remote');
+      setAiFallback(pref.ai.fallback || 'none');
       setAiTimeoutMs(pref.ai.timeoutMs || 30000);
       setAiMaxTokens(pref.ai.maxTokens || 4000);
       setAiTemperature(pref.ai.temperature || 0.7);
@@ -651,31 +651,12 @@ export const Preferences = () => {
               value={aiMode}
               options={[
                 { value: 'local', label: 'Local (Ollama)' },
-                { value: 'remote', label: 'Remote (OpenAI)' },
-                { value: 'auto', label: 'Auto (Local with Remote fallback)' }
+                { value: 'remote', label: 'Remote (OpenAI)' }
               ]}
               onSubmit={(next) => setAiMode(next)}
             />
           </div>
         </div>
-        
-        {aiMode === 'auto' && (
-          <div className="prefsRow">
-            <div className="prefsLabel">Fallback</div>
-            <div className="prefsValue">
-              <InlineEditable
-                as="select"
-                value={aiFallback}
-                options={[
-                  { value: 'none', label: 'None' },
-                  { value: 'local', label: 'Local' },
-                  { value: 'remote', label: 'Remote' }
-                ]}
-                onSubmit={(next) => setAiFallback(next)}
-              />
-            </div>
-          </div>
-        )}
 
         <div className="prefsRow">
           <div className="prefsLabel">Timeout (ms)</div>
@@ -1034,6 +1015,7 @@ export const Preferences = () => {
               Meteor.call('qdrant.health', (err, res) => { setChecking(false); setHealth(err ? { error: err?.reason || err?.message || String(err) } : res); });
             }}>{checking ? 'Checking…' : 'Check health'}</button>
             <button className="btn ml8" disabled={indexing} onClick={() => setConfirmIndex(true)}>{indexing ? 'Indexing…' : 'Rebuild index'}</button>
+            <button className="btn ml8" onClick={() => navigateTo({ name: 'searchQuality' })}>Search Quality Test</button>
           </div>
         </div>
 

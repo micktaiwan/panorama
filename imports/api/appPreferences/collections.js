@@ -6,13 +6,13 @@ export const AppPreferencesCollection = new Mongo.Collection('appPreferences');
 export const AI_PREFERENCES_SCHEMA = {
   mode: {
     type: String,
-    allowedValues: ['local', 'remote', 'auto'],
-    defaultValue: 'local'
+    allowedValues: ['local', 'remote'],
+    defaultValue: 'remote'
   },
   fallback: {
     type: String,
     allowedValues: ['none', 'local', 'remote'],
-    defaultValue: 'local'
+    defaultValue: 'none'
   },
   timeoutMs: {
     type: Number,
