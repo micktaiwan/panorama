@@ -804,6 +804,71 @@ Meteor.methods({
     const deduped = (bestById.size > 0 ? Array.from(bestById.values()) : out)
       .sort((a, b) => (Number(b?.score) || 0) - (Number(a?.score) || 0));
     return { results: deduped, cachedVector: !!cached, cacheSize: vectorCache.size };
+  },
+  async 'qdrant.qualityTest'(opts = {}) {
+    const limit = Math.max(1, Math.min(50, Number(opts?.limit) || 10));
+    const verbose = !!opts?.verbose;
+
+    console.log('[qdrant.qualityTest] Starting quality test...');
+
+    // Generate test dataset from real data
+    const { generateTestDataset } = await import('./generateQualityTests');
+    const dataset = await generateTestDataset();
+
+    if (dataset.length === 0) {
+      return {
+        error: 'No test data could be generated. Ensure you have notes, tasks, or projects with content.',
+        tests: [],
+        summary: {},
+        failures: [],
+        totalFailures: []
+      };
+    }
+
+    console.log(`[qdrant.qualityTest] Generated ${dataset.length} test cases`);
+
+    // Run quality tests
+    const { runQualityTests } = await import('./runQualityTests');
+    const results = await runQualityTests(dataset, { limit, verbose });
+
+    // Generate automatic recommendations
+    const { analyzeRecommendations } = await import('./analyzeRecommendations');
+    const analysis = analyzeRecommendations(results);
+
+    console.log('[qdrant.qualityTest] Quality test completed');
+    console.log('[qdrant.qualityTest] Recommendations:', JSON.stringify(analysis.summary, null, 2));
+
+    return {
+      ...results,
+      recommendations: analysis.recommendations,
+      recommendationsSummary: analysis.summary
+    };
+  },
+  async 'qdrant.diagnoseIndexing'() {
+    console.log('[qdrant.diagnoseIndexing] Running indexing diagnosis...');
+    const { diagnoseIndexing } = await import('./diagnoseIndexing');
+    const diagnosis = await diagnoseIndexing();
+    console.log('[qdrant.diagnoseIndexing] Diagnosis complete');
+    return diagnosis;
+  },
+  async 'qdrant.autoFix'(opts = {}) {
+    check(opts, Object);
+    const dryRun = !!opts.dryRun;
+    const sampleSize = opts.sampleSize === 0 ? 0 : Math.max(5, Math.min(1000, Number(opts?.sampleSize) || 100));
+
+    console.log(`[qdrant.autoFix] Starting auto-fix (dryRun: ${dryRun}, sampleSize: ${sampleSize})...`);
+
+    const { autoFixIndexing } = await import('./autoFixIndexing');
+    const report = await autoFixIndexing({ dryRun, sampleSize });
+
+    console.log('[qdrant.autoFix] Auto-fix complete');
+    console.log('[qdrant.autoFix] Summary:', JSON.stringify(report.summary, null, 2));
+
+    if (report.errors.length > 0) {
+      console.error('[qdrant.autoFix] Errors encountered:', report.errors.length);
+    }
+
+    return report;
   }
 });
 

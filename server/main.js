@@ -110,12 +110,46 @@ import '/imports/api/errors/publications';
 import '/imports/api/errors/methods';
 import '/imports/api/errors/serverConsoleOverride';
 
+// Observability & Monitoring
+import '/imports/api/toolCallLogs/collections';
+
 // Gmail Integration
 import '/imports/api/emails/collections';
 import '/imports/api/emails/publications';
 import '/imports/api/emails/methods';
 
-Meteor.startup(() => {
+Meteor.startup(async () => {
+  // Ensure AI mode defaults to 'remote' on first launch
+  const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
+  const prefs = await AppPreferencesCollection.findOneAsync({});
+
+  if (!prefs || !prefs.ai || !prefs.ai.mode) {
+    console.log('[startup] No AI preferences found, initializing with remote mode');
+    await AppPreferencesCollection.upsertAsync(
+      {},
+      {
+        $set: {
+          'ai.mode': 'remote',
+          'ai.fallback': 'none'
+        }
+      }
+    );
+  } else if (prefs.ai.mode === 'auto') {
+    // Legacy 'auto' mode no longer supported - force to remote
+    console.log(`[startup] AI mode is 'auto' (deprecated), switching to 'remote'`);
+    await AppPreferencesCollection.updateAsync(
+      {},
+      {
+        $set: {
+          'ai.mode': 'remote',
+          'ai.fallback': 'none'
+        }
+      }
+    );
+  } else {
+    console.log(`[startup] AI mode: '${prefs.ai.mode}'`);
+  }
+
   // Place server-side initialization here as your app grows.
   const scriptSrc = Meteor.isDevelopment
     ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"

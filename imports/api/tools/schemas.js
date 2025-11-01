@@ -18,6 +18,7 @@ export const TOOL_SCHEMAS = {
   tool_teamsList: { required: [], readOnly: true },
   tool_filesByProject: { required: ['projectId'], readOnly: true },
   tool_alarmsList: { required: [], readOnly: true },
+  tool_createAlarm: { required: ['title', 'nextTriggerAt'], readOnly: false },
   tool_createTask: { required: ['title'], readOnly: false },
   tool_updateTask: { required: ['taskId'], readOnly: false },
   tool_createNote: { required: ['title'], readOnly: false },

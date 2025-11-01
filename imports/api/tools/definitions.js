@@ -115,6 +115,22 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_updateProject',
+    description: 'Update a project\'s name, description, or status. At least one field must be provided.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        projectId: { type: 'string', description: 'Project ID (required)' },
+        name: { type: 'string', description: 'New project name (optional)' },
+        description: { type: 'string', description: 'New project description (optional)' },
+        status: { type: 'string', description: 'New project status (optional, e.g., active, archived)' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_semanticSearch',
     description: 'Semantic search over workspace items (projects, tasks, notes, links). Returns top matches with titles and optional URLs.',
     parameters: {
@@ -239,6 +255,29 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_createAlarm',
+    description: 'Create a new alarm/reminder. Use when the user wants to set a reminder or alarm for a specific time.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        title: { type: 'string', description: 'Title/description of the alarm' },
+        nextTriggerAt: { type: 'string', description: 'ISO date string when alarm should trigger (e.g., "2025-10-31T08:00:00")' },
+        enabled: { type: 'boolean', description: 'Whether alarm is enabled (default: true)' },
+        recurrence: {
+          type: 'object',
+          description: 'Recurrence settings (optional)',
+          properties: {
+            type: { type: 'string', enum: ['none', 'daily', 'weekly', 'monthly'], description: 'Recurrence type' },
+            daysOfWeek: { type: 'array', items: { type: 'number' }, description: 'Days of week (0=Sunday, 6=Saturday) for weekly recurrence' }
+          }
+        }
+      },
+      required: ['title', 'nextTriggerAt']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_collectionQuery',
     description: 'Generic read-only query across collections with a validated where DSL. Use to filter items by fields.',
     parameters: {
@@ -356,6 +395,147 @@ export const TOOL_DEFINITIONS = [
           description: 'Max number of logs to return (max: 1000). Overrides default behavior.'
         }
       }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_emailsUpdateCache',
+    description: 'Update the local email cache by fetching new messages from Gmail. Use when the user asks to refresh/sync/update their emails or check for new messages.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of emails to fetch from Gmail API (default: 20, max: 100)'
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_emailsSearch',
+    description: 'Search through cached emails using Gmail query syntax or semantic search. Use when the user wants to find emails by sender, subject, content, or date range.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query (Gmail syntax like "from:sender@example.com subject:invoice" or natural language for semantic search)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 10, max: 50)'
+        },
+        useSemanticSearch: {
+          type: 'boolean',
+          description: 'Use semantic/vector search instead of exact text matching (default: false)'
+        }
+      },
+      required: ['query']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_projectsOverview',
+    description: 'Get a complete panorama/overview/dashboard of ALL projects at once with their health, urgency, and stats. Use when the user asks for: "panorama", "overview", "dashboard", "status of all projects", "what projects need attention", "project health", "urgent projects", or wants to see the big picture across all projects. Returns comprehensive metrics: tasks (total/open/done/overdue), notes, links, files, health scores, and activity. Single call replaces multiple tool_projectsList + tool_tasksByProject calls.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        periodDays: {
+          type: 'number',
+          description: 'Period in days for activity and heat analysis (default: 14, min: 1, max: 365)'
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_emailsRead',
+    description: 'Read the full content of one or more emails by their ID. Use when the user wants to see the complete message body and details.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        emailIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of email IDs (MongoDB _id or Gmail message ID) to read'
+        },
+        includeThread: {
+          type: 'boolean',
+          description: 'Include all messages in the thread (default: false)'
+        }
+      },
+      required: ['emailIds']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_emailsListLabels',
+    description: 'List all Gmail labels available for the user. Use when the user wants to see available labels or when preparing to add/remove labels.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {}
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_emailsAddLabel',
+    description: 'Add a Gmail label to an email. Use when the user wants to categorize or tag an email.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        messageId: {
+          type: 'string',
+          description: 'Gmail message ID of the email to label'
+        },
+        labelId: {
+          type: 'string',
+          description: 'Gmail label ID to add (e.g., "STARRED", "IMPORTANT", or custom label IDs)'
+        }
+      },
+      required: ['messageId', 'labelId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_emailsRemoveLabel',
+    description: 'Remove a Gmail label from an email. Use when the user wants to remove a category or tag from an email.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        messageId: {
+          type: 'string',
+          description: 'Gmail message ID of the email'
+        },
+        labelId: {
+          type: 'string',
+          description: 'Gmail label ID to remove (e.g., "STARRED", "IMPORTANT", or custom label IDs)'
+        }
+      },
+      required: ['messageId', 'labelId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_emailsCreateLabel',
+    description: 'Create a new Gmail label. Use when the user wants to create a new category/tag for organizing emails. Returns the created label with its ID, or the existing label if it already exists.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        labelName: {
+          type: 'string',
+          description: 'Name of the label to create (e.g., "panorama", "Important Project", "Follow-up")'
+        }
+      },
+      required: ['labelName']
     }
   },
 ];

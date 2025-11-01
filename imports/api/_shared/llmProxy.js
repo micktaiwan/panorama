@@ -33,11 +33,12 @@ async function getHealthCheck(provider) {
 }
 
 /**
- * Determine which provider to use based on mode and health
+ * Determine which provider to use based on mode
+ * NO AUTOMATIC SWITCHING - mode is strictly enforced
  */
 async function selectProvider(routeOverride = null) {
   const config = getAIConfig();
-  
+
   // Override takes precedence
   if (routeOverride === 'local') {
     return 'ollama';
@@ -45,37 +46,18 @@ async function selectProvider(routeOverride = null) {
   if (routeOverride === 'remote') {
     return 'openai';
   }
-  
-  // Check mode
+
+  // Strict mode enforcement - no auto switching
   if (config.mode === 'local') {
     return 'ollama';
   }
-  
+
   if (config.mode === 'remote') {
     return 'openai';
   }
-  
-  // Auto mode: try local first, fallback to remote
-  if (config.mode === 'auto') {
-    const localHealth = await getHealthCheck('ollama');
-    if (localHealth.ok) {
-      return 'ollama';
-    }
-    
-    // Local failed, check fallback setting
-    if (config.fallback === 'remote') {
-      return 'openai';
-    }
-    if (config.fallback === 'local') {
-      return 'ollama'; // Force local even if unhealthy
-    }
-    
-    // No fallback, throw error instead of using unhealthy local
-    throw new Meteor.Error('no-healthy-provider', 'No healthy AI provider available and no fallback configured');
-  }
-  
-  // Default to local
-  return 'ollama';
+
+  // Default to remote (safer for production)
+  return 'openai';
 }
 
 /**

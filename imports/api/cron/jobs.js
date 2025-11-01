@@ -121,82 +121,134 @@ ${JSON.stringify(tasksContext, null, 2)}`;
   }
 }
 
-async function prepareEmailCta() {
-  console.log('[cron] Starting email CTA preparation...');
-  
+async function prepareEmailCtaMorningBatch() {
+  console.log('[cron] Starting morning email batch analysis (5 emails max)...');
+
   try {
-    // Check if we already have 20 prepared emails
-    const preparedCount = await GmailMessagesCollection.find({
-      ctaPrepared: true
-    }).countAsync();
-    
-    if (preparedCount >= 20) {
-      console.log(`[cron] Already have ${preparedCount} prepared emails, skipping`);
-      return;
-    }
-    
-    // Check if any email is currently being prepared
-    const preparingCount = await GmailMessagesCollection.find({
-      ctaPreparing: true
-    }).countAsync();
-    
-    if (preparingCount > 0) {
-      console.log(`[cron] ${preparingCount} emails currently being prepared, skipping`);
-      return;
-    }
-    
-    // Find the most recent email in Inbox that needs CTA preparation
-    const candidateEmail = await GmailMessagesCollection.findOneAsync({
-      labelIds: { $in: ['INBOX'] },
-      ctaPrepared: { $ne: true },
-      ctaPreparing: { $ne: true }
+    // Find up to 5 unread emails in inbox that haven't been prepared
+    const candidateEmails = await GmailMessagesCollection.find({
+      labelIds: { $all: ['INBOX', 'UNREAD'] },
+      ctaPrepared: { $ne: true }
     }, {
       sort: { gmailDate: -1 },
+      limit: 5,
       fields: { _id: 1, subject: 1, from: 1 }
-    });
-    
-    if (!candidateEmail) {
-      console.log('[cron] No candidate emails found for CTA preparation');
+    }).fetchAsync();
+
+    if (candidateEmails.length === 0) {
+      console.log('[cron] No unread emails to analyze');
+      // Create alarm even if no emails
+      const now = new Date();
+      const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+      await AlarmsCollection.insertAsync({
+        title: '📧 Inbox Zero: Aucun email non lu à analyser',
+        enabled: true,
+        nextTriggerAt: now,
+        recurrence: { type: 'none' },
+        done: false,
+        userId: null,
+        createdAt: now,
+        updatedAt: now
+      });
       return;
     }
-    
-    console.log(`[cron] Preparing CTA for email: ${candidateEmail.subject} from ${candidateEmail.from}`);
-    
-    // Call the internal suggestCta function directly
-    const result = await suggestCtaInternal(candidateEmail._id);
-    
-    if (result.success) {
-      console.log(`[cron] Successfully prepared CTA for email ${candidateEmail._id}: ${result.suggestion.action}`);
-    } else if (result.alreadyPrepared || result.alreadyPreparing) {
-      console.log(`[cron] Email ${candidateEmail._id} already prepared/preparing`);
-    } else {
-      console.log(`[cron] Failed to prepare CTA for email ${candidateEmail._id}`);
+
+    console.log(`[cron] Analyzing ${candidateEmails.length} emails with remote LLM...`);
+
+    const results = { delete: 0, archive: 0, reply: 0, errors: 0 };
+
+    // Analyze each email with remote LLM (OpenAI)
+    for (const email of candidateEmails) {
+      try {
+        const result = await suggestCtaInternal(email._id);
+        if (result.success && result.suggestion) {
+          const action = result.suggestion.action;
+          if (action in results) {
+            results[action]++;
+          }
+          console.log(`[cron] Email "${email.subject}" → ${action}`);
+        } else if (result.alreadyPrepared) {
+          console.log(`[cron] Email "${email.subject}" already prepared`);
+        }
+      } catch (error) {
+        console.error(`[cron] Error analyzing email ${email._id}:`, error);
+        results.errors++;
+      }
     }
-    
+
+    // Create alarm with summary
+    const totalAnalyzed = results.delete + results.archive + results.reply;
+    let summary = `📧 ${candidateEmails.length} email${candidateEmails.length > 1 ? 's' : ''} analysé${candidateEmails.length > 1 ? 's' : ''}`;
+
+    if (totalAnalyzed > 0) {
+      const parts = [];
+      if (results.archive > 0) parts.push(`${results.archive} à archiver`);
+      if (results.reply > 0) parts.push(`${results.reply} à répondre`);
+      if (results.delete > 0) parts.push(`${results.delete} à supprimer`);
+      summary += ': ' + parts.join(', ');
+    }
+
+    if (results.errors > 0) {
+      summary += ` (${results.errors} erreur${results.errors > 1 ? 's' : ''})`;
+    }
+
+    const now = new Date();
+    const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+    await AlarmsCollection.insertAsync({
+      title: summary,
+      enabled: true,
+      nextTriggerAt: now,
+      recurrence: { type: 'none' },
+      done: false,
+      userId: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    console.log('[cron] Morning batch completed, alarm created:', summary);
+
   } catch (error) {
-    console.error('[cron] Error in email CTA preparation:', error);
+    console.error('[cron] Error in morning email batch:', error);
+
+    // Create error alarm
+    try {
+      const now = new Date();
+      const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+      await AlarmsCollection.insertAsync({
+        title: `⚠️ Erreur lors de l'analyse des emails: ${error.message}`,
+        enabled: true,
+        nextTriggerAt: now,
+        recurrence: { type: 'none' },
+        done: false,
+        userId: null,
+        createdAt: now,
+        updatedAt: now
+      });
+    } catch (alarmError) {
+      console.error('[cron] Failed to create error alarm:', alarmError);
+    }
   }
 }
 
 function registerJobs() {
   const cronSettings = Meteor.settings?.cron || {};
   const timezone = cronSettings.timezone || 'Europe/Paris';
-  
+
   scheduleNoOverlap(
     'urgent-tasks-reporting',
-    '0 */3 * * *',
+    '0 9 * * 1-5', // Monday to Friday at 9:00 AM
     timezone,
     urgentTasksReporting
   );
-  
+
   scheduleNoOverlap(
-    'email-cta-preparation',
-    '* * * * *', // Every minute
+    'email-morning-batch',
+    '0 9 * * 1-5', // Monday to Friday at 9:00 AM
     timezone,
-    prepareEmailCta
+    prepareEmailCtaMorningBatch
   );
-  
-  console.log('[cron] Jobs registered - urgent tasks reporting every 3 hours, email CTA preparation every minute');
+
+  console.log('[cron] Jobs registered - urgent tasks and email batch on weekdays at 9:00 AM');
 }
 
 Meteor.methods({
@@ -205,16 +257,16 @@ Meteor.methods({
     await urgentTasksReporting();
     return { success: true, message: 'Urgent tasks reporting executed manually' };
   },
-  
-  async 'cron.testEmailCtaPreparation'() {
-    console.log('[cron] Manual trigger of email CTA preparation...');
-    await prepareEmailCta();
-    return { success: true, message: 'Email CTA preparation executed manually' };
+
+  async 'cron.testMorningEmailBatch'() {
+    console.log('[cron] Manual trigger of morning email batch...');
+    await prepareEmailCtaMorningBatch();
+    return { success: true, message: 'Morning email batch executed manually' };
   }
 });
 
 Meteor.startup(() => {
   if (cronJobsStarted) return;
   cronJobsStarted = true;
-  //registerJobs();
+  registerJobs();
 });

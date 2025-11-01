@@ -51,13 +51,15 @@ const processTasks = (allTasks, projectIds, since) => {
   const now = new Date();
   const soon = new Date(Date.now() + CONSTANTS.DUE_SOON_DAYS * 864e5);
   const tasksByProject = new Map();
-  
+
   for (const t of allTasks) {
     const pid = t.projectId || '';
-    if (!tasksByProject.has(pid)) tasksByProject.set(pid, { open: 0, overdue: 0, dueSoon: 0, lastTaskAt: null, next: [], changedInPeriod: 0 });
+    if (!tasksByProject.has(pid)) tasksByProject.set(pid, { total: 0, open: 0, done: 0, overdue: 0, dueSoon: 0, lastTaskAt: null, next: [], changedInPeriod: 0 });
     const acc = tasksByProject.get(pid);
+    acc.total += 1;
     const status = (t.status || 'todo');
     const isClosed = ['done', 'cancelled'].includes(status);
+    if (isClosed) acc.done += 1;
     if (!isClosed) acc.open += 1;
     const dl = t.deadline ? new Date(t.deadline) : null;
     if (!isClosed && dl && dl < now) acc.overdue += 1;
@@ -141,17 +143,18 @@ const processNotes = (notesAll, projectIds, since) => {
 };
 
 // Helper to calculate project activity and status
-const calculateProjectActivity = (project, tasksData, notesData, notesLastByProject, periodDays) => {
-  const t = tasksData.get(project._id) || { open: 0, overdue: 0, dueSoon: 0, next: [], lastTaskAt: null };
+const calculateProjectActivity = (project, tasksData, notesData, notesLastByProject, countsByProject, periodDays) => {
+  const t = tasksData.get(project._id) || { total: 0, open: 0, done: 0, overdue: 0, dueSoon: 0, next: [], lastTaskAt: null };
   const n = notesData.notesByProject.get(project._id) || { notes7d: 0 };
+  const counts = countsByProject.get(project._id) || { notesTotal: 0, linksTotal: 0, filesTotal: 0, sessionsTotal: 0 };
   const lastNoteAt = notesLastByProject.get(project._id) || null;
-  
+
   // Add project creation date to lastNoteAt calculation
   const projectCreated = project.createdAt ? new Date(project.createdAt) : null;
   if (projectCreated && (!lastNoteAt || projectCreated > lastNoteAt)) {
     notesLastByProject.set(project._id, projectCreated);
   }
-  
+
   const contentUpdatedAtTime = 0;
   const maxTime = Math.max(
     lastNoteAt ? lastNoteAt.getTime() : 0,
@@ -160,19 +163,22 @@ const calculateProjectActivity = (project, tasksData, notesData, notesLastByProj
     0 // avoid -Infinity
   );
   const lastActivityAt = maxTime > 0 ? new Date(maxTime) : null;
-  
+
   // Improve isInactive logic - consider project creation date
   const projectAge = projectCreated ? (Date.now() - projectCreated.getTime()) : 0;
   const isNewProject = projectAge < (periodDays * 864e5); // Project created within the period
   const isInactive = !lastActivityAt || (!isNewProject && (Date.now() - lastActivityAt.getTime()) > (periodDays * 864e5));
   const health = computeHealth({ t, n, dormant: isInactive });
-  
+
   return {
     lastActivityAt,
     isInactive,
     health,
-    tasks: { open: t.open || 0, overdue: t.overdue || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
-    notes: { lastStatusAt: null, decisions7d: 0, risks7d: 0 },
+    tasks: { total: t.total || 0, open: t.open || 0, done: t.done || 0, overdue: t.overdue || 0, dueSoon: t.dueSoon || 0, next: t.next || [] },
+    notes: { total: counts.notesTotal || 0, recentCount: n.notes7d || 0 },
+    links: { total: counts.linksTotal || 0 },
+    files: { total: counts.filesTotal || 0 },
+    noteSessions: { total: counts.sessionsTotal || 0 },
     heat: { notes: n.notes7d || 0, tasksChanged: t.changedInPeriod || 0 }
   };
 };
@@ -209,6 +215,51 @@ Meteor.methods({
     const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, noteFields).fetchAsync();
     const notesData = processNotes(notesAll, projectIds, since);
 
+    // Fetch counts for notes, links, files, and sessions in parallel
+    const countsByProject = new Map();
+    const [allLinks, allFiles, allSessions] = await Promise.all([
+      LinksCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync(),
+      import('/imports/api/files/collections').then(m => m.FilesCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()).catch(() => []),
+      NoteSessionsCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()
+    ]);
+
+    // Initialize counts for all projects
+    for (const pid of projectIds) {
+      countsByProject.set(pid, { notesTotal: 0, linksTotal: 0, filesTotal: 0, sessionsTotal: 0 });
+    }
+
+    // Count notes (already fetched)
+    for (const n of notesAll) {
+      const pid = n.projectId || '';
+      if (countsByProject.has(pid)) {
+        countsByProject.get(pid).notesTotal += 1;
+      }
+    }
+
+    // Count links
+    for (const l of allLinks) {
+      const pid = l.projectId || '';
+      if (countsByProject.has(pid)) {
+        countsByProject.get(pid).linksTotal += 1;
+      }
+    }
+
+    // Count files
+    for (const f of allFiles) {
+      const pid = f.projectId || '';
+      if (countsByProject.has(pid)) {
+        countsByProject.get(pid).filesTotal += 1;
+      }
+    }
+
+    // Count sessions
+    for (const s of allSessions) {
+      const pid = s.projectId || '';
+      if (countsByProject.has(pid)) {
+        countsByProject.get(pid).sessionsTotal += 1;
+      }
+    }
+
     // Add project creation date to lastNoteAt calculation
     for (const p of projects) {
       const pid = p._id;
@@ -221,7 +272,7 @@ Meteor.methods({
 
     // Compose output using helper
     return projects.map((p) => {
-      const activity = calculateProjectActivity(p, tasksByProject, notesData, notesData.notesLastByProject, periodDays);
+      const activity = calculateProjectActivity(p, tasksByProject, notesData, notesData.notesLastByProject, countsByProject, periodDays);
       return {
         _id: p._id,
         name: p.name || '(untitled project)',
@@ -284,13 +335,13 @@ Meteor.methods({
 
   async 'ai.updatePreferences'(preferences) {
     check(preferences, Object);
-    
+
     // Validate AI preferences structure
-    const validModes = ['local', 'remote', 'auto'];
+    const validModes = ['local', 'remote'];
     const validFallbacks = ['none', 'local', 'remote'];
-    
+
     if (preferences.mode && !validModes.includes(preferences.mode)) {
-      throw new Meteor.Error('invalid-mode', 'Mode must be local, remote, or auto');
+      throw new Meteor.Error('invalid-mode', 'Mode must be local or remote');
     }
     
     if (preferences.fallback && !validFallbacks.includes(preferences.fallback)) {

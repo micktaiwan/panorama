@@ -76,7 +76,14 @@ export const toPointId = (kind, id) => {
 
 export const makePreview = (text, max = 180) => {
   const s = String(text || '').replace(/\s+/g, ' ').trim();
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+  if (s.length <= max) return s;
+
+  // Use Array.from to handle surrogate pairs correctly
+  // This ensures we don't split in the middle of emoji or other multi-byte characters
+  const chars = Array.from(s);
+  if (chars.length <= max - 1) return s;
+
+  return chars.slice(0, max - 1).join('') + '…';
 };
 
 export const embedText = async (text) => {

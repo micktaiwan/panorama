@@ -294,6 +294,72 @@ Meteor.methods({
       console.log(`[GMAIL API] Error details:`, errorDetails);
     }
 
+    // Sync labels for existing messages (limit to 50 most recent)
+    let syncCount = 0;
+    let syncSuccessCount = 0;
+    let syncErrorCount = 0;
+    const syncErrorDetails = [];
+
+    if (existingIds.size > 0) {
+      console.log(`[GMAIL API] Syncing labels for ${existingIds.size} existing messages (limited to 50 most recent)`);
+
+      const existingMessagesToSync = await GmailMessagesCollection.find(
+        { id: { $in: Array.from(existingIds) } },
+        {
+          fields: { id: 1, labelIds: 1 },
+          sort: { gmailDate: -1 },
+          limit: 50
+        }
+      ).fetchAsync();
+
+      syncCount = existingMessagesToSync.length;
+
+      for (const existingMsg of existingMessagesToSync) {
+        try {
+          logApiCall('GET', `/messages/${existingMsg.id}`, 'Sync labels');
+
+          const messageResponse = await gmail.users.messages.get({
+            userId: 'me',
+            id: existingMsg.id,
+            format: 'minimal'
+          });
+
+          const currentLabelIds = messageResponse.data.labelIds || [];
+          const storedLabelIds = existingMsg.labelIds || [];
+
+          // Check if labels have changed
+          const sortedCurrentLabels = [...currentLabelIds].sort((a, b) => a.localeCompare(b));
+          const sortedStoredLabels = [...storedLabelIds].sort((a, b) => a.localeCompare(b));
+          const labelsChanged = JSON.stringify(sortedCurrentLabels) !== JSON.stringify(sortedStoredLabels);
+
+          if (labelsChanged) {
+            await GmailMessagesCollection.updateAsync(
+              { id: existingMsg.id },
+              { $set: { labelIds: currentLabelIds, labelsSyncedAt: new Date() } }
+            );
+            console.log(`[GMAIL API] Updated labels for message ${existingMsg.id}`);
+          }
+
+          syncSuccessCount++;
+        } catch (error) {
+          syncErrorCount++;
+          const errorMessage = error?.message || 'Unknown error';
+
+          console.error(`[GMAIL API ERROR] Failed to sync labels for message ${existingMsg.id}:`, error);
+
+          syncErrorDetails.push({
+            messageId: existingMsg.id,
+            error: errorMessage
+          });
+        }
+      }
+
+      console.log(`[GMAIL API] Label sync completed: ${syncSuccessCount} successful, ${syncErrorCount} errors`);
+      if (syncErrorCount > 0) {
+        console.log(`[GMAIL API] Sync error details:`, syncErrorDetails);
+      }
+    }
+
     console.log(`[GMAIL API] Total API calls made: ${apiCallCount}`);
     return {
       messages: messages,
@@ -301,7 +367,11 @@ Meteor.methods({
       totalMessages: messages.length,
       successCount: successCount,
       errorCount: errorCount,
-      errorDetails: errorDetails
+      errorDetails: errorDetails,
+      syncedCount: syncCount,
+      syncSuccessCount: syncSuccessCount,
+      syncErrorCount: syncErrorCount,
+      syncErrorDetails: syncErrorDetails
     };
   },
 
@@ -418,7 +488,7 @@ Meteor.methods({
 
   async 'gmail.addLabel'(messageId, labelId) {
     logApiCall('POST', `/messages/${messageId}/modify`, `Add label: ${labelId}`);
-    
+
     await ensureValidTokens();
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -430,11 +500,131 @@ Meteor.methods({
       },
     });
 
+    // Update local collection
+    const email = await GmailMessagesCollection.findOneAsync({ id: messageId });
+    if (email) {
+      const currentLabels = email.labelIds || [];
+      if (!currentLabels.includes(labelId)) {
+        await GmailMessagesCollection.updateAsync(
+          { id: messageId },
+          { $set: { labelIds: [...currentLabels, labelId] } }
+        );
+      }
+    }
+
     console.log(`[GMAIL API] Label ${labelId} added to message ${messageId}`);
     return { success: true };
   },
 
+  async 'gmail.removeLabel'(messageId, labelId) {
+    logApiCall('POST', `/messages/${messageId}/modify`, `Remove label: ${labelId}`);
 
+    await ensureValidTokens();
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: {
+        removeLabelIds: [labelId],
+      },
+    });
+
+    // Update local collection
+    const email = await GmailMessagesCollection.findOneAsync({ id: messageId });
+    if (email) {
+      const currentLabels = email.labelIds || [];
+      await GmailMessagesCollection.updateAsync(
+        { id: messageId },
+        { $set: { labelIds: currentLabels.filter(l => l !== labelId) } }
+      );
+    }
+
+    console.log(`[GMAIL API] Label ${labelId} removed from message ${messageId}`);
+    return { success: true };
+  },
+
+  async 'gmail.listLabels'() {
+    logApiCall('GET', '/labels', 'List all labels');
+
+    await ensureValidTokens();
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    const response = await gmail.users.labels.list({
+      userId: 'me',
+    });
+
+    const labels = response.data.labels || [];
+    console.log(`[GMAIL API] Found ${labels.length} labels`);
+
+    return labels;
+  },
+
+  async 'gmail.createLabel'(labelName) {
+    logApiCall('POST', '/labels', `Create label: ${labelName}`);
+
+    if (!labelName || typeof labelName !== 'string' || labelName.trim().length === 0) {
+      throw new Meteor.Error('invalid-label-name', 'Label name is required and must be a non-empty string');
+    }
+
+    await ensureValidTokens();
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    try {
+      // Check if label already exists
+      const existingLabels = await gmail.users.labels.list({ userId: 'me' });
+      const labelExists = existingLabels.data.labels?.find(
+        label => label.name.toLowerCase() === labelName.trim().toLowerCase()
+      );
+
+      if (labelExists) {
+        console.log(`[GMAIL API] Label "${labelName}" already exists with ID: ${labelExists.id}`);
+        return {
+          success: true,
+          label: labelExists,
+          alreadyExists: true
+        };
+      }
+
+      // Create new label
+      const response = await gmail.users.labels.create({
+        userId: 'me',
+        requestBody: {
+          name: labelName.trim(),
+          labelListVisibility: 'labelShow',
+          messageListVisibility: 'show'
+        }
+      });
+
+      const newLabel = response.data;
+      console.log(`[GMAIL API] Created label "${labelName}" with ID: ${newLabel.id}`);
+
+      return {
+        success: true,
+        label: newLabel,
+        alreadyExists: false
+      };
+    } catch (error) {
+      console.error(`[GMAIL API ERROR] Failed to create label "${labelName}":`, error);
+
+      // Check if it's an OAuth2/token error
+      const errorMessage = error.message || 'Unknown error';
+      const isOAuthError = errorMessage.includes('oauth2') ||
+                          errorMessage.includes('token') ||
+                          errorMessage.includes('unauthorized') ||
+                          errorMessage.includes('authentication') ||
+                          error.code === 401;
+
+      if (isOAuthError) {
+        // Clear invalid tokens
+        await GmailTokensCollection.removeAsync({});
+        console.log('[GMAIL API] Cleared invalid tokens due to OAuth error');
+        throw new Meteor.Error('oauth-expired', 'Gmail connection expired. Please reconnect to Gmail.');
+      }
+
+      throw new Meteor.Error('create-label-failed', `Failed to create label: ${errorMessage}`);
+    }
+  },
 
   // Method to get API call statistics
   'gmail.getApiStats'() {
@@ -902,13 +1092,13 @@ Labels: ${emailContext.labels.join(', ')}
 Snippet: ${emailContext.snippet}
 Body preview: ${emailContext.bodyPreview}`;
 
-    // Call LLM
+    // Call LLM - always use remote (OpenAI) for cron-based analysis
     const response = await chatComplete({
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
       temperature: 0.1,
       maxTokens: 200,
-      route: ctaPrefs.model || 'local'
+      route: 'remote'  // Force remote LLM for automatic email analysis
     });
 
     let suggestion;

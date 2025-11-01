@@ -1,8 +1,13 @@
 // MCP Server - JSON-RPC 2.0 Handler
 // Implements Model Context Protocol for Panorama
+// Enhanced with middleware for observability and loop protection
 
 import { PANORAMA_MCP_TOOLS } from './handlers/index';
 import { callPanoramaTool } from './handlers/adapter';
+import {
+  detectInfiniteLoop,
+  logToolCall
+} from '/imports/api/tools/middleware';
 
 // MCP Protocol version
 const MCP_PROTOCOL_VERSION = '2024-11-05';
@@ -122,9 +127,13 @@ async function handleToolsList(params) {
 
 /**
  * Handle tools/call method - Execute a specific tool
+ * Enhanced with middleware for logging and loop detection
  */
 async function handleToolsCall(params) {
-  console.log('[mcp] Tool call:', { name: params?.name });
+  const startTime = Date.now();
+  const toolName = params?.name;
+
+  console.log('[mcp] Tool call:', { name: toolName });
 
   // Validate params
   if (!params || typeof params !== 'object') {
@@ -143,10 +152,42 @@ async function handleToolsCall(params) {
     throw new Error(`Unknown tool: ${name}`);
   }
 
-  // Execute the tool via adapter
-  const result = await callPanoramaTool(name, args || {});
+  let success = false;
+  let error = null;
+  let result = null;
 
-  return result;
+  try {
+    // 1. Check for infinite loops (protection anti-boucle)
+    detectInfiniteLoop(name);
+
+    // 2. Execute the tool via adapter
+    result = await callPanoramaTool(name, args || {});
+    success = true;
+
+    return result;
+
+  } catch (err) {
+    success = false;
+    error = err.message || 'Unknown error';
+    throw err; // Re-throw to preserve error handling
+
+  } finally {
+    // 3. Log the call (always, even if it failed)
+    const duration = Date.now() - startTime;
+    const resultSize = result?.content?.[0]?.text ?
+      String(result.content[0].text).length : 0;
+
+    await logToolCall({
+      toolName: name,
+      args: args || {},
+      success,
+      error,
+      duration,
+      resultSize,
+      source: 'mcp',
+      metadata: {}
+    });
+  }
 }
 
 /**
