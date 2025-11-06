@@ -1,0 +1,61 @@
+.mcpServerForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.formGroup label {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.formGroup input[type="text"],
+.formGroup input[type="url"],
+.formGroup select,
+.formGroup textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.formGroup input[type="text"]:focus,
+.formGroup input[type="url"]:focus,
+.formGroup select:focus,
+.formGroup textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.formGroup input[type="checkbox"] {
+  margin-right: 4px;
+}
+
+.formGroup textarea {
+  font-family: monospace;
+  resize: vertical;
+}
+
+.formHelp {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}

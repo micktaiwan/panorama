@@ -1,0 +1,147 @@
+.mcpServers {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.mcpServers-loading {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.mcpServers-intro {
+  margin-bottom: 24px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+
+.mcpServers-intro p {
+  margin: 0;
+}
+
+.mcpServers-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+
+.mcpServers-empty p {
+  margin: 8px 0;
+}
+
+.mcpServers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mcpServer-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  background: var(--bg);
+}
+
+.mcpServer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.mcpServer-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcpServer-name {
+  font-weight: 500;
+  font-size: 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcpServer-type {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.mcpServer-status {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.mcpServer-command,
+.mcpServer-url {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.mcpServer-command code,
+.mcpServer-url code {
+  padding: 2px 6px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.mcpServer-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mcpServer-meta {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.mcpServer-lastConnected {
+  color: var(--text-muted);
+}
+
+.mcpServer-error {
+  color: var(--error);
+  margin-top: 4px;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-stdio {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.badge-http {
+  background: var(--secondary-light);
+  color: var(--secondary);
+}
+
+.badge-success {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.badge-muted {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
