@@ -129,6 +129,17 @@ For IMPORTANT emails:
 
 ## Email Classification Guidelines
 
+### ❌ NEVER Archive (Protected Emails)
+**These emails MUST stay in inbox - never suggest archiving:**
+- Emails with label **STARRED** - User explicitly marked as important
+- Emails with label **RED_CIRCLE** - User marked with red flag
+- Emails with label **SENT** - User's own sent emails
+- Emails in active conversations (user replied within last 7 days)
+- Emails from ongoing recruitment/hiring discussions
+- Emails with attachments that haven't been reviewed
+
+**Critical Rule:** Before suggesting archiving, ALWAYS check for these labels. If present, skip the email.
+
 ### ✅ Important Emails (Keep in Inbox)
 - Personal correspondence requiring response
 - Business decisions or approvals needed
@@ -137,21 +148,26 @@ For IMPORTANT emails:
 - Security alerts or critical notifications
 - Financial transactions requiring review
 - Legal or compliance matters
+- Active recruitment/commercial discussions with multiple exchanges
 
-### 📧 Archivable Emails
-- Newsletters and marketing emails
-- Automated notifications (successful payments, account activity)
+### 📧 High Probability Archivable Emails
+**Automatically suggest archiving these:**
+- Emails from **donotreply@** or **noreply@** addresses
+- Newsletters (TLDR, Tech.Rocks, Substack, etc.)
+- Automated service notifications (Cursor, Composio, GitHub, etc.)
 - Social media notifications
 - Promotional offers without time sensitivity
-- Already-handled conversations
-- FYI emails with no action required
+- Event invitations for past dates (event date < today)
+- Already-handled conversations (no reply > 30 days)
 - Subscription confirmations
+- Marketing emails from CATEGORY_PROMOTIONS or CATEGORY_UPDATES
 
 ### 🤔 Ask User When Uncertain
 - Emails from unknown senders with unclear intent
 - Complex threads with multiple participants
 - Emails that might require domain knowledge
 - Potentially important but ambiguous content
+- Emails with important-sounding subjects but from marketing addresses
 
 ## Interaction Guidelines
 
