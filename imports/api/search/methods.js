@@ -568,10 +568,14 @@ Meteor.methods({
           try {
             await client.upsert(COLLECTION(), { points });
             const st = indexJobs.get(jobId);
-            st?.upserts && (st.upserts += points.length);
+            if (st) {
+              st.upserts = (st.upserts || 0) + points.length;
+            }
           } catch (e) {
             const st = indexJobs.get(jobId);
-            st?.errors && (st.errors += points.length);
+            if (st) {
+              st.errors = (st.errors || 0) + points.length;
+            }
             const body = e?.response?.data || e?.response || e?.message || e;
             console.error('[qdrant.indexKind job] upsert failed', { batch: points.length, sample: points[0] && { id: points[0].id, len: points[0].vector?.length, payload: points[0].payload }, error: body });
           }
