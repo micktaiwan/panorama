@@ -143,20 +143,41 @@ Meteor.methods({
 
   async 'gmail.listMessages'(query = '', maxResults = 20) {
     logApiCall('GET', '/messages/list', `Query: "${query}", MaxResults: ${maxResults}`);
-    
+
     await ensureValidTokens();
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     // Always filter to show only inbox emails (not archived)
     const searchQuery = query ? `in:inbox ${query}` : 'in:inbox';
 
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      q: searchQuery,
-      maxResults: maxResults,
-    });
+    // Fetch all messages with pagination
+    let allMessages = [];
+    let pageToken = null;
+    const perPageLimit = 100; // Gmail API limit is 500, but we use 100 for safety
 
-    const messages = response.data.messages || [];
+    do {
+      const response = await gmail.users.messages.list({
+        userId: 'me',
+        q: searchQuery,
+        maxResults: perPageLimit,
+        pageToken: pageToken
+      });
+
+      const messages = response.data.messages || [];
+      allMessages = allMessages.concat(messages);
+      pageToken = response.data.nextPageToken;
+
+      console.log(`[GMAIL API] Fetched ${messages.length} messages (total: ${allMessages.length}/${maxResults})`);
+
+      // Stop if we've reached the requested maxResults
+      if (allMessages.length >= maxResults) {
+        allMessages = allMessages.slice(0, maxResults);
+        break;
+      }
+    } while (pageToken);
+
+    const messages = allMessages;
+    console.log(`[GMAIL API] Total messages fetched: ${messages.length}`);
     
     // Get existing message IDs to avoid re-downloading
     const existingIds = new Set();
@@ -1567,5 +1588,27 @@ Meteor.methods({
     });
 
     return { success: true };
+  },
+
+  async 'emails.clearCache'() {
+    logApiCall('POST', '/clear-cache', 'Clear all emails from local cache');
+
+    try {
+      const count = await GmailMessagesCollection.find({}).countAsync();
+      console.log(`[CLEAR CACHE] Removing ${count} emails from local cache`);
+
+      await GmailMessagesCollection.removeAsync({});
+
+      console.log('[CLEAR CACHE] Email cache cleared successfully');
+
+      return {
+        success: true,
+        removedCount: count,
+        message: `Cleared ${count} emails from cache`
+      };
+    } catch (error) {
+      console.error('[CLEAR CACHE ERROR] Failed to clear email cache:', error);
+      throw new Meteor.Error('clear-cache-failed', `Failed to clear cache: ${error.message}`);
+    }
   }
 });
