@@ -28,6 +28,8 @@ export const parseHashRoute = () => {
   if (parts[0] === 'notes') return { name: 'notes', noteId: parts[1] };
   if (parts[0] === 'emails') return { name: 'emails' };
   if (parts[0] === 'inbox-zero') return { name: 'inboxZero' };
+  if (parts[0] === 'notion-reporting') return { name: 'notionReporting' };
+  if (parts[0] === 'mcp-servers') return { name: 'mcpServers' };
   return { name: 'home' };
 };
 
@@ -107,6 +109,12 @@ export const navigateTo = (route) => {
       break;
     case 'inboxZero':
       window.location.hash = '#/inbox-zero';
+      break;
+    case 'notionReporting':
+      window.location.hash = '#/notion-reporting';
+      break;
+    case 'mcpServers':
+      window.location.hash = '#/mcp-servers';
       break;
     default:
       window.location.hash = '#/';

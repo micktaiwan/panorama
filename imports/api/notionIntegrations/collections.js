@@ -69,6 +69,38 @@ export const NOTION_INTEGRATION_SCHEMA = {
     optional: true,
     description: 'Timestamp of last successful sync'
   },
+  syncInProgress: {
+    type: Boolean,
+    optional: true,
+    defaultValue: false,
+    description: 'Whether a sync operation is currently running'
+  },
+  syncProgress: {
+    type: Object,
+    optional: true,
+    description: 'Current sync progress information'
+  },
+  'syncProgress.current': {
+    type: Number,
+    optional: true,
+    description: 'Number of tickets synced so far'
+  },
+  'syncProgress.pageCount': {
+    type: Number,
+    optional: true,
+    description: 'Number of pages fetched so far'
+  },
+  'syncProgress.status': {
+    type: String,
+    optional: true,
+    description: 'Current status message'
+  },
+  syncCancelRequested: {
+    type: Boolean,
+    optional: true,
+    defaultValue: false,
+    description: 'Whether user requested to cancel the current sync'
+  },
   enabled: {
     type: Boolean,
     defaultValue: true,
