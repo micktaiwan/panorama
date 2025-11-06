@@ -587,6 +587,20 @@ export const Preferences = () => {
           </div>
         </div>
         <div className="prefsRow">
+          <div className="prefsLabel">MCP Servers</div>
+          <div className="prefsValue">
+            <div className="muted" style={{ marginBottom: '8px', fontSize: '13px' }}>
+              Configure external MCP servers (Notion, Google Calendar, etc.)
+            </div>
+            <button
+              className="btn"
+              onClick={() => navigateTo({ name: 'mcpServers' })}
+            >
+              Manage MCP Servers
+            </button>
+          </div>
+        </div>
+        <div className="prefsRow">
           <div className="prefsLabel">Pennylane Base URL</div>
           <div className="prefsValue">
             <InlineEditable
