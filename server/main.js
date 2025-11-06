@@ -118,6 +118,21 @@ import '/imports/api/emails/collections';
 import '/imports/api/emails/publications';
 import '/imports/api/emails/methods';
 
+// Notion Integration
+import '/imports/api/notionIntegrations/collections';
+import '/imports/api/notionIntegrations/publications';
+import '/imports/api/notionIntegrations/methods';
+
+// Notion Tickets (Persisted)
+import '/imports/api/notionTickets/collections';
+import '/imports/api/notionTickets/publications';
+import '/imports/api/notionTickets/methods';
+
+// MCP Servers Management
+import '/imports/api/mcpServers/collections';
+import '/imports/api/mcpServers/publications';
+import '/imports/api/mcpServers/methods';
+
 Meteor.startup(async () => {
   // Ensure AI mode defaults to 'remote' on first launch
   const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');

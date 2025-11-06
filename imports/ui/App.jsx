@@ -42,6 +42,8 @@ import { NotesPage } from '/imports/ui/Notes/NotesPage.jsx';
 import { WebPage } from '/imports/ui/Web/WebPage.jsx';
 import { EmailsPage } from '/imports/ui/Emails/EmailsPage.jsx';
 import { InboxZero } from '/imports/ui/Emails/InboxZero.jsx';
+import { NotionReporting } from '/imports/ui/NotionReporting/NotionReporting.jsx';
+import { MCPServers } from '/imports/ui/MCPServers/MCPServers.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -711,6 +713,16 @@ function App() {
           <InboxZero />
         </div>
       )}
+      {route?.name === 'notionReporting' && (
+        <div className="panel">
+          <NotionReporting />
+        </div>
+      )}
+      {route?.name === 'mcpServers' && (
+        <div className="panel">
+          <MCPServers />
+        </div>
+      )}
       {route?.name === 'onboarding' && (
         <div className="panel">
           <Onboarding />
@@ -924,6 +936,8 @@ function App() {
           <a href="#/userlog" onClick={(e) => { e.preventDefault(); goUserLog(); }}>Journal</a>
           <span className="dot">·</span>
           <a href="#/emails" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'emails' }); }}>Emails</a>
+          <span className="dot">·</span>
+          <a href="#/notion-reporting" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'notionReporting' }); }}>Notion</a>
           <span className="dot">·</span>
           <a href="#/width" onClick={(e) => { e.preventDefault(); setWide(v => !v); }}>{wide ? 'Width: 90%' : 'Width: 1100px'}</a>
         </span>

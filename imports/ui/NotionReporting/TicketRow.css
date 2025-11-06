@@ -1,0 +1,107 @@
+.ticketRow {
+  /* Styles inherited from parent table */
+}
+
+.ticketId {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ticketTitle {
+  font-weight: 500;
+  max-width: 300px;
+}
+
+.ownersList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ownerBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.ticketAge {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.priorityBadge,
+.lifecycleBadge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.priorityBadge.priority-high {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.priorityBadge.priority-medium {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.priorityBadge.priority-low {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.priorityBadge.priority-none {
+  background: var(--bg-tertiary);
+  color: var(--muted);
+}
+
+.lifecycleBadge.lifecycle-ongoing {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.lifecycleBadge.lifecycle-delivering {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.lifecycleBadge.lifecycle-rd {
+  background: #e9d5ff;
+  color: #6b21a8;
+}
+
+.lifecycleBadge.lifecycle-shaped {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.lifecycleBadge.lifecycle-discovered {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.lifecycleBadge.lifecycle-none {
+  background: var(--bg-tertiary);
+  color: var(--muted);
+}
+
+.ticketNextStep {
+  max-width: 200px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ticketActions {
+  white-space: nowrap;
+}
