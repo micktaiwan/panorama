@@ -365,6 +365,19 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_deleteNote',
+    description: 'Delete a note by ID. Use when the user wants to remove/delete a note permanently.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        noteId: { type: 'string', description: 'Note ID (required)' }
+      },
+      required: ['noteId']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_createLink',
     description: 'Create a new web link/bookmark with a name and URL. Optionally associate with a project.',
     parameters: {
@@ -536,6 +549,17 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ['labelName']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_mcpServersSync',
+    description: 'Sync MCP server configurations from Claude Desktop config. Reads claude_desktop_config.json and imports server configurations into Panorama. Use when the user wants to import their existing MCP servers from Claude Desktop.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+      required: []
     }
   },
 ];
