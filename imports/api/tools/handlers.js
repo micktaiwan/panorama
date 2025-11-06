@@ -334,10 +334,19 @@ export const TOOL_HANDLERS = {
       } else if (collection === 'emails') {
         const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
         cursor = GmailMessagesCollection;
+      } else if (collection === 'mcpServers') {
+        const { MCPServersCollection } = await import('/imports/api/mcpServers/collections');
+        cursor = MCPServersCollection;
+      } else if (collection === 'notionIntegrations') {
+        const { NotionIntegrationsCollection } = await import('/imports/api/notionIntegrations/collections');
+        cursor = NotionIntegrationsCollection;
+      } else if (collection === 'notionTickets') {
+        const { NotionTicketsCollection } = await import('/imports/api/notionTickets/collections');
+        cursor = NotionTicketsCollection;
       } else {
         return buildErrorResponse(`Unsupported collection: ${collection}`, 'tool_collectionQuery', {
           code: 'INVALID_COLLECTION',
-          suggestion: 'Use one of: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails'
+          suggestion: 'Use one of: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets'
         });
       }
       const fields = select.length > 0 ? Object.fromEntries(select.map(f => [f, 1])) : undefined;
@@ -609,6 +618,29 @@ export const TOOL_HANDLERS = {
 
     return buildSuccessResponse(result, 'tool_updateNote', { policy: 'write' });
   },
+  async tool_deleteNote(args, memory) {
+    const noteId = String(args?.noteId || '').trim();
+    if (!noteId) {
+      return buildErrorResponse('noteId is required', 'tool_deleteNote', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide noteId parameter'
+      });
+    }
+
+    try {
+      await Meteor.callAsync('notes.remove', noteId);
+
+      const result = { deleted: true, noteId };
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.noteId = noteId;
+      }
+
+      return buildSuccessResponse(result, 'tool_deleteNote', { policy: 'write' });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_deleteNote');
+    }
+  },
   async tool_createLink(args, memory) {
     const name = String(args?.name || '').trim();
     const url = String(args?.url || '').trim();
@@ -677,7 +709,7 @@ export const TOOL_HANDLERS = {
     return buildSuccessResponse({ userLogs: mapped, total: mapped.length }, 'tool_userLogsFilter');
   },
   async tool_emailsUpdateCache(args, memory) {
-    const maxResults = Math.min(100, Math.max(1, Number(args?.maxResults) || 20));
+    const maxResults = Math.min(500, Math.max(1, Number(args?.maxResults) || 20));
 
     try {
       // Call the Gmail method to fetch and cache new messages
@@ -1039,7 +1071,14 @@ export const TOOL_HANDLERS = {
         gmailMessageId = email.id;
       }
 
+      // Add label via Gmail API
       await Meteor.callAsync('gmail.addLabel', gmailMessageId, labelId);
+
+      // Update local DB to keep it in sync
+      await GmailMessagesCollection.updateAsync(
+        { id: gmailMessageId },
+        { $addToSet: { labelIds: labelId } }
+      );
 
       return buildSuccessResponse({
         success: true,
@@ -1073,7 +1112,14 @@ export const TOOL_HANDLERS = {
         gmailMessageId = email.id;
       }
 
+      // Remove label via Gmail API
       await Meteor.callAsync('gmail.removeLabel', gmailMessageId, labelId);
+
+      // Update local DB to keep it in sync
+      await GmailMessagesCollection.updateAsync(
+        { id: gmailMessageId },
+        { $pull: { labelIds: labelId } }
+      );
 
       return buildSuccessResponse({
         success: true,
@@ -1113,6 +1159,153 @@ export const TOOL_HANDLERS = {
     } catch (error) {
       console.error('[tool_emailsCreateLabel] Error:', error);
       throw new Error(`Failed to create Gmail label: ${error.message}`);
+    }
+  },
+
+  /**
+   * Sync MCP servers from Claude Desktop config
+   * Reads claude_desktop_config.json and imports server configurations
+   */
+  async tool_mcpServersSync(args, memory) {
+    try {
+      const fs = await import('fs/promises');
+      const os = await import('os');
+      const path = await import('path');
+
+      // Determine config path based on OS
+      const homeDir = os.homedir();
+      let configPath;
+
+      if (process.platform === 'darwin') {
+        // macOS
+        configPath = path.join(homeDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+      } else if (process.platform === 'win32') {
+        // Windows
+        configPath = path.join(homeDir, 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json');
+      } else {
+        // Linux
+        configPath = path.join(homeDir, '.config', 'Claude', 'claude_desktop_config.json');
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(configPath);
+      } catch (error) {
+        return buildErrorResponse(
+          `Claude Desktop config not found at: ${configPath}`,
+          'tool_mcpServersSync',
+          { source: 'filesystem', policy: 'read_only' }
+        );
+      }
+
+      // Read and parse config
+      const configContent = await fs.readFile(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+
+      if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+        return buildErrorResponse(
+          'No MCP servers found in Claude Desktop config',
+          'tool_mcpServersSync',
+          { source: 'filesystem', policy: 'read_only' }
+        );
+      }
+
+      const { MCPServersCollection } = await import('/imports/api/mcpServers/collections');
+
+      const results = {
+        imported: [],
+        skipped: [],
+        errors: []
+      };
+
+      // Import each server
+      for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
+        try {
+          // Check if server already exists
+          const existing = await MCPServersCollection.findOneAsync({ name: serverName });
+          if (existing) {
+            results.skipped.push({
+              name: serverName,
+              reason: 'Already exists'
+            });
+            continue;
+          }
+
+          // Determine server type (stdio or http)
+          let type, serverDoc;
+
+          if (serverConfig.command) {
+            // stdio type
+            type = 'stdio';
+            serverDoc = {
+              name: serverName,
+              type: 'stdio',
+              command: serverConfig.command,
+              args: serverConfig.args || [],
+              env: serverConfig.env || {},
+              enabled: true,
+              createdAt: new Date()
+            };
+          } else if (serverConfig.url) {
+            // http type
+            type = 'http';
+            serverDoc = {
+              name: serverName,
+              type: 'http',
+              url: serverConfig.url,
+              headers: serverConfig.headers || {},
+              enabled: true,
+              createdAt: new Date()
+            };
+          } else {
+            results.errors.push({
+              name: serverName,
+              reason: 'Unknown server type (no command or url)'
+            });
+            continue;
+          }
+
+          // Insert server
+          const serverId = await MCPServersCollection.insertAsync(serverDoc);
+          results.imported.push({
+            name: serverName,
+            type,
+            id: serverId
+          });
+
+        } catch (error) {
+          console.error(`[tool_mcpServersSync] Error importing ${serverName}:`, error);
+          results.errors.push({
+            name: serverName,
+            reason: error.message
+          });
+        }
+      }
+
+      if (memory) {
+        memory.lastSync = {
+          imported: results.imported.length,
+          skipped: results.skipped.length,
+          errors: results.errors.length
+        };
+      }
+
+      return buildSuccessResponse({
+        summary: {
+          total: results.imported.length + results.skipped.length + results.errors.length,
+          imported: results.imported.length,
+          skipped: results.skipped.length,
+          errors: results.errors.length
+        },
+        imported: results.imported,
+        skipped: results.skipped,
+        errors: results.errors,
+        configPath
+      }, 'tool_mcpServersSync', { source: 'filesystem', policy: 'write' });
+
+    } catch (error) {
+      console.error('[tool_mcpServersSync] Error:', error);
+      throw new Error(`Failed to sync MCP servers: ${error.message}`);
     }
   }
 };

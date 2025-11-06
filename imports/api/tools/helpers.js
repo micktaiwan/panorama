@@ -212,7 +212,9 @@ export const FIELD_ALLOWLIST = {
   files: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt'],
   alarms: ['_id', 'title', 'enabled', 'when', 'createdAt', 'updatedAt'],
   userLogs: ['_id', 'content', 'createdAt'],
-  emails: ['_id', 'id', 'threadId', 'from', 'to', 'subject', 'snippet', 'body', 'gmailDate', 'labelIds', 'createdAt']
+  emails: ['_id', 'id', 'threadId', 'from', 'to', 'subject', 'snippet', 'body', 'gmailDate', 'labelIds', 'createdAt'],
+  notionIntegrations: ['_id', 'name', 'databaseId', 'description', 'filters', 'ownerMapping', 'pageSize', 'enabled', 'lastSyncAt', 'syncInProgress', 'syncProgress', 'syncCancelRequested', 'createdAt'],
+  notionTickets: ['_id', 'integrationId', 'notionId', 'id', 'title', 'owners', 'age', 'priority', 'lifecycle', 'nextStep', 'url', 'syncedAt', 'createdAt', 'updatedAt']
 };
 
 // Map collection name to lists.* memory key
@@ -230,7 +232,10 @@ export const getListKeyForCollection = (collection) => {
     files: 'files',
     alarms: 'alarms',
     userLogs: 'userLogs',
-    emails: 'emails'
+    emails: 'emails',
+    mcpServers: 'mcpServers',
+    notionIntegrations: 'notionIntegrations',
+    notionTickets: 'notionTickets'
   };
   return map[c] || c;
 };
