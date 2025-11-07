@@ -129,7 +129,7 @@ When using these features, explain your reasoning to the user.
 
 ## Error Handling
 
-- If MCP tools are unavailable, explain the limitation clearly and suggest alternatives
+- **CRITICAL: MCP Availability Check** - If MCP tools are unavailable when attempting to perform an operation (create task, note, project, etc.), you MUST immediately stop and ask the user to reconnect to the MCP server using the `/mcp` command. DO NOT attempt to find alternative methods (HTTP API, shell commands, etc.) to accomplish the task. The user expects all Panorama operations to go through MCP.
 - If data is missing or ambiguous, ask for clarification rather than guessing
 - If an operation fails, provide actionable troubleshooting steps
 
