@@ -303,3 +303,93 @@ export const compileWhere = (collection, where = {}) => {
   };
   return compileNode(where);
 };
+
+/**
+ * Common pre-configured queries for frequent operations
+ * Use these to avoid repeating complex query logic
+ *
+ * Usage:
+ *   const query = COMMON_QUERIES.tasksWithDeadline;
+ *   // or
+ *   const query = getCommonQuery('tasksWithDeadline');
+ */
+export const COMMON_QUERIES = {
+  // Tasks with deadline (sorted by deadline ascending)
+  tasksWithDeadline: {
+    where: {
+      and: [
+        { status: { in: ['todo', 'in_progress'] } },
+        { deadline: { ne: null } }
+      ]
+    },
+    sort: { deadline: 1 }
+  },
+
+  // Urgent tasks (not done)
+  urgentTasks: {
+    where: {
+      and: [
+        { status: { ne: 'done' } },
+        { isUrgent: { eq: true } }
+      ]
+    }
+  },
+
+  // Important tasks (not done)
+  importantTasks: {
+    where: {
+      and: [
+        { status: { ne: 'done' } },
+        { isImportant: { eq: true } }
+      ]
+    }
+  },
+
+  // Overdue tasks (deadline passed)
+  overdueTasks: {
+    where: {
+      and: [
+        { status: { ne: 'done' } },
+        { deadline: { lt: new Date().toISOString() } }
+      ]
+    },
+    sort: { deadline: 1 }
+  },
+
+  // Todo tasks (status = todo)
+  todoTasks: {
+    where: {
+      status: { eq: 'todo' }
+    }
+  },
+
+  // In progress tasks
+  inProgressTasks: {
+    where: {
+      status: { eq: 'in_progress' }
+    }
+  },
+
+  // Active tasks (todo or in_progress)
+  activeTasks: {
+    where: {
+      status: { in: ['todo', 'in_progress'] }
+    }
+  }
+};
+
+/**
+ * Get a common query by name
+ *
+ * @param {string} queryName - Name of the common query
+ * @returns {object|null} Query object with where and optional sort, or null if not found
+ *
+ * @example
+ * const query = getCommonQuery('tasksWithDeadline');
+ * if (query) {
+ *   const cursor = TasksCollection.find(compileWhere('tasks', query.where));
+ * }
+ */
+export const getCommonQuery = (queryName) => {
+  return COMMON_QUERIES[queryName] || null;
+};

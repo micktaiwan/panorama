@@ -334,6 +334,19 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_deleteTask',
+    description: 'Delete a task by ID. Use when the user wants to remove/delete a task permanently.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (required)' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_createNote',
     description: 'Create a new note with title and optional content. Associate with a project if needed. Content can be markdown formatted.',
     parameters: {
