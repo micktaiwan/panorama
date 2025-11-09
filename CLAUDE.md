@@ -158,3 +158,74 @@ Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` 
 1. Update AI preferences in UI (Preferences → AI)
 2. **Rebuild Qdrant index** (Preferences → Qdrant → Rebuild)
 3. Verify search works with new model
+
+### MCP-First Policy (When Working with Panorama Data)
+
+**CRITICAL**: When Claude Code needs to access or manipulate Panorama data, **ALWAYS use MCP tools first**. Never bypass to direct database access (bash, mongosh, meteor shell) without exhausting all MCP options.
+
+#### The Rule
+
+1. **Try MCP tools with different parameters** before considering direct access
+2. **Check response metadata hints** for parameter suggestions
+3. **Consult COMMON_QUERIES** in `imports/api/tools/helpers.js` for pre-tested patterns
+4. **Create a new MCP tool** if none fit your need (see `docs/panorama_mcp_tool_creation.md`)
+5. **Only use direct access** as an absolute last resort for debugging or emergency fixes
+
+#### Why This Matters
+
+- **Observability**: All MCP calls logged to `toolCallLogs` with timing and status
+- **Safety**: Built-in validation, error handling, rate limiting
+- **Consistency**: Structured `{data, summary, metadata}` responses
+- **Future-proof**: Tools evolve with the codebase; one-off queries don't
+
+#### Example: The Wrong Way
+
+```bash
+# ❌ DON'T: Bypassing MCP when a query seems insufficient
+User: "List tasks with deadlines"
+Claude: [Calls tool_collectionQuery, gets unexpected results]
+Claude: "Let me use mongosh to query the database..."
+mongosh panorama --eval "db.tasks.find({deadline: {$ne: null}})"
+```
+
+#### Example: The Right Way
+
+```javascript
+// ✅ DO: Exhaust MCP options with different approaches
+User: "List tasks with deadlines"
+Claude: [Calls tool_collectionQuery with basic where clause]
+Claude: "Not quite right. Let me try tool_tasksFilter with refined parameters..."
+Claude: [Calls tool_tasksFilter with proper filters]
+// OR
+Claude: "Let me check COMMON_QUERIES for a pre-tested pattern..."
+Claude: [Uses COMMON_QUERIES.tasksWithDeadline via tool_collectionQuery]
+```
+
+#### Available MCP Tools
+
+Key tools for data access (see `imports/api/tools/definitions.js` for complete list):
+
+- **Tasks**: `tool_tasksByProject`, `tool_tasksFilter`, `tool_createTask`, `tool_updateTask`, `tool_deleteTask`
+- **Projects**: `tool_projectsList`, `tool_projectByName`, `tool_createProject`, `tool_updateProject`, `tool_projectsOverview`
+- **Notes**: `tool_notesByProject`, `tool_noteById`, `tool_createNote`, `tool_updateNote`, `tool_deleteNote`
+- **Search**: `tool_semanticSearch` (Qdrant), `tool_collectionQuery` (generic MongoDB DSL)
+- **Emails**: `tool_emailsSearch`, `tool_emailsRead`, `tool_emailsUpdateCache`
+
+#### Escalation Workflow
+
+When an MCP tool doesn't work:
+
+1. **Refine parameters**: Check metadata hints, try different filter combinations
+2. **Try related tools**: Use specialized tools (`tool_tasksFilter` vs `tool_collectionQuery`)
+3. **Check helpers**: Review `COMMON_QUERIES` in `helpers.js` for patterns
+4. **Create new tool**: Follow `docs/panorama_mcp_tool_creation.md` to extend the API
+5. **Direct access**: Only if debugging production issues or the tool can't be created immediately
+
+#### When Direct Access Is Acceptable
+
+- **Debugging production issues**: Quick diagnostic queries to understand a problem
+- **Schema migrations**: One-time bulk updates during development
+- **MCP server is down**: Emergency access when the MCP endpoint is unavailable
+- **Performance analysis**: Direct MongoDB queries to diagnose slow operations
+
+In all other cases: **Create a proper MCP tool instead of using one-off queries.**

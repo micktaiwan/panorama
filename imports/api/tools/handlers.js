@@ -12,7 +12,9 @@ import {
   buildFilterSelector,
   compileWhere,
   getListKeyForCollection,
-  FIELD_ALLOWLIST
+  FIELD_ALLOWLIST,
+  COMMON_QUERIES,
+  getCommonQuery
 } from '/imports/api/tools/helpers';
 import {
   buildSuccessResponse,
@@ -75,6 +77,35 @@ const fetchPreview = async (kind, rawId) => {
     default:
       return { title: '(doc)', text: '' };
   }
+};
+
+// Helper to detect if query could use a COMMON_QUERY
+const detectCommonQuery = (collection, where) => {
+  if (collection !== 'tasks') return null;
+
+  const whereStr = JSON.stringify(where || {});
+
+  // Check for tasks with deadline
+  if (whereStr.includes('deadline') && whereStr.includes('ne') && whereStr.includes('null')) {
+    return 'tasksWithDeadline';
+  }
+
+  // Check for urgent tasks
+  if (whereStr.includes('isUrgent') && whereStr.includes('true')) {
+    return 'urgentTasks';
+  }
+
+  // Check for important tasks
+  if (whereStr.includes('isImportant') && whereStr.includes('true')) {
+    return 'importantTasks';
+  }
+
+  // Check for overdue tasks
+  if (whereStr.includes('deadline') && (whereStr.includes('lt') || whereStr.includes('lte'))) {
+    return 'overdueTasks';
+  }
+
+  return null;
 };
 
 // Tool handlers object
@@ -358,9 +389,19 @@ export const TOOL_HANDLERS = {
         memory.lists = memory.lists || {};
         memory.lists[key] = list;
       }
+
+      // Detect if a COMMON_QUERY could be used and add hint in metadata
+      const commonQueryName = detectCommonQuery(collection, where);
+      const options = {};
+
+      if (commonQueryName) {
+        options.customSummary = `Found ${list.length} ${key} (tip: use COMMON_QUERIES.${commonQueryName} for this pattern)`;
+      }
+
       return buildSuccessResponse(
         { [key]: list, total: list.length },
-        'tool_collectionQuery'
+        'tool_collectionQuery',
+        options
       );
     } catch (error) {
       return buildErrorResponse(error, 'tool_collectionQuery');
@@ -561,6 +602,29 @@ export const TOOL_HANDLERS = {
     }
 
     return buildSuccessResponse(result, 'tool_updateTask', { policy: 'write' });
+  },
+  async tool_deleteTask(args, memory) {
+    const taskId = String(args?.taskId || '').trim();
+    if (!taskId) {
+      return buildErrorResponse('taskId is required', 'tool_deleteTask', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide taskId parameter'
+      });
+    }
+
+    try {
+      await Meteor.callAsync('tasks.remove', taskId);
+
+      const result = { deleted: true, taskId };
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.taskId = taskId;
+      }
+
+      return buildSuccessResponse(result, 'tool_deleteTask', { policy: 'write' });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_deleteTask');
+    }
   },
   async tool_createNote(args, memory) {
     const title = String(args?.title || '').trim();

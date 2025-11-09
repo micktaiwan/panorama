@@ -11,6 +11,7 @@
  * @param {string} options.policy - Access policy (e.g., 'read_only', 'write', 'delete')
  * @param {Date} options.cachedAt - When data was cached (if applicable)
  * @param {string} options.customSummary - Custom summary text (overrides auto-generated)
+ * @param {boolean} options.includeHint - Include MCP-first hint in metadata (default: true)
  * @returns {object} Response object with output property
  */
 export function buildSuccessResponse(data, toolName, options = {}) {
@@ -18,7 +19,8 @@ export function buildSuccessResponse(data, toolName, options = {}) {
     source = 'panorama_db',
     policy = 'read_only',
     cachedAt = null,
-    customSummary = null
+    customSummary = null,
+    includeHint = true
   } = options;
 
   // Auto-generate summary if not provided
@@ -31,7 +33,10 @@ export function buildSuccessResponse(data, toolName, options = {}) {
       source,
       policy,
       timestamp: new Date().toISOString(),
-      ...(cachedAt && { cachedAt: cachedAt.toISOString() })
+      ...(cachedAt && { cachedAt: cachedAt.toISOString() }),
+      ...(includeHint && {
+        hint: 'If this result is not what you expected, try different parameters or ask for a new MCP tool'
+      })
     }
   };
 
