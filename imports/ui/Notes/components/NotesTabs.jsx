@@ -45,14 +45,14 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       style={style}
       key={tab.id}
       className={`note-tab ${isActive ? 'active' : ''}`}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
       role="tab"
       tabIndex={0}
     >
       <div
         className="tab-draggable"
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
         {...attributes}
         {...listeners}
       >
