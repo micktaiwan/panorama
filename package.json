@@ -9,6 +9,9 @@
     "dev:electron": "wait-on http://localhost:3000 && electron .",
     "dev:desktop": "concurrently -k -n meteor,electron -c blue,green \"npm:dev:meteor\" \"npm:dev:electron\"",
     "dev:desktop:raw": "concurrently -k -n meteor,electron -c blue,green \"npm:dev:meteor:raw\" \"npm:dev:electron\"",
+    "dev:meteor:4000": "meteor run --port 4000 --settings settings.json",
+    "dev:electron:4000": "METEOR_PORT=4000 sh -c 'wait-on http://localhost:4000 && electron .'",
+    "dev:desktop:4000": "concurrently -k -n meteor,electron -c blue,green \"npm run dev:meteor:4000\" \"npm run dev:electron:4000\"",
     "test": "meteor test --once --driver-package meteortesting:mocha"
   },
   "dependencies": {
