@@ -22,7 +22,7 @@ describe('Tool handlers (TDD - nouvelle structure)', function () {
     assert.ok(parsed.total >= 0, 'Should have total count');
   });
 
-  it('tool_projectByName should find project by name', async function () {
+  it('tool_projectByName should find projects by name (partial match)', async function () {
     // First get a project name
     const listResult = await TOOL_HANDLERS.tool_projectsList({}, {});
     const projects = JSON.parse(listResult.output).projects;
@@ -31,8 +31,12 @@ describe('Tool handlers (TDD - nouvelle structure)', function () {
     const firstProject = projects[0];
     const result = await TOOL_HANDLERS.tool_projectByName({ name: firstProject.name }, {});
     const parsed = JSON.parse(result.output);
-    assert.ok(parsed.project, 'Should return a project');
-    assert.strictEqual(parsed.project.name, firstProject.name, 'Should match queried name');
+    assert.ok(Array.isArray(parsed.projects), 'Should return a projects array');
+    assert.ok(parsed.projects.length > 0, 'Should find at least one project');
+    assert.ok(parsed.total >= 1, 'Should have total count');
+    // Verify at least one project matches the search term
+    const matches = parsed.projects.some(p => p.name.toLowerCase().includes(firstProject.name.toLowerCase()));
+    assert.ok(matches, 'Should contain at least one project matching the search term');
   });
 
   it('tool_createTask should create task', async function () {

@@ -117,10 +117,17 @@ export function generateSummary(data, toolName) {
       return `Found ${total || items.length} project${items.length !== 1 ? 's' : ''}`;
 
     case 'tool_projectByName': {
-      const project = data?.project;
-      return project
-        ? `Found project "${project.name}"`
-        : 'Project not found';
+      const projects = data?.projects || [];
+      if (projects.length === 0) {
+        return 'No projects found';
+      }
+      if (projects.length === 1) {
+        return `Found 1 project: "${projects[0].name}"`;
+      }
+      if (projects.length === 2) {
+        return `Found 2 projects: "${projects[0].name}", "${projects[1].name}"`;
+      }
+      return `Found ${projects.length} projects`;
     }
 
     case 'tool_createProject': {
@@ -153,6 +160,14 @@ export function generateSummary(data, toolName) {
       return note
         ? `Retrieved note "${note.title}"`
         : 'Note not found';
+    }
+
+    case 'tool_notesByTitleOrContent': {
+      const notes = data?.notes || [];
+      if (notes.length === 0) return 'No notes found';
+      if (notes.length === 1) return `Found 1 note: "${notes[0].title}"`;
+      if (notes.length === 2) return `Found 2 notes: "${notes[0].title}", "${notes[1].title}"`;
+      return `Found ${notes.length} notes`;
     }
 
     case 'tool_createNote': {

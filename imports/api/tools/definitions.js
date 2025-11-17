@@ -88,12 +88,12 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_projectByName',
-    description: 'Fetch a single project by its name (case-insensitive). Use when the user names a project.',
+    description: 'Fetch projects by name (case-insensitive, partial match). Returns a list of all matching projects. Use when the user names a project or searches for projects.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        name: { type: 'string', description: 'Project name (case-insensitive match)' }
+        name: { type: 'string', description: 'Project name or search term (case-insensitive partial match)' }
       },
       required: ['name']
     }
@@ -116,7 +116,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_updateProject',
-    description: 'Update a project\'s name, description, or status. At least one field must be provided.',
+    description: 'Update a project\'s name, description, or status. Supports partial updates - only pass the fields you want to change. At least one field must be provided.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -167,6 +167,22 @@ export const TOOL_DEFINITIONS = [
         noteId: { type: 'string', description: 'Note ID' }
       },
       required: ['noteId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_notesByTitleOrContent',
+    description: 'Search notes by keyword in title or content (case-insensitive, exact text match without semantic search). Returns notes with contextual snippets around the keyword. Use when you need to find notes containing specific keywords.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Keyword or search term to find in note titles or content'
+        }
+      },
+      required: ['query']
     }
   },
   {
@@ -315,7 +331,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_updateTask',
-    description: 'Update a task. Change title, notes, status (use "done" to mark as completed), deadline, project association, or urgency/importance flags. All fields are optional except taskId.',
+    description: 'Update a task. Supports partial updates - only pass the fields you want to change (title, notes, status, deadline, project, urgency/importance). Use "done" status to mark as completed. All fields are optional except taskId.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -363,7 +379,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_updateNote',
-    description: 'Update a note\'s title, content, or project association. All fields except noteId are optional.',
+    description: 'Update a note\'s title, content, or project association. All fields except noteId are optional. Supports partial updates - you can update just the title without reading the note first. Only pass the fields you want to change.',
     parameters: {
       type: 'object',
       additionalProperties: false,

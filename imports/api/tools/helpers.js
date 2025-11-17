@@ -82,14 +82,15 @@ export const buildFilterSelector = (filters = {}) => {
   return sel;
 };
 
-// Build a selector to find a project by name (case-insensitive; trims input).
-// Uses a case-insensitive regex. For accent-insensitive needs, consider storing a normalizedName field.
+// Build a selector to find projects by name (case-insensitive partial match; trims input).
+// Uses a case-insensitive regex to find projects containing the search term anywhere in the name.
+// For accent-insensitive needs, consider storing a normalizedName field.
 export const buildProjectByNameSelector = (rawName) => {
   const name = String(rawName || '').trim();
   if (!name) return {};
   // Escape regex special chars in user-provided name
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return { name: { $regex: `^${escaped}$`, $options: 'i' } };
+  return { name: { $regex: escaped, $options: 'i' } };
 };
 
 // Generic path resolver for {var:'path'} syntax
