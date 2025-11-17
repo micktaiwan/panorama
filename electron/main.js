@@ -146,7 +146,8 @@ function createWindow(savedState) {
   }
 
   const win = new BrowserWindow(windowOptions);
-  win.loadURL('http://localhost:3000');
+  const port = process.env.METEOR_PORT || 3000;
+  win.loadURL(`http://localhost:${port}`);
 
   // Intercept popups/new windows to handle app file links gracefully
   win.webContents.setWindowOpenHandler(({ url }) => {
