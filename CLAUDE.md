@@ -178,6 +178,40 @@ Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` 
 - **Consistency**: Structured `{data, summary, metadata}` responses
 - **Future-proof**: Tools evolve with the codebase; one-off queries don't
 
+#### Tool Call Optimization
+
+**Minimize MCP tool calls** - each call has overhead. Follow these principles:
+
+1. **Use partial updates**: Update tools (`tool_updateTask`, `tool_updateNote`, `tool_updateProject`) support partial updates. Only pass the fields you want to change.
+   ```javascript
+   // ✅ GOOD: Update just the title
+   tool_updateNote({noteId: "abc", title: "New Title"})
+
+   // ❌ BAD: Reading the full note first is unnecessary
+   tool_noteById({noteId: "abc"})  // ← Unnecessary read!
+   tool_updateNote({noteId: "abc", title: "New Title", content: existingContent})
+   ```
+
+2. **Batch related operations**: When possible, use tools that return multiple items instead of making N individual calls.
+   ```javascript
+   // ✅ GOOD: One call for all tasks
+   tool_tasksByProject({projectId: "abc"})
+
+   // ❌ BAD: N calls for N tasks
+   for (taskId in taskIds) tool_taskById({taskId})
+   ```
+
+3. **Choose the right tool**: Use specialized tools instead of generic queries when available.
+   ```javascript
+   // ✅ GOOD: Specialized tool
+   tool_tasksFilter({dueBefore: "2025-01-30", urgent: true})
+
+   // ⚠️ ACCEPTABLE: Generic query (only if specialized tool doesn't exist)
+   tool_collectionQuery({collection: "tasks", where: {...}})
+   ```
+
+4. **Read once, use everywhere**: If you need to read data, cache it in memory and reference it multiple times instead of re-reading.
+
 #### Example: The Wrong Way
 
 ```bash

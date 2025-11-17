@@ -27,6 +27,7 @@ Cloudflare's code mode targets **multi-tenant cloud workers**:
 ### Panorama's Context (Single-User Local)
 
 Panorama is **single-user, local-first**:
+
 - One trusted actor (the user)
 - Code runs on `localhost` in user's environment
 - AI assistant already has full database access
@@ -38,21 +39,20 @@ Panorama is **single-user, local-first**:
 ## 2. Token Reduction: Real Numbers
 
 ### The Prompt's Claim
-> "≥90% token reduction for long workflows (e.g., indexing 5k notes)"
+
+"≥90% token reduction for long workflows (e.g., indexing 5k notes)"
 
 ### Reality: Two Different Sources of Savings
 
 #### Source 1: SDK vs. Tool Definitions (~8-15% savings)
 
 **Before (MCP)**:
-```
+
 40 tools × 150 tokens (schema + description) = 6,000 tokens
-```
 
 **After (Code Mode)**:
-```
+
 1 SDK doc + 40 function signatures ≈ 5,500 tokens
-```
 
 **Actual savings**: 8% on tool definitions themselves.
 
@@ -60,7 +60,6 @@ Panorama is **single-user, local-first**:
 
 This is the real win. **Traditional tool-calling loop**:
 
-```
 → LLM reasoning: "I should get project X" (200 tokens)
 → tool_projectByName(X)
 → Response (300 tokens)
@@ -71,17 +70,14 @@ This is the real win. **Traditional tool-calling loop**:
 → Result
 
 Total: ~1,250 tokens
-```
 
 **Code mode approach**:
 
-```
 → LLM reasoning: "I'll write a script" (100 tokens)
 → Execute code (no intermediate reasoning)
 → Response (500 tokens)
 
 Total: ~600 tokens
-```
 
 **Actual savings**: 50-80% on multi-step workflows by eliminating "thinking steps" between tools.
 
@@ -96,6 +92,7 @@ Total: ~600 tokens
 **Problem**: User wants to cross-reference data from multiple sources.
 
 **Example workflow**:
+
 ```javascript
 // Get meetings from Claap
 const meetings = await claap.searchMeetings({
