@@ -179,20 +179,36 @@ export const TOOL_HANDLERS = {
   async tool_projectByName(args, memory) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     const selector = buildProjectByNameSelector(args?.name);
-    const proj = await ProjectsCollection.findOneAsync(selector, { fields: { name: 1, description: 1 } });
-    if (proj?._id && memory) {
+    const projects = await ProjectsCollection.find(selector, { fields: { name: 1, description: 1 } }).fetchAsync();
+
+    // Map results to compact format
+    const compact = (projects || []).map(p => ({
+      id: p._id,
+      name: clampText(p.name || ''),
+      description: clampText(p.description || '')
+    }));
+
+    // Store first project in memory for tool chaining compatibility
+    if (compact.length > 0 && memory) {
+      const firstProject = projects[0];
       // Standardize on new generic memory structure
       memory.ids = memory.ids || {};
-      memory.ids.projectId = proj._id;
+      memory.ids.projectId = firstProject._id;
       memory.entities = memory.entities || {};
-      memory.entities.project = { name: proj.name || '', description: proj.description || '' };
+      memory.entities.project = { name: firstProject.name || '', description: firstProject.description || '' };
       // Keep legacy for backward compatibility during transition
-      memory.projectId = proj._id;
-      memory.projectName = proj.name || null;
+      memory.projectId = firstProject._id;
+      memory.projectName = firstProject.name || null;
     }
-    const out = proj ? { id: proj._id, name: clampText(proj.name || ''), description: clampText(proj.description || '') } : null;
+
+    // Store list in memory
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.projects = compact;
+    }
+
     return buildSuccessResponse(
-      { project: out },
+      { projects: compact, total: compact.length },
       'tool_projectByName'
     );
   },
@@ -443,6 +459,91 @@ export const TOOL_HANDLERS = {
     };
     if (memory) { memory.entities = memory.entities || {}; memory.entities.note = result; }
     return buildSuccessResponse({ note: result }, 'tool_noteById');
+  },
+  async tool_notesByTitleOrContent(args, memory) {
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const query = String(args?.query || '').trim();
+    if (!query) {
+      return buildErrorResponse('query is required', 'tool_notesByTitleOrContent', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide a search query, e.g., {query: "keyword"}'
+      });
+    }
+
+    // Helper to extract context around a match
+    const extractContext = (text, searchTerm) => {
+      const lowerText = text.toLowerCase();
+      const lowerTerm = searchTerm.toLowerCase();
+      const index = lowerText.indexOf(lowerTerm);
+
+      if (index === -1) return null;
+
+      const contextLength = 150;
+      const start = Math.max(0, index - contextLength);
+      const end = Math.min(text.length, index + searchTerm.length + contextLength);
+
+      let snippet = text.slice(start, end);
+
+      // Add ellipsis if truncated
+      if (start > 0) snippet = '...' + snippet;
+      if (end < text.length) snippet = snippet + '...';
+
+      return snippet;
+    };
+
+    // Escape regex special chars
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = { $regex: escaped, $options: 'i' };
+
+    // Search in title OR content
+    const selector = {
+      $or: [
+        { title: regex },
+        { content: regex }
+      ]
+    };
+
+    const notes = await NotesCollection.find(selector, {
+      fields: { title: 1, content: 1, projectId: 1, updatedAt: 1, createdAt: 1 },
+      sort: { updatedAt: -1, createdAt: -1 }
+    }).fetchAsync();
+
+    // Map results with match indicators and context
+    const mapped = (notes || []).map(n => {
+      const title = n.title || '';
+      const content = n.content || '';
+
+      const titleMatch = title.toLowerCase().includes(query.toLowerCase());
+      const contentMatch = content.toLowerCase().includes(query.toLowerCase());
+
+      const result = {
+        id: n._id,
+        projectId: n.projectId || null,
+        title: clampText(title, 200),
+        titleMatch,
+        contentMatch
+      };
+
+      // Add snippet if content matches
+      if (contentMatch) {
+        const snippet = extractContext(content, query);
+        if (snippet) {
+          result.snippet = clampText(snippet, 350);
+        }
+      }
+
+      return result;
+    });
+
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.notes = mapped;
+    }
+
+    return buildSuccessResponse(
+      { notes: mapped, total: mapped.length },
+      'tool_notesByTitleOrContent'
+    );
   },
   async tool_noteSessionsByProject(args, memory) {
     const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
