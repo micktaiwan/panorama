@@ -4,7 +4,7 @@ import { Meteor } from 'meteor/meteor';
 import { NotesCollection } from '/imports/api/notes/collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { notify } from '/imports/ui/utils/notify.js';
-import { parseHashRoute } from '/imports/ui/router.js';
+import { parseHashRoute, navigateTo } from '/imports/ui/router.js';
 import { NotesSearch } from './components/NotesSearch.jsx';
 import { NotesList } from './components/NotesList.jsx';
 import { NotesTabs } from './components/NotesTabs.jsx';
@@ -25,6 +25,12 @@ export const NotesPage = () => {
   const [touchedNotes, setTouchedNotes] = useState(new Set());
   const [shouldFocusNote, setShouldFocusNote] = useState(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [showOnlyOpen, setShowOnlyOpen] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem('notes.showOnlyOpen') === 'true';
+    }
+    return false;
+  });
 
   const parseLocalJson = (key, fallback) => {
     const raw = localStorage.getItem(key);
@@ -157,6 +163,13 @@ export const NotesPage = () => {
     }
   }, [activeTabId]);
 
+  // Save showOnlyOpen to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('notes.showOnlyOpen', String(showOnlyOpen));
+    }
+  }, [showOnlyOpen]);
+
   // Save note contents to localStorage (JSON with savedAt), avoid storing if equals DB baseline
   useEffect(() => {
     Object.keys(noteContents).forEach(noteId => {
@@ -240,12 +253,19 @@ export const NotesPage = () => {
     const lower = searchTerm.toLowerCase();
     const toMs = (d) => (d ? new Date(d).getTime() : 0);
     return notes
-      .filter((note) =>
-        note.title?.toLowerCase().includes(lower) ||
-        note.content?.toLowerCase().includes(lower)
-      )
+      .filter((note) => {
+        const matchesSearch = note.title?.toLowerCase().includes(lower) ||
+                            note.content?.toLowerCase().includes(lower);
+
+        // If showOnlyOpen is active, only show notes that are in openTabs
+        if (showOnlyOpen) {
+          return matchesSearch && openTabs.some(tab => tab.id === note._id);
+        }
+
+        return matchesSearch;
+      })
       .sort((a, b) => toMs(b.updatedAt || b.createdAt) - toMs(a.updatedAt || a.createdAt));
-  }, [notes, searchTerm]);
+  }, [notes, searchTerm, showOnlyOpen, openTabs]);
 
   // Dirty tabs: compare against current DB baseline when available
   const dirtySet = useMemo(() => {
@@ -300,32 +320,45 @@ export const NotesPage = () => {
 
   // Close a tab
   const closeTab = (tabId) => {
+    // Compute next active tab BEFORE updating state (using current openTabs from closure)
+    let nextActiveTabId = activeTabId;
+    if (activeTabId === tabId) {
+      const remainingTabs = openTabs.filter(tab => tab.id !== tabId);
+      if (remainingTabs.length > 0) {
+        nextActiveTabId = remainingTabs[remainingTabs.length - 1].id;
+      } else {
+        nextActiveTabId = null;
+      }
+    }
+
+    // Clear URL if closing the note that's in the URL (prevents auto-reopen)
+    const route = parseHashRoute();
+    if (route.name === 'notes' && route.noteId === tabId) {
+      navigateTo({ name: 'notes' }); // Remove noteId from URL
+    }
+
+    // Update all state
     setOpenTabs(prev => prev.filter(tab => tab.id !== tabId));
     setNoteContents(prev => {
       const newContents = { ...prev };
       delete newContents[tabId];
       return newContents;
     });
-    
+
     // Clean localStorage for this note
     localStorage.removeItem(`note-content-${tabId}`);
     setTouchedNotes(prev => { const n = new Set(prev); n.delete(tabId); return n; });
-    
+
     // Remove from renamed tabs set
     setRenamedTabs(prev => {
       const newSet = new Set(prev);
       newSet.delete(tabId);
       return newSet;
     });
-    
-    // If closing active tab, activate previous or next
-    if (activeTabId === tabId) {
-      const remainingTabs = openTabs.filter(tab => tab.id !== tabId);
-      if (remainingTabs.length > 0) {
-        setActiveTabId(remainingTabs[remainingTabs.length - 1].id);
-      } else {
-        setActiveTabId(null);
-      }
+
+    // Set the computed next active tab
+    if (nextActiveTabId !== activeTabId) {
+      setActiveTabId(nextActiveTabId);
     }
   };
 
@@ -534,11 +567,13 @@ export const NotesPage = () => {
   return (
     <div className="notes-page">
       <div className="notes-sidebar">
-        <NotesSearch 
+        <NotesSearch
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
+          showOnlyOpen={showOnlyOpen}
+          onShowOnlyOpenChange={setShowOnlyOpen}
         />
-        
+
         <NotesList
           notes={notes}
           filteredNotes={filteredNotes}
