@@ -693,7 +693,8 @@ Meteor.methods({
     const client = await getQdrantClient();
     const { vector, cached } = await getQueryVector(String(query || ''));
     const filter = opts && opts.projectId ? { must: [{ key: 'projectId', match: { value: opts.projectId } }] } : undefined;
-    const res = await client.search(COLLECTION(), { vector, limit: 10, filter, with_payload: true });
+    const limit = Number(opts?.limit) || 10;
+    const res = await client.search(COLLECTION(), { vector, limit, filter, with_payload: true });
     // Map payloads back to docs
     const items = Array.isArray(res) ? res : (res?.result || []);
     const fetchPreview = async (kind, rawId) => {

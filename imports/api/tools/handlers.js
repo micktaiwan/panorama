@@ -300,7 +300,7 @@ export const TOOL_HANDLERS = {
     }
   },
   async tool_semanticSearch(args, memory) {
-    const limit = Math.max(1, Math.min(50, Number(args?.limit) || 8));
+    const limit = Math.max(1, Math.min(50, Number(args?.limit) || 20));
     const q = String(args?.query || '').trim();
     const url = getQdrantUrl();
     if (!url) {
@@ -1324,6 +1324,127 @@ export const TOOL_HANDLERS = {
     } catch (error) {
       console.error('[tool_emailsCreateLabel] Error:', error);
       throw new Error(`Failed to create Gmail label: ${error.message}`);
+    }
+  },
+
+  /**
+   * Clean local email cache by removing old/archived emails
+   * Preserves important emails based on filters
+   */
+  async tool_emailsCleanCache(args, memory) {
+    try {
+      // Extract parameters with defaults
+      const keepInbox = args?.keepInbox !== false; // Default: true
+      const keepRecent = args?.keepRecent !== false; // Default: true
+      const daysToKeep = Math.min(365, Math.max(1, Number(args?.daysToKeep) || 30)); // Default: 30 days
+      const keepStarred = args?.keepStarred !== false; // Default: true
+      const keepImportant = args?.keepImportant !== false; // Default: true
+      const dryRun = args?.dryRun === true; // Default: false
+
+      const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+
+      // Get all emails from cache
+      const allEmails = await GmailMessagesCollection.find({}).fetchAsync();
+      const totalCount = allEmails.length;
+
+      // Calculate cutoff date for recent emails
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+      // Filter emails to keep
+      const emailsToKeep = [];
+      const emailsToDelete = [];
+
+      allEmails.forEach(email => {
+        let shouldKeep = false;
+        const reasons = [];
+
+        // Check if email has INBOX label
+        if (keepInbox && email.labelIds?.includes('INBOX')) {
+          shouldKeep = true;
+          reasons.push('INBOX');
+        }
+
+        // Check if email is recent
+        if (keepRecent && email.gmailDate && new Date(email.gmailDate) >= cutoffDate) {
+          shouldKeep = true;
+          reasons.push('recent');
+        }
+
+        // Check if email is starred
+        if (keepStarred && email.labelIds?.includes('STARRED')) {
+          shouldKeep = true;
+          reasons.push('STARRED');
+        }
+
+        // Check if email is important
+        if (keepImportant && email.labelIds?.includes('IMPORTANT')) {
+          shouldKeep = true;
+          reasons.push('IMPORTANT');
+        }
+
+        if (shouldKeep) {
+          emailsToKeep.push({ id: email._id, reasons });
+        } else {
+          emailsToDelete.push({
+            id: email._id,
+            subject: email.subject || '(no subject)',
+            from: email.from || '(unknown)',
+            date: email.gmailDate || email.createdAt
+          });
+        }
+      });
+
+      // Perform deletion or just simulate
+      let deletedCount = 0;
+      if (!dryRun && emailsToDelete.length > 0) {
+        const idsToDelete = emailsToDelete.map(e => e.id);
+        deletedCount = await GmailMessagesCollection.removeAsync({ _id: { $in: idsToDelete } });
+      }
+
+      // Prepare response
+      const summary = dryRun
+        ? `Would delete ${emailsToDelete.length} emails (keeping ${emailsToKeep.length})`
+        : `Deleted ${deletedCount} emails (kept ${emailsToKeep.length})`;
+
+      const responseData = {
+        dryRun,
+        totalEmails: totalCount,
+        kept: emailsToKeep.length,
+        deleted: dryRun ? emailsToDelete.length : deletedCount,
+        filters: {
+          keepInbox,
+          keepRecent: keepRecent ? `${daysToKeep} days` : false,
+          keepStarred,
+          keepImportant
+        }
+      };
+
+      // In dry run mode, include sample of emails that would be deleted
+      if (dryRun && emailsToDelete.length > 0) {
+        responseData.samplesWouldDelete = emailsToDelete.slice(0, 10).map(e => ({
+          subject: e.subject,
+          from: e.from,
+          date: e.date
+        }));
+      }
+
+      if (memory) {
+        memory.emailCacheClean = {
+          kept: emailsToKeep.length,
+          deleted: emailsToDelete.length,
+          timestamp: new Date()
+        };
+      }
+
+      return buildSuccessResponse(responseData, 'tool_emailsCleanCache', {
+        source: 'panorama_db',
+        policy: 'write'
+      });
+
+    } catch (error) {
+      console.error('[tool_emailsCleanCache] Error:', error);
+      return buildErrorResponse(error, 'tool_emailsCleanCache');
     }
   },
 
