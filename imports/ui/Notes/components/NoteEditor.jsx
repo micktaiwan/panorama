@@ -8,6 +8,7 @@ import { CleanPromptModal } from './CleanPromptModal.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import './NoteEditor.css';
 import { marked } from 'marked';
+import { htmlToMarkdown } from '/imports/ui/utils/htmlPaste.js';
 
 // Constants
 const FOCUS_TIMEOUT_MS = 50;
@@ -229,6 +230,25 @@ export const NoteEditor = ({
           ref={textAreaRef}
           value={noteContents[activeTabId] || ''}
           onChange={(e) => onContentChange(activeTabId, e.target.value)}
+          onPaste={(e) => {
+            const html = e.clipboardData?.getData('text/html');
+            const markdown = htmlToMarkdown(html);
+
+            if (markdown) {
+              e.preventDefault();
+              const textarea = e.target;
+              const start = textarea.selectionStart;
+              const end = textarea.selectionEnd;
+              const value = textarea.value;
+              const newValue = value.slice(0, start) + markdown + value.slice(end);
+              onContentChange(activeTabId, newValue);
+
+              // Positionner le curseur après le texte collé
+              const newPos = start + markdown.length;
+              pendingSelectionRef.current = { start: newPos, end: newPos };
+            }
+            // Si pas de HTML formaté, laisser le comportement par défaut (coller texte brut)
+          }}
           onKeyDown={(e) => {
             const key = String(e.key || '').toLowerCase();
             const hasMod = e.metaKey || e.ctrlKey;
