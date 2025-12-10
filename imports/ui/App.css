@@ -102,13 +102,7 @@
 
 /* Reserve space for docked chat (right sidebar) */
 body.withDockedChat .container {
-  padding-right: calc(min(38vw, 560px));
-}
-
-@media (min-width: 1200px) {
-  body.withDockedChat .container {
-    padding-right: 560px; /* explicit cap on very wide screens */
-  }
+  padding-right: var(--docked-chat-width, 420px);
 }
 
 /* Go to screen palette */

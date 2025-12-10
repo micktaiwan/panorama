@@ -1,11 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Meteor } from 'meteor/meteor';
+import { marked } from 'marked';
 import './ChatWidget.css';
 import { navigateTo } from '/imports/ui/router.js';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { useTracker } from 'meteor/react-meteor-data';
 import { ChatsCollection } from '/imports/api/chats/collections';
+
+// Configure marked for safe HTML output
+marked.setOptions({
+  breaks: true, // Convert \n to <br>
+  gfm: true     // GitHub Flavored Markdown
+});
 
 const initialMessages = [
   {
@@ -14,6 +21,9 @@ const initialMessages = [
     content: "Hi 👋 I can answer about your workspace and run actions (e.g., create a task). Ask me anything.",
   },
 ];
+
+const DEFAULT_DOCKED_WIDTH = 420;
+const MIN_DOCKED_WIDTH = 300;
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(() => {
@@ -24,11 +34,17 @@ export default function ChatWidget() {
     if (typeof localStorage === 'undefined') return false;
     return localStorage.getItem('chat_docked') === '1';
   });
+  const [dockedWidth, setDockedWidth] = useState(() => {
+    if (typeof localStorage === 'undefined') return DEFAULT_DOCKED_WIDTH;
+    const saved = localStorage.getItem('chat_docked_width');
+    return saved ? Math.max(MIN_DOCKED_WIDTH, parseInt(saved, 10) || DEFAULT_DOCKED_WIDTH) : DEFAULT_DOCKED_WIDTH;
+  });
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState(() => "");
   const [isSending, setIsSending] = useState(false);
   const [pending, setPending] = useState([]); // local, not yet persisted
   const [expandedCitations, setExpandedCitations] = useState(() => new Set());
+  const [isResizing, setIsResizing] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -37,7 +53,15 @@ export default function ChatWidget() {
   const historyDocs = useTracker(() => (historyReady ? ChatsCollection.find({}, { sort: { createdAt: 1 }, limit: 200 }).fetch() : []), [historyReady]);
   const renderList = useMemo(() => {
     if (Array.isArray(historyDocs) && historyDocs.length > 0) {
-      const base = historyDocs.map((d) => ({ id: d._id, role: d.role, content: d.content, citations: d.citations || [], isStatus: !!d.isStatus, error: !!d.error }));
+      const base = historyDocs.map((d) => ({
+        id: d._id,
+        role: d.role,
+        content: d.content,
+        citations: d.citations || [],
+        actions: d.actions || [],
+        isStatus: !!d.isStatus,
+        error: !!d.error
+      }));
       return [...base, ...pending];
     }
     return [...messages, ...pending];
@@ -45,6 +69,36 @@ export default function ChatWidget() {
 
   const toggleOpen = useCallback(() => {
     setIsOpen((v) => !v);
+  }, []);
+
+  // Execute navigation action from chat response
+  // Must be defined before handleSend which depends on it
+  const executeAction = useCallback((action) => {
+    if (!action || action.type !== 'navigate') return;
+
+    switch (action.kind) {
+      case 'project':
+        navigateTo({ name: 'project', projectId: action.id });
+        break;
+      case 'session':
+        navigateTo({ name: 'session', sessionId: action.id });
+        break;
+      case 'note':
+        // Notes are viewed within their project
+        navigateTo({ name: 'project', projectId: action.id });
+        break;
+      case 'alarms':
+        navigateTo({ name: 'alarms' });
+        break;
+      case 'emails':
+        navigateTo({ name: 'emails' });
+        break;
+      case 'preferences':
+        navigateTo({ name: 'preferences' });
+        break;
+      default:
+        console.warn('[ChatWidget] Unknown action kind:', action.kind);
+    }
   }, []);
 
   const handleSend = useCallback(() => {
@@ -55,8 +109,6 @@ export default function ChatWidget() {
 
     // Persist user message immediately so it appears before server status entries
     Meteor.call('chats.insert', { role: 'user', content: trimmed });
-    // Show assistant placeholder only
-    setPending((prev) => [...prev, { id: `${Date.now()}-assistant-pending`, role: 'assistant', content: 'Thinking…', pending: true }]);
     setInput('');
     setIsSending(true);
 
@@ -76,10 +128,26 @@ export default function ChatWidget() {
         }
 
         const assistantText = result?.text || "I don't have an answer yet.";
-        setMessages((prev) => [...prev, { id: `${Date.now()}-assistant`, role: 'assistant', content: assistantText, citations: result?.citations || [] }]);
+        const resultActions = result?.actions || [];
+
+        setMessages((prev) => [...prev, {
+          id: `${Date.now()}-assistant`,
+          role: 'assistant',
+          content: assistantText,
+          citations: result?.citations || [],
+          actions: resultActions
+        }]);
+
+        // Execute navigation actions automatically
+        if (resultActions.length > 0) {
+          const navAction = resultActions.find(a => a.type === 'navigate');
+          if (navAction) {
+            executeAction(navAction);
+          }
+        }
       }
     );
-  }, [input, isSending, renderList]);
+  }, [input, isSending, renderList, executeAction]);
 
   const onKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -110,9 +178,18 @@ export default function ChatWidget() {
     const body = typeof document !== 'undefined' ? document.body : null;
     if (!body) return;
     const shouldReserve = isOpen && docked;
-    if (shouldReserve) body.classList.add(cls); else body.classList.remove(cls);
-    return () => body.classList.remove(cls);
-  }, [isOpen, docked]);
+    if (shouldReserve) {
+      body.classList.add(cls);
+      body.style.setProperty('--docked-chat-width', `${dockedWidth}px`);
+    } else {
+      body.classList.remove(cls);
+      body.style.removeProperty('--docked-chat-width');
+    }
+    return () => {
+      body.classList.remove(cls);
+      body.style.removeProperty('--docked-chat-width');
+    };
+  }, [isOpen, docked, dockedWidth]);
 
   // Persist state in localStorage
   useEffect(() => {
@@ -123,6 +200,33 @@ export default function ChatWidget() {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem('chat_docked', docked ? '1' : '0');
   }, [docked]);
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem('chat_docked_width', String(dockedWidth));
+  }, [dockedWidth]);
+
+  // Resize handler for docked mode
+  const handleResizeStart = useCallback((e) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.clientX;
+    const startWidth = dockedWidth;
+
+    const onMouseMove = (moveEvent) => {
+      const delta = startX - moveEvent.clientX;
+      const newWidth = Math.max(MIN_DOCKED_WIDTH, startWidth + delta);
+      setDockedWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [dockedWidth]);
 
   // Global shortcut: ⌘D to toggle panel
   useEffect(() => {
@@ -204,9 +308,21 @@ export default function ChatWidget() {
   }, []);
 
   return (
-    <div className={`ChatWidget__root${docked ? ' isDocked' : ''}`} aria-live="polite">
+    <div className={`ChatWidget__root${docked ? ' isDocked' : ''}${isResizing ? ' isResizing' : ''}`} aria-live="polite">
       {isOpen && (
-        <div className={`ChatWidget__panel${docked ? ' docked' : ''}`} role="dialog" aria-label="AI Chat">
+        <div
+          className={`ChatWidget__panel${docked ? ' docked' : ''}`}
+          role="dialog"
+          aria-label="AI Chat"
+          style={docked ? { width: `${dockedWidth}px` } : undefined}
+        >
+          {docked && (
+            <div
+              className="ChatWidget__resizeHandle"
+              onMouseDown={handleResizeStart}
+              title="Drag to resize"
+            />
+          )}
           <div className="ChatWidget__header">
             <div className="ChatWidget__title">AI Chat {isSending ? <span className="muted">· Sending…</span> : null}</div>
             <div>
@@ -224,7 +340,10 @@ export default function ChatWidget() {
               renderList.map((m) => (
                 <div key={m.id} className={`ChatWidget__message ChatWidget__message--${m.role} ${m.error ? 'ChatWidget__message--error' : ''}${m.isStatus ? ' ChatWidget__message--status' : ''}`}>
                   <div className="ChatWidget__bubble">
-                    <div className="ChatWidget__content">{m.content}</div>
+                    <div
+                      className="ChatWidget__content aiMarkdown"
+                      dangerouslySetInnerHTML={{ __html: marked.parse(m.content || '') }}
+                    />
                     {Array.isArray(m.citations) && m.citations.length > 0 && (
                       <div className="ChatWidget__sourcesBlock">
                         {!expandedCitations.has(m.id) ? (
