@@ -322,14 +322,13 @@ Meteor.methods({
     const syncErrorDetails = [];
 
     if (existingIds.size > 0) {
-      console.log(`[GMAIL API] Syncing labels for ${existingIds.size} existing messages (limited to 50 most recent)`);
+      console.log(`[GMAIL API] Syncing labels for all ${existingIds.size} existing messages`);
 
       const existingMessagesToSync = await GmailMessagesCollection.find(
         { id: { $in: Array.from(existingIds) } },
         {
           fields: { id: 1, labelIds: 1 },
-          sort: { gmailDate: -1 },
-          limit: 50
+          sort: { gmailDate: -1 }
         }
       ).fetchAsync();
 
