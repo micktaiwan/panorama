@@ -71,10 +71,10 @@
 
 /* When the chat is docked, move the toast to the left of the sidebar */
 body.withDockedChat .notify {
-  right: calc(min(38vw, 560px) + 24px);
+  right: calc(var(--docked-chat-width, 420px) + 24px);
 }
 
 body.withDockedChat .notifyContainer {
-  right: calc(min(38vw, 560px) + 24px);
+  right: calc(var(--docked-chat-width, 420px) + 24px);
 }
 
