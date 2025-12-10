@@ -51,6 +51,12 @@ export const getOpenAiApiKey = () => {
   return fromPrefs || process.env.OPENAI_API_KEY || Meteor.settings?.openai?.apiKey || null;
 };
 
+export const getAnthropicApiKey = () => {
+  const pref = getPrefs();
+  const fromPrefs = pref?.anthropicApiKey?.trim() || null;
+  return fromPrefs || process.env.ANTHROPIC_API_KEY || Meteor.settings?.anthropic?.apiKey || null;
+};
+
 export const getPennylaneConfig = () => {
   const pref = getPrefs();
   const baseUrl = pref?.pennylaneBaseUrl?.trim() || Meteor.settings?.pennylane?.baseUrl || null;
