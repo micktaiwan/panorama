@@ -1,39 +1,5 @@
 // Tool definitions in OpenAI function calling format
-// Used by both Chat and MCP server
-
-// Pure helpers for building citations used by chat methods.
-export const buildCitationsFromMemory = (memory) => {
-  const list = memory?.lists?.searchResults;
-  if (!Array.isArray(list) || list.length === 0) return [];
-  return list.map((r) => ({ id: r.id, title: r.title, kind: r.kind, url: r.url || null }));
-};
-
-export const buildCitationsFromToolResults = (toolCalls, toolResults) => {
-  const calls = Array.isArray(toolCalls) ? toolCalls : [];
-  const results = Array.isArray(toolResults) ? toolResults : [];
-  const citations = [];
-  for (let i = 0; i < calls.length; i += 1) {
-    const call = calls[i];
-    if (call && call.name === 'tool_semanticSearch') {
-      const match = results.find((r) => r?.tool_call_id === (call.id || 'tool_semanticSearch'));
-      if (match && match.output) {
-        try {
-          const parsed = JSON.parse(match.output);
-          const items = Array.isArray(parsed?.results) ? parsed.results : [];
-          for (let j = 0; j < items.length; j += 1) {
-            const it = items[j];
-            citations.push({ id: it.id, title: it.title, kind: it.kind, url: it.url || null });
-          }
-        } catch (err) {
-          console.error('[tools/definitions] parse tool result failed', err);
-        }
-      }
-    }
-  }
-  return citations;
-};
-
-// Exported tool definitions for Chat and MCP
+// Used by both Chat (Claude SDK) and MCP server
 export const TOOL_DEFINITIONS = [
   {
     type: 'function',
@@ -442,14 +408,14 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_emailsUpdateCache',
-    description: 'Update the local email cache by fetching new messages from Gmail. Use when the user asks to refresh/sync/update their emails or check for new messages.',
+    description: 'Update the local email cache by fetching new messages from Gmail inbox. Retrieves the N most recent inbox messages, adds new ones to cache, and syncs labels for existing cached messages. Use when the user asks to refresh/sync/update their emails or check for new messages.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         maxResults: {
           type: 'number',
-          description: 'Maximum number of emails to fetch from Gmail API (default: 20, max: 100)'
+          description: 'Maximum number of inbox emails to fetch from Gmail API (default: 20, max: 500). To sync all inbox messages, use a high value like 500.'
         }
       }
     }
@@ -582,6 +548,41 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_emailsCleanCache',
+    description: 'Clean the local email cache by removing old or archived emails while preserving important ones. Use when the user wants to reduce cache size or clean up old emails. Safe operation that only affects local cache, not Gmail.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        keepInbox: {
+          type: 'boolean',
+          description: 'Keep emails with INBOX label (default: true)'
+        },
+        keepRecent: {
+          type: 'boolean',
+          description: 'Keep recent emails based on daysToKeep parameter (default: true)'
+        },
+        daysToKeep: {
+          type: 'number',
+          description: 'Number of days to keep if keepRecent is true (default: 30, min: 1, max: 365)'
+        },
+        keepStarred: {
+          type: 'boolean',
+          description: 'Keep emails with STARRED label (default: true)'
+        },
+        keepImportant: {
+          type: 'boolean',
+          description: 'Keep emails with IMPORTANT label (default: true)'
+        },
+        dryRun: {
+          type: 'boolean',
+          description: 'If true, only simulates cleanup and returns what would be deleted without actually deleting (default: false)'
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_mcpServersSync',
     description: 'Sync MCP server configurations from Claude Desktop config. Reads claude_desktop_config.json and imports server configurations into Panorama. Use when the user wants to import their existing MCP servers from Claude Desktop.',
     parameters: {
@@ -592,125 +593,3 @@ export const TOOL_DEFINITIONS = [
     }
   },
 ];
-
-export const buildPlannerConfig = (system, user, toolNames) => {
-  const plannerSchema = {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      steps: {
-        type: 'array',
-        maxItems: 5,
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            tool: { type: 'string', enum: toolNames },
-            args: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                dueBefore: { type: 'string' },
-                projectId: { type: 'string' },
-                status: { type: 'string' },
-                now: { type: 'string' },
-                tag: { type: 'string' },
-                name: { type: 'string' },
-                sessionId: { type: 'string' },
-                enabled: { type: 'boolean' },
-                query: { type: 'string' },
-                limit: { type: 'number' },
-                collection: { type: 'string' },
-                where: { type: 'object' },
-                select: { type: 'array', items: { type: 'string' } },
-                important: { type: 'boolean' },
-                urgent: { type: 'boolean' }
-              }
-            }
-          },
-          required: ['tool', 'args']
-        }
-      },
-      stopWhen: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          have: { type: 'array', maxItems: 5, items: { type: 'string' } }
-        }
-      }
-    },
-    required: ['steps']
-  };
-
-  const plannerPrompt = [
-    'You will plan the minimal sequence of tool calls to answer the user.',
-    'Choose only from the allowed tools and provide precise arguments.',
-    '',
-    '=== Tool Selection Guidelines ===',
-    'For "latest/recent important subjects/topics/items":',
-    '  - Use tool_overdue for overdue tasks',
-    '  - OR tool_tasksFilter with isImportant/isUrgent filters',
-    '  - DO NOT use semantic search for this - use structured task queries',
-    '',
-    'For "tasks in project X":',
-    '  - First: tool_projectByName(name="X")',
-    '  - Then: tool_tasksByProject (projectId will be auto-bound)',
-    '',
-    'For "find/search for content about X":',
-    '  - Use tool_semanticSearch(query="X") for semantic content search',
-    '  - Best for: finding notes, documents, or content by keywords',
-    '',
-    'For status/tag filters:',
-    '  - Use tool_tasksFilter(status="todo/doing/done", tag="...")',
-    '',
-    '=== Planning Strategy ===',
-    'Plan 2-3 tools when possible for robustness (e.g., try tool_overdue AND tool_tasksFilter).',
-    'Use tool_semanticSearch as a fallback, not as primary for structured queries.',
-    '',
-    '=== Technical Details ===',
-    'IMPORTANT: Include stopWhen.have to avoid unnecessary steps.',
-    'Examples: ["lists.tasks"] after getting tasks, ["ids.projectId"] after finding project, ["lists.*"] when any list is populated.',
-    'Leverage variable binding: use {"var":"ids.projectId"} to reference previously found IDs.',
-    'CRITICAL: Respond with ONLY valid JSON that matches the schema. No prose, no markdown. Keep at most 5 steps.'
-  ].join(' ');
-
-  const plannerMessages = [
-    { role: 'system', content: `${system} Allowed tools: ${toolNames.join(', ')}. ${plannerPrompt}` },
-    { role: 'user', content: user }
-  ];
-
-  return { plannerSchema, plannerPrompt, plannerMessages };
-};
-
-export const buildResponsesFirstPayload = (system, user) => {
-  return {
-    model: 'o4-mini',
-    instructions: system,
-    input: [ { role: 'user', content: [ { type: 'input_text', text: user } ] } ],
-    tools: TOOL_DEFINITIONS,
-    tool_choice: 'auto'
-  };
-};
-
-export const extractResponsesToolCalls = (data) => {
-  const outputArray = Array.isArray(data?.output) ? data.output : [];
-  const toolCallsFromOutput = outputArray
-    .filter((it) => it && (it.type === 'tool_call' || it.type === 'function_call'))
-    .map((tc) => {
-      const argsStr = (typeof tc?.arguments === 'string') ? tc.arguments : (tc?.function?.arguments || '');
-      let argsObj = {};
-      try { if (argsStr) argsObj = JSON.parse(argsStr); } catch { argsObj = {}; }
-      return {
-        id: tc?.id || tc?.tool_call_id || tc?.call_id || '',
-        name: tc?.name || tc?.tool_name || tc?.function?.name || '',
-        arguments: argsObj
-      };
-    });
-  const toolCallsTop = Array.isArray(data?.tool_calls) ? data.tool_calls.map((tc) => ({
-    id: tc?.id || tc?.tool_call_id || '',
-    name: tc?.function?.name || tc?.name || '',
-    arguments: (() => { try { return typeof tc?.function?.arguments === 'string' ? JSON.parse(tc.function.arguments) : (tc?.arguments || {}); } catch { return {}; } })()
-  })) : [];
-  const toolCallsAll = (toolCallsFromOutput.length > 0 ? toolCallsFromOutput : toolCallsTop);
-  return toolCallsAll.slice(0, 5);
-};

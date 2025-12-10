@@ -15,6 +15,7 @@ export const Preferences = () => {
   const [filesDir, setFilesDir] = React.useState('');
   const [devUrlMode, setDevUrlMode] = React.useState(false);
   const [openaiApiKey, setOpenaiApiKey] = React.useState('');
+  const [anthropicApiKey, setAnthropicApiKey] = React.useState('');
   const [perplexityApiKey, setPerplexityApiKey] = React.useState('');
   const [pennyBaseUrl, setPennyBaseUrl] = React.useState('');
   const [pennyToken, setPennyToken] = React.useState('');
@@ -47,7 +48,7 @@ export const Preferences = () => {
   const [lanIp, setLanIp] = React.useState('');
   
   // AI Backend preferences
-  const [aiMode, setAiMode] = React.useState('local');
+  const [aiMode, setAiMode] = React.useState('remote');
   const [aiFallback, setAiFallback] = React.useState('remote');
   const [aiTimeoutMs, setAiTimeoutMs] = React.useState(30000);
   const [aiMaxTokens, setAiMaxTokens] = React.useState(4000);
@@ -98,22 +99,20 @@ export const Preferences = () => {
 
   // Load AI preferences on mount
   React.useEffect(() => {
-    if (pref?.ai) {
-      setAiMode(pref.ai.mode || 'remote');
-      setAiFallback(pref.ai.fallback || 'none');
-      setAiTimeoutMs(pref.ai.timeoutMs || 30000);
-      setAiMaxTokens(pref.ai.maxTokens || 4000);
-      setAiTemperature(pref.ai.temperature || 0.7);
-      if (pref.ai.local) {
-        setAiLocalHost(pref.ai.local.host || 'http://127.0.0.1:11434');
-        setAiLocalChatModel(pref.ai.local.chatModel || 'llama3.1:latest');
-        setAiLocalEmbeddingModel(pref.ai.local.embeddingModel || 'nomic-embed-text:latest');
-      }
-      if (pref.ai.remote) {
-        setAiRemoteProvider(pref.ai.remote.provider || 'openai');
-        setAiRemoteChatModel(pref.ai.remote.chatModel || 'gpt-4o-mini');
-        setAiRemoteEmbeddingModel(pref.ai.remote.embeddingModel || 'text-embedding-3-small');
-      }
+    if (pref) {
+      setAiMode(pref.ai?.mode || 'remote');
+      setAiFallback(pref.ai?.fallback || 'none');
+      setAiTimeoutMs(pref.ai?.timeoutMs || 30000);
+      setAiMaxTokens(pref.ai?.maxTokens || 4000);
+      setAiTemperature(pref.ai?.temperature || 0.7);
+      
+      setAiLocalHost(pref.ai?.local?.host || 'http://127.0.0.1:11434');
+      setAiLocalChatModel(pref.ai?.local?.chatModel || 'llama3.1:latest');
+      setAiLocalEmbeddingModel(pref.ai?.local?.embeddingModel || 'nomic-embed-text:latest');
+
+      setAiRemoteProvider(pref.ai?.remote?.provider || 'openai');
+      setAiRemoteChatModel(pref.ai?.remote?.chatModel || 'gpt-4o-mini');
+      setAiRemoteEmbeddingModel(pref.ai?.remote?.embeddingModel || 'text-embedding-3-small');
       
       // Load CTA preferences
       if (pref.cta) {
@@ -300,39 +299,39 @@ export const Preferences = () => {
   // Auto-save when AI mode changes (only on user interaction, not on load)
   React.useEffect(() => {
     // Only auto-save if this is a user-initiated change, not initial load
-    if (aiMode && pref?.ai && aiMode !== pref.ai.mode) {
+    if (aiMode && pref && aiMode !== (pref.ai?.mode)) {
       debouncedAutoSave();
     }
-  }, [aiMode, debouncedAutoSave]);
+  }, [aiMode, debouncedAutoSave, pref]);
 
   // Auto-save when embedding model changes (only on user interaction, not on load)
   React.useEffect(() => {
     // Only auto-save if this is a user-initiated change, not initial load
-    if (aiLocalEmbeddingModel && pref?.ai?.local && aiLocalEmbeddingModel !== pref.ai.local.embeddingModel) {
+    if (aiLocalEmbeddingModel && pref && aiLocalEmbeddingModel !== (pref.ai?.local?.embeddingModel)) {
       debouncedAutoSave();
     }
-  }, [aiLocalEmbeddingModel, debouncedAutoSave]);
+  }, [aiLocalEmbeddingModel, debouncedAutoSave, pref]);
 
   // Auto-save when timeout changes
   React.useEffect(() => {
-    if (aiTimeoutMs && pref?.ai && aiTimeoutMs !== pref.ai.timeoutMs) {
+    if (aiTimeoutMs && pref && aiTimeoutMs !== (pref.ai?.timeoutMs)) {
       debouncedAutoSave();
     }
-  }, [aiTimeoutMs, debouncedAutoSave]);
+  }, [aiTimeoutMs, debouncedAutoSave, pref]);
 
   // Auto-save when max tokens changes
   React.useEffect(() => {
-    if (aiMaxTokens && pref?.ai && aiMaxTokens !== pref.ai.maxTokens) {
+    if (aiMaxTokens && pref && aiMaxTokens !== (pref.ai?.maxTokens)) {
       debouncedAutoSave();
     }
-  }, [aiMaxTokens, debouncedAutoSave]);
+  }, [aiMaxTokens, debouncedAutoSave, pref]);
 
   // Auto-save when temperature changes
   React.useEffect(() => {
-    if (aiTemperature !== undefined && pref?.ai && aiTemperature !== pref.ai.temperature) {
+    if (aiTemperature !== undefined && pref && aiTemperature !== (pref.ai?.temperature)) {
       debouncedAutoSave();
     }
-  }, [aiTemperature, debouncedAutoSave]);
+  }, [aiTemperature, debouncedAutoSave, pref]);
 
   // Update Qdrant health when embedding model changes (for footer display)
   React.useEffect(() => {
@@ -374,6 +373,7 @@ export const Preferences = () => {
     setFilesDir(pref.filesDir || '');
     setDevUrlMode(!!pref.devUrlMode);
     setOpenaiApiKey(pref.openaiApiKey || '');
+    setAnthropicApiKey(pref.anthropicApiKey || '');
     setPerplexityApiKey(pref.perplexityApiKey || '');
     setPennyBaseUrl(pref.pennylaneBaseUrl || '');
     setPennyToken(pref.pennylaneToken || '');
@@ -470,6 +470,23 @@ export const Preferences = () => {
                 Meteor.call('appPreferences.update', { openaiApiKey: next }, () => {});
               }}
             />
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Anthropic API Key (Chat)</div>
+          <div className="prefsValue">
+            <InlineEditable
+              value={anthropicApiKey}
+              placeholder="sk-ant-..."
+              fullWidth
+              onSubmit={(next) => {
+                setAnthropicApiKey(next);
+                Meteor.call('appPreferences.update', { anthropicApiKey: next }, () => {});
+              }}
+            />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Utilisé par le chat AI (Claude SDK avec toolRunner)
+            </div>
           </div>
         </div>
         <div className="prefsRow">

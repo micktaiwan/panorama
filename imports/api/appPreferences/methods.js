@@ -16,6 +16,7 @@ Meteor.methods({
       onboardedAt: null,
       devUrlMode: false,
       openaiApiKey: null,
+      anthropicApiKey: null,
       perplexityApiKey: null,
       pennylaneBaseUrl: null,
       pennylaneToken: null,
@@ -30,6 +31,7 @@ Meteor.methods({
     if (modifier.onboardedAt === true) set.onboardedAt = new Date();
     if (typeof modifier.devUrlMode === 'boolean') set.devUrlMode = modifier.devUrlMode;
     if (typeof modifier.openaiApiKey === 'string') set.openaiApiKey = modifier.openaiApiKey.trim() || null;
+    if (typeof modifier.anthropicApiKey === 'string') set.anthropicApiKey = modifier.anthropicApiKey.trim() || null;
     if (typeof modifier.perplexityApiKey === 'string') set.perplexityApiKey = modifier.perplexityApiKey.trim() || null;
     if (typeof modifier.pennylaneBaseUrl === 'string') set.pennylaneBaseUrl = modifier.pennylaneBaseUrl.trim() || null;
     if (typeof modifier.pennylaneToken === 'string') set.pennylaneToken = modifier.pennylaneToken.trim() || null;
