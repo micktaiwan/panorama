@@ -30,6 +30,22 @@ const clampText = (s, max = 300) => {
   return str.slice(0, max - 1) + '…';
 };
 
+// Validate projectId exists before querying
+const validateProjectId = async (projectId) => {
+  if (!projectId) return { valid: false, error: 'projectId is required' };
+  const id = String(projectId).trim();
+  // Meteor IDs are 17 alphanumeric chars
+  if (!/^[a-zA-Z0-9]{17}$/.test(id)) {
+    return { valid: false, error: `Invalid projectId format: "${id}". Expected 17 alphanumeric characters.` };
+  }
+  const { ProjectsCollection } = await import('/imports/api/projects/collections');
+  const exists = await ProjectsCollection.findOneAsync({ _id: id }, { fields: { _id: 1 } });
+  if (!exists) {
+    return { valid: false, error: `Project not found: "${id}". Use tool_projectByName to find the correct ID.` };
+  }
+  return { valid: true, id };
+};
+
 const embedQuery = async (text) => {
   const { embedText } = await import('/imports/api/search/vectorStore');
   return embedText(text);
@@ -129,8 +145,17 @@ export const TOOL_HANDLERS = {
     );
   },
   async tool_tasksByProject(args, memory) {
+    // Validate projectId exists
+    const validation = await validateProjectId(args?.projectId);
+    if (!validation.valid) {
+      return buildErrorResponse(validation.error, 'tool_tasksByProject', {
+        code: 'INVALID_PROJECT_ID',
+        suggestion: 'Use tool_projectByName({"name": "..."}) to find the correct project ID first.'
+      });
+    }
+
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const selector = buildByProjectSelector(args?.projectId);
+    const selector = buildByProjectSelector(validation.id);
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
@@ -424,9 +449,17 @@ export const TOOL_HANDLERS = {
     }
   },
   async tool_notesByProject(args, memory) {
+    // Validate projectId exists
+    const validation = await validateProjectId(args?.projectId);
+    if (!validation.valid) {
+      return buildErrorResponse(validation.error, 'tool_notesByProject', {
+        code: 'INVALID_PROJECT_ID',
+        suggestion: 'Use tool_projectByName({"name": "..."}) to find the correct project ID first.'
+      });
+    }
+
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const projectId = String(args?.projectId || '').trim();
-    const notes = await NotesCollection.find({ projectId }, { fields: { title: 1 } }).fetchAsync();
+    const notes = await NotesCollection.find({ projectId: validation.id }, { fields: { title: 1 } }).fetchAsync();
     const mapped = (notes || []).map(n => ({ id: n._id, title: clampText(n.title || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.notes = mapped; }
     return buildSuccessResponse({ notes: mapped, total: mapped.length }, 'tool_notesByProject');
