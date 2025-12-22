@@ -97,7 +97,7 @@
 
 .ChatWidget__message {
   display: flex;
-  margin: 4px 0;
+  margin: 16px 0;
 }
 
 .ChatWidget__message--user {
@@ -166,10 +166,17 @@
   font-size: 13px;
   line-height: 1.25;
   word-break: break-word;
+  background: transparent;
 }
 .ChatWidget__content.aiMarkdown {
   border: none;
   padding: 0;
+  background: transparent;
+  margin-bottom: 0;
+}
+/* Ensure markdown elements don't have unexpected backgrounds */
+.ChatWidget__content.aiMarkdown > * {
+  background: transparent;
 }
 /* Reduce vertical space from line breaks */
 .ChatWidget__content br {
@@ -191,9 +198,9 @@
 .ChatWidget__content.aiMarkdown h3 { font-size: 1em; }
 
 .ChatWidget__content.aiMarkdown p {
-  margin: 0 0 2px 0;
+  margin: 0;
 }
-.ChatWidget__content.aiMarkdown p:last-child { margin-bottom: 0; }
+.ChatWidget__content.aiMarkdown p + p { margin-top: 2px; }
 
 .ChatWidget__content.aiMarkdown ul,
 .ChatWidget__content.aiMarkdown ol {
@@ -336,6 +343,33 @@
 .ChatWidget__close:focus-visible {
   outline: 2px solid #0b5fff;
   outline-offset: 2px;
+}
+
+/* Standalone mode (separate window) */
+.ChatWidget__standalone {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+}
+
+.ChatWidget__panel.standalone {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+/* Container for standalone chat window app */
+.ChatWindowApp {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #0f172a;
 }
 
 

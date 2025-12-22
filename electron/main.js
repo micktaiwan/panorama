@@ -11,6 +11,10 @@ function getWindowStateFilePath() {
   return path.join(app.getPath('userData'), 'window-state.json');
 }
 
+function getChatWindowStateFilePath() {
+  return path.join(app.getPath('userData'), 'chat-window-state.json');
+}
+
 function loadWindowState() {
   try {
     const filePath = getWindowStateFilePath();
@@ -38,6 +42,33 @@ function saveWindowState(win) {
     fs.writeFileSync(getWindowStateFilePath(), JSON.stringify(state, null, 2), 'utf-8');
   } catch (error) {
     console.error('[electron] Failed to save window state:', error);
+  }
+}
+
+function loadChatWindowState() {
+  try {
+    const filePath = getChatWindowStateFilePath();
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (error) {
+    console.error('[electron] Failed to load chat window state:', error);
+  }
+  return null;
+}
+
+function saveChatWindowState(win) {
+  try {
+    const bounds = win.getBounds();
+    const display = screen.getDisplayMatching(bounds);
+    const state = {
+      bounds,
+      displayId: display?.id
+    };
+    fs.writeFileSync(getChatWindowStateFilePath(), JSON.stringify(state, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('[electron] Failed to save chat window state:', error);
   }
 }
 
@@ -116,6 +147,90 @@ function handleFileDownloadAndOpen(win, url) {
   win.webContents.downloadURL(url);
 }
 
+// Chat window management
+let chatWindow = null;
+let mainWindow = null;
+
+function getMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  // Fallback: find window that's not the chat window
+  const allWindows = BrowserWindow.getAllWindows();
+  return allWindows.find((w) => w !== chatWindow && !w.isDestroyed()) || null;
+}
+
+function createChatWindow() {
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.focus();
+    return;
+  }
+
+  const savedState = loadChatWindowState();
+  const windowOptions = {
+    width: 420,
+    height: 600,
+    minWidth: 300,
+    minHeight: 400,
+    title: 'Panorama Chat',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  };
+
+  // Restore position/size from saved state
+  const validated = validateBounds(savedState);
+  if (validated) {
+    const { x, y, width, height } = validated;
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      windowOptions.x = x;
+      windowOptions.y = y;
+    }
+    if (Number.isFinite(width) && Number.isFinite(height)) {
+      windowOptions.width = width;
+      windowOptions.height = height;
+    }
+  }
+
+  if (process.platform !== 'darwin') {
+    const iconFileName = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+    windowOptions.icon = path.join(__dirname, 'assets', iconFileName);
+  }
+
+  chatWindow = new BrowserWindow(windowOptions);
+  const port = process.env.METEOR_PORT || 3000;
+  chatWindow.loadURL(`http://localhost:${port}?chatWindow=1`);
+
+  // Save state on move/resize
+  let saveTimer = null;
+  const queueSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        saveChatWindowState(chatWindow);
+      }
+    }, 200);
+  };
+  chatWindow.on('resize', queueSave);
+  chatWindow.on('move', queueSave);
+
+  // Handle close event - notify main window
+  chatWindow.on('closed', () => {
+    chatWindow = null;
+    const main = getMainWindow();
+    if (main && !main.isDestroyed()) {
+      main.webContents.send('chat:windowClosed');
+    }
+  });
+
+  // Save state before close
+  chatWindow.on('close', () => {
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      saveChatWindowState(chatWindow);
+    }
+  });
+}
+
 function createWindow(savedState) {
   const windowOptions = {
     width: 1280,
@@ -146,6 +261,7 @@ function createWindow(savedState) {
   }
 
   const win = new BrowserWindow(windowOptions);
+  mainWindow = win; // Track main window reference
   const port = process.env.METEOR_PORT || 3000;
   win.loadURL(`http://localhost:${port}`);
 
@@ -379,6 +495,27 @@ ipcMain.handle('app:notify', (_event, { title, body }) => {
 ipcMain.handle('app:focusMain', () => {
   const win = BrowserWindow.getAllWindows()[0];
   if (win) { win.show(); win.focus(); }
+});
+
+// Chat window IPC handlers
+ipcMain.handle('chat:openWindow', () => {
+  createChatWindow();
+});
+
+ipcMain.handle('chat:closeWindow', () => {
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.close();
+  }
+});
+
+ipcMain.handle('chat:focusWindow', () => {
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.focus();
+  }
+});
+
+ipcMain.handle('chat:isWindowOpen', () => {
+  return chatWindow !== null && !chatWindow.isDestroyed();
 });
 
 
