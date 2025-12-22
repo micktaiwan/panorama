@@ -25,20 +25,28 @@ const initialMessages = [
 const DEFAULT_DOCKED_WIDTH = 420;
 const MIN_DOCKED_WIDTH = 300;
 
-export default function ChatWidget() {
+// Mode cycle order: floating -> docked -> windowed -> floating
+const MODE_CYCLE = ['floating', 'docked', 'windowed'];
+
+export default function ChatWidget({ isStandalone = false }) {
   const [isOpen, setIsOpen] = useState(() => {
+    if (isStandalone) return true; // Always open in standalone mode
     if (typeof localStorage === 'undefined') return false;
     return localStorage.getItem('chat_open') === '1';
   });
-  const [docked, setDocked] = useState(() => {
-    if (typeof localStorage === 'undefined') return false;
-    return localStorage.getItem('chat_docked') === '1';
+  const [mode, setMode] = useState(() => {
+    if (isStandalone) return 'windowed'; // Standalone is always windowed mode
+    if (typeof localStorage === 'undefined') return 'floating';
+    return localStorage.getItem('chat_mode') || 'floating';
   });
   const [dockedWidth, setDockedWidth] = useState(() => {
     if (typeof localStorage === 'undefined') return DEFAULT_DOCKED_WIDTH;
     const saved = localStorage.getItem('chat_docked_width');
     return saved ? Math.max(MIN_DOCKED_WIDTH, parseInt(saved, 10) || DEFAULT_DOCKED_WIDTH) : DEFAULT_DOCKED_WIDTH;
   });
+
+  // Derived state for backward compatibility
+  const docked = mode === 'docked';
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState(() => "");
   const [isSending, setIsSending] = useState(false);
@@ -175,31 +183,43 @@ export default function ChatWidget() {
   // When docked and open, reserve space on the right so content is not hidden
   useEffect(() => {
     const cls = 'withDockedChat';
+    const clsWide = 'chatWide';
+    const WIDE_THRESHOLD = 500; // px - container goes 100% width above this
     const body = typeof document !== 'undefined' ? document.body : null;
     if (!body) return;
     const shouldReserve = isOpen && docked;
     if (shouldReserve) {
       body.classList.add(cls);
       body.style.setProperty('--docked-chat-width', `${dockedWidth}px`);
+      // Force container to 100% when chat is wide
+      if (dockedWidth >= WIDE_THRESHOLD) {
+        body.classList.add(clsWide);
+      } else {
+        body.classList.remove(clsWide);
+      }
     } else {
       body.classList.remove(cls);
+      body.classList.remove(clsWide);
       body.style.removeProperty('--docked-chat-width');
     }
     return () => {
       body.classList.remove(cls);
+      body.classList.remove(clsWide);
       body.style.removeProperty('--docked-chat-width');
     };
   }, [isOpen, docked, dockedWidth]);
 
   // Persist state in localStorage
   useEffect(() => {
+    if (isStandalone) return; // Don't persist in standalone mode
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem('chat_open', isOpen ? '1' : '0');
-  }, [isOpen]);
+  }, [isOpen, isStandalone]);
   useEffect(() => {
+    if (isStandalone) return; // Don't persist in standalone mode
     if (typeof localStorage === 'undefined') return;
-    localStorage.setItem('chat_docked', docked ? '1' : '0');
-  }, [docked]);
+    localStorage.setItem('chat_mode', mode);
+  }, [mode, isStandalone]);
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem('chat_docked_width', String(dockedWidth));
@@ -228,24 +248,68 @@ export default function ChatWidget() {
     document.addEventListener('mouseup', onMouseUp);
   }, [dockedWidth]);
 
-  // Global shortcut: ⌘D to toggle panel
+  // Cycle through modes: floating -> docked -> windowed -> floating
+  const cycleMode = useCallback(async () => {
+    const currentIndex = MODE_CYCLE.indexOf(mode);
+    let nextIndex = (currentIndex + 1) % MODE_CYCLE.length;
+    let nextMode = MODE_CYCLE[nextIndex];
+
+    // Skip windowed mode if not in Electron
+    if (nextMode === 'windowed' && !window.electron?.chatOpenWindow) {
+      nextIndex = (nextIndex + 1) % MODE_CYCLE.length;
+      nextMode = MODE_CYCLE[nextIndex];
+    }
+
+    // Handle windowed mode transitions
+    if (nextMode === 'windowed') {
+      await window.electron.chatOpenWindow();
+    } else if (mode === 'windowed') {
+      // Leaving windowed mode - close the chat window
+      window.electron?.chatCloseWindow?.();
+    }
+
+    setMode(nextMode);
+    setIsOpen(true);
+  }, [mode]);
+
+  // Listen for chat window closed event (when user closes external window)
   useEffect(() => {
+    if (isStandalone) return;
+    if (!window.electron?.onChatWindowClosed) return;
+
+    const cleanup = window.electron.onChatWindowClosed(() => {
+      // When chat window is closed, switch back to floating mode
+      setMode('floating');
+      setIsOpen(true);
+    });
+
+    return cleanup;
+  }, [isStandalone]);
+
+  // Global shortcut: ⌘D to toggle panel, ⌘⇧D to cycle modes
+  useEffect(() => {
+    if (isStandalone) return; // Don't handle shortcuts in standalone window
+
     const onGlobalKeyDown = (e) => {
       const key = String(e.key || '').toLowerCase();
       if (e.metaKey && e.shiftKey && key === 'd') {
         e.preventDefault();
-        setDocked((v) => !v);
-        setIsOpen(true);
+        cycleMode();
         return;
       }
       if (e.metaKey && key === 'd') {
         e.preventDefault();
-        setIsOpen((v) => !v);
+        // In windowed mode, Cmd+D focuses the chat window
+        if (mode === 'windowed') {
+          window.electron?.chatFocusWindow?.();
+        } else {
+          setIsOpen((v) => !v);
+        }
       }
     };
     window.addEventListener('keydown', onGlobalKeyDown);
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
-  }, []);
+  }, [cycleMode, mode, isStandalone]);
 
   const onClickCitation = useCallback((c) => {
     if (!c) return;
@@ -307,6 +371,92 @@ export default function ChatWidget() {
     await writeClipboard(toCopy);
   }, []);
 
+  // In windowed mode (main window), don't render anything - chat is in external window
+  if (mode === 'windowed' && !isStandalone) {
+    return null;
+  }
+
+  // Standalone mode: render full-screen chat without toggle
+  if (isStandalone) {
+    return (
+      <div className="ChatWidget__standalone" aria-live="polite">
+        <div className="ChatWidget__panel standalone" role="dialog" aria-label="AI Chat">
+          <div className="ChatWidget__header">
+            <div className="ChatWidget__title">AI Chat {isSending ? <span className="muted">· Sending…</span> : null}</div>
+            <div>
+              <button type="button" className="ChatWidget__close" onClick={handleCopyTranscript} aria-label="Copy transcript" title="Copy transcript">⧉</button>
+              <button type="button" className="ChatWidget__close" onClick={() => {
+                setPending([]);
+                Meteor.call('chats.clear');
+              }} aria-label="Clear" title="Clear chat">⟲</button>
+            </div>
+          </div>
+
+          <div className="ChatWidget__messages scrollArea" ref={scrollRef}>
+            {hasMessages ? (
+              renderList.map((m) => (
+                <div key={m.id} className={`ChatWidget__message ChatWidget__message--${m.role} ${m.error ? 'ChatWidget__message--error' : ''}${m.isStatus ? ' ChatWidget__message--status' : ''}`}>
+                  <div className="ChatWidget__bubble">
+                    <div
+                      className="ChatWidget__content aiMarkdown"
+                      dangerouslySetInnerHTML={{ __html: marked.parse(m.content || '') }}
+                    />
+                    {Array.isArray(m.citations) && m.citations.length > 0 && (
+                      <div className="ChatWidget__sourcesBlock">
+                        {!expandedCitations.has(m.id) ? (
+                          <button className="ChatWidget__toggleCitations" onClick={() => toggleCitations(m.id)}>Show sources</button>
+                        ) : (
+                          <>
+                            <div className="ChatWidget__citations">
+                              {m.citations.map((c, idx) => (
+                                <button key={idx} className="ChatWidget__citation" onClick={() => onClickCitation(c)}>
+                                  {c.title || c.id || 'source'}
+                                </button>
+                              ))}
+                            </div>
+                            <button className="ChatWidget__toggleCitations" onClick={() => toggleCitations(m.id)}>Hide sources</button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {m.role === 'assistant' && !m.isStatus ? (
+                      <div className="ChatWidget__actions">
+                        <button
+                          type="button"
+                          className="ChatWidget__iconBtn"
+                          onClick={() => handleCopyMessage(m.content)}
+                          aria-label="Copy reply"
+                          title="Copy reply"
+                        >
+                          ⧉
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="ChatWidget__empty">No messages yet.</div>
+            )}
+          </div>
+
+          <div className="ChatWidget__composer">
+            <textarea
+              className="ChatWidget__input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Ask your question… (Enter to send, Shift+Enter for new line)"
+              rows={2}
+              ref={inputRef}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Normal floating/docked mode
   return (
     <div className={`ChatWidget__root${docked ? ' isDocked' : ''}${isResizing ? ' isResizing' : ''}`} aria-live="polite">
       {isOpen && (
