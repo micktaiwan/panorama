@@ -122,7 +122,7 @@
 .ChatWidget__message--status .ChatWidget__content {
   color: #93c5fd;
   font-style: normal;
-  font-size: 13px;
+  font-size: 14px;
 }
 @keyframes statusPulse {
   0%, 100% { opacity: 0.7; }
@@ -163,8 +163,8 @@
 
 .ChatWidget__content {
   color: #e5e7eb;
-  font-size: 13px;
-  line-height: 1.25;
+  font-size: 15px;
+  line-height: 1.4;
   word-break: break-word;
   background: transparent;
 }
@@ -362,6 +362,8 @@
   border-radius: 0;
   border: none;
   box-shadow: none;
+  bottom: auto; /* Reset inherited bottom: 60px from base .ChatWidget__panel */
+  right: auto;
 }
 
 /* Container for standalone chat window app */

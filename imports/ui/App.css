@@ -105,6 +105,11 @@ body.withDockedChat .container {
   padding-right: var(--docked-chat-width, 420px);
 }
 
+/* When chat is wide (>=500px), force container to full width */
+body.chatWide .container {
+  max-width: 100%;
+}
+
 /* Go to screen palette */
 .goList { list-style: none; margin: 0; padding: 0; }
 .goList li { margin: 2px 0; }
