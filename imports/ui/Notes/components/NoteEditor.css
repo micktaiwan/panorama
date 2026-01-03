@@ -18,8 +18,36 @@
 /* Split preview layout */
 .note-editor.split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  /* grid-template-columns is set inline via style prop */
+  gap: 0; /* No gap, resize handle acts as separator */
+}
+
+/* Resize handle for split view */
+.resize-handle {
+  width: 6px;
+  background: var(--border, #404040);
+  cursor: col-resize;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.resize-handle:hover {
+  background: #3b82f6;
+}
+
+.resize-handle:active {
+  background: #2563eb;
+}
+
+/* Prevent text selection while resizing */
+.note-editor.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+.note-editor.resizing .note-textarea,
+.note-editor.resizing .note-preview {
+  pointer-events: none;
 }
 
 .note-preview {
