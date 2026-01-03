@@ -592,4 +592,25 @@ export const TOOL_DEFINITIONS = [
       required: []
     }
   },
+  {
+    type: 'function',
+    name: 'tool_readFile',
+    description: 'Read the contents of a file from the local filesystem. Supports text files (markdown, JSON, JavaScript, etc.). Use when the user wants to read or examine file contents.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Absolute file path to read (e.g., /Users/name/.claude/plans/filename.md). Path must be absolute, not relative.'
+        },
+        encoding: {
+          type: 'string',
+          enum: ['utf8', 'utf16le', 'latin1', 'ascii'],
+          description: 'Text encoding for reading the file (default: utf8)'
+        }
+      },
+      required: ['filePath']
+    }
+  },
 ];

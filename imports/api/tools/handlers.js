@@ -1626,5 +1626,109 @@ export const TOOL_HANDLERS = {
       console.error('[tool_mcpServersSync] Error:', error);
       throw new Error(`Failed to sync MCP servers: ${error.message}`);
     }
+  },
+
+  /**
+   * Read file contents from the filesystem
+   * Supports text files (markdown, JSON, code, etc.)
+   */
+  async tool_readFile(args, memory) {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      // Validate filePath parameter
+      const filePath = String(args?.filePath || '').trim();
+      if (!filePath) {
+        return buildErrorResponse('filePath is required', 'tool_readFile', {
+          code: 'MISSING_PARAMETER',
+          suggestion: 'Provide an absolute file path, e.g., {filePath: "/Users/name/.claude/plans/filename.md"}'
+        });
+      }
+
+      // Validate that it's an absolute path
+      if (!path.isAbsolute(filePath)) {
+        return buildErrorResponse(`Path must be absolute, got: "${filePath}"`, 'tool_readFile', {
+          code: 'INVALID_PATH',
+          suggestion: 'Use absolute paths starting with / (Unix) or C:\ (Windows)'
+        });
+      }
+
+      // Resolve the path to prevent directory traversal issues
+      const resolvedPath = path.resolve(filePath);
+
+      // Check file exists and is readable
+      try {
+        await fs.access(resolvedPath);
+      } catch (error) {
+        return buildErrorResponse(`File not found or not accessible: "${filePath}"`, 'tool_readFile', {
+          code: 'FILE_NOT_FOUND',
+          resolvedPath,
+          originalPath: filePath
+        });
+      }
+
+      // Get file stats to check it's a regular file
+      const stats = await fs.stat(resolvedPath);
+      if (!stats.isFile()) {
+        return buildErrorResponse(`Path is not a regular file: "${filePath}"`, 'tool_readFile', {
+          code: 'INVALID_FILE_TYPE',
+          isDirectory: stats.isDirectory(),
+          isSymlink: stats.isSymbolicLink()
+        });
+      }
+
+      // Check file size (limit to 10MB to prevent issues)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (stats.size > maxSize) {
+        return buildErrorResponse(`File is too large (${(stats.size / 1024 / 1024).toFixed(2)}MB, max 10MB): "${filePath}"`, 'tool_readFile', {
+          code: 'FILE_TOO_LARGE',
+          size: stats.size,
+          maxSize
+        });
+      }
+
+      // Determine encoding (default utf8)
+      const encoding = String(args?.encoding || 'utf8').toLowerCase();
+      const validEncodings = ['utf8', 'utf16le', 'latin1', 'ascii'];
+      if (!validEncodings.includes(encoding)) {
+        return buildErrorResponse(`Invalid encoding "${encoding}". Valid options: ${validEncodings.join(', ')}`, 'tool_readFile', {
+          code: 'INVALID_ENCODING'
+        });
+      }
+
+      // Read file content
+      const content = await fs.readFile(resolvedPath, encoding);
+
+      // Prepare response
+      const result = {
+        path: filePath,
+        resolvedPath,
+        encoding,
+        size: stats.size,
+        content,
+        lineCount: content.split('\n').length
+      };
+
+      if (memory) {
+        memory.lastFile = {
+          path: filePath,
+          size: stats.size,
+          lineCount: result.lineCount
+        };
+      }
+
+      return buildSuccessResponse(result, 'tool_readFile', {
+        source: 'filesystem',
+        policy: 'read_only'
+      });
+
+    } catch (error) {
+      console.error('[tool_readFile] Error:', error);
+      return buildErrorResponse(error, 'tool_readFile', {
+        code: 'READ_ERROR',
+        message: error.message
+      });
+    }
   }
 };
