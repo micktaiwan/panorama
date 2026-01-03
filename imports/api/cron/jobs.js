@@ -231,24 +231,25 @@ async function prepareEmailCtaMorningBatch() {
 }
 
 function registerJobs() {
-  const cronSettings = Meteor.settings?.cron || {};
-  const timezone = cronSettings.timezone || 'Europe/Paris';
+  // const cronSettings = Meteor.settings?.cron || {};
+  // const timezone = cronSettings.timezone || 'Europe/Paris';
 
-  scheduleNoOverlap(
-    'urgent-tasks-reporting',
-    '0 9 * * 1-5', // Monday to Friday at 9:00 AM
-    timezone,
-    urgentTasksReporting
-  );
+  // scheduleNoOverlap(
+  //   'urgent-tasks-reporting',
+  //   '0 9 * * 1-5', // Monday to Friday at 9:00 AM
+  //   timezone,
+  //   urgentTasksReporting
+  // );
 
-  scheduleNoOverlap(
-    'email-morning-batch',
-    '0 9 * * 1-5', // Monday to Friday at 9:00 AM
-    timezone,
-    prepareEmailCtaMorningBatch
-  );
+  // scheduleNoOverlap(
+  //   'email-morning-batch',
+  //   '0 9 * * 1-5', // Monday to Friday at 9:00 AM
+  //   timezone,
+  //   prepareEmailCtaMorningBatch
+  // );
 
-  console.log('[cron] Jobs registered - urgent tasks and email batch on weekdays at 9:00 AM');
+  // console.log('[cron] Jobs registered - urgent tasks and email batch on weekdays at 9:00 AM');
+  console.log('[cron] Jobs disabled - all cron jobs are commented out');
 }
 
 Meteor.methods({
