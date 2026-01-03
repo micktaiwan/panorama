@@ -30,16 +30,26 @@ export const NoteEditor = ({
 }) => {
   const textAreaRef = useRef(null);
   const pendingSelectionRef = useRef(null);
+  const editorRef = useRef(null);
+  const resizingRef = useRef(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [undoAvailable, setUndoAvailable] = useState(false);
   const [showCleanModal, setShowCleanModal] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [splitPreview, setSplitPreview] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       return window.localStorage.getItem('notes.splitPreview') === 'true';
     }
     return false;
+  });
+  const [splitRatio, setSplitRatio] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('notes.splitRatio');
+      return saved ? parseFloat(saved) : 50;
+    }
+    return 50;
   });
 
   const renderedHtml = useMemo(() => {
@@ -175,6 +185,34 @@ export const NoteEditor = ({
     return !!sessionStorage.getItem(undoKey);
   };
 
+  // Resize handlers for split view
+  const handleResizeMouseDown = (e) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    setIsResizing(true);
+    document.addEventListener('mousemove', handleResizeMouseMove);
+    document.addEventListener('mouseup', handleResizeMouseUp);
+  };
+
+  const handleResizeMouseMove = (e) => {
+    if (!resizingRef.current || !editorRef.current) return;
+    const container = editorRef.current;
+    const rect = container.getBoundingClientRect();
+    const newRatio = ((e.clientX - rect.left) / rect.width) * 100;
+    const clampedRatio = Math.min(Math.max(newRatio, 20), 80);
+    setSplitRatio(clampedRatio);
+  };
+
+  const handleResizeMouseUp = () => {
+    resizingRef.current = false;
+    setIsResizing(false);
+    document.removeEventListener('mousemove', handleResizeMouseMove);
+    document.removeEventListener('mouseup', handleResizeMouseUp);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('notes.splitRatio', String(splitRatio));
+    }
+  };
+
   // Update undo availability when activeTabId changes
   useEffect(() => {
     setUndoAvailable(hasUndoData());
@@ -207,6 +245,14 @@ export const NoteEditor = ({
     }
   }, [noteContents, activeTabId]);
 
+  // Cleanup resize event listeners on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMouseMove);
+      document.removeEventListener('mouseup', handleResizeMouseUp);
+    };
+  }, []);
+
   if (!activeTabId) {
     return (
       <div className="note-editor-container">
@@ -225,7 +271,11 @@ export const NoteEditor = ({
 
   return (
     <div className="note-editor-container">
-      <div className={`note-editor${splitPreview ? ' split' : ''}`}>
+      <div
+        ref={editorRef}
+        className={`note-editor${splitPreview ? ' split' : ''}${isResizing ? ' resizing' : ''}`}
+        style={splitPreview ? { gridTemplateColumns: `${splitRatio}% 6px 1fr` } : undefined}
+      >
         <textarea
           ref={textAreaRef}
           value={noteContents[activeTabId] || ''}
@@ -330,7 +380,13 @@ export const NoteEditor = ({
           className="note-textarea"
         />
         {splitPreview && (
-          <div className="note-preview aiMarkdown webMarkdown" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+          <>
+            <div
+              className="resize-handle"
+              onMouseDown={handleResizeMouseDown}
+            />
+            <div className="note-preview aiMarkdown webMarkdown" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+          </>
         )}
       </div>
       
