@@ -78,6 +78,9 @@ Meteor.methods({
     check(records, Array);
     const now = new Date();
 
+    // Count total before import
+    const totalBefore = await PeopleCollection.find({}).countAsync();
+
     // Build lookup maps from existing people
     const cursor = PeopleCollection.find({}, { fields: { _id: 1, email: 1, name: 1, lastName: 1, left: 1 } });
     const existingPeople = typeof cursor.fetchAsync === 'function' ? await cursor.fetchAsync() : cursor.fetch();
@@ -162,7 +165,10 @@ Meteor.methods({
       }
     }
 
-    return { inserted, updated, skipped };
+    // Count total after import
+    const totalAfter = await PeopleCollection.find({}).countAsync();
+
+    return { inserted, updated, skipped, totalBefore, totalAfter };
   }
 });
 
