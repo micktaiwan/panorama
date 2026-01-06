@@ -34,6 +34,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
   const [teamCreateName, setTeamCreateName] = useState('');
   const [teamDeleteId, setTeamDeleteId] = useState(null);
   const [personDeleteId, setPersonDeleteId] = useState(null);
+  const [importResult, setImportResult] = useState(null);
   const [filter, setFilter] = useState(() => loadPeopleFilters().text);
   const [teamFilter, setTeamFilter] = useState(() => loadPeopleFilters().team);
   const [subteamFilter, setSubteamFilter] = useState(() => loadPeopleFilters().subteam);
@@ -232,6 +233,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
         teams={teams}
         count={sorted.length}
         onCopy={handleCopy}
+        onImportComplete={setImportResult}
       />
       <Collapsible title="Teams" className="peopleSection" open={openTeams} onToggle={setOpenTeams} toggleTextClosed="Show teams" toggleTextOpen="Hide teams">
         <TeamsTable
@@ -299,6 +301,44 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
         ]}
       >
         <p>Delete this person? This action cannot be undone.</p>
+      </Modal>
+
+      <Modal
+        open={!!importResult}
+        onClose={() => setImportResult(null)}
+        title="Import Results"
+        actions={[
+          <button key="close" className="btn btn-primary" onClick={() => setImportResult(null)}>Close</button>
+        ]}
+      >
+        {importResult && (
+          <div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>Total before:</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{importResult.totalBefore || 0}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>Total after:</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{importResult.totalAfter || 0}</td>
+                </tr>
+                <tr style={{ borderTop: '1px solid #ccc' }}>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>New people:</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{importResult.inserted || 0}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>Updated:</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{importResult.updated || 0}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '8px', fontWeight: 'bold' }}>Skipped:</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{importResult.skipped || 0}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </Modal>
       <Collapsible title="People" className="peopleSection" open={openList} onToggle={setOpenList}>
         <div className="tableMeta">Displayed: {sorted.length}</div>

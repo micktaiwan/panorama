@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { notify } from '/imports/ui/utils/notify.js';
 
-export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilter, onTeamFilterChange, subteamFilter, onSubteamFilterChange, teams, count = 0, onCopy }) => {
+export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilter, onTeamFilterChange, subteamFilter, onSubteamFilterChange, teams, count = 0, onCopy, onImportComplete }) => {
   return (
     <div className="peopleToolbar">
       <button className="btn btn-primary" onClick={onNewPerson}>New person</button>
@@ -49,9 +49,8 @@ export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilte
               Meteor.call('people.importGoogleWorkspace', records, (err, res) => {
                 if (err) {
                   notify({ message: `Import failed: ${err.message}`, kind: 'error' });
-                } else {
-                  const { inserted = 0, updated = 0, skipped = 0 } = res || {};
-                  notify({ message: `Import done. Inserted: ${inserted}, Updated: ${updated}, Skipped: ${skipped}`, kind: 'info' });
+                } else if (onImportComplete) {
+                  onImportComplete(res);
                 }
               });
             } catch (err) {
@@ -76,5 +75,6 @@ PeopleFilterBar.propTypes = {
   teams: PropTypes.array,
   count: PropTypes.number,
   onCopy: PropTypes.func,
+  onImportComplete: PropTypes.func,
 };
 
