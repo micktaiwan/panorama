@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine, formatAnchors, buildEntriesBlock, buildProjectsBlock } from '/imports/api/_shared/aiCore';
 
 Meteor.methods({
@@ -16,7 +17,8 @@ Meteor.methods({
       return { content: original };
     }
 
-    const system = 'You fix spelling and basic grammar without changing meaning or tone.';
+    const userContext = buildUserContextBlock();
+    const system = `You fix spelling and basic grammar without changing meaning or tone.\n\n${userContext}`;
     const instructions = [
       'This is a short journal entry. Do not summarize or translate.',
       'Keep the same language as the original.',
@@ -66,6 +68,7 @@ Meteor.methods({
 
     const { tz, sinceLocalIso, nowLocalIso, startLocal, endLocal } = formatAnchors(now, since);
 
+    const userContext = buildUserContextBlock();
     const system = ([
       'You analyze short journal entries and produce: (1) a structured summary organized by subject in simple text format, (2) task suggestions.',
       'Do NOT invent facts. Use the provided entries only. Keep original language (typically French).',
@@ -79,7 +82,9 @@ Meteor.methods({
       '- Task titles should be clear, concise action statements (e.g., "Call client about project status", "Review budget proposal").',
       '- Assign appropriate projectId if the task clearly relates to an existing project, otherwise leave empty.',
       '- Extract deadlines only if explicitly mentioned in the entries, otherwise leave empty.',
-      '- Focus on quality over quantity: prefer fewer, well-grounded tasks over many weak suggestions.'
+      '- Focus on quality over quantity: prefer fewer, well-grounded tasks over many weak suggestions.',
+      '',
+      userContext
     ].join(' '));
 
     const entriesBlock = buildEntriesBlock(logs);

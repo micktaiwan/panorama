@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 /**
  * Clean AI response by removing Markdown code blocks (```json...```)
@@ -24,7 +25,8 @@ Meteor.methods({
     const name = String(project.name || '').trim();
     const desc = String(project.description || '').trim();
 
-    const system = 'You are a product discovery assistant. Ask clarifying questions to improve a project description.';
+    const userContext = buildUserContextBlock();
+    const system = `You are a product discovery assistant. Ask clarifying questions to improve a project description.\n\n${userContext}`;
     const user = [
       'Given the project below, ask up to 6 high-signal questions that would help clarify scope, outcomes, constraints, and first steps.',
       'Keep questions concise and concrete. Use the same language as the user content when possible (often French).',
@@ -81,7 +83,8 @@ Meteor.methods({
     const name = String(project.name || '').trim();
     const desc = String(project.description || '').trim();
 
-    const system = 'You improve project descriptions and propose initial actionable tasks.';
+    const userContext = buildUserContextBlock();
+    const system = `You improve project descriptions and propose initial actionable tasks.\n\n${userContext}`;
     const rules = [
       'Return STRICT JSON with this exact structure: {"appendedDescription": "text to append", "starterTasks": [{"title": "task", "notes": "optional notes"}, ...]}',
       'Language: respond in the same language as the user inputs and project description (often French).',

@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { check } from 'meteor/check';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 const windowKeyToMs = (key) => {
   const k = String(key || '').toLowerCase();
@@ -93,12 +94,14 @@ Meteor.methods({
     const lang = (options && typeof options.lang === 'string') ? options.lang.toLowerCase() : 'fr';
     const wantsMarkdown = ((options && typeof options.format === 'string') ? options.format.toLowerCase() : 'text') === 'markdown';
 
+    const userContext = buildUserContextBlock();
     const defaultSystem = [
       'You are an assistant that writes concise CTO activity reports for executive leadership.',
       'Audience: CEO. Objective: inform leadership with a strategic, factual weekly-style update.',
       'Style: high-level; include details only when they clarify a decision or risk.',
       'You receive structured activity items (projects/tasks/notes) and FULL TEXT excerpts of notes.',
-      wantsMarkdown ? 'Do not invent facts; rely only on provided content. Output clean Markdown only.' : 'Do not invent facts; rely only on provided content. Output clean plain text only.'
+      wantsMarkdown ? 'Do not invent facts; rely only on provided content. Output clean Markdown only.' : 'Do not invent facts; rely only on provided content. Output clean plain text only.',
+      '\n\n' + userContext
     ].join(' ');
     const itemsBlock = rows.map(r => `- [${r.whenIso}] (${r.type}) ${r.title}${r.projectId ? ` {projectId:${r.projectId}}` : ''}`).join('\n');
     const toOneLine = (s) => String(s || '').replace(/\s+/g, ' ').trim();

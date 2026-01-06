@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 // Helper function to update note index and project timestamp
 const updateNoteIndex = async (noteId) => {
@@ -33,7 +34,8 @@ Meteor.methods({
       return { content: original };
     }
 
-    const system = `You are a text cleaner. Your job is to normalize notes without summarizing or translating.`;
+    const userContext = buildUserContextBlock();
+    const system = `You are a text cleaner. Your job is to normalize notes without summarizing or translating.\n\n${userContext}`;
     
     // Use custom prompt if provided, otherwise use default instructions
     const instructions = customPrompt || `
@@ -83,7 +85,8 @@ Meteor.methods({
       return { content: original };
     }
 
-    const system = `You are a text summarizer. Your job is to create concise summaries while preserving key information.`;
+    const userContext = buildUserContextBlock();
+    const system = `You are a text summarizer. Your job is to create concise summaries while preserving key information.\n\n${userContext}`;
     const instructions = `
     Rules for summarizing notes:
     1. Create a concise summary that captures the main points and key information.

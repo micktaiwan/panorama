@@ -4,6 +4,7 @@ import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { toOneLine } from '/imports/api/_shared/aiCore';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 const buildPrompt = ({ project, lines: noteLines }) => {
   const head = [
@@ -66,7 +67,8 @@ Meteor.methods({
     // Lazy import to avoid client bundling
     // Structured JSON output with citations
     const numbered = lines.map((l, idx) => `L${idx + 1}: ${l.content}`);
-    const system = 'You summarize CTO project meeting notes strictly from provided content.';
+    const userContext = buildUserContextBlock();
+    const system = 'You summarize CTO project meeting notes strictly from provided content.\n\n' + userContext;
     const instructions = [
       'Use ONLY the provided notes. Do not invent facts.',
       'Return a JSON object with fields: summary, decisions, risks, nextSteps.',
@@ -142,10 +144,12 @@ Meteor.methods({
     // OpenAI structured outputs prefer an object root; wrap outputs in object fields
 
     // Build final system and user contents once and log them
+    const userContext = buildUserContextBlock();
     const systemContent = 'You are a CTO project coach. Ask concise, high-signal questions, propose concrete ' +
       'ideas/suggestions, and if the notes contain explicit questions, provide concise answers. Ground ' +
       'everything strictly in the provided notes. Only propose NEW items; do not repeat or rephrase ' +
-      'previously asked or suggested ones. Keep same language as the original notes (generally French).';
+      'previously asked or suggested ones. Keep same language as the original notes (generally French).\n\n' +
+      userContext;
     const userContent = `${prompt}\n\nPrevious coach items (for context; avoid duplicates):\nQuestions:\n` +
       `${previousQuestionsBlock}\n\nIdeas:\n${previousIdeasBlock}\n\nAnswers:\n${previousAnswersBlock}\n\n` +
       `Notes (numbered):\n${numbered.join('\n')}`;

@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine } from '/imports/api/_shared/aiCore';
 
 Meteor.methods({
@@ -15,7 +16,8 @@ Meteor.methods({
       .filter(p => !!p.name)
       .map(p => ({ name: toOneLine(p.name), description: toOneLine(p.description) }));
 
-    const system = 'You convert free-form text into structured projects and tasks. Output JSON only.';
+    const userContext = buildUserContextBlock();
+    const system = `You convert free-form text into structured projects and tasks. Output JSON only.\n\n${userContext}`;
     const now = new Date();
     const nowIso = now.toISOString();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
