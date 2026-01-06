@@ -4,6 +4,7 @@ import { google } from 'googleapis';
 import { GmailTokensCollection, GmailMessagesCollection, EmailActionLogsCollection } from './collections.js';
 import { chatComplete } from '/imports/api/_shared/llmProxy.js';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections.js';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 // OAuth2 configuration
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'];
@@ -785,7 +786,8 @@ Thread Content:
 ${threadText}
     `.trim();
     
-    const system = 'You are an email thread analysis assistant. Analyze email conversations and provide structured insights including summary, key topics, decisions, and action items.';
+    const userContext = buildUserContextBlock();
+    const system = `You are an email thread analysis assistant. Analyze email conversations and provide structured insights including summary, key topics, decisions, and action items.\n\n${userContext}`;
     const userContent = `Analyze this email thread and provide:
 
 1. Résumé de la conversation : A global summary of the exchange
@@ -1087,7 +1089,8 @@ export async function suggestCtaInternal(emailId) {
       bodyPreview: email.bodyPreview ? email.bodyPreview.substring(0, 2000) : ''
     };
 
-    const systemPrompt = `You are an email assistant that suggests the most appropriate action for each email to help achieve inbox zero. 
+    const userContext = buildUserContextBlock();
+    const systemPrompt = `You are an email assistant that suggests the most appropriate action for each email to help achieve inbox zero.
 
 Available actions:
 - "delete": Move to trash (for spam, newsletters, promotional emails, or emails that don't require any action)
@@ -1102,7 +1105,9 @@ Respond with a JSON object containing:
 - "rationale": a brief explanation of why you chose this action
 
 Example response:
-{"action": "archive", "confidence": 0.8, "rationale": "This appears to be a read notification that doesn't require further action"}`;
+{"action": "archive", "confidence": 0.8, "rationale": "This appears to be a read notification that doesn't require further action"}
+
+${userContext}`;
 
     const userPrompt = `Email to analyze:
 Subject: ${emailContext.subject}

@@ -7,6 +7,7 @@ import { SituationNotesCollection } from '/imports/api/situationNotes/collection
 import { SituationSummariesCollection } from '/imports/api/situationSummaries/collections';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildKnownPeopleCatalog, buildRosterForQuestions, buildRosterForSummary, buildPriorBlock, buildNotesByActorBlock, logOpenAiPayload } from '/imports/api/situations/promptHelpers';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 const callOpenAi = async (system, user) => {
   try {
@@ -34,12 +35,15 @@ Meteor.methods({
     // Build a compact known-people catalog to guide matching (include ids)
     const knownPeople = await PeopleCollection.find({}, { fields: { name: 1, lastName: 1, aliases: 1, role: 1 } }).fetchAsync();
     const catalogLines = buildKnownPeopleCatalog(knownPeople);
+    const userContext = buildUserContextBlock();
     const system = [
       'Extract a list of actors and their roles in this situation ("situationRole", not their company role ("role")) from the provided situation.',
       'Language: French for roles where appropriate.',
       'Always include personId and situationRole as strings; use empty string ("") when unknown.',
       'Use company roles and aliases from the known roster to disambiguate people with the same name. Prefer returning personId from the provided roster.',
-      'Output a strict JSON object matching the provided schema.'
+      'Output a strict JSON object matching the provided schema.',
+      '',
+      userContext
     ].join(' ');
     const user = [
       'Situation description:',
@@ -149,13 +153,16 @@ Meteor.methods({
         generalNotes.push(line);
       }
     }
+    const userContext = buildUserContextBlock();
     const system = [
       'You generate neutral, insightful interview questions per actor.',
       'Language: French. Use tutoiement ("tu"), never vouvoiement.',
       'Tone: neutral, non-blaming, focused on understanding and improvements.',
       'Output a strict JSON object matching the provided schema. The field personId is REQUIRED for every item and MUST be one of the roster ids.',
       'When considering context, use situationRole (role specific to this situation), not the company title.',
-      'Important: For each question object, set r to an empty string ("") — do NOT provide any suggested reply, rationale, or hint in r.'
+      'Important: For each question object, set r to an empty string ("") — do NOT provide any suggested reply, rationale, or hint in r.',
+      '',
+      userContext
     ].join(' ');
     const roster = buildRosterForQuestions(activeActors);
     // Render prior Q/R for context
@@ -278,10 +285,13 @@ Meteor.methods({
       }
       return blocks.length > 0 ? blocks.join('\n\n') : '(none)';
     };
+    const userContext = buildUserContextBlock();
     const system = [
       'You write a summary and an action plan. Output must be in French.',
       'Style: simple sentences, clear, no jargon; explain and popularize.',
-      'No Markdown. No tables. Plain text only.'
+      'No Markdown. No tables. Plain text only.',
+      '',
+      userContext
     ].join(' ');
     const user = [
       'Situation content:',

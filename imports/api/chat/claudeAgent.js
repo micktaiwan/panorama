@@ -5,6 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicApiKey } from '/imports/api/_shared/config';
 import { TOOL_HANDLERS } from '/imports/api/tools/handlers';
 import { TOOL_DEFINITIONS } from '/imports/api/tools/definitions';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 const DEFAULT_MAX_TOKENS = 4096;
@@ -51,9 +52,12 @@ function buildSystemPrompt() {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const nowIso = now.toISOString();
 
+  const userContext = buildUserContextBlock();
+
   return [
     "Tu es l'assistant de Panorama, une application de gestion de projets, tâches et notes.",
     "",
+    userContext,
     `CONTEXTE TEMPOREL: Nous sommes le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (${tz}).`,
     "",
     "Tu as accès à des outils pour interroger et modifier les données de l'utilisateur.",

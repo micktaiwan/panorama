@@ -4,6 +4,7 @@ import { TasksCollection } from '/imports/api/tasks/collections';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { GmailMessagesCollection } from '/imports/api/emails/collections';
 import { suggestCtaInternal } from '/imports/api/emails/methods';
+import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
 let cronJobsStarted = false;
 const jobLocks = new Map();
@@ -59,6 +60,7 @@ async function urgentTasksReporting() {
       statusChangedAt: task.statusChangedAt
     }));
 
+    const userContext = buildUserContextBlock();
     const systemPrompt = `You are a productivity assistant. Analyze the user's urgent tasks and generate a personalized reminder question that starts with "Have you thought about...".
 
 Rules:
@@ -67,6 +69,8 @@ Rules:
 - Use a supportive but firm tone
 - The question must be relevant to the urgent tasks
 - Maximum 2 sentences
+
+${userContext}
 
 Urgent tasks to analyze:
 ${JSON.stringify(tasksContext, null, 2)}`;
