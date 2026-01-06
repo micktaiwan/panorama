@@ -685,7 +685,27 @@ export const TOOL_HANDLERS = {
       status: args?.status || 'todo'
     };
 
-    if (args?.projectId) doc.projectId = String(args.projectId).trim();
+    // Validate projectId if provided
+    if (args?.projectId) {
+      const projectId = String(args.projectId).trim();
+
+      const { ProjectsCollection } = await import('/imports/api/projects/collections');
+      const existingProject = await ProjectsCollection.findOneAsync(
+        { _id: projectId },
+        { fields: { _id: 1 } }
+      );
+
+      if (!existingProject) {
+        console.warn(`[tool_createTask] Project not found: ${projectId}`);
+        return buildErrorResponse(`Project not found: "${projectId}"`, 'tool_createTask', {
+          code: 'PROJECT_NOT_FOUND',
+          suggestion: 'Use tool_projectByName or tool_projectsList to find the correct projectId'
+        });
+      }
+
+      doc.projectId = projectId;
+    }
+
     if (args?.notes) doc.notes = String(args.notes);
     if (args?.deadline) doc.deadline = String(args.deadline);
     if (typeof args?.isUrgent === 'boolean') doc.isUrgent = args.isUrgent;
@@ -710,13 +730,49 @@ export const TOOL_HANDLERS = {
       });
     }
 
+    // Validate that the task exists before attempting update
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const existingTask = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { _id: 1 } });
+
+    if (!existingTask) {
+      console.warn(`[tool_updateTask] Task not found: ${taskId}`);
+      return buildErrorResponse(`Task not found: "${taskId}"`, 'tool_updateTask', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_tasksFilter or tool_tasksByProject to find the correct taskId'
+      });
+    }
+
     const modifier = {};
 
     if (args?.title) modifier.title = String(args.title);
     if (args?.notes !== undefined) modifier.notes = String(args.notes || '');
     if (args?.status) modifier.status = String(args.status);
     if (args?.deadline !== undefined) modifier.deadline = args.deadline ? String(args.deadline) : null;
-    if (args?.projectId !== undefined) modifier.projectId = args.projectId ? String(args.projectId).trim() : null;
+
+    // Validate projectId if provided
+    if (args?.projectId !== undefined) {
+      const projectIdValue = args.projectId ? String(args.projectId).trim() : null;
+
+      // If projectId is provided (not null), verify it exists
+      if (projectIdValue) {
+        const { ProjectsCollection } = await import('/imports/api/projects/collections');
+        const existingProject = await ProjectsCollection.findOneAsync(
+          { _id: projectIdValue },
+          { fields: { _id: 1 } }
+        );
+
+        if (!existingProject) {
+          console.warn(`[tool_updateTask] Project not found: ${projectIdValue}`);
+          return buildErrorResponse(`Project not found: "${projectIdValue}"`, 'tool_updateTask', {
+            code: 'PROJECT_NOT_FOUND',
+            suggestion: 'Use tool_projectByName or tool_projectsList to find the correct projectId'
+          });
+        }
+      }
+
+      modifier.projectId = projectIdValue;
+    }
+
     if (typeof args?.isUrgent === 'boolean') modifier.isUrgent = args.isUrgent;
     if (typeof args?.isImportant === 'boolean') modifier.isImportant = args.isImportant;
 
@@ -727,7 +783,18 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    await Meteor.callAsync('tasks.update', taskId, modifier);
+    const res = await Meteor.callAsync('tasks.update', taskId, modifier);
+
+    // Verify that the update actually modified a document
+    if (res === 0) {
+      console.error(`[tool_updateTask] Update returned 0 for taskId: ${taskId}`);
+      return buildErrorResponse('Task update failed (0 documents modified)', 'tool_updateTask', {
+        code: 'UPDATE_FAILED',
+        suggestion: 'The task may have been deleted between validation and update'
+      });
+    }
+
+    console.log(`[tool_updateTask] Successfully updated task: ${taskId}`);
 
     const result = { updated: true, taskId };
     if (memory) {
@@ -746,8 +813,22 @@ export const TOOL_HANDLERS = {
       });
     }
 
+    // Validate that the task exists before attempting delete
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const existingTask = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { _id: 1 } });
+
+    if (!existingTask) {
+      console.warn(`[tool_deleteTask] Task not found: ${taskId}`);
+      return buildErrorResponse(`Task not found: "${taskId}"`, 'tool_deleteTask', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_tasksFilter or tool_tasksByProject to find the correct taskId'
+      });
+    }
+
     try {
       await Meteor.callAsync('tasks.remove', taskId);
+
+      console.log(`[tool_deleteTask] Successfully deleted task: ${taskId}`);
 
       const result = { deleted: true, taskId };
       if (memory) {
@@ -757,6 +838,7 @@ export const TOOL_HANDLERS = {
 
       return buildSuccessResponse(result, 'tool_deleteTask', { policy: 'write' });
     } catch (error) {
+      console.error(`[tool_deleteTask] Error deleting task ${taskId}:`, error);
       return buildErrorResponse(error, 'tool_deleteTask');
     }
   },
@@ -772,7 +854,27 @@ export const TOOL_HANDLERS = {
     const doc = { title };
 
     if (args?.content) doc.content = String(args.content);
-    if (args?.projectId) doc.projectId = String(args.projectId).trim();
+
+    // Validate projectId if provided
+    if (args?.projectId) {
+      const projectId = String(args.projectId).trim();
+
+      const { ProjectsCollection } = await import('/imports/api/projects/collections');
+      const existingProject = await ProjectsCollection.findOneAsync(
+        { _id: projectId },
+        { fields: { _id: 1 } }
+      );
+
+      if (!existingProject) {
+        console.warn(`[tool_createNote] Project not found: ${projectId}`);
+        return buildErrorResponse(`Project not found: "${projectId}"`, 'tool_createNote', {
+          code: 'PROJECT_NOT_FOUND',
+          suggestion: 'Use tool_projectByName or tool_projectsList to find the correct projectId'
+        });
+      }
+
+      doc.projectId = projectId;
+    }
 
     const noteId = await Meteor.callAsync('notes.insert', doc);
 
@@ -793,11 +895,46 @@ export const TOOL_HANDLERS = {
       });
     }
 
+    // Validate that the note exists before attempting update
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { _id: 1 } });
+
+    if (!existingNote) {
+      console.warn(`[tool_updateNote] Note not found: ${noteId}`);
+      return buildErrorResponse(`Note not found: "${noteId}"`, 'tool_updateNote', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_notesByTitleOrContent or tool_noteById to find the correct noteId'
+      });
+    }
+
     const modifier = {};
 
     if (args?.title) modifier.title = String(args.title);
     if (args?.content !== undefined) modifier.content = String(args.content || '');
-    if (args?.projectId !== undefined) modifier.projectId = args.projectId ? String(args.projectId).trim() : null;
+
+    // Validate projectId if provided
+    if (args?.projectId !== undefined) {
+      const projectIdValue = args.projectId ? String(args.projectId).trim() : null;
+
+      // If projectId is provided (not null), verify it exists
+      if (projectIdValue) {
+        const { ProjectsCollection } = await import('/imports/api/projects/collections');
+        const existingProject = await ProjectsCollection.findOneAsync(
+          { _id: projectIdValue },
+          { fields: { _id: 1 } }
+        );
+
+        if (!existingProject) {
+          console.warn(`[tool_updateNote] Project not found: ${projectIdValue}`);
+          return buildErrorResponse(`Project not found: "${projectIdValue}"`, 'tool_updateNote', {
+            code: 'PROJECT_NOT_FOUND',
+            suggestion: 'Use tool_projectByName or tool_projectsList to find the correct projectId'
+          });
+        }
+      }
+
+      modifier.projectId = projectIdValue;
+    }
 
     if (Object.keys(modifier).length === 0) {
       return buildErrorResponse('No fields to update', 'tool_updateNote', {
@@ -806,7 +943,18 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    await Meteor.callAsync('notes.update', noteId, modifier);
+    const res = await Meteor.callAsync('notes.update', noteId, modifier);
+
+    // Verify that the update actually modified a document
+    if (res === 0) {
+      console.error(`[tool_updateNote] Update returned 0 for noteId: ${noteId}`);
+      return buildErrorResponse('Note update failed (0 documents modified)', 'tool_updateNote', {
+        code: 'UPDATE_FAILED',
+        suggestion: 'The note may have been deleted between validation and update'
+      });
+    }
+
+    console.log(`[tool_updateNote] Successfully updated note: ${noteId}`);
 
     const result = { updated: true, noteId };
     if (memory) {
@@ -825,8 +973,22 @@ export const TOOL_HANDLERS = {
       });
     }
 
+    // Validate that the note exists before attempting delete
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { _id: 1 } });
+
+    if (!existingNote) {
+      console.warn(`[tool_deleteNote] Note not found: ${noteId}`);
+      return buildErrorResponse(`Note not found: "${noteId}"`, 'tool_deleteNote', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_notesByTitleOrContent or tool_noteById to find the correct noteId'
+      });
+    }
+
     try {
       await Meteor.callAsync('notes.remove', noteId);
+
+      console.log(`[tool_deleteNote] Successfully deleted note: ${noteId}`);
 
       const result = { deleted: true, noteId };
       if (memory) {
@@ -836,6 +998,7 @@ export const TOOL_HANDLERS = {
 
       return buildSuccessResponse(result, 'tool_deleteNote', { policy: 'write' });
     } catch (error) {
+      console.error(`[tool_deleteNote] Error deleting note ${noteId}:`, error);
       return buildErrorResponse(error, 'tool_deleteNote');
     }
   },
