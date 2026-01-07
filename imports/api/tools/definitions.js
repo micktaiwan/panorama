@@ -193,11 +193,13 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_peopleList',
-    description: 'List all people in the workspace. Use when the user asks about contacts, people, or team members.',
+    description: 'List all people in the workspace. Use when the user asks about contacts, people, or team members. Optionally filter by team.',
     parameters: {
       type: 'object',
       additionalProperties: false,
-      properties: {}
+      properties: {
+        teamId: { type: 'string', description: 'Filter by team ID (optional)' }
+      }
     }
   },
   {
