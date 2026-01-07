@@ -7,7 +7,7 @@ import { TOOL_HANDLERS } from '/imports/api/tools/handlers';
 import { TOOL_DEFINITIONS } from '/imports/api/tools/definitions';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
-const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
 const DEFAULT_MAX_TOKENS = 4096;
 const MAX_ITERATIONS = 30;
 const MAX_HISTORY_MESSAGES = 40; // Limit history to control token usage
@@ -65,6 +65,12 @@ function buildSystemPrompt() {
     "Sois concis dans tes réponses. Ne fabrique pas d'informations.",
     "Quand tu présentes des données, montre les champs lisibles (titres, noms, dates) pas les IDs internes.",
     "Réponds en français sauf si l'utilisateur parle une autre langue.",
+    "",
+    "RÈGLE CRITIQUE SUR LES DONNÉES:",
+    "- Tu dois utiliser EXCLUSIVEMENT les données retournées par les outils.",
+    "- INTERDIT d'utiliser tes connaissances pré-existantes sur les personnes, entreprises, ou projets.",
+    "- INTERDIT d'inventer, deviner, ou compléter des informations manquantes.",
+    "- Si une information n'est pas dans le tool result, dis explicitement que tu ne l'as pas.",
     "",
     "PARALLÉLISATION:",
     "Quand tu dois effectuer plusieurs opérations similaires (ex: mettre à jour 5 tâches), appelle TOUS les outils en parallèle dans une seule réponse.",
@@ -127,7 +133,15 @@ async function executeTool(toolName, args) {
   try {
     const result = await handler(args, null); // No memory needed with agentic approach
     // Handlers return {output: string} structure
-    return result?.output || JSON.stringify(result);
+    const output = result?.output || JSON.stringify(result);
+
+    // DEBUG: Log tool execution for tool_peopleList
+    if (toolName === 'tool_peopleList') {
+      console.log(`[claudeAgent] ${toolName} executed, output size:`, output.length, 'chars');
+      console.log(`[claudeAgent] ${toolName} output preview:`, output.substring(0, 500) + '...');
+    }
+
+    return output;
   } catch (error) {
     console.error(`[claudeAgent] Tool ${toolName} error:`, error);
     return JSON.stringify({
@@ -394,6 +408,16 @@ export async function runChatAgent(query, history = [], options = {}) {
 
     // Execute all tools in parallel
     const toolResults = await executeToolsInParallel(toolUseBlocks);
+
+    // DEBUG: Log tool results being sent to Claude
+    if (toolUseBlocks.some(t => t.name === 'tool_peopleList')) {
+      const peopleResult = toolResults.find(r =>
+        toolUseBlocks.find(b => b.id === r.tool_use_id && b.name === 'tool_peopleList')
+      );
+      if (peopleResult) {
+        console.log('[claudeAgent] Sending tool_peopleList result to Claude:', peopleResult.content.substring(0, 500) + '...');
+      }
+    }
 
     // Notify about tool execution end
     if (onToolEnd) {

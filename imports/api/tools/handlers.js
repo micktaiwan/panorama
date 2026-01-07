@@ -604,10 +604,25 @@ export const TOOL_HANDLERS = {
   },
   async tool_peopleList(args, memory) {
     const { PeopleCollection } = await import('/imports/api/people/collections');
-    const people = await PeopleCollection.find({}, { fields: { name: 1 } }).fetchAsync();
-    const mapped = (people || []).map(p => ({ id: p._id, name: clampText(p.name || '') }));
+    const selector = {};
+    if (args?.teamId) selector.teamId = String(args.teamId).trim();
+
+    const people = await PeopleCollection.find(selector).fetchAsync();
+    const mapped = (people || []).map(p => {
+      const { _id, ...rest } = p;
+      return { id: _id, ...rest };
+    });
+
+    // DEBUG: Log first 2 people to verify data
+    console.log('[tool_peopleList] First 2 people:', JSON.stringify(mapped.slice(0, 2), null, 2));
+
     if (memory) { memory.lists = memory.lists || {}; memory.lists.people = mapped; }
-    return buildSuccessResponse({ people: mapped, total: mapped.length }, 'tool_peopleList');
+    const response = buildSuccessResponse({ people: mapped, total: mapped.length }, 'tool_peopleList');
+
+    // DEBUG: Log response size
+    console.log('[tool_peopleList] Response output size:', response.output?.length || 0, 'chars');
+
+    return response;
   },
   async tool_teamsList(args, memory) {
     const { TeamsCollection } = await import('/imports/api/teams/collections');
