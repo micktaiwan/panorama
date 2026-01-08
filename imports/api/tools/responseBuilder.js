@@ -195,8 +195,13 @@ export function generateSummary(data, toolName) {
     }
 
     // People & Teams
-    case 'tool_peopleList':
-      return `Found ${total || items.length} person${items.length !== 1 ? 'people' : ''}`;
+    case 'tool_peopleList': {
+      const { total, returned, hasMore } = data || {};
+      if (hasMore) {
+        return `Returned ${returned} of ${total} people (use offset parameter for more results)`;
+      }
+      return `Found ${total || items.length} ${total === 1 ? 'person' : 'people'}`;
+    }
 
     case 'tool_teamsList':
       return `Found ${total || items.length} team${items.length !== 1 ? 's' : ''}`;

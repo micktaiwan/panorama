@@ -604,25 +604,45 @@ export const TOOL_HANDLERS = {
   },
   async tool_peopleList(args, memory) {
     const { PeopleCollection } = await import('/imports/api/people/collections');
+
+    // Default filters: active employees only
     const selector = {};
     if (args?.teamId) selector.teamId = String(args.teamId).trim();
+    if (!args?.includeLeft) selector.left = { $ne: true };
+    if (!args?.includeContacts) selector.contactOnly = { $ne: true };
 
-    const people = await PeopleCollection.find(selector).fetchAsync();
-    const mapped = (people || []).map(p => {
+    // Text search
+    if (args?.search) {
+      const searchRegex = new RegExp(String(args.search).trim(), 'i');
+      selector.$or = [
+        { name: searchRegex },
+        { lastName: searchRegex },
+        { role: searchRegex }
+      ];
+    }
+
+    // Pagination
+    const limit = Math.min(200, Math.max(1, Number(args?.limit) || 50));
+    const skip = Math.max(0, Number(args?.offset) || 0);
+
+    // Field selection: essential fields by default, all fields if includeDetails is true
+    const summaryFields = { _id: 1, name: 1, lastName: 1, role: 1, email: 1, teamId: 1 };
+    const fields = args?.includeDetails ? undefined : summaryFields;
+
+    const total = await PeopleCollection.find(selector).countAsync();
+    const people = await PeopleCollection.find(selector, { fields, limit, skip, sort: { name: 1, lastName: 1 } }).fetchAsync();
+
+    const mapped = people.map(p => {
       const { _id, ...rest } = p;
       return { id: _id, ...rest };
     });
 
-    // DEBUG: Log first 2 people to verify data
-    console.log('[tool_peopleList] First 2 people:', JSON.stringify(mapped.slice(0, 2), null, 2));
-
     if (memory) { memory.lists = memory.lists || {}; memory.lists.people = mapped; }
-    const response = buildSuccessResponse({ people: mapped, total: mapped.length }, 'tool_peopleList');
 
-    // DEBUG: Log response size
-    console.log('[tool_peopleList] Response output size:', response.output?.length || 0, 'chars');
-
-    return response;
+    return buildSuccessResponse(
+      { people: mapped, total, returned: mapped.length, hasMore: skip + mapped.length < total },
+      'tool_peopleList'
+    );
   },
   async tool_teamsList(args, memory) {
     const { TeamsCollection } = await import('/imports/api/teams/collections');

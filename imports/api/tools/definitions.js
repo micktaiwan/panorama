@@ -193,12 +193,18 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_peopleList',
-    description: 'List all people in the workspace. Use when the user asks about contacts, people, or team members. Optionally filter by team.',
+    description: 'List people in the workspace. By default returns active employees with essential fields only. Use search parameter to find specific people.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        teamId: { type: 'string', description: 'Filter by team ID (optional)' }
+        teamId: { type: 'string', description: 'Filter by team ID (optional)' },
+        includeLeft: { type: 'boolean', description: 'Include people who left the company (default: false)' },
+        includeContacts: { type: 'boolean', description: 'Include external contacts (default: false)' },
+        includeDetails: { type: 'boolean', description: 'Return all fields instead of essential fields only (default: false). Essential fields: id, name, lastName, role, email, teamId' },
+        search: { type: 'string', description: 'Search by name, lastName, or role (case-insensitive partial match)' },
+        limit: { type: 'number', description: 'Maximum number of results to return (default: 50, max: 200)' },
+        offset: { type: 'number', description: 'Number of results to skip for pagination (default: 0)' }
       }
     }
   },
