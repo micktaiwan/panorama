@@ -545,13 +545,17 @@ function App() {
 
   // create task now handled inside CommandPalette
 
-  const [wide, setWide] = useState(() => {
-    if (typeof localStorage === 'undefined') return false;
-    return localStorage.getItem('container_wide') === '1';
+  const WIDTH_MODES = ['default', 'w90', 'full'];
+  const WIDTH_LABELS = { default: '1100px', w90: '90%', full: '100%' };
+  const [widthMode, setWidthMode] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'default';
+    const stored = localStorage.getItem('container_width_mode');
+    return WIDTH_MODES.includes(stored) ? stored : 'default';
   });
+  const cycleWidth = () => setWidthMode(m => WIDTH_MODES[(WIDTH_MODES.indexOf(m) + 1) % WIDTH_MODES.length]);
   useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('container_wide', wide ? '1' : '0');
-  }, [wide]);
+    if (typeof localStorage !== 'undefined') localStorage.setItem('container_width_mode', widthMode);
+  }, [widthMode]);
 
   // Redirect to onboarding if not configured
   useEffect(() => {
@@ -563,7 +567,7 @@ function App() {
   }, [subPrefs(), appPrefs?._id, route?.name]);
 
   return (
-    <div className={`container${wide ? ' w90' : ''}`}>
+    <div className={`container${widthMode !== 'default' ? ` ${widthMode}` : ''}`}>
       <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>Panorama</a></h1>
       {favoriteProjects.length > 0 && (
         <div className="favoritesBar">
@@ -939,7 +943,7 @@ function App() {
           <span className="dot">·</span>
           <a href="#/notion-reporting" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'notionReporting' }); }}>Notion</a>
           <span className="dot">·</span>
-          <a href="#/width" onClick={(e) => { e.preventDefault(); setWide(v => !v); }}>{wide ? 'Width: 90%' : 'Width: 1100px'}</a>
+          <a href="#/width" onClick={(e) => { e.preventDefault(); cycleWidth(); }}>Width: {WIDTH_LABELS[widthMode]}</a>
         </span>
       </footer>
       <ChatWidget />
