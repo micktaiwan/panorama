@@ -49,6 +49,7 @@ button { cursor: pointer; }
 
 /* Container width toggle */
 .container.w90 { max-width: 90%; }
+.container.full { max-width: 100%; }
 
 /* Panels and layout */
 .panel {
