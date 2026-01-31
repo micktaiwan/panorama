@@ -552,6 +552,19 @@ export const NotesPage = () => {
     }
   };
 
+  // Cmd/Ctrl + W → close active note tab (scoped to NotesPage)
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && key === 'w' && activeTabId) {
+        e.preventDefault();
+        closeTab(activeTabId);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeTabId, openTabs]);
+
   // Effect to handle URL parameter for opening specific note
   useEffect(() => {
     const route = parseHashRoute();
