@@ -1,0 +1,48 @@
+.ccCommandPopup {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--bg-secondary, #1e293b);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.ccCommandList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.ccCommandItem {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ccCommandItem:hover,
+.ccCommandItemActive {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.ccCommandName {
+  font-weight: 600;
+  color: var(--primary, #3b82f6);
+  white-space: nowrap;
+}
+
+.ccCommandDesc {
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

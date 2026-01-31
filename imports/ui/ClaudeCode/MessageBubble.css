@@ -1,0 +1,207 @@
+.ccMessage {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+}
+
+.ccMessageUser {
+  background: var(--bg-accent, #1a2332);
+  border-color: var(--border-accent, rgba(59, 130, 246, 0.2));
+}
+
+.ccMessageSystem {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.ccMessageRole {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #94a3b8);
+  margin-bottom: 4px;
+}
+
+.ccMessageBody {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text, #e5e7eb);
+}
+
+.ccMarkdown h1,
+.ccMarkdown h2,
+.ccMarkdown h3 {
+  margin: 8px 0 4px;
+  font-size: 14px;
+  color: var(--text-heading, #e2e8f0);
+}
+
+.ccMarkdown p {
+  margin: 4px 0;
+}
+
+.ccMarkdown pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.ccMarkdown code {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.ccMarkdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.ccMarkdown a {
+  color: var(--link, #93c5fd);
+}
+
+.ccMarkdown ul,
+.ccMarkdown ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.ccMarkdown blockquote {
+  border-left: 3px solid var(--border, rgba(255, 255, 255, 0.1));
+  margin: 4px 0;
+  padding: 2px 8px;
+  color: var(--text-muted, #94a3b8);
+}
+
+/* Tool use/result */
+.ccToolUse,
+.ccToolResult {
+  margin: 4px 0;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ccToolUseToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ccToolUseToggle:hover {
+  color: var(--text, #e5e7eb);
+}
+
+.ccToolIcon {
+  font-size: 11px;
+}
+
+.ccToolName {
+  font-family: monospace;
+  font-weight: 500;
+}
+
+.ccToolChevron {
+  margin-left: auto;
+  font-size: 10px;
+}
+
+.ccToolInput {
+  margin: 0;
+  padding: 8px;
+  font-size: 11px;
+  overflow-x: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Tool group (grouped tool-only messages) */
+.ccToolGroup {
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.ccToolGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ccToolGroupHeader:hover {
+  color: var(--text, #e5e7eb);
+}
+
+.ccToolGroupIcon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.ccToolGroupNames {
+  font-family: monospace;
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ccToolGroup--active {
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+.ccToolGroupDetails {
+  padding: 4px 12px 8px;
+  border-top: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+/* Streaming cursor */
+.ccCursor {
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  background: var(--text-muted, #94a3b8);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: ccBlink 0.8s step-end infinite;
+}
+
+@keyframes ccBlink {
+  50% { opacity: 0; }
+}
+
+/* Message meta (tokens, cost, duration) */
+.ccMessageMeta {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  opacity: 0.7;
+}

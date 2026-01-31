@@ -44,6 +44,7 @@ import { EmailsPage } from '/imports/ui/Emails/EmailsPage.jsx';
 import { InboxZero } from '/imports/ui/Emails/InboxZero.jsx';
 import { NotionReporting } from '/imports/ui/NotionReporting/NotionReporting.jsx';
 import { MCPServers } from '/imports/ui/MCPServers/MCPServers.jsx';
+import { ClaudeCodePage } from '/imports/ui/ClaudeCode/ClaudeCodePage.jsx';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -96,6 +97,7 @@ function App() {
   // Command palette state is internal to component; keep only open/close here
   // Go to screen palette
   const [goOpen, setGoOpen] = useState(false);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const goItems = [
     { key: 'v', label: 'Panorama', route: { name: 'panorama' } },
     { key: 'o', label: 'Overview', route: { name: 'dashboard' } },
@@ -113,6 +115,7 @@ function App() {
     { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
     { key: 't', label: 'Notes', route: { name: 'notes' } },
     { key: 'm', label: 'Emails', route: { name: 'emails' } },
+    { key: 'x', label: 'Claude Code', route: { name: 'claude' } },
     { key: 'n', label: 'New Note Session', action: 'newSession' },
     { key: 'h', label: 'Help', route: { name: 'help' } },
     { key: 'g', label: 'Preferences', route: { name: 'preferences' } },
@@ -197,6 +200,27 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [route?.name, route?.projectId]);
+
+  // Cmd/Ctrl + Q → quit confirmation
+  useEffect(() => {
+    // Keyboard shortcut (works in browser dev mode)
+    const onQuitKey = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && key === 'q') {
+        e.preventDefault();
+        setShowQuitConfirm(true);
+      }
+    };
+    window.addEventListener('keydown', onQuitKey);
+
+    // Electron menu Cmd+Q sends IPC
+    const cleanup = window.electron?.onConfirmQuit?.(() => setShowQuitConfirm(true));
+
+    return () => {
+      window.removeEventListener('keydown', onQuitKey);
+      cleanup?.();
+    };
+  }, []);
 
   // Global shortcut: Cmd/Ctrl + G → open Go to screen palette
   useEffect(() => {
@@ -293,44 +317,6 @@ function App() {
     };
     window.addEventListener('keydown', onNavKeys);
     return () => window.removeEventListener('keydown', onNavKeys);
-  }, []);
-
-  // Global shortcut: Cmd/Ctrl + I → cycle focus across visible inputs/textareas (no selects)
-  useEffect(() => {
-    const onCycleInputs = (e) => {
-      const key = String(e.key || '').toLowerCase();
-      const hasMod = e.metaKey || e.ctrlKey;
-      if (!hasMod || key !== 'i') return;
-
-      e.preventDefault();
-      const disallowedTypes = new Set(['hidden', 'button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'color', 'file']);
-      const isVisible = (el) => {
-        const style = window.getComputedStyle(el);
-        if (style.visibility === 'hidden' || style.display === 'none') return false;
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      };
-      const candidates = Array.from(document.querySelectorAll('input, textarea')).filter((el) => {
-        if (!el || typeof el !== 'object') return false;
-        if (el.getAttribute && el.getAttribute('tabindex') === '-1') return false;
-        if (el.disabled) return false;
-        const tag = String(el.tagName || '').toLowerCase();
-        if (tag === 'textarea') return isVisible(el);
-        if (tag !== 'input') return false; // explicitly exclude selects and others
-        const type = String(el.type || 'text').toLowerCase();
-        if (disallowedTypes.has(type)) return false;
-        return isVisible(el);
-      });
-      if (candidates.length === 0) return;
-
-      const activeEl = document.activeElement;
-      const currentIdx = candidates.findIndex((el) => el === activeEl);
-      const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % candidates.length : 0;
-      const next = candidates[nextIdx];
-      if (next && typeof next.focus === 'function') next.focus();
-    };
-    window.addEventListener('keydown', onCycleInputs);
-    return () => window.removeEventListener('keydown', onCycleInputs);
   }, []);
 
   // Keyboard handling when Go to screen palette is open
@@ -727,6 +713,9 @@ function App() {
           <MCPServers />
         </div>
       )}
+      {route?.name === 'claude' && (
+        <ClaudeCodePage projectId={route.projectId} />
+      )}
       {route?.name === 'onboarding' && (
         <div className="panel">
           <Onboarding />
@@ -947,6 +936,32 @@ function App() {
         </span>
       </footer>
       <ChatWidget />
+
+      <Modal
+        open={showQuitConfirm}
+        onClose={() => setShowQuitConfirm(false)}
+        title="Quit Panorama"
+        actions={[
+          <button key="cancel" className="btn" type="button" onClick={() => setShowQuitConfirm(false)}>Cancel</button>,
+          <button
+            key="quit"
+            className="btn btn-primary"
+            type="button"
+            onClick={() => {
+              setShowQuitConfirm(false);
+              if (window.electron?.quit) {
+                window.electron.quit();
+              } else {
+                window.close();
+              }
+            }}
+          >
+            Quit
+          </button>,
+        ]}
+      >
+        Are you sure you want to quit Panorama?
+      </Modal>
     </div>
   );
 }
