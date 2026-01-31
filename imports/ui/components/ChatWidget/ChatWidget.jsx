@@ -286,20 +286,20 @@ export default function ChatWidget({ isStandalone = false }) {
     return cleanup;
   }, [isStandalone]);
 
-  // Global shortcut: ⌘D to toggle panel, ⌘⇧D to cycle modes
+  // Global shortcut: ⌘L to toggle panel, ⌘⇧L to cycle modes
   useEffect(() => {
     if (isStandalone) return; // Don't handle shortcuts in standalone window
 
     const onGlobalKeyDown = (e) => {
       const key = String(e.key || '').toLowerCase();
-      if (e.metaKey && e.shiftKey && key === 'd') {
+      if (e.metaKey && e.shiftKey && key === 'l') {
         e.preventDefault();
         cycleMode();
         return;
       }
-      if (e.metaKey && key === 'd') {
+      if (e.metaKey && key === 'l') {
         e.preventDefault();
-        // In windowed mode, Cmd+D focuses the chat window
+        // In windowed mode, Cmd+L focuses the chat window
         if (mode === 'windowed') {
           window.electron?.chatFocusWindow?.();
         } else {

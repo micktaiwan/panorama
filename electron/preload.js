@@ -20,7 +20,17 @@ contextBridge.exposeInMainWorld('electron', {
   },
 
   // Check if this is the chat window
-  isChatWindow: () => window.location.search.includes('chatWindow=1')
+  isChatWindow: () => window.location.search.includes('chatWindow=1'),
+
+  // Quit the app
+  quit: () => ipcRenderer.invoke('app:quit'),
+
+  // Listen for quit confirmation request (from menu Cmd+Q)
+  onConfirmQuit: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('app:confirmQuit', handler);
+    return () => ipcRenderer.removeListener('app:confirmQuit', handler);
+  }
 });
 
 

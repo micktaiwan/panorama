@@ -83,7 +83,7 @@ export const Help = () => {
         </ul>
         <li className="headingSection headingFeatures"><span className="bold">Special Features</span></li>
         <ul>
-          <li><span className="bold">AI Chat</span> — <span className="bold">⌘D</span> toggle open/close, <span className="bold">⌘⇧D</span> toggle docked sidebar</li>
+          <li><span className="bold">AI Chat</span> — <span className="bold">⌘L</span> toggle open/close, <span className="bold">⌘⇧L</span> toggle docked sidebar</li>
           <li><span className="bold">Journal</span> — <span className="bold">⌘J</span> opens the Journal page</li>
           <li><span className="bold">Eisenhower</span> — <span className="bold">⌘E</span> (macOS) / <span className="bold">Ctrl+E</span> (Windows/Linux) opens the Eisenhower page</li>
           <li><span className="bold">Focus Panorama</span> — <span className="bold">⌘⇧P</span> (macOS) / <span className="bold">Ctrl+Shift+P</span> (Windows/Linux) brings the app to front</li>

@@ -336,7 +336,18 @@ app.whenReady().then(() => {
               { role: 'hideOthers' },
               { role: 'unhide' },
               { type: 'separator' },
-              { role: 'quit' }
+              {
+                label: 'Quit',
+                accelerator: 'CmdOrCtrl+Q',
+                click: () => {
+                  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+                  if (win) {
+                    win.webContents.send('app:confirmQuit');
+                  } else {
+                    app.quit();
+                  }
+                }
+              }
             ]
           }
         ]
@@ -480,6 +491,10 @@ app.on('activate', () => {
 app.on('will-quit', () => {
   // Unregister all global shortcuts
   globalShortcut.unregisterAll();
+});
+
+ipcMain.handle('app:quit', () => {
+  app.quit();
 });
 
 ipcMain.handle('app:notify', (_event, { title, body }) => {
