@@ -22,9 +22,39 @@
   border: 2px solid #12141a;
 }
 
+.note-item-row {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  position: relative;
+}
+
+.note-item-row .note-delete-btn {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.note-item-row:hover .note-delete-btn {
+  opacity: 1;
+}
+
+.note-item-row .note-delete-btn:hover {
+  color: #ef4444;
+}
+
 .note-item {
   padding: 12px;
-  margin-bottom: 4px;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;

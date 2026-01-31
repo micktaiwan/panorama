@@ -1,10 +1,18 @@
 .note-editor-container {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-height: 0; /* Allow flex item to shrink */
   overflow: hidden; /* Prevent overflow */
   max-height: 100%; /* Don't exceed parent height */
+}
+
+.note-editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .note-editor {
@@ -13,68 +21,6 @@
   flex-direction: column;
   min-height: 0; /* Allow flex item to shrink below content size */
   overflow: hidden; /* Prevent overflow */
-}
-
-/* Split preview layout */
-.note-editor.split {
-  display: grid;
-  /* grid-template-columns is set inline via style prop */
-  gap: 0; /* No gap, resize handle acts as separator */
-}
-
-/* Resize handle for split view */
-.resize-handle {
-  width: 6px;
-  background: var(--border, #404040);
-  cursor: col-resize;
-  transition: background 0.15s;
-  flex-shrink: 0;
-}
-
-.resize-handle:hover {
-  background: #3b82f6;
-}
-
-.resize-handle:active {
-  background: #2563eb;
-}
-
-/* Prevent text selection while resizing */
-.note-editor.resizing {
-  user-select: none;
-  cursor: col-resize;
-}
-
-.note-editor.resizing .note-textarea,
-.note-editor.resizing .note-preview {
-  pointer-events: none;
-}
-
-.note-preview {
-  min-width: 0;
-  overflow: auto;
-  padding: 20px;
-  border-left: 1px solid var(--border, #404040);
-  background: #20242e; /* slightly lighter than editor to separate visually */
-}
-
-.note-textarea {
-  flex: 1;
-  border: none;
-  outline: none;
-  padding: 20px;
-  font-size: 14px;
-  line-height: 1.6;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  resize: none;
-  background: #171a21; /* darker background for editor */
-  color: #e5e7eb;
-  min-height: 0; /* Allow textarea to shrink */
-  overflow-y: auto; /* Enable scrolling if content is too long */
-}
-
-.note-textarea::placeholder {
-  color: #6b7280;
 }
 
 .notes-actions {
