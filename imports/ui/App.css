@@ -12,7 +12,7 @@
 /* Removed split layout; Dashboard uses full width */
 
 .appFooter {
-  margin-top: 60px;
+  margin-top: 20px;
   padding: 16px 0 8px;
   border-top: 1px solid var(--border);
   color: var(--muted);
