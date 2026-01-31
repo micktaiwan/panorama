@@ -133,7 +133,49 @@ import '/imports/api/mcpServers/collections';
 import '/imports/api/mcpServers/publications';
 import '/imports/api/mcpServers/methods';
 
+// Claude Code Projects & Sessions
+import '/imports/api/claudeProjects/collections';
+import '/imports/api/claudeProjects/publications';
+import '/imports/api/claudeProjects/methods';
+import '/imports/api/claudeSessions/collections';
+import '/imports/api/claudeSessions/publications';
+import '/imports/api/claudeSessions/methods';
+import '/imports/api/claudeMessages/collections';
+import '/imports/api/claudeMessages/publications';
+
 Meteor.startup(async () => {
+  // Reset any Claude sessions stuck in "running" (processes died on restart)
+  const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
+  const stuckCount = await ClaudeSessionsCollection.updateAsync(
+    { status: 'running' },
+    { $set: { status: 'idle', updatedAt: new Date() } },
+    { multi: true }
+  );
+  if (stuckCount > 0) console.log(`[startup] Reset ${stuckCount} stuck Claude session(s) to idle`);
+
+  // Migrate orphan Claude sessions (no projectId) into individual projects
+  const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
+  const orphanSessions = await ClaudeSessionsCollection.find({ projectId: { $exists: false } }).fetchAsync();
+  if (orphanSessions.length > 0) {
+    console.log(`[startup] Migrating ${orphanSessions.length} orphan Claude session(s) into projects`);
+    for (const session of orphanSessions) {
+      const now = new Date();
+      const projectId = await ClaudeProjectsCollection.insertAsync({
+        name: session.name || 'Migrated Project',
+        cwd: session.cwd,
+        model: session.model,
+        permissionMode: session.permissionMode,
+        appendSystemPrompt: session.appendSystemPrompt,
+        createdAt: session.createdAt || now,
+        updatedAt: now,
+      });
+      await ClaudeSessionsCollection.updateAsync(session._id, {
+        $set: { projectId, updatedAt: now },
+      });
+    }
+    console.log(`[startup] Migration complete: ${orphanSessions.length} project(s) created`);
+  }
+
   // Ensure AI mode defaults to 'remote' on first launch
   const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
   const prefs = await AppPreferencesCollection.findOneAsync({});
