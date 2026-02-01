@@ -68,13 +68,16 @@ export const NoteEditor = ({
     }
 
     setIsCleaning(true);
-    Meteor.call('ai.cleanNote', activeTabId, customPrompt, (err) => {
-      console.log('ai.cleanNote result', err);
+    Meteor.call('ai.cleanNote', activeTabId, customPrompt, (err, result) => {
       setIsCleaning(false);
       if (err) {
         console.error('ai.cleanNote failed', err);
         notify({ message: 'Error cleaning note', kind: 'error' });
         return;
+      }
+      if (result?.content != null) {
+        editorRef.current?.setContent(result.content);
+        onContentChange(activeTabId, result.content);
       }
       notify({ message: 'Note cleaned successfully. Use Undo button to revert.', kind: 'success' });
     });
@@ -105,12 +108,16 @@ export const NoteEditor = ({
     }
 
     setIsSummarizing(true);
-    Meteor.call('ai.summarizeNote', activeTabId, (err) => {
+    Meteor.call('ai.summarizeNote', activeTabId, (err, result) => {
       setIsSummarizing(false);
       if (err) {
         console.error('ai.summarizeNote failed', err);
         notify({ message: 'Error summarizing note', kind: 'error' });
         return;
+      }
+      if (result?.content != null) {
+        editorRef.current?.setContent(result.content);
+        onContentChange(activeTabId, result.content);
       }
       notify({ message: 'Note summarized successfully. Use Undo button to revert.', kind: 'success' });
     });
