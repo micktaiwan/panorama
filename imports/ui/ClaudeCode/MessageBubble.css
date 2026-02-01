@@ -16,6 +16,17 @@
   border-style: dashed;
 }
 
+.ccMessagePermission {
+  opacity: 1;
+  border-style: solid;
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.ccMessagePermission .ccMessageRole {
+  color: rgb(245, 158, 11);
+}
+
 .ccMessageRole {
   font-size: 11px;
   font-weight: 600;
@@ -179,6 +190,167 @@
 .ccToolGroupDetails {
   padding: 4px 12px 8px;
   border-top: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+/* AskUserQuestion */
+.ccAskQuestion {
+  margin: 8px 0;
+}
+
+.ccAskQuestionItem {
+  margin-bottom: 8px;
+}
+
+.ccAskQuestionItem:last-child {
+  margin-bottom: 0;
+}
+
+.ccAskHeader {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--text-muted, #94a3b8);
+  margin-bottom: 4px;
+}
+
+.ccAskText {
+  font-size: 13px;
+  color: var(--text, #e5e7eb);
+  margin: 4px 0 8px;
+}
+
+.ccAskOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ccAskOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--text, #e5e7eb);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.ccAskOption:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.ccAskOption--selected {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.ccAskOptionLabel {
+  font-weight: 500;
+}
+
+.ccAskDescription {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.ccAskConfirm {
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--text, #e5e7eb);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ccAskConfirm:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.3);
+}
+
+.ccAskConfirm:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Permission action buttons */
+.ccPermissionActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ccPermissionBtn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.1);
+  color: rgb(245, 158, 11);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ccPermissionBtn:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+.ccPermissionBtn--deny {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(239, 68, 68);
+}
+
+.ccPermissionBtn--deny:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.ccPermissionSent {
+  font-size: 12px;
+  color: var(--text-muted, #94a3b8);
+  font-style: italic;
+}
+
+/* Shell messages */
+.ccMessageShell {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(34, 197, 94, 0.2);
+  opacity: 1;
+  border-style: solid;
+}
+
+.ccMessageShell .ccMessageRole {
+  color: rgb(34, 197, 94);
+}
+
+.ccShellOutput {
+  margin: 0;
+  padding: 4px 0;
+  font-family: 'SF Mono', Monaco, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: rgb(209, 213, 219);
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 /* Streaming cursor */

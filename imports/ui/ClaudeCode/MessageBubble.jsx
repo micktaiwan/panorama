@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Meteor } from 'meteor/meteor';
 import { marked } from 'marked';
 import './MessageBubble.css';
 
@@ -36,6 +37,69 @@ const formatToolLabel = (block) => {
     default:
       return name;
   }
+};
+
+const AskUserQuestionBlock = ({ block, onAnswer }) => {
+  const questions = block.input?.questions || [];
+  const [selections, setSelections] = useState({});
+  const hasMultipleQuestions = questions.length > 1;
+
+  const selectOption = (qIdx, label, isMulti) => {
+    setSelections(prev => {
+      if (isMulti) {
+        const current = prev[qIdx] || [];
+        return { ...prev, [qIdx]: current.includes(label) ? current.filter(l => l !== label) : [...current, label] };
+      }
+      return { ...prev, [qIdx]: [label] };
+    });
+  };
+
+  const formatAndSend = () => {
+    const parts = questions.map((q, qIdx) => {
+      const selected = selections[qIdx] || [];
+      const answer = selected.join(', ');
+      return q.header ? `${q.header}: ${answer}` : answer;
+    });
+    onAnswer?.(parts.join('\n'));
+  };
+
+  const allAnswered = questions.every((_, qIdx) => (selections[qIdx] || []).length > 0);
+  const isImmediate = questions.length === 1 && !questions[0].multiSelect;
+
+  return (
+    <div className="ccAskQuestion">
+      {questions.map((q, qIdx) => (
+        <div key={qIdx} className="ccAskQuestionItem">
+          {q.header && <span className="ccAskHeader">{q.header}</span>}
+          <div className="ccAskText">{q.question}</div>
+          <div className="ccAskOptions">
+            {q.options?.map((opt, oIdx) => {
+              const isSelected = (selections[qIdx] || []).includes(opt.label);
+              return (
+                <button
+                  key={oIdx}
+                  className={`ccAskOption${isSelected ? ' ccAskOption--selected' : ''}`}
+                  onClick={() => isImmediate ? onAnswer?.(opt.label) : selectOption(qIdx, opt.label, q.multiSelect)}
+                >
+                  <span className="ccAskOptionLabel">{opt.label}</span>
+                  {opt.description && <span className="ccAskDescription">{opt.description}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {!isImmediate && (
+        <button
+          className="ccAskConfirm"
+          disabled={!allAnswered}
+          onClick={formatAndSend}
+        >
+          Send
+        </button>
+      )}
+    </div>
+  );
 };
 
 const ToolUseBlock = ({ block }) => {
@@ -76,7 +140,7 @@ const ToolResultBlock = ({ block }) => {
   );
 };
 
-const ContentBlock = ({ block }) => {
+const ContentBlock = ({ block, onAnswer }) => {
   if (block.type === 'text') {
     return (
       <div
@@ -86,6 +150,9 @@ const ContentBlock = ({ block }) => {
     );
   }
   if (block.type === 'tool_use') {
+    if (block.name === 'AskUserQuestion') {
+      return <AskUserQuestionBlock block={block} onAnswer={onAnswer} />;
+    }
     return <ToolUseBlock block={block} />;
   }
   if (block.type === 'tool_result') {
@@ -94,7 +161,7 @@ const ContentBlock = ({ block }) => {
   return null;
 };
 
-export const ToolGroupBlock = ({ messages, autoExpanded = false }) => {
+export const ToolGroupBlock = ({ messages, autoExpanded = false, onAnswer }) => {
   const [userToggled, setUserToggled] = useState(false);
   const [expanded, setExpanded] = useState(autoExpanded);
 
@@ -130,7 +197,7 @@ export const ToolGroupBlock = ({ messages, autoExpanded = false }) => {
       {expanded && (
         <div className="ccToolGroupDetails">
           {allBlocks.map((block, i) => (
-            <ContentBlock key={i} block={block} />
+            <ContentBlock key={i} block={block} onAnswer={onAnswer} />
           ))}
         </div>
       )}
@@ -138,18 +205,48 @@ export const ToolGroupBlock = ({ messages, autoExpanded = false }) => {
   );
 };
 
-export const MessageBubble = ({ message }) => {
+const PermissionActions = ({ sessionId }) => {
+  const [responded, setResponded] = useState(false);
+
+  const handleClick = (behavior) => {
+    setResponded(true);
+    Meteor.call('claudeSessions.respondToPermission', sessionId, behavior);
+  };
+
+  if (responded) {
+    return <div className="ccPermissionActions"><span className="ccPermissionSent">Response sent</span></div>;
+  }
+
+  return (
+    <div className="ccPermissionActions">
+      <button className="ccPermissionBtn" onClick={() => handleClick('allow')}>Allow</button>
+      <button className="ccPermissionBtn" onClick={() => handleClick('allowAll')}>Allow All</button>
+      <button className="ccPermissionBtn ccPermissionBtn--deny" onClick={() => handleClick('deny')}>Deny</button>
+    </div>
+  );
+};
+
+export const MessageBubble = ({ message, onAnswer, sessionId }) => {
   const { role, content, contentText, isStreaming, usage, costUsd, durationMs } = message;
   const isUser = role === 'user';
   const isSystem = role === 'system' || message.type === 'result';
+  const isPermission = message.type === 'permission_request';
+  const isShell = message.type === 'shell_command' || message.type === 'shell_result';
   const blocks = Array.isArray(content) ? content : [];
 
+  const roleLabel = isShell
+    ? (message.type === 'shell_command' ? `$ ${contentText}` : 'Output')
+    : isPermission ? '\u26A0 Permission Request'
+    : isUser ? 'You' : 'Claude';
+
   return (
-    <div className={`ccMessage ${isUser ? 'ccMessageUser' : ''} ${isSystem ? 'ccMessageSystem' : ''}`}>
-      <div className="ccMessageRole">{isUser ? 'You' : 'Claude'}</div>
+    <div className={`ccMessage ${isUser ? 'ccMessageUser' : ''} ${isSystem ? 'ccMessageSystem' : ''} ${isPermission ? 'ccMessagePermission' : ''} ${isShell ? 'ccMessageShell' : ''}`}>
+      <div className="ccMessageRole">{roleLabel}</div>
       <div className="ccMessageBody">
-        {blocks.length > 0
-          ? blocks.map((block, i) => <ContentBlock key={i} block={block} />)
+        {isShell ? (
+          message.type === 'shell_result' && <pre className="ccShellOutput">{contentText}</pre>
+        ) : blocks.length > 0
+          ? blocks.map((block, i) => <ContentBlock key={i} block={block} onAnswer={onAnswer} />)
           : contentText && (
             <div
               className="ccMarkdown"
@@ -157,6 +254,7 @@ export const MessageBubble = ({ message }) => {
             />
           )
         }
+        {isPermission && sessionId && <PermissionActions sessionId={sessionId} />}
         {isStreaming && <span className="ccCursor" />}
       </div>
       {(usage || costUsd != null || durationMs != null) && (

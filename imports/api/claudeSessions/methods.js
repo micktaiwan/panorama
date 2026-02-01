@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { ClaudeSessionsCollection } from './collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
-import { spawnClaudeProcess, killProcess, queueMessage, clearQueue } from './processManager';
+import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, respondToPermission, execShellCommand } from './processManager';
 
 const TAG = '[claude-methods]';
 
@@ -79,6 +79,27 @@ Meteor.methods({
 
     console.log(TAG, 'sendMessage', sessionId, 'status:', session.status, 'claudeSessionId:', session.claudeSessionId);
 
+    // Collect unconsumed shell results to inject as context
+    const shellResults = await ClaudeMessagesCollection.find(
+      { sessionId, type: 'shell_result', shellConsumed: { $ne: true } },
+      { sort: { createdAt: 1 } }
+    ).fetchAsync();
+
+    let messageForClaude = message;
+    if (shellResults.length > 0) {
+      const shellContext = shellResults.map(sr =>
+        `$ ${sr.shellCommand}\n${sr.contentText}`
+      ).join('\n\n');
+      messageForClaude = `[Shell commands executed]\n\`\`\`\n${shellContext}\n\`\`\`\n\n${message}`;
+
+      const ids = shellResults.map(sr => sr._id);
+      await ClaudeMessagesCollection.updateAsync(
+        { _id: { $in: ids } },
+        { $set: { shellConsumed: true } },
+        { multi: true }
+      );
+    }
+
     // Insert user message immediately so it appears in the chat
     await ClaudeMessagesCollection.insertAsync({
       sessionId,
@@ -91,11 +112,33 @@ Meteor.methods({
 
     if (session.status === 'running') {
       // Claude is busy — queue message for later processing
-      queueMessage(sessionId, message);
+      queueMessage(sessionId, messageForClaude);
     } else {
       // Spawn is fire-and-forget from the method's perspective
-      spawnClaudeProcess(session, message);
+      spawnClaudeProcess(session, messageForClaude);
     }
+    return true;
+  },
+
+  async 'claudeSessions.execShell'(sessionId, command) {
+    check(sessionId, String);
+    check(command, String);
+    const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
+    if (!session) throw new Meteor.Error('not-found', 'Session not found');
+    const cwd = session.cwd || process.env.HOME + '/projects';
+
+    // Insert the command message immediately
+    await ClaudeMessagesCollection.insertAsync({
+      sessionId,
+      role: 'user',
+      type: 'shell_command',
+      content: [{ type: 'text', text: command }],
+      contentText: command,
+      createdAt: new Date(),
+    });
+
+    // Execute async
+    execShellCommand(sessionId, command, cwd);
     return true;
   },
 
@@ -110,6 +153,12 @@ Meteor.methods({
     await killProcess(sessionId);
     await ClaudeMessagesCollection.removeAsync({ sessionId });
     return ClaudeSessionsCollection.removeAsync(sessionId);
+  },
+
+  'claudeSessions.respondToPermission'(sessionId, behavior) {
+    check(sessionId, String);
+    check(behavior, Match.OneOf('allow', 'allowAll', 'deny'));
+    respondToPermission(sessionId, behavior);
   },
 
   async 'claudeSessions.clearMessages'(sessionId) {
