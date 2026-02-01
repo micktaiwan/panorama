@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { DEFAULT_CLEAN_PROMPT } from '/imports/api/notes/cleanPrompt';
 
 // Helper function to update note index and project timestamp
 const updateNoteIndex = async (noteId) => {
@@ -38,18 +39,7 @@ Meteor.methods({
     const system = `You are a text cleaner. Your job is to normalize notes without summarizing or translating.\n\n${userContext}`;
     
     // Use custom prompt if provided, otherwise use default instructions
-    const instructions = customPrompt || `
-    Rules for cleaning notes:
-    1. Remove all emojis.
-    2. Remove all markdown symbols (e.g. **, #, >, *) but keep the hierarchy: convert titles and subtitles to plain text lines.
-    3. Remove timestamps (e.g. "2 minutes ago", "9:14").
-    4. For email signatures: remove long blocks. Keep only the sender's name and date. Ignore job titles, phone numbers, or disclaimers.
-    5. Keep the conversation flow and speaker names if it's a dialogue.
-    6. Keep all original content, do NOT summarize, shorten, or translate.
-    7. Preserve the original language of the text.
-    8. Correct obvious spelling mistakes.
-    Output: plain text only, no markdown, no special formatting, no added text compared to the original
-    `;
+    const instructions = customPrompt || DEFAULT_CLEAN_PROMPT;
     
     const user = `${instructions}\n\nOriginal note:\n\n\u0060\u0060\u0060\n${original}\n\u0060\u0060\u0060`;
 

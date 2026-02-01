@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { DEFAULT_CLEAN_PROMPT } from '/imports/api/notes/cleanPrompt';
 
-export const CleanPromptModal = ({ 
-  open, 
-  onClose, 
-  onConfirm, 
-  defaultPrompt = '',
-  noteContent = '' 
+export const CleanPromptModal = ({
+  open,
+  onClose,
+  onConfirm,
+  defaultPrompt = DEFAULT_CLEAN_PROMPT,
+  noteContent = ''
 }) => {
   const [customPrompt, setCustomPrompt] = useState('');
   const [useCustomPrompt, setUseCustomPrompt] = useState(false);
