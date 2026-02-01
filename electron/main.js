@@ -418,17 +418,10 @@ app.whenReady().then(() => {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
   if (process.platform === 'darwin') {
-    const icnsPath = path.join(__dirname, 'assets', 'icon.icns');
     const pngPath = path.join(__dirname, 'assets', 'icon.png');
-    let dockIcon = nativeImage.createFromPath(icnsPath);
-    if (dockIcon.isEmpty()) {
-      console.error(`[electron] icon.icns not usable at: ${icnsPath}. Falling back to PNG.`);
-      dockIcon = nativeImage.createFromPath(pngPath);
-    }
+    const dockIcon = nativeImage.createFromPath(pngPath);
     if (!dockIcon.isEmpty()) {
       app.dock.setIcon(dockIcon);
-    } else {
-      console.error('[electron] No valid Dock icon found (icns/png).');
     }
   }
   createWindow(savedWindowState);
