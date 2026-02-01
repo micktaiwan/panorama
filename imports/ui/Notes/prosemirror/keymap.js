@@ -1,6 +1,8 @@
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap, toggleMark, setBlockType, wrapIn, lift, chainCommands } from 'prosemirror-commands';
 import { sinkListItem, liftListItem, splitListItem } from 'prosemirror-schema-list';
+import { TextSelection } from 'prosemirror-state';
+import { Fragment } from 'prosemirror-model';
 import { undo, redo } from 'prosemirror-history';
 import { schema } from './schema.js';
 
@@ -57,6 +59,62 @@ export function createFormattingKeymap() {
       // In a list: outdent the list item
       if (liftListItem(schema.nodes.list_item)(state, dispatch)) return true;
       // Outside list: just consume the event (don't leave editor)
+      return true;
+    },
+    'Mod-ArrowUp': (state, dispatch) => {
+      const { $from } = state.selection;
+      let depth = null;
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type === schema.nodes.list_item) {
+          depth = d;
+          break;
+        }
+      }
+      if (depth === null) return false;
+      const listItem = $from.node(depth);
+      if (listItem.attrs.checked === null) return false;
+      const index = $from.index(depth - 1);
+      if (index === 0) return false;
+      const parentNode = $from.node(depth - 1);
+      const prevNode = parentNode.child(index - 1);
+      const curNode = listItem;
+      const itemStart = $from.before(depth);
+      const itemEnd = $from.after(depth);
+      const prevStart = itemStart - prevNode.nodeSize;
+      if (dispatch) {
+        const tr = state.tr.replaceWith(prevStart, itemEnd, Fragment.from([curNode, prevNode]));
+        const newCursorPos = prevStart + ($from.pos - itemStart);
+        tr.setSelection(TextSelection.create(tr.doc, newCursorPos));
+        dispatch(tr.scrollIntoView());
+      }
+      return true;
+    },
+    'Mod-ArrowDown': (state, dispatch) => {
+      const { $from } = state.selection;
+      let depth = null;
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type === schema.nodes.list_item) {
+          depth = d;
+          break;
+        }
+      }
+      if (depth === null) return false;
+      const listItem = $from.node(depth);
+      if (listItem.attrs.checked === null) return false;
+      const parentNode = $from.node(depth - 1);
+      const index = $from.index(depth - 1);
+      if (index >= parentNode.childCount - 1) return false;
+      const nextNode = parentNode.child(index + 1);
+      const curNode = listItem;
+      const itemStart = $from.before(depth);
+      const itemEnd = $from.after(depth);
+      const nextEnd = itemEnd + nextNode.nodeSize;
+      if (dispatch) {
+        const tr = state.tr.replaceWith(itemStart, nextEnd, Fragment.from([nextNode, curNode]));
+        const newCursorPos = itemStart + nextNode.nodeSize + ($from.pos - itemStart);
+        tr.setSelection(TextSelection.create(tr.doc, newCursorPos));
+        dispatch(tr.scrollIntoView());
+      }
       return true;
     },
     'Enter': (state, dispatch) => {
