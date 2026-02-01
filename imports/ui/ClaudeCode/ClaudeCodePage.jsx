@@ -157,16 +157,20 @@ export const ClaudeCodePage = ({ projectId }) => {
       }
       if (e.key === 'w' || e.key === 'W') {
         e.preventDefault();
-        // If multiple sessions, close the last one (LIFO)
-        if (sessions.length > 1) {
-          const sessionToRemove = sessions[sessions.length - 1];
+        // Close the active (focused) session
+        if (sessions.length > 1 && activePanel?.type === 'session') {
+          const idx = sessions.findIndex(s => s._id === activePanel.id);
+          if (idx === -1) return;
+          const sessionToRemove = sessions[idx];
           Meteor.call('claudeSessions.remove', sessionToRemove._id, (err) => {
             if (err) {
               notify({ message: `Close failed: ${err.reason || err.message}`, kind: 'error' });
               return;
             }
             const remaining = sessions.filter(s => s._id !== sessionToRemove._id);
-            setActivePanel(remaining.length > 0 ? { type: 'session', id: remaining[remaining.length - 1]._id } : null);
+            // Switch to the nearest session (prefer previous, fallback to next)
+            const nextIdx = Math.min(idx, remaining.length - 1);
+            setActivePanel(remaining.length > 0 ? { type: 'session', id: remaining[nextIdx]._id } : null);
           });
           return;
         }
@@ -194,6 +198,13 @@ export const ClaudeCodePage = ({ projectId }) => {
   const activePanelIdx = activePanel?.type === 'session'
     ? sessions.findIndex(s => s._id === activePanel.id)
     : -1;
+
+  // Scroll active panel into view when tab is clicked (especially when note sidebar is open)
+  useEffect(() => {
+    if (activePanelIdx >= 0 && panelRefs.current[activePanelIdx]) {
+      panelRefs.current[activePanelIdx].scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+    }
+  }, [activePanelIdx]);
 
   return (
     <div className="ccPage">
