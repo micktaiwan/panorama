@@ -144,14 +144,37 @@ import '/imports/api/claudeMessages/collections';
 import '/imports/api/claudeMessages/publications';
 
 Meteor.startup(async () => {
-  // Reset any Claude sessions stuck in "running" (processes died on restart)
+  // Mark any Claude sessions stuck in "running" as interrupted (processes died on restart)
   const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
-  const stuckCount = await ClaudeSessionsCollection.updateAsync(
-    { status: 'running' },
-    { $set: { status: 'idle', updatedAt: new Date() } },
-    { multi: true }
-  );
-  if (stuckCount > 0) console.log(`[startup] Reset ${stuckCount} stuck Claude session(s) to idle`);
+  const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
+  const stuckSessions = await ClaudeSessionsCollection.find({ status: 'running' }).fetchAsync();
+  if (stuckSessions.length > 0) {
+    console.log(`[startup] Found ${stuckSessions.length} stuck Claude session(s), marking as interrupted`);
+    for (const session of stuckSessions) {
+      // Best-effort kill of zombie OS process
+      if (session.pid) {
+        try {
+          process.kill(session.pid);
+          console.log(`[startup] Killed zombie process ${session.pid} for session ${session._id}`);
+        } catch (_) {
+          // Process already dead — expected after restart
+        }
+      }
+      // Mark session as interrupted
+      await ClaudeSessionsCollection.updateAsync(session._id, {
+        $set: { status: 'interrupted', pid: null, updatedAt: new Date() }
+      });
+      // Insert system message so user sees what happened
+      await ClaudeMessagesCollection.insertAsync({
+        sessionId: session._id,
+        role: 'system',
+        type: 'info',
+        content: [{ type: 'text', text: 'Session interrupted by a server restart.' }],
+        contentText: 'Session interrupted by a server restart.',
+        createdAt: new Date(),
+      });
+    }
+  }
 
   // Migrate orphan Claude sessions (no projectId) into individual projects
   const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');

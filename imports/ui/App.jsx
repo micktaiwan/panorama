@@ -96,6 +96,8 @@ function App() {
   const [cmdDefaultProjectId, setCmdDefaultProjectId] = useState('');
   const [qdrantModalOpen, setQdrantModalOpen] = useState(false);
   const [qdrantStatus, setQdrantStatus] = useState(null);
+  const [interruptedModalOpen, setInterruptedModalOpen] = useState(false);
+  const [interruptedCount, setInterruptedCount] = useState(0);
   // Command palette state is internal to component; keep only open/close here
   // Go to screen palette
   const [goOpen, setGoOpen] = useState(false);
@@ -353,6 +355,17 @@ function App() {
       });
     };
     checkQdrant();
+  }, []);
+
+  // Check for interrupted Claude sessions on mount
+  useEffect(() => {
+    Meteor.call('claudeSessions.countInterrupted', (err, count) => {
+      if (count > 0) {
+        setInterruptedCount(count);
+        setInterruptedModalOpen(true);
+        navigateTo({ name: 'claude' });
+      }
+    });
   }, []);
 
   // Global navigation shortcuts: Back/Forward with Cmd/Ctrl + Left/Right
@@ -1014,6 +1027,35 @@ function App() {
         </span>
       </footer>}
       <ChatWidget />
+
+      <Modal
+        open={interruptedModalOpen}
+        onClose={() => {}}
+        closable={false}
+        title="Sessions Claude interrompues"
+        icon={<span aria-hidden="true">&#x26A0;&#xFE0F;</span>}
+        actions={[
+          <button
+            key="proceed"
+            className="btn btn-primary"
+            onClick={() => {
+              Meteor.call('claudeSessions.cleanupInterrupted', (err) => {
+                if (err) {
+                  notify({ message: `Cleanup failed: ${err.reason || err.message}`, kind: 'error' });
+                  return;
+                }
+                setInterruptedModalOpen(false);
+                notify({ message: `${interruptedCount} session(s) restored to idle`, kind: 'success' });
+              });
+            }}
+          >
+            Proceed
+          </button>,
+        ]}
+      >
+        <p>{interruptedCount} session(s) were running during the last server restart.</p>
+        <p>Processes have been stopped. Click &quot;Proceed&quot; to reset them to idle.</p>
+      </Modal>
 
       <Modal
         open={showQuitConfirm}
