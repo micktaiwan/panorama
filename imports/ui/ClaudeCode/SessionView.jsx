@@ -49,6 +49,8 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
       if (!Array.isArray(msg.content) || msg.content.length === 0) return false;
       const hasToolBlock = msg.content.some(b => b.type === 'tool_use' || b.type === 'tool_result');
       if (!hasToolBlock) return false;
+      const hasAskQuestion = msg.content.some(b => b.type === 'tool_use' && b.name === 'AskUserQuestion');
+      if (hasAskQuestion) return false;
       const hasText = msg.content.some(b => b.type === 'text' && b.text?.trim());
       return !hasText;
     };
@@ -150,10 +152,29 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
     if (messages.length > 0) scrolledSession.current = sessionId;
   }, [sessionId, messages.length, messages[messages.length - 1]?.contentText, localMessages.length, isRunning]);
 
+  // Clear local messages when new DB messages arrive
+  useEffect(() => {
+    if (localMessages.length > 0) setLocalMessages([]);
+  }, [messages.length]);
+
   // Focus textarea when session becomes idle or panel becomes active
   useEffect(() => {
     if (isActive && !isRunning) textareaRef.current?.focus();
   }, [isActive, isRunning]);
+
+  // Global ESC handler — works even when textarea doesn't have focus
+  useEffect(() => {
+    if (!isActive || !isRunning) return;
+    const handleGlobalEsc = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        addLocalMessage('Interrupted by user (ESC)');
+        Meteor.call('claudeSessions.stop', sessionId);
+      }
+    };
+    document.addEventListener('keydown', handleGlobalEsc);
+    return () => document.removeEventListener('keydown', handleGlobalEsc);
+  }, [isActive, isRunning, sessionId]);
 
   if (!sessionId) {
     return (
@@ -171,9 +192,27 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
     );
   }
 
+  const sendMessage = (text) => {
+    Meteor.call('claudeSessions.sendMessage', sessionId, text, (err) => {
+      if (err) notify({ message: `Send failed: ${err.reason || err.message}`, kind: 'error' });
+    });
+    textareaRef.current?.focus();
+  };
+
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
+
+    // Intercept shell escape
+    if (text.startsWith('!')) {
+      const shellCmd = text.slice(1).trim();
+      if (!shellCmd) return;
+      setInput('');
+      Meteor.call('claudeSessions.execShell', sessionId, shellCmd, (err) => {
+        if (err) notify({ message: `Shell: ${err.reason || err.message}`, kind: 'error' });
+      });
+      return;
+    }
 
     // Intercept slash commands
     if (text.startsWith('/')) {
@@ -189,9 +228,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
     }
 
     setInput('');
-    Meteor.call('claudeSessions.sendMessage', sessionId, text, (err) => {
-      if (err) notify({ message: `Send failed: ${err.reason || err.message}`, kind: 'error' });
-    });
+    sendMessage(text);
   };
 
   const handleStop = () => {
@@ -245,6 +282,20 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
         return;
       }
     }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const modes = ['', 'plan', 'acceptEdits', 'dontAsk', 'bypassPermissions'];
+      const current = session.permissionMode || '';
+      const next = modes[(modes.indexOf(current) + 1) % modes.length];
+      Meteor.call('claudeSessions.update', sessionId, { permissionMode: next });
+      return;
+    }
+    if (e.key === 'Escape' && isRunning) {
+      e.preventDefault();
+      addLocalMessage('Interrupted by user (ESC)');
+      handleStop();
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -286,22 +337,6 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
           />
           <span className="ccSessionCwd muted">{shortenPath(session.cwd, homeDir) || '(default cwd)'}</span>
           {session.model && <span className="ccSessionModel muted">{session.model}</span>}
-          <select
-            className="ccPermModeSelect"
-            value={session.permissionMode || ''}
-            onChange={(e) => {
-              const permissionMode = e.target.value || undefined;
-              Meteor.call('claudeSessions.update', sessionId, { permissionMode }, (err) => {
-                if (err) notify({ message: `Update failed: ${err.reason || err.message}`, kind: 'error' });
-              });
-            }}
-          >
-            <option value="">Default</option>
-            <option value="plan">Plan</option>
-            <option value="acceptEdits">Accept Edits</option>
-            <option value="dontAsk">Don't Ask</option>
-            <option value="bypassPermissions">Bypass</option>
-          </select>
           <span className={`ccStatusBadge ccStatus-${session.status}`}>{session.status}</span>
         </div>
         <div className="ccSessionActions">
@@ -356,8 +391,14 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
                 key={group.key}
                 messages={group.messages}
                 autoExpanded={isRunning && idx === groupedMessages.length - 1}
+                onAnswer={sendMessage}
               />
-            : <MessageBubble key={group.key} message={group.message} />
+            : <MessageBubble
+                key={group.key}
+                message={group.message}
+                onAnswer={sendMessage}
+                sessionId={sessionId}
+              />
         )}
         {localMessages.map((msg) => (
           <MessageBubble key={msg._id} message={msg} />
@@ -393,15 +434,32 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
+          placeholder="Type a message... (Enter to send, !cmd for shell, /help for commands)"
           rows={3}
         />
-        <div className="ccComposerActions">
-          <button className="btn btn-primary btn-small" onClick={handleSend} disabled={!input.trim()}>Send</button>
-          {isRunning && (
+        {isRunning && (
+          <div className="ccComposerActions">
             <button className="btn btn-danger btn-small" onClick={handleStop}>Stop</button>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
+      <div className="ccComposerFooter">
+        <select
+          className={`ccPermModeSelect${session.permissionMode ? ` ccMode-${session.permissionMode}` : ''}`}
+          value={session.permissionMode || ''}
+          onChange={(e) => {
+            const permissionMode = e.target.value || undefined;
+            Meteor.call('claudeSessions.update', sessionId, { permissionMode }, (err) => {
+              if (err) notify({ message: `Update failed: ${err.reason || err.message}`, kind: 'error' });
+            });
+          }}
+        >
+          <option value="">💬 Default</option>
+          <option value="plan">📋 Plan</option>
+          <option value="acceptEdits">✏️ Accept Edits</option>
+          <option value="dontAsk">🚀 Don't Ask</option>
+          <option value="bypassPermissions">⚠️ Bypass</option>
+        </select>
       </div>
 
       {/* Footer stats */}

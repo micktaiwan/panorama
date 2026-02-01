@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { ClaudeSessionsCollection } from './collections';
@@ -24,6 +24,9 @@ function logError(...args) {
 
 // In-memory map: sessionId -> ChildProcess
 const activeProcesses = new Map();
+
+// In-memory map: sessionId -> { requestId, toolName, toolInput }
+const pendingPermissions = new Map();
 
 // In-memory message queue: sessionId -> [string, ...]
 const messageQueues = new Map();
@@ -72,6 +75,7 @@ export function isRunning(sessionId) {
 
 export async function killProcess(sessionId) {
   clearQueue(sessionId);
+  pendingPermissions.delete(sessionId);
   const proc = activeProcesses.get(sessionId);
   if (!proc) {
     log('killProcess: no process for', sessionId);
@@ -93,6 +97,82 @@ export async function killProcess(sessionId) {
   });
 }
 
+export function respondToPermission(sessionId, behavior) {
+  const pending = pendingPermissions.get(sessionId);
+  if (!pending) {
+    log('respondToPermission: no pending request for', sessionId);
+    return;
+  }
+
+  const proc = activeProcesses.get(sessionId);
+  if (!proc) {
+    log('respondToPermission: no active process for', sessionId);
+    pendingPermissions.delete(sessionId);
+    return;
+  }
+
+  const permissionResponse = behavior === 'deny'
+    ? { behavior: 'deny', message: 'User denied' }
+    : behavior === 'allowAll'
+      ? { behavior: 'allow', updatedInput: pending.toolInput || {}, updatedPermissions: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }] }
+      : { behavior: 'allow', updatedInput: pending.toolInput || {} };
+
+  const response = {
+    type: 'control_response',
+    response: {
+      subtype: 'success',
+      request_id: pending.requestId,
+      response: permissionResponse,
+    },
+  };
+
+  log('respondToPermission:', sessionId, 'behavior:', behavior, 'requestId:', pending.requestId);
+  proc.stdin.write(JSON.stringify(response) + '\n');
+  pendingPermissions.delete(sessionId);
+}
+
+export function execShellCommand(sessionId, command, cwd) {
+  const TIMEOUT_MS = 30000;
+  const MAX_OUTPUT = 50000;
+
+  exec(command, {
+    cwd,
+    timeout: TIMEOUT_MS,
+    maxBuffer: 1024 * 1024,
+    shell: '/bin/bash',
+    env: { ...process.env },
+  }, Meteor.bindEnvironment(async (error, stdout, stderr) => {
+    let output = '';
+    if (stdout) output += stdout;
+    if (stderr) output += (output ? '\n' : '') + stderr;
+
+    let truncated = false;
+    if (output.length > MAX_OUTPUT) {
+      output = output.slice(0, MAX_OUTPUT);
+      truncated = true;
+    }
+
+    const exitCode = error ? (error.killed ? null : error.code || 1) : 0;
+    const timedOut = error?.killed;
+
+    let status = '';
+    if (timedOut) status = `\n[Timeout after ${TIMEOUT_MS / 1000}s]`;
+    else if (exitCode !== 0 && exitCode !== null) status = `\n[Exit code: ${exitCode}]`;
+    if (truncated) status += `\n[Output truncated]`;
+
+    await ClaudeMessagesCollection.insertAsync({
+      sessionId,
+      role: 'system',
+      type: 'shell_result',
+      content: [{ type: 'text', text: (output || '(no output)') + status }],
+      contentText: (output || '(no output)') + status,
+      shellCommand: command,
+      shellExitCode: exitCode,
+      createdAt: new Date(),
+    });
+  }));
+}
+
 export async function spawnClaudeProcess(session, message) {
   const sessionId = session._id;
   log('--- spawnClaudeProcess ---');
@@ -103,8 +183,8 @@ export async function spawnClaudeProcess(session, message) {
     await killProcess(sessionId);
   }
 
-  // Build args
-  const args = ['-p', message, '--output-format', 'stream-json', '--verbose'];
+  // Build args — prompt is sent via stdin (stream-json), not -p
+  const args = ['--output-format', 'stream-json', '--verbose', '--permission-prompt-tool', 'stdio', '--input-format', 'stream-json'];
 
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);
@@ -134,11 +214,16 @@ export async function spawnClaudeProcess(session, message) {
   const proc = spawn('claude', args, {
     cwd,
     env: { ...process.env },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 
   log('spawned pid:', proc.pid);
   activeProcesses.set(sessionId, proc);
+
+  // Send prompt via stdin (stream-json format)
+  const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: message } });
+  proc.stdin.write(stdinMsg + '\n');
+  log('sent prompt via stdin');
 
   let currentAssistantMsgId = null;
   let buffer = '';
@@ -303,7 +388,52 @@ export async function spawnClaudeProcess(session, message) {
       return;
     }
 
-    log(`unhandled type=${type} subtype=${subtype}`, JSON.stringify(data).slice(0, 200));
+    // --- control_request (permission prompt via stdin/stdout) ---
+    if (type === 'control_request') {
+      const requestId = data.request_id;
+      const toolName = data.request?.tool_name;
+      const toolInput = data.request?.input;
+      log('control_request:', requestId, 'tool:', toolName);
+
+      pendingPermissions.set(sessionId, { requestId, toolName, toolInput });
+
+      const text = `Tool **${toolName}** requires permission.`;
+      await ClaudeMessagesCollection.insertAsync({
+        sessionId,
+        role: 'system',
+        type: 'permission_request',
+        content: [{ type: 'text', text }],
+        contentText: text,
+        toolName,
+        toolInput,
+        createdAt: new Date(),
+      });
+      return;
+    }
+
+    // --- user message (permission requests — legacy fallback) ---
+    if (type === 'user') {
+      const contentBlocks = data.message?.content || [];
+      const permissionTexts = contentBlocks
+        .filter(b => b.type === 'tool_result' && typeof b.content === 'string' && b.content.includes('requested permissions'))
+        .map(b => b.content);
+
+      if (permissionTexts.length > 0) {
+        const text = permissionTexts.join('\n');
+        log('permission request detected (legacy):', text.slice(0, 200));
+        await ClaudeMessagesCollection.insertAsync({
+          sessionId,
+          role: 'system',
+          type: 'permission_request',
+          content: [{ type: 'text', text }],
+          contentText: text,
+          createdAt: new Date(),
+        });
+        return;
+      }
+    }
+
+    log(`unhandled type=${type} subtype=${subtype}`, JSON.stringify(data));
   });
 
   proc.stdout.on('data', (chunk) => {
@@ -338,6 +468,7 @@ export async function spawnClaudeProcess(session, message) {
   proc.on('exit', Meteor.bindEnvironment(async (code, signal) => {
     log(`exit code=${code} signal=${signal} lines=${lineCount} bufferLeft=${buffer.length}`);
     activeProcesses.delete(sessionId);
+    pendingPermissions.delete(sessionId);
 
     // Process remaining buffer
     if (buffer.trim()) {
