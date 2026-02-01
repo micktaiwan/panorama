@@ -3,6 +3,7 @@ import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
 import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
+import { NotesCollection } from '/imports/api/notes/collections';
 import { navigateTo } from '/imports/ui/router.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
@@ -15,19 +16,21 @@ const projectStatus = (sessions) => {
   return 'idle';
 };
 
-export const ProjectList = ({ activeProjectId, homeDir, activePanelIdx, onSessionClick }) => {
+export const ProjectList = ({ activeProjectId, homeDir, activePanel, onPanelClick }) => {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCwd, setNewCwd] = useState('');
   const [newModel, setNewModel] = useState('');
   const [newPermMode, setNewPermMode] = useState('acceptEdits');
 
-  const { projects, allSessions } = useTracker(() => {
+  const { projects, allSessions, allNotes } = useTracker(() => {
     Meteor.subscribe('claudeProjects');
     Meteor.subscribe('claudeSessions');
+    Meteor.subscribe('notes');
     return {
       projects: ClaudeProjectsCollection.find({}, { sort: { updatedAt: -1 } }).fetch(),
       allSessions: ClaudeSessionsCollection.find({}, { fields: { projectId: 1, status: 1, name: 1, createdAt: 1 }, sort: { createdAt: 1 } }).fetch(),
+      allNotes: NotesCollection.find({ claudeProjectId: { $exists: true, $ne: null } }, { fields: { claudeProjectId: 1, title: 1, createdAt: 1 }, sort: { createdAt: 1 } }).fetch(),
     };
   });
 
@@ -36,6 +39,13 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanelIdx, onSessio
     if (!s.projectId) return;
     if (!sessionsByProject[s.projectId]) sessionsByProject[s.projectId] = [];
     sessionsByProject[s.projectId].push(s);
+  });
+
+  const notesByProject = {};
+  allNotes.forEach(n => {
+    if (!n.claudeProjectId) return;
+    if (!notesByProject[n.claudeProjectId]) notesByProject[n.claudeProjectId] = [];
+    notesByProject[n.claudeProjectId].push(n);
   });
 
   const handleCreate = () => {
@@ -71,8 +81,8 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanelIdx, onSessio
     <div className="ccProjectList">
       <div className="ccProjectListHeader">
         <span className="ccProjectListTitle">Projects</span>
-        <button className="btn btn-small btn-primary" onClick={() => setCreating(!creating)}>
-          {creating ? 'Cancel' : '+ New'}
+        <button className="ccNewProjectBtn" onClick={() => setCreating(!creating)}>
+          {creating ? '×' : '+'}
         </button>
       </div>
 
@@ -117,6 +127,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanelIdx, onSessio
         )}
         {projects.map((p) => {
           const sessions = sessionsByProject[p._id] || [];
+          const projectNotes = notesByProject[p._id] || [];
           const status = projectStatus(sessions);
           return (
             <div
@@ -142,23 +153,23 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanelIdx, onSessio
                 >&times;</button>
               </div>
               {p.cwd && <span className="ccProjectItemCwd muted">{shortenPath(p.cwd, homeDir)}</span>}
-              {p._id === activeProjectId && sessions.length > 0 && (
+              {p._id === activeProjectId && (sessions.length > 0 || projectNotes.length > 0) && (
                 <div className="ccSessionList">
-                  {sessions.map((s, idx) => (
+                  {sessions.map((s) => (
                     <div
                       key={s._id}
-                      className={`ccSessionItem ${idx === activePanelIdx ? 'ccSessionItemActive' : ''}`}
+                      className={`ccSessionItem ${activePanel?.type === 'session' && activePanel?.id === s._id ? 'ccSessionItemActive' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (idx !== activePanelIdx) {
-                          onSessionClick?.(idx);
+                        if (activePanel?.type !== 'session' || activePanel?.id !== s._id) {
+                          onPanelClick?.({ type: 'session', id: s._id });
                         }
                       }}
                     >
                       <span className={`ccStatusDot ccStatusDot--small ccStatus-${s.status}`} />
-                      {idx === activePanelIdx ? (
+                      {activePanel?.type === 'session' && activePanel?.id === s._id ? (
                         <InlineEditable
-                          value={s.name || `Session ${idx + 1}`}
+                          value={s.name || 'Session'}
                           className="ccSessionItemName"
                           onSubmit={(name) => {
                             Meteor.call('claudeSessions.update', s._id, { name }, (err) => {
@@ -167,8 +178,23 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanelIdx, onSessio
                           }}
                         />
                       ) : (
-                        <span className="ccSessionItemName">{s.name || `Session ${idx + 1}`}</span>
+                        <span className="ccSessionItemName">{s.name || 'Session'}</span>
                       )}
+                    </div>
+                  ))}
+                  {projectNotes.map((n) => (
+                    <div
+                      key={n._id}
+                      className={`ccSessionItem ccNoteItem ${activePanel?.type === 'note' && activePanel?.id === n._id ? 'ccSessionItemActive' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (activePanel?.type !== 'note' || activePanel?.id !== n._id) {
+                          onPanelClick?.({ type: 'note', id: n._id });
+                        }
+                      }}
+                    >
+                      <span className="ccNoteIcon">N</span>
+                      <span className="ccSessionItemName">{n.title || 'Untitled'}</span>
                     </div>
                   ))}
                 </div>

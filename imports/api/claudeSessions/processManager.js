@@ -249,12 +249,12 @@ export async function spawnClaudeProcess(session, message) {
     // --- init ---
     if (type === 'system' && subtype === 'init') {
       const claudeSessionId = data.session_id;
-      log('init → claudeSessionId:', claudeSessionId);
-      if (claudeSessionId) {
-        await ClaudeSessionsCollection.updateAsync(sessionId, {
-          $set: { claudeSessionId, updatedAt: new Date() }
-        });
-      }
+      log('init → claudeSessionId:', claudeSessionId, 'version:', data.claude_code_version, 'model:', data.model);
+      const initUpdate = { updatedAt: new Date() };
+      if (claudeSessionId) initUpdate.claudeSessionId = claudeSessionId;
+      if (data.claude_code_version) initUpdate.claudeCodeVersion = data.claude_code_version;
+      if (data.model) initUpdate.activeModel = data.model;
+      await ClaudeSessionsCollection.updateAsync(sessionId, { $set: initUpdate });
       return;
     }
 
@@ -380,6 +380,9 @@ export async function spawnClaudeProcess(session, message) {
       }
       if (data.duration_ms != null) {
         sessionUpdate.totalDurationMs = (session.totalDurationMs || 0) + data.duration_ms;
+      }
+      if (data.modelUsage) {
+        sessionUpdate.lastModelUsage = data.modelUsage;
       }
       await ClaudeSessionsCollection.updateAsync(sessionId, { $set: sessionUpdate });
       log('session → idle, stats updated');

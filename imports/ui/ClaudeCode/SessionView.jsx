@@ -15,6 +15,7 @@ const COMMANDS = [
   { name: 'stop', description: 'Stop the running process', hasArgs: false },
   { name: 'model', description: 'Change model (e.g. /model claude-sonnet-4-20250514)', hasArgs: true },
   { name: 'cwd', description: 'Change working directory', hasArgs: true },
+  { name: 'info', description: 'Show Claude version and context usage', hasArgs: false },
   { name: 'help', description: 'Show available commands', hasArgs: false },
 ];
 
@@ -134,6 +135,27 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
           if (err) notify({ message: `Update failed: ${err.reason || err.message}`, kind: 'error' });
           else notify({ message: `Working directory set to ${cwd}`, kind: 'success' });
         });
+        break;
+      }
+      case 'info': {
+        const lines = ['**Session Info**\n'];
+        lines.push(`**Claude Code**: ${session.claudeCodeVersion || '(unknown)'}`);
+        lines.push(`**Model**: ${session.activeModel || session.model || '(default)'}`);
+        const usage = session.lastModelUsage;
+        if (usage) {
+          for (const [, m] of Object.entries(usage)) {
+            const used = (m.inputTokens || 0) + (m.cacheReadInputTokens || 0) + (m.cacheCreationInputTokens || 0);
+            const ctxWin = m.contextWindow || 0;
+            const pct = ctxWin > 0 ? ((used / ctxWin) * 100).toFixed(1) : '?';
+            lines.push(`**Context**: ${used.toLocaleString()} / ${ctxWin.toLocaleString()} tokens (${pct}%)`);
+          }
+        } else {
+          lines.push('**Context**: (send a message first)');
+        }
+        if (session.totalCostUsd > 0) {
+          lines.push(`**Total cost**: $${session.totalCostUsd.toFixed(4)}`);
+        }
+        addLocalMessage(lines.join('\n'));
         break;
       }
       case 'help': {
