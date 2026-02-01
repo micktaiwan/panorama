@@ -134,3 +134,14 @@
   background: var(--purple-600);
   border-color: var(--purple-600);
 }
+
+/* Claude Code project button */
+.claude-project-button {
+  background: rgba(var(--purple-rgb), 0.15);
+  color: var(--purple);
+  border-color: rgba(var(--purple-rgb), 0.3);
+}
+
+.claude-project-button:hover:not(:disabled) {
+  background: rgba(var(--purple-rgb), 0.25);
+}
