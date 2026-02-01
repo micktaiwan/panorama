@@ -10,6 +10,16 @@ import { CommandPopup } from './CommandPopup.jsx';
 import { shortenPath } from './useHomeDir.js';
 import './SessionView.css';
 
+const formatDuration = (ms) => {
+  const totalSec = ms / 1000;
+  if (totalSec < 60) return `${totalSec.toFixed(1)}s`;
+  const totalMin = totalSec / 60;
+  if (totalMin < 60) return `${totalMin.toFixed(1)}min`;
+  const h = Math.floor(totalMin / 60);
+  const m = Math.round(totalMin % 60);
+  return m > 0 ? `${h}h${m}min` : `${h}h`;
+};
+
 const COMMANDS = [
   { name: 'clear', description: 'Clear messages and start fresh', hasArgs: false },
   { name: 'stop', description: 'Stop the running process', hasArgs: false },
@@ -277,7 +287,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
 
   const handleNewSession = () => {
     if (!session?.projectId || !onNewSession) return;
-    Meteor.call('claudeSessions.createInProject', session.projectId, (err, newId) => {
+    Meteor.call('claudeSessions.createInProject', session.projectId, { name: session.name }, (err, newId) => {
       if (err) {
         notify({ message: `New session failed: ${err.reason || err.message}`, kind: 'error' });
         return;
@@ -511,7 +521,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         <span className={`ccStatusBadge ccStatus-${session.status}`}>{session.status}</span>
         <div className="ccStatusBarSpacer" />
         {session.totalCostUsd > 0 && <span>${session.totalCostUsd.toFixed(4)}</span>}
-        {session.totalDurationMs > 0 && <span>{(session.totalDurationMs / 1000).toFixed(1)}s</span>}
+        {session.totalDurationMs > 0 && <span>{formatDuration(session.totalDurationMs)}</span>}
       </div>
     </div>
   );

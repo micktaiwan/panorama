@@ -4,6 +4,12 @@
 }
 
 .ccMessageUser {
+  border-left: 3px solid var(--primary);
+  padding: 0 12px 0 10px;
+}
+
+.ccMessageUser .ccMessageBody {
+  color: var(--primary);
 }
 
 .ccMessageSystem {

@@ -34,18 +34,19 @@ Meteor.methods({
     return ClaudeSessionsCollection.insertAsync(session);
   },
 
-  async 'claudeSessions.createInProject'(projectId) {
+  async 'claudeSessions.createInProject'(projectId, options = {}) {
     check(projectId, String);
+    check(options, Match.Optional(Object));
     const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
     const project = await ClaudeProjectsCollection.findOneAsync(projectId);
     if (!project) throw new Meteor.Error('not-found', 'Project not found');
 
-    // Count existing sessions to auto-name
-    const count = await ClaudeSessionsCollection.find({ projectId }).countAsync();
+    // Count existing sessions to auto-name (unless a name is provided)
+    const name = options.name || `Session ${await ClaudeSessionsCollection.find({ projectId }).countAsync() + 1}`;
     const now = new Date();
     const session = {
       projectId,
-      name: `Session ${count + 1}`,
+      name,
       cwd: project.cwd,
       model: project.model,
       permissionMode: project.permissionMode,
@@ -70,6 +71,14 @@ Meteor.methods({
     if (typeof set.name === 'string') set.name = set.name.trim();
     if (typeof set.cwd === 'string') set.cwd = set.cwd.trim();
     if (typeof set.model === 'string') set.model = set.model.trim();
+    // Propagate cwd change to the project so new sessions inherit it
+    if (typeof set.cwd === 'string') {
+      const session = await ClaudeSessionsCollection.findOneAsync(sessionId, { fields: { projectId: 1 } });
+      if (session?.projectId) {
+        const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
+        await ClaudeProjectsCollection.updateAsync(session.projectId, { $set: { cwd: set.cwd, updatedAt: new Date() } });
+      }
+    }
     return ClaudeSessionsCollection.updateAsync(sessionId, { $set: set });
   },
 
