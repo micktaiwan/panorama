@@ -205,12 +205,37 @@ export const ToolGroupBlock = ({ messages, autoExpanded = false, onAnswer }) => 
   );
 };
 
-const PermissionActions = ({ sessionId }) => {
+const PermissionActions = ({ sessionId, toolName, toolInput }) => {
   const [responded, setResponded] = useState(false);
+  const [selections, setSelections] = useState({});
+
+  const isAskQuestion = toolName === 'AskUserQuestion';
+  const questions = isAskQuestion ? (toolInput?.questions || []) : [];
+  const needsAnswers = questions.length > 0;
+  const allAnswered = !needsAnswers || questions.every((_, qIdx) => (selections[qIdx] || []).length > 0);
+
+  const selectOption = (qIdx, label, isMulti) => {
+    setSelections(prev => {
+      if (isMulti) {
+        const current = prev[qIdx] || [];
+        return { ...prev, [qIdx]: current.includes(label) ? current.filter(l => l !== label) : [...current, label] };
+      }
+      return { ...prev, [qIdx]: [label] };
+    });
+  };
 
   const handleClick = (behavior) => {
     setResponded(true);
-    Meteor.call('claudeSessions.respondToPermission', sessionId, behavior);
+    let updatedToolInput = null;
+    if (needsAnswers && behavior !== 'deny') {
+      const answers = {};
+      questions.forEach((q, qIdx) => {
+        const selected = selections[qIdx] || [];
+        answers[String(qIdx)] = selected.join(', ');
+      });
+      updatedToolInput = { ...toolInput, answers };
+    }
+    Meteor.call('claudeSessions.respondToPermission', sessionId, behavior, updatedToolInput);
   };
 
   if (responded) {
@@ -218,10 +243,40 @@ const PermissionActions = ({ sessionId }) => {
   }
 
   return (
-    <div className="ccPermissionActions">
-      <button className="ccPermissionBtn" onClick={() => handleClick('allow')}>Allow</button>
-      <button className="ccPermissionBtn" onClick={() => handleClick('allowAll')}>Allow All</button>
-      <button className="ccPermissionBtn ccPermissionBtn--deny" onClick={() => handleClick('deny')}>Deny</button>
+    <div className="ccPermissionActionsWrap">
+      {needsAnswers && (
+        <div className="ccAskQuestion">
+          {questions.map((q, qIdx) => (
+            <div key={qIdx} className="ccAskQuestionItem">
+              {q.header && <span className="ccAskHeader">{q.header}</span>}
+              <div className="ccAskText">{q.question}</div>
+              <div className="ccAskOptions">
+                {q.options?.map((opt, oIdx) => {
+                  const isSelected = (selections[qIdx] || []).includes(opt.label);
+                  return (
+                    <button
+                      key={oIdx}
+                      className={`ccAskOption${isSelected ? ' ccAskOption--selected' : ''}`}
+                      onClick={() => selectOption(qIdx, opt.label, q.multiSelect)}
+                    >
+                      <span className="ccAskOptionLabel">{opt.label}</span>
+                      {opt.description && <span className="ccAskDescription">{opt.description}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {!allAnswered && (
+            <div className="ccPermissionHint">Selectionnez vos reponses puis cliquez sur Allow</div>
+          )}
+        </div>
+      )}
+      <div className="ccPermissionActions">
+        <button className="ccPermissionBtn" disabled={!allAnswered} onClick={() => handleClick('allow')}>Allow</button>
+        <button className="ccPermissionBtn" disabled={!allAnswered} onClick={() => handleClick('allowAll')}>Allow All</button>
+        <button className="ccPermissionBtn ccPermissionBtn--deny" onClick={() => handleClick('deny')}>Deny</button>
+      </div>
     </div>
   );
 };
@@ -237,11 +292,11 @@ export const MessageBubble = ({ message, onAnswer, sessionId }) => {
   const roleLabel = isShell
     ? (message.type === 'shell_command' ? `$ ${contentText}` : 'Output')
     : isPermission ? '\u26A0 Permission Request'
-    : isUser ? 'You' : 'Claude';
+    : null;
 
   return (
     <div className={`ccMessage ${isUser ? 'ccMessageUser' : ''} ${isSystem ? 'ccMessageSystem' : ''} ${isPermission ? 'ccMessagePermission' : ''} ${isShell ? 'ccMessageShell' : ''}`}>
-      <div className="ccMessageRole">{roleLabel}</div>
+      {roleLabel && <div className="ccMessageRole">{roleLabel}</div>}
       <div className="ccMessageBody">
         {isShell ? (
           message.type === 'shell_result' && <pre className="ccShellOutput">{contentText}</pre>
@@ -254,16 +309,9 @@ export const MessageBubble = ({ message, onAnswer, sessionId }) => {
             />
           )
         }
-        {isPermission && sessionId && <PermissionActions sessionId={sessionId} />}
+        {isPermission && sessionId && <PermissionActions sessionId={sessionId} toolName={message.toolName} toolInput={message.toolInput} />}
         {isStreaming && <span className="ccCursor" />}
       </div>
-      {(usage || costUsd != null || durationMs != null) && (
-        <div className="ccMessageMeta">
-          {usage && <span>in:{usage.input_tokens} out:{usage.output_tokens}</span>}
-          {costUsd != null && <span>${costUsd.toFixed(4)}</span>}
-          {durationMs != null && <span>{(durationMs / 1000).toFixed(1)}s</span>}
-        </div>
-      )}
     </div>
   );
 };

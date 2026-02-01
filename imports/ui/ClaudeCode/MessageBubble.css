@@ -1,26 +1,19 @@
 .ccMessage {
   padding: 8px 12px;
   margin-bottom: 8px;
-  border-radius: 6px;
-  background: var(--panel);
-  border: 1px solid var(--border);
 }
 
 .ccMessageUser {
-  background: var(--panel);
-  border-color: rgba(var(--info-rgb), 0.2);
 }
 
 .ccMessageSystem {
-  opacity: 0.7;
-  border-style: dashed;
+  opacity: 0.6;
 }
 
 .ccMessagePermission {
   opacity: 1;
-  border-style: solid;
-  border-color: rgba(var(--warning-rgb), 0.4);
-  background: rgba(var(--warning-rgb), 0.08);
+  border-left: 3px solid var(--warning);
+  padding-left: 10px;
 }
 
 .ccMessagePermission .ccMessageRole {
@@ -55,7 +48,7 @@
 }
 
 .ccMarkdown pre {
-  background: rgba(var(--black-rgb), 0.3);
+  background: var(--code-bg);
   padding: 8px;
   border-radius: 4px;
   overflow-x: auto;
@@ -63,10 +56,12 @@
 }
 
 .ccMarkdown code {
-  background: rgba(var(--black-rgb), 0.2);
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;
+  color: var(--text-code);
 }
 
 .ccMarkdown pre code {
@@ -145,9 +140,8 @@
 /* Tool group (grouped tool-only messages) */
 .ccToolGroup {
   margin-bottom: 8px;
-  border-radius: 6px;
-  background: rgba(var(--primary-rgb), 0.08);
-  border: 1px solid rgba(var(--primary-rgb), 0.15);
+  border-left: 2px solid rgba(var(--primary-rgb), 0.3);
+  padding-left: 8px;
 }
 
 .ccToolGroupHeader {
@@ -155,7 +149,7 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 6px 12px;
+  padding: 4px 0;
   background: none;
   border: none;
   color: var(--muted);
@@ -184,12 +178,11 @@
 }
 
 .ccToolGroup--active {
-  border-color: rgba(var(--primary-rgb), 0.25);
+  border-left-color: rgba(var(--primary-rgb), 0.6);
 }
 
 .ccToolGroupDetails {
-  padding: 4px 12px 8px;
-  border-top: 1px solid rgba(var(--primary-rgb), 0.1);
+  padding: 4px 0 8px;
 }
 
 /* AskUserQuestion */
@@ -288,6 +281,10 @@
 }
 
 /* Permission action buttons */
+.ccPermissionActionsWrap {
+  margin-top: 8px;
+}
+
 .ccPermissionActions {
   display: flex;
   gap: 8px;
@@ -322,6 +319,23 @@
   border-color: rgba(var(--danger-rgb), 0.6);
 }
 
+.ccPermissionBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ccPermissionBtn:disabled:hover {
+  background: rgba(var(--warning-rgb), 0.1);
+  border-color: rgba(var(--warning-rgb), 0.4);
+}
+
+.ccPermissionHint {
+  font-size: 11px;
+  color: var(--warning);
+  margin-top: 8px;
+  font-style: italic;
+}
+
 .ccPermissionSent {
   font-size: 12px;
   color: var(--muted);
@@ -330,10 +344,9 @@
 
 /* Shell messages */
 .ccMessageShell {
-  background: var(--surface-sunken);
-  border-color: rgba(var(--success-text-rgb), 0.2);
   opacity: 1;
-  border-style: solid;
+  border-left: 3px solid rgba(var(--success-text-rgb), 0.4);
+  padding-left: 10px;
 }
 
 .ccMessageShell .ccMessageRole {
@@ -368,12 +381,3 @@
   50% { opacity: 0; }
 }
 
-/* Message meta (tokens, cost, duration) */
-.ccMessageMeta {
-  display: flex;
-  gap: 12px;
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--muted);
-  opacity: 0.7;
-}
