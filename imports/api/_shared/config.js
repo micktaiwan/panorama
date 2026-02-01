@@ -71,6 +71,16 @@ export const getQdrantUrl = () => {
   return url?.trim() || null;
 };
 
+export const getSlackConfig = () => {
+  const pref = getPrefs();
+  return {
+    enabled: pref?.slack?.enabled ?? false,
+    botToken: pref?.slack?.botToken?.trim() || process.env.SLACK_BOT_TOKEN || null,
+    appToken: pref?.slack?.appToken?.trim() || process.env.SLACK_APP_TOKEN || null,
+    allowedUserId: pref?.slack?.allowedUserId?.trim() || process.env.SLACK_ALLOWED_USER_ID || null,
+  };
+};
+
 export const getGoogleCalendarConfig = () => {
   const pref = getPrefs();
   const clientId = pref?.googleCalendar?.clientId?.trim() || process.env.GOOGLE_CALENDAR_CLIENT_ID || Meteor.settings?.googleCalendar?.clientId || null;
