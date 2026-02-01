@@ -1,9 +1,17 @@
 import { Meteor } from 'meteor/meteor';
-import { spawn, exec } from 'child_process';
+import { spawn, exec, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { ClaudeSessionsCollection } from './collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
+
+// Resolve claude binary path at startup (Meteor's PATH may not include homebrew/nvm dirs)
+let claudeBin = 'claude';
+try {
+  claudeBin = execSync('which claude', { encoding: 'utf8' }).trim();
+} catch (_) {
+  console.warn('[claude-pm] "claude" not found in PATH, spawn will likely fail');
+}
 
 // --- File logger ---
 const LOG_FILE = path.join(process.env.HOME || '/tmp', '.panorama-claude.log');
@@ -211,15 +219,29 @@ export async function spawnClaudeProcess(session, message) {
     args.push('--append-system-prompt', session.appendSystemPrompt);
   }
 
-  const cwd = session.cwd || process.env.HOME + '/projects';
+  let cwd = session.cwd || process.env.HOME + '/projects';
+  if (cwd.startsWith('~/')) cwd = path.join(process.env.HOME, cwd.slice(2));
   log('args:', args.join(' '));
   log('cwd:', cwd);
 
-  const proc = spawn('claude', args, {
+  const proc = spawn(claudeBin, args, {
     cwd,
     env: { ...process.env, PANORAMA_SESSION: sessionId },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+
+  // Attach error handler IMMEDIATELY (before any await) to prevent unhandled 'error' crash
+  proc.on('error', Meteor.bindEnvironment(async (err) => {
+    logError('spawn error:', err.message);
+    activeProcesses.delete(sessionId);
+    await ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: {
+        status: 'error',
+        lastError: err.message,
+        updatedAt: new Date(),
+      }
+    });
+  }));
 
   log('spawned pid:', proc.pid);
   activeProcesses.set(sessionId, proc);
@@ -289,14 +311,8 @@ export async function spawnClaudeProcess(session, message) {
         createdAt: new Date(),
       };
 
-      if (currentAssistantMsgId) {
-        await ClaudeMessagesCollection.updateAsync(currentAssistantMsgId, { $set: msgDoc });
-        log('updated assistant msg', currentAssistantMsgId);
-        currentAssistantMsgId = null;
-      } else {
-        currentAssistantMsgId = await ClaudeMessagesCollection.insertAsync(msgDoc);
-        log('inserted assistant msg', currentAssistantMsgId);
-      }
+      currentAssistantMsgId = await ClaudeMessagesCollection.insertAsync(msgDoc);
+      log('inserted assistant msg', currentAssistantMsgId);
       return;
     }
 
@@ -445,6 +461,23 @@ export async function spawnClaudeProcess(session, message) {
         });
         return;
       }
+
+      // Save tool results / user context messages
+      if (contentBlocks.length > 0) {
+        const contentText = contentBlocks
+          .filter(b => b.type === 'text')
+          .map(b => b.text)
+          .join('\n');
+        await ClaudeMessagesCollection.insertAsync({
+          sessionId,
+          role: 'user',
+          type: 'tool_result',
+          content: contentBlocks,
+          contentText,
+          createdAt: new Date(),
+        });
+        return;
+      }
     }
 
     log(`unhandled type=${type} subtype=${subtype}`, JSON.stringify(data));
@@ -465,18 +498,6 @@ export async function spawnClaudeProcess(session, message) {
     if (text) {
       logError('stderr:', text);
     }
-  }));
-
-  proc.on('error', Meteor.bindEnvironment(async (err) => {
-    logError('spawn error:', err.message);
-    activeProcesses.delete(sessionId);
-    await ClaudeSessionsCollection.updateAsync(sessionId, {
-      $set: {
-        status: 'error',
-        lastError: err.message,
-        updatedAt: new Date(),
-      }
-    });
   }));
 
   proc.on('exit', Meteor.bindEnvironment(async (code, signal) => {
