@@ -11,11 +11,11 @@
 
 .notify {
   background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(17, 24, 39, 0.94));
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--white-rgb), 0.08);
   border-radius: 12px;
   color: var(--text);
   display: block;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 40px rgba(var(--black-rgb), 0.45);
   overflow: hidden;
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -28,14 +28,14 @@
 .notifyAside {
   flex: 0 0 50px;
   width: 50px;
-  background: #111827;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--panel);
+  border-right: 1px solid rgba(var(--white-rgb), 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .notifyAside img { max-width: 36px; max-height: 36px; border-radius: 8px; }
-.notifyAside svg { width: 36px; height: 36px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
+.notifyAside svg { width: 36px; height: 36px; filter: drop-shadow(0 1px 1px rgba(var(--black-rgb),0.3)); }
 
 .notifyMain {
   flex: 1 1 auto;
@@ -47,10 +47,10 @@
 
 .notifyMain span { font-weight: 500; }
 
-.notify.info .notifyAside { background: #4f46e5; }
-.notify.error .notifyAside { background: #ef4444; }
-.notify.success .notifyAside { background: #10b981; }
-.notify.warning .notifyAside { background: #f59e0b; }
+.notify.info .notifyAside { background: var(--primary); }
+.notify.error .notifyAside { background: var(--danger); }
+.notify.success .notifyAside { background: var(--success); }
+.notify.warning .notifyAside { background: var(--warning); }
 
 /* Exit animation */
 .notify.closing {
@@ -76,5 +76,17 @@ body.withDockedChat .notify {
 
 body.withDockedChat .notifyContainer {
   right: calc(var(--docked-chat-width, 420px) + 24px);
+}
+
+/* Light mode: readable toast */
+:root[data-theme="light"] .notify {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 249, 250, 0.96));
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme="light"] .notifyAside {
+  border-right-color: var(--border);
 }
 

@@ -7,7 +7,7 @@
 .helpTitle {
   margin-top: 20px;
   font-size: 24px;
-  color: #007BFF;
+  color: var(--info);
 }
 
 .headingSection {
@@ -15,11 +15,11 @@
   font-size: 20px;
   font-weight: 600;
 }
-.headingEditing { color: #28A745; }
-.headingAlarm { color: #DC3545; }
-.headingSearch { color: #FFC107; }
-.headingNotes { color: #6F42C1; }
-.headingFeatures { color: #17A2B8; }
+.headingEditing { color: var(--success-text); }
+.headingAlarm { color: var(--danger); }
+.headingSearch { color: var(--warning); }
+.headingNotes { color: var(--purple); }
+.headingFeatures { color: var(--link); }
 
 .bold { font-weight: 600; }
 

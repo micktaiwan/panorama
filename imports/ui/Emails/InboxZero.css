@@ -86,12 +86,12 @@
   border-radius: var(--radius-lg);
   padding: 32px;
   margin-bottom: 32px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(var(--black-rgb), 0.1);
   transition: all 0.3s ease;
 }
 
 .inboxZero-emailCard:hover {
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 48px rgba(var(--black-rgb), 0.15);
   transform: translateY(-2px);
 }
 
@@ -280,7 +280,7 @@
   background: var(--panel);
   border: 2px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px rgba(var(--black-rgb), 0.2);
   z-index: 1000;
   min-width: 180px;
   overflow: hidden;
@@ -333,7 +333,7 @@
   bottom: 125%;
   left: 50%;
   margin-left: -175px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(var(--black-rgb), 0.3);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -447,7 +447,7 @@
   padding: 20px;
   font-size: 14px;
   color: var(--text-secondary);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px rgba(var(--black-rgb), 0.2);
   backdrop-filter: blur(10px);
 }
 

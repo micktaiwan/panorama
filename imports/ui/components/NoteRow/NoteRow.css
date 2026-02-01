@@ -4,7 +4,7 @@
   gap: 12px;
   align-items: start;
   padding: 8px 0;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border);
 }
 .noteRowC.withProject { grid-template-columns: 220px 1fr auto; }
 .noteRowC.smallText {
@@ -17,7 +17,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #374151;
+  color: var(--muted-2);
   text-decoration: none;
   max-width: 100%;
 }
@@ -37,7 +37,7 @@
   font-weight: 500;
 }
 .notePreview {
-  color: #6b7280;
+  color: var(--muted-2);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -46,7 +46,7 @@
   white-space: pre-line;
 }
 .noteRight {
-  color: #6b7280;
+  color: var(--muted-2);
   white-space: nowrap;
 }
 .iconButton {

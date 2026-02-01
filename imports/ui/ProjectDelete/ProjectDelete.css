@@ -6,15 +6,15 @@
 }
 
 .pdWarning {
-  border: 1px solid #ff4d4f;
-  background: #3a1214;
+  border: 1px solid var(--danger);
+  background: var(--danger-bg);
   color: #fff0f0;
   padding: 12px;
   margin-top: 16px;
 }
 
 .pdWarning strong {
-  color: #ff7272;
+  color: var(--danger-400);
 }
 
 .pdFooter {

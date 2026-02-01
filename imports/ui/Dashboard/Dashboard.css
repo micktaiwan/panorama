@@ -116,7 +116,7 @@
   align-items: center; 
   gap: 8px; 
   flex-wrap: wrap;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
 }
 
@@ -148,9 +148,9 @@
 .recentDone { 
   margin: 0 0 16px; 
   padding: 24px; 
-  border: 1px solid #444; 
-  border-radius: 6px; 
-  background: #222; 
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
   h3 { margin: 0 0 8px; }
 }
 .recentDone .recentDoneHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -202,12 +202,12 @@
 .projectsOverview { margin: 12px 0 24px; }
 .projectsScroll { max-height: 360px; overflow: auto; margin-top: 8px; }
 .signalsStrip { display: flex; gap: 12px; margin-bottom: 12px; }
-.signalBox { background: #10141b; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+.signalBox { background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
 .signalLabel { color: var(--muted); font-size: 12px; }
 .signalValue { font-size: 18px; font-weight: 600; }
 
 .projectsTable { width: 100%; border-collapse: collapse; table-layout: auto; }
-.projectsTable thead th { position: sticky; top: 0; background: #0b0c10; z-index: 1; }
+.projectsTable thead th { position: sticky; top: 0; background: var(--bg); z-index: 1; }
 .projectsTable th, .projectsTable td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .projectsTable th { color: var(--muted); font-weight: 500; text-align: left; }
 .projectsTable th.alignRight { text-align: right; }
@@ -218,24 +218,24 @@
 .projectsTable .projName { display: flex; align-items: center; gap: 6px; }
 .projectsTable .starBtn { appearance: none; border: none; background: transparent; cursor: pointer; color: var(--muted); padding: 0; }
 .projectsTable .starBtn .starIcon { width: 16px; height: 16px; fill: currentColor; }
-.projectsTable .starBtn.active { color: #f59e0b; }
-.projectsTable .starBtn:hover { color: #f59e0b; }
+.projectsTable .starBtn.active { color: var(--warning); }
+.projectsTable .starBtn:hover { color: var(--warning); }
 .projFlag { display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
 .projectsTable .rowAction { color: var(--muted); }
-.projectsTable .dueSoon { color: #f59e0b; }
-.projectsTable .dueNow { color: #ef4444; }
-.projectsTable .dueLater { color: #22c55e; }
-.projectsTable tbody tr:nth-child(odd) { background: rgba(255,255,255,0.02); }
-.projectsTable tbody tr:hover { background: rgba(255,255,255,0.04); }
+.projectsTable .dueSoon { color: var(--warning); }
+.projectsTable .dueNow { color: var(--danger); }
+.projectsTable .dueLater { color: var(--success-text); }
+.projectsTable tbody tr:nth-child(odd) { background: rgba(var(--white-rgb),0.02); }
+.projectsTable tbody tr:hover { background: rgba(var(--white-rgb),0.04); }
 .alignRight { text-align: right; }
 .alignCenter { text-align: center; }
-.statusBadge { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #1b1e26; }
-.statusBadge.active { background: #0f1a12; color: #22c55e; border-color: #13321f; }
-.statusBadge.blocked { background: #1a1212; color: #ef4444; border-color: #3a1a1a; }
-.riskBadge { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #1b1e26; }
-.riskBadge.low { color: #22c55e; }
-.riskBadge.medium { color: #f59e0b; }
-.riskBadge.high { color: #ef4444; }
+.statusBadge { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: var(--surface); }
+.statusBadge.active { background: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+.statusBadge.blocked { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+.riskBadge { padding: 2px 6px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: var(--surface); }
+.riskBadge.low { color: var(--success-text); }
+.riskBadge.medium { color: var(--warning); }
+.riskBadge.high { color: var(--danger); }
 
 
 /* Scrollable tasks list */

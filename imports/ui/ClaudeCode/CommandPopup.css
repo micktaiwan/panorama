@@ -4,12 +4,12 @@
   left: 0;
   right: 0;
   margin-bottom: 4px;
-  background: var(--bg-secondary, #1e293b);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: 6px;
   max-height: 200px;
   overflow-y: auto;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 -4px 12px rgba(var(--black-rgb), 0.3);
   z-index: 10;
 }
 
@@ -30,17 +30,17 @@
 
 .ccCommandItem:hover,
 .ccCommandItemActive {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(var(--info-rgb), 0.15);
 }
 
 .ccCommandName {
   font-weight: 600;
-  color: var(--primary, #3b82f6);
+  color: var(--info);
   white-space: nowrap;
 }
 
 .ccCommandDesc {
-  color: var(--text-muted, #94a3b8);
+  color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;

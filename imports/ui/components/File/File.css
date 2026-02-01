@@ -5,5 +5,5 @@
 .fileActions { display: inline-flex; gap: 3px; margin-left: 3px; }
 .hoverHideActions .fileActions { display: none; }
 .hoverHideActions:hover .fileActions { display: inline-flex; }
-.fileIconAnchor { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; background: #10141b; color: var(--text); text-decoration: none; }
-.fileIconAnchor:hover { background: #141923; }
+.fileIconAnchor { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-sunken); color: var(--text); text-decoration: none; }
+.fileIconAnchor:hover { background: var(--surface-raised); }

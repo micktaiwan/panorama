@@ -1,5 +1,5 @@
 .projFilterBar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
-.projChip { background: #1b1e26; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 999px; font-size: 12px; }
-.projChip.include { background: #082614; border-color: #134e23; color: #22c55e; }
-.projChip.exclude { background: #2a0f0f; border-color: #6b1d1d; color: #ef4444; }
+.projChip { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 999px; font-size: 12px; }
+.projChip.include { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+.projChip.exclude { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
 

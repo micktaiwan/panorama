@@ -1,14 +1,14 @@
 .notes-tabs {
   display: flex;
-  background: #2d2d2d;
-  border-bottom: 1px solid #404040;
+  background: var(--notes-panel);
+  border-bottom: 1px solid var(--notes-border);
   overflow-x: auto;
   overflow-y: hidden;
   max-width: 100%;
   flex-shrink: 0;
   /* Custom scrollbar styling */
   scrollbar-width: thin;
-  scrollbar-color: #555 #2d2d2d;
+  scrollbar-color: var(--notes-border-strong) var(--notes-panel);
 }
 
 .notes-tabs::-webkit-scrollbar {
@@ -16,24 +16,24 @@
 }
 
 .notes-tabs::-webkit-scrollbar-track {
-  background: #2d2d2d;
+  background: var(--notes-panel);
 }
 
 .notes-tabs::-webkit-scrollbar-thumb {
-  background: #555;
+  background: var(--notes-border-strong);
   border-radius: 3px;
 }
 
 .notes-tabs::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: var(--notes-border-strong);
 }
 
 .note-tab {
   display: flex;
   align-items: center;
   padding: 8px 16px;
-  background: #3a3a3a !important;
-  border-right: 1px solid #555;
+  background: var(--notes-surface) !important;
+  border-right: 1px solid var(--notes-border-strong);
   cursor: pointer;
   transition: background-color 0.2s;
   min-width: 120px;
@@ -42,7 +42,7 @@
   flex-shrink: 0;
   border: none;
   text-align: left;
-  color: #e5e7eb !important;
+  color: var(--text) !important;
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
@@ -52,17 +52,17 @@
 }
 
 .note-tab:hover {
-  background: #4a4a4a !important;
+  background: var(--notes-surface-hover) !important;
 }
 
 .note-tab:focus {
-  outline: 2px solid #60a5fa;
+  outline: 2px solid var(--info-400);
   outline-offset: -2px;
 }
 
 .note-tab.active {
-  background: #2563eb !important; /* blue-600 */
-  border-bottom: 2px solid #60a5fa !important; /* blue-400 */
+  background: var(--notes-active-bg) !important;
+  border-bottom: 2px solid var(--notes-active-border) !important;
 }
 
 .tab-draggable {
@@ -88,7 +88,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ef4444; /* red-500 */
+  background: var(--danger); /* red-500 */
   margin-right: 6px;
 }
 
@@ -96,7 +96,7 @@
   background: none;
   border: none;
   font-size: 16px;
-  color: #9ca3af;
+  color: var(--muted);
   cursor: pointer;
   padding: 0;
   width: 20px;
@@ -108,16 +108,16 @@
 }
 
 .tab-close:hover {
-  background: #555;
-  color: #e5e7eb;
+  background: var(--notes-border-strong);
+  color: var(--text);
 }
 
 .tab-title-edit {
   flex: 1;
   background: transparent;
-  border: 1px solid #3b82f6;
+  border: 1px solid var(--info);
   border-radius: 3px;
-  color: #e5e7eb;
+  color: var(--text);
   font-size: 13px;
   padding: 2px 4px;
   margin-right: 8px;
@@ -126,17 +126,17 @@
 }
 
 .tab-context-menu {
-  background: #2d2d2d;
-  border: 1px solid #404040;
+  background: var(--notes-panel);
+  border: 1px solid var(--notes-border);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(var(--black-rgb), 0.3);
   padding: 4px 0;
   min-width: 120px;
 }
 
 .context-menu-item {
   padding: 8px 16px;
-  color: #e5e7eb;
+  color: var(--text);
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.2s;
@@ -148,7 +148,7 @@
 }
 
 .context-menu-item:hover {
-  background: #3a3a3a;
+  background: var(--notes-surface);
 }
 
 .new-note-button {
@@ -156,14 +156,14 @@
   align-items: center;
   justify-content: center;
   padding: 8px 12px;
-  background: #3a3a3a;
+  background: var(--notes-surface);
   border: none;
-  border-right: 1px solid #555;
+  border-right: 1px solid var(--notes-border-strong);
   cursor: pointer;
   transition: background-color 0.2s;
   min-width: 40px;
   flex-shrink: 0;
-  color: #e5e7eb;
+  color: var(--text);
   font-size: 18px;
   font-weight: bold;
   font-family: inherit;
@@ -171,11 +171,11 @@
 }
 
 .new-note-button:hover {
-  background: #4a4a4a;
+  background: var(--notes-surface-hover);
 }
 
 .new-note-button:active {
-  background: #5a5a5a;
+  background: var(--notes-border-strong);
 }
 
 .new-note-button:disabled {
@@ -184,5 +184,5 @@
 }
 
 .new-note-button:disabled:hover {
-  background: #3a3a3a;
+  background: var(--notes-surface);
 }

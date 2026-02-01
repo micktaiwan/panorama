@@ -12,7 +12,7 @@
   line-height: 20px; 
   vertical-align: middle; 
   margin: 0; 
-  background: #0b0c10; 
+  background: var(--bg); 
   color: var(--text); 
   border: 1px solid var(--border); 
   border-radius: 4px; 

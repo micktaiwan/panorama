@@ -40,6 +40,7 @@ export const Preferences = () => {
   // indexJob: { jobId, total, processed, upserts, errors, done }
   const [indexJob, setIndexJob] = React.useState(null);
   // removed local toast; using global notify manager
+  const [theme, setTheme] = React.useState('dark');
   const [mobileTasksEnabled, setMobileTasksEnabled] = React.useState(() => {
     try {
       const raw = window.localStorage.getItem('panorama.mobileTasksEnabled');
@@ -374,6 +375,7 @@ export const Preferences = () => {
 
   React.useEffect(() => {
     if (!pref) return;
+    setTheme(pref.theme || 'dark');
     setFilesDir(pref.filesDir || '');
     setDevUrlMode(!!pref.devUrlMode);
     setOpenaiApiKey(pref.openaiApiKey || '');
@@ -397,6 +399,20 @@ export const Preferences = () => {
     <div className="prefs">
       <h2>Preferences</h2>
       <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Theme</div>
+          <div className="prefsValue">
+            <InlineEditable
+              as="select"
+              value={theme}
+              options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]}
+              onSubmit={(next) => {
+                setTheme(next);
+                Meteor.call('appPreferences.update', { theme: next }, () => {});
+              }}
+            />
+          </div>
+        </div>
         <div className="prefsRow">
           <div className="prefsLabel">Files directory</div>
           <div className="prefsValue">

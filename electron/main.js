@@ -480,12 +480,17 @@ ipcMain.handle('view:toggleFullscreen', () => {
   if (win) win.setFullScreen(!win.isFullScreen());
 });
 
+ipcMain.handle('view:setSimpleFullscreen', (_event, enabled) => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) win.setSimpleFullScreen(enabled);
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createWindow(loadWindowState());
 });
 
 app.on('will-quit', () => {
