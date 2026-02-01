@@ -93,11 +93,11 @@ export async function killProcess(sessionId) {
   activeProcesses.delete(sessionId);
 
   await ClaudeSessionsCollection.updateAsync(sessionId, {
-    $set: { status: 'idle', updatedAt: new Date() }
+    $set: { status: 'idle', pid: null, updatedAt: new Date() }
   });
 }
 
-export function respondToPermission(sessionId, behavior) {
+export function respondToPermission(sessionId, behavior, updatedToolInput) {
   const pending = pendingPermissions.get(sessionId);
   if (!pending) {
     log('respondToPermission: no pending request for', sessionId);
@@ -111,11 +111,13 @@ export function respondToPermission(sessionId, behavior) {
     return;
   }
 
+  const toolInput = updatedToolInput || pending.toolInput || {};
+
   const permissionResponse = behavior === 'deny'
     ? { behavior: 'deny', message: 'User denied' }
     : behavior === 'allowAll'
-      ? { behavior: 'allow', updatedInput: pending.toolInput || {}, updatedPermissions: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }] }
-      : { behavior: 'allow', updatedInput: pending.toolInput || {} };
+      ? { behavior: 'allow', updatedInput: toolInput, updatedPermissions: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }] }
+      : { behavior: 'allow', updatedInput: toolInput };
 
   const response = {
     type: 'control_response',
@@ -129,6 +131,13 @@ export function respondToPermission(sessionId, behavior) {
   log('respondToPermission:', sessionId, 'behavior:', behavior, 'requestId:', pending.requestId);
   proc.stdin.write(JSON.stringify(response) + '\n');
   pendingPermissions.delete(sessionId);
+
+  // Sync permission mode to session when Allow All sets acceptEdits
+  if (behavior === 'allowAll') {
+    ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: { permissionMode: 'acceptEdits', updatedAt: new Date() }
+    });
+  }
 }
 
 export function execShellCommand(sessionId, command, cwd) {
@@ -206,19 +215,19 @@ export async function spawnClaudeProcess(session, message) {
   log('args:', args.join(' '));
   log('cwd:', cwd);
 
-  // Update session status
-  await ClaudeSessionsCollection.updateAsync(sessionId, {
-    $set: { status: 'running', lastError: null, updatedAt: new Date() }
-  });
-
   const proc = spawn('claude', args, {
     cwd,
-    env: { ...process.env },
+    env: { ...process.env, PANORAMA_SESSION: sessionId },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
   log('spawned pid:', proc.pid);
   activeProcesses.set(sessionId, proc);
+
+  // Update session status with PID
+  await ClaudeSessionsCollection.updateAsync(sessionId, {
+    $set: { status: 'running', pid: proc.pid, lastError: null, updatedAt: new Date() }
+  });
 
   // Send prompt via stdin (stream-json format)
   const stdinMsg = JSON.stringify({ type: 'user', message: { role: 'user', content: message } });
@@ -472,8 +481,14 @@ export async function spawnClaudeProcess(session, message) {
 
   proc.on('exit', Meteor.bindEnvironment(async (code, signal) => {
     log(`exit code=${code} signal=${signal} lines=${lineCount} bufferLeft=${buffer.length}`);
-    activeProcesses.delete(sessionId);
-    pendingPermissions.delete(sessionId);
+    // Only clean up if this is still the active process (avoids race when a new process was spawned)
+    if (activeProcesses.get(sessionId) === proc) {
+      activeProcesses.delete(sessionId);
+      pendingPermissions.delete(sessionId);
+    } else {
+      log('exit from stale process, skipping cleanup (new process already active)');
+      return;
+    }
 
     // Process remaining buffer
     if (buffer.trim()) {
