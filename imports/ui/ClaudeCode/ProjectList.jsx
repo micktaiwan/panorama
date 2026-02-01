@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
 import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
@@ -9,6 +9,18 @@ import { notify } from '/imports/ui/utils/notify.js';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { shortenPath } from './useHomeDir.js';
 import './ProjectList.css';
+
+const COLLAPSE_STORAGE_KEY = 'claude-collapsed-projects';
+
+const loadCollapsed = () => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSE_STORAGE_KEY) || '[]'));
+  } catch { return new Set(); }
+};
+
+const saveCollapsed = (set) => {
+  localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify([...set]));
+};
 
 const projectStatus = (sessions) => {
   if (sessions.some(s => s.status === 'running')) return 'running';
@@ -23,6 +35,18 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, onPanelClic
   const [newCwd, setNewCwd] = useState('');
   const [newModel, setNewModel] = useState('');
   const [newPermMode, setNewPermMode] = useState('acceptEdits');
+  const [collapsedIds, setCollapsedIds] = useState(loadCollapsed);
+
+  const toggleCollapse = useCallback((e, projectId) => {
+    e.stopPropagation();
+    setCollapsedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      saveCollapsed(next);
+      return next;
+    });
+  }, []);
 
   const { projects, allSessions, allNotes } = useTracker(() => {
     Meteor.subscribe('claudeProjects');
@@ -136,78 +160,85 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, onPanelClic
               className={`ccProjectItem ${p._id === activeProjectId ? 'active' : ''}`}
               onClick={() => navigateTo({ name: 'claude', projectId: p._id })}
             >
-              <div className="ccProjectItemTop">
-                <span className={`ccStatusDot ccStatus-${status}`} />
-                <InlineEditable
-                  value={p.name}
-                  className="ccProjectItemName"
-                  onSubmit={(name) => {
-                    Meteor.call('claudeProjects.update', p._id, { name }, (err) => {
-                      if (err) notify({ message: `Rename failed: ${err.reason || err.message}`, kind: 'error' });
-                    });
-                  }}
-                />
-                <button
-                  className="ccProjectItemRemove"
-                  onClick={(e) => handleRemove(e, p._id)}
-                  title="Delete project"
-                >&times;</button>
-              </div>
-              {p.cwd && <span className="ccProjectItemCwd muted">{shortenPath(p.cwd, homeDir)}</span>}
               {(() => {
-                const isActive = p._id === activeProjectId;
-                const unseenSessions = sessions.filter(s => s.unseenCompleted);
-                const visibleSessions = isActive ? sessions : unseenSessions;
-                const visibleNotes = isActive ? projectNotes : [];
-                if (visibleSessions.length === 0 && visibleNotes.length === 0) return null;
+                const hasUnseen = sessions.some(s => s.unseenCompleted);
+                const userCollapsed = collapsedIds.has(p._id);
+                const isExpanded = !userCollapsed || hasUnseen;
                 return (
-                  <div className="ccSessionList">
-                    {visibleSessions.map((s) => (
-                      <div
-                        key={s._id}
-                        className={`ccSessionItem ${activePanel?.type === 'session' && activePanel?.id === s._id ? 'ccSessionItemActive' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!isActive) {
-                            navigateTo({ name: 'claude', projectId: p._id });
-                          }
-                          if (activePanel?.type !== 'session' || activePanel?.id !== s._id) {
-                            onPanelClick?.({ type: 'session', id: s._id });
-                          }
+                  <>
+                    <div className="ccProjectItemTop">
+                      <button
+                        className={`ccChevron ${isExpanded ? 'ccChevronOpen' : ''}`}
+                        onClick={(e) => toggleCollapse(e, p._id)}
+                        title={isExpanded ? 'Collapse' : 'Expand'}
+                      >&#9656;</button>
+                      <span className={`ccStatusDot ccStatus-${status}`} />
+                      <InlineEditable
+                        value={p.name}
+                        className="ccProjectItemName"
+                        onSubmit={(name) => {
+                          Meteor.call('claudeProjects.update', p._id, { name }, (err) => {
+                            if (err) notify({ message: `Rename failed: ${err.reason || err.message}`, kind: 'error' });
+                          });
                         }}
-                      >
-                        <span className={`ccStatusDot ccStatusDot--small ccStatus-${s.unseenCompleted ? 'completed' : s.status}`} />
-                        {isActive && activePanel?.type === 'session' && activePanel?.id === s._id ? (
-                          <InlineEditable
-                            value={s.name || 'Session'}
-                            className="ccSessionItemName"
-                            onSubmit={(name) => {
-                              Meteor.call('claudeSessions.update', s._id, { name }, (err) => {
-                                if (err) notify({ message: `Rename failed: ${err.reason || err.message}`, kind: 'error' });
-                              });
+                      />
+                      <button
+                        className="ccProjectItemRemove"
+                        onClick={(e) => handleRemove(e, p._id)}
+                        title="Delete project"
+                      >&times;</button>
+                    </div>
+                    {p.cwd && <span className="ccProjectItemCwd muted">{shortenPath(p.cwd, homeDir)}</span>}
+                    {isExpanded && (sessions.length > 0 || projectNotes.length > 0) && (
+                      <div className="ccSessionList">
+                        {sessions.map((s) => (
+                          <div
+                            key={s._id}
+                            className={`ccSessionItem ${activePanel?.type === 'session' && activePanel?.id === s._id ? 'ccSessionItemActive' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (p._id !== activeProjectId) {
+                                navigateTo({ name: 'claude', projectId: p._id });
+                              }
+                              if (activePanel?.type !== 'session' || activePanel?.id !== s._id) {
+                                onPanelClick?.({ type: 'session', id: s._id });
+                              }
                             }}
-                          />
-                        ) : (
-                          <span className="ccSessionItemName">{s.name || 'Session'}</span>
-                        )}
+                          >
+                            <span className={`ccStatusDot ccStatusDot--small ccStatus-${s.unseenCompleted ? 'completed' : s.status}`} />
+                            {p._id === activeProjectId && activePanel?.type === 'session' && activePanel?.id === s._id ? (
+                              <InlineEditable
+                                value={s.name || 'Session'}
+                                className="ccSessionItemName"
+                                onSubmit={(name) => {
+                                  Meteor.call('claudeSessions.update', s._id, { name }, (err) => {
+                                    if (err) notify({ message: `Rename failed: ${err.reason || err.message}`, kind: 'error' });
+                                  });
+                                }}
+                              />
+                            ) : (
+                              <span className="ccSessionItemName">{s.name || 'Session'}</span>
+                            )}
+                          </div>
+                        ))}
+                        {projectNotes.map((n) => (
+                          <div
+                            key={n._id}
+                            className={`ccSessionItem ccNoteItem ${activePanel?.type === 'note' && activePanel?.id === n._id ? 'ccSessionItemActive' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activePanel?.type !== 'note' || activePanel?.id !== n._id) {
+                                onPanelClick?.({ type: 'note', id: n._id });
+                              }
+                            }}
+                          >
+                            <span className="ccNoteIcon">N</span>
+                            <span className="ccSessionItemName">{n.title || 'Untitled'}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    {visibleNotes.map((n) => (
-                      <div
-                        key={n._id}
-                        className={`ccSessionItem ccNoteItem ${activePanel?.type === 'note' && activePanel?.id === n._id ? 'ccSessionItemActive' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (activePanel?.type !== 'note' || activePanel?.id !== n._id) {
-                            onPanelClick?.({ type: 'note', id: n._id });
-                          }
-                        }}
-                      >
-                        <span className="ccNoteIcon">N</span>
-                        <span className="ccSessionItemName">{n.title || 'Untitled'}</span>
-                      </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 );
               })()}
             </div>

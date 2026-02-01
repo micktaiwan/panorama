@@ -91,6 +91,29 @@
   color: var(--info);
 }
 
+/* Chevron toggle */
+.ccChevron {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 12px;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  transform: rotate(0deg);
+}
+
+.ccChevron.ccChevronOpen {
+  transform: rotate(90deg);
+}
+
+.ccChevron:hover {
+  color: var(--text);
+}
+
 .ccProjectItemTop {
   display: flex;
   align-items: center;
