@@ -330,7 +330,7 @@
 
 /* Shell messages */
 .ccMessageShell {
-  background: rgba(var(--black-rgb), 0.4);
+  background: var(--surface-sunken);
   border-color: rgba(var(--success-text-rgb), 0.2);
   opacity: 1;
   border-style: solid;

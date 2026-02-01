@@ -12,6 +12,7 @@ import './ProjectList.css';
 
 const projectStatus = (sessions) => {
   if (sessions.some(s => s.status === 'running')) return 'running';
+  if (sessions.some(s => s.unseenCompleted)) return 'completed';
   if (sessions.some(s => s.status === 'error')) return 'error';
   return 'idle';
 };
@@ -29,7 +30,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, onPanelClic
     Meteor.subscribe('notes');
     return {
       projects: ClaudeProjectsCollection.find({}, { sort: { updatedAt: -1 } }).fetch(),
-      allSessions: ClaudeSessionsCollection.find({}, { fields: { projectId: 1, status: 1, name: 1, createdAt: 1 }, sort: { createdAt: 1 } }).fetch(),
+      allSessions: ClaudeSessionsCollection.find({}, { fields: { projectId: 1, status: 1, unseenCompleted: 1, name: 1, createdAt: 1 }, sort: { createdAt: 1 } }).fetch(),
       allNotes: NotesCollection.find({ claudeProjectId: { $exists: true, $ne: null } }, { fields: { claudeProjectId: 1, title: 1, createdAt: 1 }, sort: { createdAt: 1 } }).fetch(),
     };
   });
@@ -153,52 +154,62 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, onPanelClic
                 >&times;</button>
               </div>
               {p.cwd && <span className="ccProjectItemCwd muted">{shortenPath(p.cwd, homeDir)}</span>}
-              {p._id === activeProjectId && (sessions.length > 0 || projectNotes.length > 0) && (
-                <div className="ccSessionList">
-                  {sessions.map((s) => (
-                    <div
-                      key={s._id}
-                      className={`ccSessionItem ${activePanel?.type === 'session' && activePanel?.id === s._id ? 'ccSessionItemActive' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (activePanel?.type !== 'session' || activePanel?.id !== s._id) {
-                          onPanelClick?.({ type: 'session', id: s._id });
-                        }
-                      }}
-                    >
-                      <span className={`ccStatusDot ccStatusDot--small ccStatus-${s.status}`} />
-                      {activePanel?.type === 'session' && activePanel?.id === s._id ? (
-                        <InlineEditable
-                          value={s.name || 'Session'}
-                          className="ccSessionItemName"
-                          onSubmit={(name) => {
-                            Meteor.call('claudeSessions.update', s._id, { name }, (err) => {
-                              if (err) notify({ message: `Rename failed: ${err.reason || err.message}`, kind: 'error' });
-                            });
-                          }}
-                        />
-                      ) : (
-                        <span className="ccSessionItemName">{s.name || 'Session'}</span>
-                      )}
-                    </div>
-                  ))}
-                  {projectNotes.map((n) => (
-                    <div
-                      key={n._id}
-                      className={`ccSessionItem ccNoteItem ${activePanel?.type === 'note' && activePanel?.id === n._id ? 'ccSessionItemActive' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (activePanel?.type !== 'note' || activePanel?.id !== n._id) {
-                          onPanelClick?.({ type: 'note', id: n._id });
-                        }
-                      }}
-                    >
-                      <span className="ccNoteIcon">N</span>
-                      <span className="ccSessionItemName">{n.title || 'Untitled'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const isActive = p._id === activeProjectId;
+                const unseenSessions = sessions.filter(s => s.unseenCompleted);
+                const visibleSessions = isActive ? sessions : unseenSessions;
+                const visibleNotes = isActive ? projectNotes : [];
+                if (visibleSessions.length === 0 && visibleNotes.length === 0) return null;
+                return (
+                  <div className="ccSessionList">
+                    {visibleSessions.map((s) => (
+                      <div
+                        key={s._id}
+                        className={`ccSessionItem ${activePanel?.type === 'session' && activePanel?.id === s._id ? 'ccSessionItemActive' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isActive) {
+                            navigateTo({ name: 'claude', projectId: p._id });
+                          }
+                          if (activePanel?.type !== 'session' || activePanel?.id !== s._id) {
+                            onPanelClick?.({ type: 'session', id: s._id });
+                          }
+                        }}
+                      >
+                        <span className={`ccStatusDot ccStatusDot--small ccStatus-${s.unseenCompleted ? 'completed' : s.status}`} />
+                        {isActive && activePanel?.type === 'session' && activePanel?.id === s._id ? (
+                          <InlineEditable
+                            value={s.name || 'Session'}
+                            className="ccSessionItemName"
+                            onSubmit={(name) => {
+                              Meteor.call('claudeSessions.update', s._id, { name }, (err) => {
+                                if (err) notify({ message: `Rename failed: ${err.reason || err.message}`, kind: 'error' });
+                              });
+                            }}
+                          />
+                        ) : (
+                          <span className="ccSessionItemName">{s.name || 'Session'}</span>
+                        )}
+                      </div>
+                    ))}
+                    {visibleNotes.map((n) => (
+                      <div
+                        key={n._id}
+                        className={`ccSessionItem ccNoteItem ${activePanel?.type === 'note' && activePanel?.id === n._id ? 'ccSessionItemActive' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (activePanel?.type !== 'note' || activePanel?.id !== n._id) {
+                            onPanelClick?.({ type: 'note', id: n._id });
+                          }
+                        }}
+                      >
+                        <span className="ccNoteIcon">N</span>
+                        <span className="ccSessionItemName">{n.title || 'Untitled'}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}

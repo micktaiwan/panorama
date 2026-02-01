@@ -25,6 +25,7 @@ Meteor.methods({
       claudeSessionId: null,
       status: 'idle',
       lastError: null,
+      unseenCompleted: false,
       totalCostUsd: 0,
       totalDurationMs: 0,
       createdAt: now,
@@ -52,6 +53,7 @@ Meteor.methods({
       claudeSessionId: null,
       status: 'idle',
       lastError: null,
+      unseenCompleted: false,
       totalCostUsd: 0,
       totalDurationMs: 0,
       createdAt: now,
@@ -175,6 +177,13 @@ Meteor.methods({
         totalDurationMs: 0,
         updatedAt: new Date(),
       }
+    });
+  },
+
+  async 'claudeSessions.markSeen'(sessionId) {
+    check(sessionId, String);
+    return ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: { unseenCompleted: false, updatedAt: new Date() }
     });
   },
 });

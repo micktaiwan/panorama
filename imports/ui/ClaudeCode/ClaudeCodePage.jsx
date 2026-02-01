@@ -112,6 +112,16 @@ export const ClaudeCodePage = ({ projectId }) => {
     }
   }, [projectId, activePanel]);
 
+  // Jump to session from Cmd+Shift+C shortcut
+  useEffect(() => {
+    const targetId = localStorage.getItem('claude-jumpToSession');
+    if (!targetId || sessions.length === 0) return;
+    if (sessions.find(s => s._id === targetId)) {
+      setActivePanel({ type: 'session', id: targetId });
+    }
+    localStorage.removeItem('claude-jumpToSession');
+  }, [sessions]);
+
   // Keyboard shortcuts: Cmd-D (new session / split), Cmd-W (close/deselect)
   useEffect(() => {
     if (!projectId) return;
@@ -129,25 +139,24 @@ export const ClaudeCodePage = ({ projectId }) => {
       }
       if (e.key === 'w' || e.key === 'W') {
         e.preventDefault();
-        // If a note is active, just go back to first session (don't delete)
+        // If a note is active, just go back to last session (don't delete)
         if (activePanel?.type === 'note') {
           if (sessions.length > 0) {
-            setActivePanel({ type: 'session', id: sessions[0]._id });
+            setActivePanel({ type: 'session', id: sessions[sessions.length - 1]._id });
           }
           return;
         }
-        // If a session is active, remove it (if more than one)
+        // LIFO: close the last (most recently created) session
         if (sessions.length <= 1) return;
-        const sessionToRemove = sessions.find(s => s._id === activePanel?.id);
-        if (!sessionToRemove) return;
+        const sessionToRemove = sessions[sessions.length - 1];
         Meteor.call('claudeSessions.remove', sessionToRemove._id, (err) => {
           if (err) {
             notify({ message: `Close failed: ${err.reason || err.message}`, kind: 'error' });
             return;
           }
-          // Fallback to first remaining session
+          // Switch to the new last session (LIFO)
           const remaining = sessions.filter(s => s._id !== sessionToRemove._id);
-          setActivePanel(remaining.length > 0 ? { type: 'session', id: remaining[0]._id } : null);
+          setActivePanel(remaining.length > 0 ? { type: 'session', id: remaining[remaining.length - 1]._id } : null);
         });
       }
     };
@@ -198,7 +207,7 @@ export const ClaudeCodePage = ({ projectId }) => {
                 onClick={() => setActivePanel({ type: 'session', id: session._id })}
               >
                 {session.name}
-                <span className={`ccTabStatus ccStatus-${session.status}`} />
+                <span className={`ccTabStatus ccStatus-${session.unseenCompleted ? 'completed' : session.status}`} />
               </button>
             ))}
             {notes.map((note) => (
