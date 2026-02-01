@@ -4,7 +4,7 @@
   padding: 8px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: #2a2f3a #12141a;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .notes-list::-webkit-scrollbar {
@@ -13,13 +13,13 @@
 }
 
 .notes-list::-webkit-scrollbar-track {
-  background: #12141a;
+  background: var(--scrollbar-track);
 }
 
 .notes-list::-webkit-scrollbar-thumb {
-  background-color: #2a2f3a;
+  background-color: var(--scrollbar-thumb);
   border-radius: 8px;
-  border: 2px solid #12141a;
+  border: 2px solid var(--scrollbar-track);
 }
 
 .note-item-row {
@@ -36,7 +36,7 @@
   top: 4px;
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--muted-2);
   font-size: 11px;
   cursor: pointer;
   padding: 2px 4px;
@@ -50,7 +50,7 @@
 }
 
 .note-item-row .note-delete-btn:hover {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .note-item {
@@ -59,11 +59,11 @@
   cursor: pointer;
   transition: background-color 0.2s;
   border: 1px solid transparent;
-  background: #3a3a3a !important;
+  background: var(--notes-surface) !important;
   width: 100%;
   text-align: left;
   display: block;
-  color: #e5e7eb !important;
+  color: var(--text) !important;
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
@@ -73,23 +73,23 @@
 }
 
 .note-item:hover {
-  background-color: #4a4a4a !important;
+  background-color: var(--notes-surface-hover) !important;
 }
 
 .note-item.open {
-  background-color: #1e40af !important; /* blue-800 */
-  border-color: #3b82f6 !important; /* blue-500 */
+  background-color: var(--notes-open-bg) !important;
+  border-color: var(--notes-open-border) !important;
 }
 
 .note-item.active {
-  background-color: #2563eb !important; /* blue-600 */
-  border-color: #60a5fa !important; /* blue-400 */
+  background-color: var(--notes-active-bg) !important;
+  border-color: var(--notes-active-border) !important;
 }
 
 .note-title {
   font-weight: 600;
   font-size: 14px;
-  color: #f3f4f6 !important;
+  color: var(--text-heading) !important;
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -101,13 +101,13 @@
 
 .note-date {
   font-size: 11px;
-  color: #6b7280 !important;
+  color: var(--muted-2) !important;
   display: block;
 }
 
 .note-project {
   font-size: 11px;
-  color: #9ca3af !important;
+  color: var(--muted) !important;
   display: inline-block;
   margin-bottom: 2px;
 }
@@ -116,7 +116,7 @@
 .no-results {
   padding: 20px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--muted);
 }
 
 .no-notes p,

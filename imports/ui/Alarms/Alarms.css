@@ -1,5 +1,5 @@
 .timeAgoHighlight {
-  color: #edcf6c;
+  color: var(--warning);
   padding: 0 4px;
 }
 
@@ -15,7 +15,7 @@
 
 .alarmsTable { width: 100%; border-collapse: collapse; }
 .alarmsTable td, .alarmsTable th { padding: 10px 8px; }
-.alarmsTable tr:hover { background: rgba(255,255,255,0.03); }
+.alarmsTable tr:hover { background: rgba(var(--white-rgb), 0.03); }
 .colCenter { text-align: center; }
 .colRight { text-align: right; }
 .colNext { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
@@ -26,8 +26,8 @@
 .btnSecondary { background: transparent; border: 1px solid var(--border); }
 
 .badge { display: inline-block; padding: 2px 6px; border-radius: 999px; font-size: 12px; }
-.badgeSuccess { background: #1f4d1f; color: #b6f0b6; }
-.badgeMuted { background: #383838; color: #cfcfcf; }
+.badgeSuccess { background: var(--success-bg); color: #b6f0b6; }
+.badgeMuted { background: var(--notes-surface); color: var(--muted); }
 .textMuted { color: var(--muted); }
 
 .rowDone .colTitle,
@@ -62,6 +62,6 @@
   outline-offset: 0;
 }
 
-.afInput::placeholder { color: rgba(255,255,255,0.6); }
+.afInput::placeholder { color: rgba(var(--white-rgb), 0.6); }
 
 .afInput:disabled { opacity: 0.6; cursor: not-allowed; }

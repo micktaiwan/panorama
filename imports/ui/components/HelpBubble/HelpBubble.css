@@ -11,8 +11,8 @@
   border-radius: 9999px;
   border: none;
   background: #475569;
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+  color: var(--text-bright);
+  box-shadow: 0 6px 18px rgba(var(--black-rgb),0.2);
   cursor: pointer;
   font-size: 18px;
 }
@@ -25,11 +25,11 @@
   max-height: min(75vh, 640px);
   display: flex;
   flex-direction: column;
-  background: #0f172a;
-  color: #e2e8f0;
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--info-bg);
+  color: var(--text);
+  border: 1px solid rgba(var(--white-rgb),0.08);
   border-radius: 10px;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  box-shadow: 0 12px 28px rgba(var(--black-rgb),0.35);
   overflow: hidden;
 }
 
@@ -38,12 +38,12 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #0b1220;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: var(--bg-deep);
+  border-bottom: 1px solid rgba(var(--white-rgb),0.06);
 }
 
 .HelpBubble__title { font-weight: 600; }
-.HelpBubble__close { background: transparent; border: none; color: #cbd5e1; font-size: 20px; cursor: pointer; }
+.HelpBubble__close { background: transparent; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
 
 .HelpBubble__content { padding: 12px; overflow-y: auto; }
 

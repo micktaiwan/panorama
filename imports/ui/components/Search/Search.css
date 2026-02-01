@@ -47,12 +47,12 @@
 }
 
 .cachedDot {
-  color: #22c55e;
+  color: var(--success-text);
   margin-left: 6px;
 }
 
 .uncachedDot {
-  color: #ef4444;
+  color: var(--danger);
   margin-left: 6px;
 }
 
@@ -61,8 +61,8 @@
   width: 14px;
   height: 14px;
   margin-left: 8px;
-  border: 2px solid rgba(255,255,255,0.2);
-  border-top-color: #60a5fa; /* modern blue */
+  border: 2px solid rgba(var(--white-rgb),0.2);
+  border-top-color: var(--info-400); /* modern blue */
   border-radius: 50%;
   animation: spinner-rotate 0.8s linear infinite;
 }
@@ -75,9 +75,9 @@
 .searchResults {
   margin: 0 0 16px;
   padding: 12px 14px;
-  border: 1px solid #444;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #222;
+  background: var(--surface);
   max-width: 100%;
   /* Palette: fixed height with scroll */
   max-height: 340px;
@@ -129,10 +129,10 @@
   cursor: pointer;
 }
 .searchResults .taskItem.clickable:hover {
-  background: rgba(255,255,255,0.04);
+  background: rgba(var(--white-rgb),0.04);
 }
 .searchResults .taskItem.clickable.active {
-  background: rgba(255,255,255,0.06);
+  background: rgba(var(--white-rgb),0.06);
 }
 
 /* Ensure content fits within modal width */
@@ -155,10 +155,10 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border: 1px solid #555;
+  border: 1px solid var(--notes-border-strong);
   border-radius: 14px;
-  background: #1b1b1b;
-  color: #ddd;
+  background: var(--notes-bg);
+  color: var(--text);
   font-size: 12px;
 }
 .typeChip .badge {
@@ -166,15 +166,15 @@
   min-width: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: #333;
-  color: #bbb;
+  background: var(--notes-surface);
+  color: var(--muted);
   text-align: center;
 }
-.typeChip.include { border-color: #22c55e; background: rgba(34,197,94,0.12); color: #e6ffe6; }
-.typeChip.include .badge { background: #22c55e; color: #041a04; }
-.typeChip.exclude { border-color: #ef4444; background: rgba(239,68,68,0.12); color: #ffecec; }
-.typeChip.exclude .badge { background: #ef4444; color: #220404; }
+.typeChip.include { border-color: var(--success-text); background: rgba(var(--success-text-rgb),0.12); color: #e6ffe6; }
+.typeChip.include .badge { background: var(--success-text); color: #041a04; }
+.typeChip.exclude { border-color: var(--danger); background: rgba(var(--danger-rgb),0.12); color: #ffecec; }
+.typeChip.exclude .badge { background: var(--danger); color: #220404; }
 .typeChip.empty { opacity: 0.6; }
-.typeChip.reset { border-color: #777; background: #2a2a2a; color: #ddd; }
+.typeChip.reset { border-color: var(--muted-2); background: var(--notes-panel); color: var(--text); }
 
 

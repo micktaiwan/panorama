@@ -62,7 +62,7 @@
 
 .budgetSelect {
   appearance: none;
-  background: #0e1420;
+  background: var(--bg-deep);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -70,13 +70,13 @@
 }
 .budgetSelect:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
-  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(var(--info-rgb), 0.25);
+  border-color: var(--info);
 }
 
 .budgetSearch {
   min-width: 200px;
-  background: #0e1420;
+  background: var(--bg-deep);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -85,8 +85,8 @@
 .budgetSearch::placeholder { color: var(--muted); }
 .budgetSearch:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
-  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(var(--info-rgb), 0.25);
+  border-color: var(--info);
 }
 
 .budgetTabs {
@@ -107,12 +107,12 @@
 }
 .budgetTabs a.active {
   color: var(--text);
-  background: #10141b;
-  border-color: #2a2f3a;
-  box-shadow: 0 0 0 1px #2a2f3a inset;
+  background: var(--surface-sunken);
+  border-color: var(--border-subtle);
+  box-shadow: 0 0 0 1px var(--border-subtle) inset;
 }
 .budgetTabs a:hover {
-  background: #0e1420;
+  background: var(--bg-deep);
   color: var(--text);
 }
 .budgetTabs a.active::after {
@@ -123,7 +123,7 @@
   bottom: -7px;
   height: 2px;
   border-radius: 2px;
-  background: #3b82f6;
+  background: var(--info);
 }
 
 .budgetPage .table th,
@@ -138,13 +138,13 @@
   transition: background 120ms ease;
 }
 .budgetPage .table tbody tr:hover, .budgetPage table tbody tr:hover {
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(var(--info-rgb), 0.12);
 }
 
 .budgetPage .scrollArea thead th {
   position: sticky;
   top: 0;
-  background: #0b0f17;
+  background: var(--bg-deep);
   z-index: 1;
 }
 

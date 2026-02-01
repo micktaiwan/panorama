@@ -88,13 +88,13 @@
 .webMarkdown ul, .webMarkdown ol { margin: 8px 0 14px 20px; }
 .webMarkdown li { margin: 2px 0; }
 .webMarkdown strong { font-weight: 600; }
-.webMarkdown a { color: #93c5fd; text-decoration: underline; }
+.webMarkdown a { color: var(--link); text-decoration: underline; }
 .webMarkdown blockquote { margin: 10px 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
 .webMarkdown h1, .webMarkdown h2, .webMarkdown h3 { margin: 10px 0 8px; }
 .webMarkdown h1 { font-size: 1.2rem; }
 .webMarkdown h2 { font-size: 1.1rem; }
 .webMarkdown h3 { font-size: 1.05rem; }
-.webMarkdown code, .webMarkdown pre { background: #0f172a; }
+.webMarkdown code, .webMarkdown pre { background: var(--info-bg); }
 
 .resultMeta {
   margin-top: 12px;
@@ -110,7 +110,7 @@
 .resultCitations ol { margin: 0; padding-left: 18px; }
 .resultCitations li { margin: 2px 0; }
 .resultCitations .srcTitle { display: block; color: var(--text); }
-.resultCitations .srcLink { display: block; color: #93c5fd; word-break: break-all; }
+.resultCitations .srcLink { display: block; color: var(--link); word-break: break-all; }
 
 .errorSection {
   margin-top: 16px;

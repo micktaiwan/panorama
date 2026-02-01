@@ -14,7 +14,7 @@
 
 .projectLink:hover {
   text-decoration: underline;
-  color: #fff;
+  color: var(--text-bright);
 }
 
 

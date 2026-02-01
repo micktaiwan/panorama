@@ -2,18 +2,18 @@
   display: flex;
   height: calc(100vh - 260px); /* reduce overall page height */
   max-height: calc(100vh - 140px);
-  background: #1a1a1a !important;
+  background: var(--notes-bg) !important;
   margin: -16px; /* Annuler le padding du panel */
   border-radius: 0; /* Annuler le border-radius du panel */
   border: none; /* Annuler la border du panel */
   min-height: 360px;
-  color: #e5e7eb;
+  color: var(--text);
 }
 
 .notes-sidebar {
   width: 300px;
-  background: #2d2d2d !important;
-  border-right: 1px solid #404040;
+  background: var(--notes-panel) !important;
+  border-right: 1px solid var(--notes-border);
   display: flex;
   flex-direction: column;
   min-height: 0; /* allow inner scroll sections to size correctly */
@@ -24,7 +24,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #1a1a1a !important;
+  background: var(--notes-bg) !important;
   min-height: 0; /* Allow flex item to shrink */
   overflow: hidden; /* Prevent overflow from tabs */
   max-width: 100%;
@@ -46,7 +46,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #9ca3af;
+  color: var(--muted);
   text-align: center;
 }
 
@@ -54,10 +54,17 @@
   margin: 0 0 8px 0;
   font-size: 24px;
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--text);
 }
 
 .notes-empty p {
   margin: 0;
   font-size: 16px;
+}
+
+/* Focus mode: fill the panel */
+.container.focusMode .notes-page {
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
 }

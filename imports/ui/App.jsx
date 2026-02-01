@@ -98,6 +98,7 @@ function App() {
   // Go to screen palette
   const [goOpen, setGoOpen] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [focusMode, setFocusMode] = useState(() => localStorage.getItem('focusMode') === '1');
   const goItems = [
     { key: 'v', label: 'Panorama', route: { name: 'panorama' } },
     { key: 'o', label: 'Overview', route: { name: 'dashboard' } },
@@ -127,6 +128,17 @@ function App() {
   // Preferences
   const subPrefs = useSubscribe('appPreferences');
   const appPrefs = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
+
+  // Sync theme preference to document + localStorage
+  useEffect(() => {
+    const theme = appPrefs?.theme || 'dark';
+    if (theme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('panorama-theme', theme);
+  }, [appPrefs?.theme]);
 
   const suppressModalFor = (alarmId, ms = 3000) => {
     if (!alarmId) return;
@@ -220,6 +232,24 @@ function App() {
       window.removeEventListener('keydown', onQuitKey);
       cleanup?.();
     };
+  }, []);
+
+  // Global shortcut: Cmd/Ctrl + Shift + F → toggle focus mode
+  useEffect(() => {
+    const onFocusMode = (e) => {
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (hasMod && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setFocusMode(f => {
+          const next = !f;
+          localStorage.setItem('focusMode', next ? '1' : '0');
+          window.electron?.setSimpleFullscreen(next);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('keydown', onFocusMode);
+    return () => window.removeEventListener('keydown', onFocusMode);
   }, []);
 
   // Global shortcut: Cmd/Ctrl + G → open Go to screen palette
@@ -553,9 +583,9 @@ function App() {
   }, [subPrefs(), appPrefs?._id, route?.name]);
 
   return (
-    <div className={`container${widthMode !== 'default' ? ` ${widthMode}` : ''}`}>
-      <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>Panorama</a></h1>
-      {favoriteProjects.length > 0 && (
+    <div className={`container${widthMode !== 'default' ? ` ${widthMode}` : ''}${focusMode ? ' focusMode' : ''}`}>
+      {!focusMode && <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>Panorama</a></h1>}
+      {!focusMode && favoriteProjects.length > 0 && (
         <div className="favoritesBar">
           <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
             <span className="name">Panorama</span>
@@ -887,7 +917,7 @@ function App() {
         defaultTab={cmdDefaultTab}
         defaultProjectId={cmdDefaultProjectId}
       />
-      <footer className="appFooter">
+      {!focusMode && <footer className="appFooter">
         <span className="footerNextAlarm">
           {(() => {
             const effective = (a) => (a.snoozedUntilAt ? new Date(a.snoozedUntilAt) : new Date(a.nextTriggerAt));
@@ -934,7 +964,7 @@ function App() {
           <span className="dot">·</span>
           <a href="#/width" onClick={(e) => { e.preventDefault(); cycleWidth(); }}>Width: {WIDTH_LABELS[widthMode]}</a>
         </span>
-      </footer>
+      </footer>}
       <ChatWidget />
 
       <Modal

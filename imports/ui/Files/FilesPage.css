@@ -10,7 +10,7 @@
 .fileGroupHeader {
   display: block;
   width: 100%;
-  background: #0f1218;
+  background: var(--bg-deep);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 12px;

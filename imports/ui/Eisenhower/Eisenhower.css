@@ -44,7 +44,7 @@
 .eisenhowerQuadrant { 
   border: 1px solid var(--border); 
   border-radius: 6px; 
-  background: #10141b; 
+  background: var(--surface-sunken); 
   padding: 8px; 
   height: var(--eis-quadrant-height); 
   display: flex; 
@@ -75,7 +75,7 @@
   justify-content: space-between; 
   gap: 8px; 
   padding: 4px 0; 
-  border-bottom: 1px solid rgba(255,255,255,0.04); 
+  border-bottom: 1px solid rgba(var(--white-rgb),0.04); 
 }
 
 .eisenhowerItem:last-child { 
@@ -89,7 +89,7 @@
 }
 
 .eisenhowerCheck { 
-  accent-color: #22c55e; 
+  accent-color: var(--success-text); 
 }
 
 .eisenhowerActions { 

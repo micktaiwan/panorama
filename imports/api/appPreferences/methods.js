@@ -45,6 +45,7 @@ Meteor.methods({
       if (typeof s.allowedUserId === 'string') slack.allowedUserId = s.allowedUserId.trim() || null;
       set.slack = slack;
     }
+    if (modifier.theme === 'dark' || modifier.theme === 'light') set.theme = modifier.theme;
     if (Number.isFinite(modifier.settingsVersion)) set.settingsVersion = modifier.settingsVersion;
     const doc = await AppPreferencesCollection.findOneAsync({});
     if (!doc) {

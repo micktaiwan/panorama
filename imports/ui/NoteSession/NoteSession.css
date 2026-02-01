@@ -5,6 +5,11 @@
   gap: 16px;
 }
 
+/* In focus mode the panel has no padding — add some breathing room */
+.container.focusMode .noteSessionGrid {
+  padding: 16px;
+}
+
 .noteSessionGrid > div {
   min-height: 0; /* allow children to overflow/scroll inside grid cell */
   min-width: 0;  /* allow grid items to shrink and not overflow horizontally */
@@ -47,7 +52,7 @@
 
 /* Hover highlight for note lines */
 .noteLineRow:hover {
-  background: #141923;
+  background: var(--notes-bg);
 }
 
 .noteLineNumber {
@@ -59,12 +64,13 @@
 .noteLineRow:hover .noteLineActions { opacity: 1; }
 
 .noteInput {
+  box-sizing: border-box;
   width: 100%;
   margin-top: 12px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #1b1e26;
+  background: var(--notes-bg);
   color: var(--text);
 }
 
@@ -107,7 +113,7 @@
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #1b1e26;
+  background: var(--notes-bg);
   color: var(--text);
   width: 100%;
   max-width: 100%;
@@ -161,7 +167,7 @@
   padding: 0;
   border: none;
   border-radius: 0;
-  background: #10141b;
+  background: var(--code-bg);
 }
 
 .aiHeader {
@@ -177,8 +183,8 @@
 }
 
 .statusText { margin-left: 8px; font-size: 12px; color: var(--muted); }
-.statusSuccess { color: #10b981; }
-.statusError { color: #ef4444; }
+.statusSuccess { color: var(--success-text); }
+.statusError { color: var(--danger); }
 
 .ml8 {
   margin-left: 8px;
@@ -192,7 +198,7 @@
 
 .dangerLink {
   background: transparent;
-  color: #ef4444;
+  color: var(--danger);
   border: none;
   padding: 0;
   cursor: pointer;
@@ -225,7 +231,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
-  background: #12141a;
+  background: var(--scrollbar-track);
 }
 
 .linkProjectSelect {
@@ -234,7 +240,7 @@
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #1b1e26;
+  background: var(--notes-bg);
   color: var(--text);
 }
 

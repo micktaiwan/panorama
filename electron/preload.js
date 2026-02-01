@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electron', {
   resetZoom: () => ipcRenderer.invoke('view:resetZoom'),
   toggleFullscreen: () => ipcRenderer.invoke('view:toggleFullscreen'),
+  setSimpleFullscreen: (enabled) => ipcRenderer.invoke('view:setSimpleFullscreen', enabled),
   focusMain: () => ipcRenderer.invoke('app:focusMain'),
   notify: ({ title, body }) => ipcRenderer.invoke('app:notify', { title, body }),
 

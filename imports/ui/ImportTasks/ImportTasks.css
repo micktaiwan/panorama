@@ -118,6 +118,6 @@
   border-radius: 4px;
   cursor: pointer;
 }
-.iconButton:hover { color: var(--text); background: #1b1e26; }
+.iconButton:hover { color: var(--text); background: var(--surface); }
 
 

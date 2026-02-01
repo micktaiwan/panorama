@@ -1,7 +1,7 @@
 .peoplePage { min-height: 0; }
 .peopleSection { margin-top: 32px; }
 .peopleSection .collapsibleHeader { 
-  background: #162230; 
+  background: var(--bg-deep); 
   padding: 16px 20px; 
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -15,7 +15,7 @@
   padding: 16px 12px 12px 12px;
 }
 .peopleToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.peopleFilter { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: #1b1e26; color: var(--text); }
+.peopleFilter { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 .peopleTable { width: 100%; border-collapse: collapse; }
 .peopleTable th, .peopleTable td { border-bottom: 1px solid var(--border); padding: 8px; text-align: left; }
 .peopleTable th { background: var(--panel); }
@@ -23,12 +23,12 @@
 .peopleTable .actionsCol { width: 1%; white-space: nowrap; }
 .peopleTable tr.highlight { animation: rowFlash 3s ease-out 1; }
 @keyframes rowFlash {
-  0% { background-color: rgba(100, 149, 237, 0.25); }
+  0% { background-color: rgba(var(--info-rgb), 0.25); }
   100% { background-color: transparent; }
 }
 .notesTitle { margin-top: 64px; }
-.peopleTable td.emptyCell { background: #3a0b0b; }
-.peopleTable tr.leftRow { background: #14161a; }
+.peopleTable td.emptyCell { background: var(--danger-bg); }
+.peopleTable tr.leftRow { background: var(--scrollbar-track); }
 .peopleTable tr.leftRow td { font-style: italic; color: var(--muted); }
 .peopleTable tr.leftRow td.emptyCell { background: transparent; }
 

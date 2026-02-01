@@ -18,7 +18,7 @@
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #1b1e26;
+  background: var(--surface);
   color: var(--text);
   width: 100%;
   box-sizing: border-box;

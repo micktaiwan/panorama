@@ -1,6 +1,6 @@
 .projectHeaderCard {
   margin-bottom: 16px;
-  background: #333;
+  background: var(--notes-surface);
 }
 
 .projectHeaderRow {
@@ -74,8 +74,8 @@
 }
 
 .starBtn .starIcon { width: 20px; height: 20px; fill: currentColor; }
-.starBtn.active { color: #f59e0b; }
-.starBtn:hover { color: #f59e0b; }
+.starBtn.active { color: var(--warning); }
+.starBtn:hover { color: var(--warning); }
 
 .projectDescription {
   margin: 0 0 24px;
@@ -108,9 +108,9 @@
   min-width: 160px;
 }
 .deadlineDisplay:hover { text-decoration: underline; }
-.deadlineDisplay.dueSoon { color: #f59e0b; }
-.deadlineDisplay.dueNow { color: #ef4444; }
-.deadlineDisplay.dueLater { color: #22c55e; }
+.deadlineDisplay.dueSoon { color: var(--warning); }
+.deadlineDisplay.dueNow { color: var(--danger); }
+.deadlineDisplay.dueLater { color: var(--success-text); }
 
 /* Compact icon buttons for row actions */
 .iconButton {
@@ -122,7 +122,7 @@
   border-radius: 4px;
   cursor: pointer;
 }
-.iconButton:hover { color: var(--text); background: #1b1e26; }
+.iconButton:hover { color: var(--text); background: var(--surface); }
 
 /* Done state */
 .taskDone .titleCell { text-decoration: line-through; color: var(--muted); }
@@ -153,7 +153,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
-  background: #1b1e26;
+  background: var(--surface);
 }
 
 .noteBlockHeader {
@@ -250,7 +250,7 @@
   align-items: center; 
   gap: 8px; 
   margin: 8px 0 12px; 
-  background: #1b1e26;
+  background: var(--surface);
   padding: 12px;
 }
 
