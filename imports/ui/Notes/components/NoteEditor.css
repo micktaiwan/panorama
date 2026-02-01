@@ -25,8 +25,8 @@
 
 .notes-actions {
   padding: 12px 20px;
-  background: #2d2d2d;
-  border-top: 1px solid #404040;
+  background: var(--notes-panel);
+  border-top: 1px solid var(--notes-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -56,10 +56,10 @@
 .save-button,
 .save-all-button {
   padding: 8px 16px;
-  border: 1px solid #555;
+  border: 1px solid var(--notes-border-strong);
   border-radius: 6px;
-  background: #3a3a3a;
-  color: #e5e7eb;
+  background: var(--notes-surface);
+  color: var(--text);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
@@ -67,8 +67,8 @@
 
 .save-button:hover,
 .save-all-button:hover {
-  background: #4a4a4a;
-  border-color: #666;
+  background: var(--notes-surface-hover);
+  border-color: var(--notes-border-strong);
 }
 
 .save-button:disabled,
@@ -78,14 +78,14 @@
 }
 
 .save-button {
-  background: #3b82f6;
+  background: var(--info);
   color: white;
-  border-color: #3b82f6;
+  border-color: var(--info);
 }
 
 .save-button:hover:not(:disabled) {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--info-600);
+  border-color: var(--info-600);
 }
 
 /* Metadata styles */
@@ -93,7 +93,7 @@
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--muted);
 }
 
 .metadata-item {
@@ -103,66 +103,34 @@
 /* Project select styles */
 .project-select {
   padding: 6px 12px;
-  border: 1px solid #555;
+  border: 1px solid var(--notes-border-strong);
   border-radius: 6px;
-  background: #3a3a3a;
-  color: #e5e7eb;
+  background: var(--notes-surface);
+  color: var(--text);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .project-select:hover {
-  background: #4a4a4a;
-  border-color: #666;
+  background: var(--notes-surface-hover);
+  border-color: var(--notes-border-strong);
 }
 
 .project-select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: var(--info);
+  box-shadow: 0 0 0 2px rgba(var(--info-rgb), 0.2);
 }
 
-/* Action button styles */
-.action-button {
-  padding: 8px 16px;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background: #3a3a3a;
-  color: #e5e7eb;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-button:hover:not(:disabled) {
-  background: #4a4a4a;
-  border-color: #666;
-}
-
-.action-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.clean-button {
-  background: #059669;
-  color: white;
-  border-color: #059669;
-}
-
-.clean-button:hover:not(:disabled) {
-  background: #047857;
-  border-color: #047857;
-}
-
+/* Duplicate button (NoteEditor-specific) */
 .duplicate-button {
-  background: #7c3aed;
+  background: var(--purple);
   color: white;
-  border-color: #7c3aed;
+  border-color: var(--purple);
 }
 
 .duplicate-button:hover:not(:disabled) {
-  background: #6d28d9;
-  border-color: #6d28d9;
+  background: var(--purple-600);
+  border-color: var(--purple-600);
 }
