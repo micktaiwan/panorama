@@ -76,7 +76,24 @@
   min-height: 0;
   display: flex;
   flex-direction: row;
+  overflow: hidden;
+}
+
+.ccSessionsPanels {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
   overflow-x: auto;
+}
+
+.ccNoteSidebar {
+  width: 500px;
+  min-width: 350px;
+  max-width: 50%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
 }
 
 .ccPanel {
@@ -89,7 +106,11 @@
 
 .ccPanelActive {
   border-top: 2px solid var(--info);
-  background: rgba(var(--white-rgb), 0.03);
+  background: var(--panel);
+}
+
+[data-theme="light"] .ccPanelActive {
+  background: #fff;
 }
 
 .ccPanel:not(.ccPanelActive) {

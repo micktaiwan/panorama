@@ -29,7 +29,7 @@ const projectStatus = (sessions) => {
   return 'idle';
 };
 
-export const ProjectList = ({ activeProjectId, homeDir, activePanel, onPanelClick }) => {
+export const ProjectList = ({ activeProjectId, homeDir, activePanel, openNoteId, onPanelClick, onNoteToggle }) => {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCwd, setNewCwd] = useState('');
@@ -224,12 +224,10 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, onPanelClic
                         {projectNotes.map((n) => (
                           <div
                             key={n._id}
-                            className={`ccSessionItem ccNoteItem ${activePanel?.type === 'note' && activePanel?.id === n._id ? 'ccSessionItemActive' : ''}`}
+                            className={`ccSessionItem ccNoteItem ${openNoteId === n._id ? 'ccSessionItemActive' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (activePanel?.type !== 'note' || activePanel?.id !== n._id) {
-                                onPanelClick?.({ type: 'note', id: n._id });
-                              }
+                              onNoteToggle?.(n._id);
                             }}
                           >
                             <span className="ccNoteIcon">N</span>

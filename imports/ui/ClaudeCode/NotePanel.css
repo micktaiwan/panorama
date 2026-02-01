@@ -34,8 +34,44 @@
 .ccNotePanelActions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   flex-shrink: 0;
+}
+
+/* Flat/ghost buttons inside note panel header */
+.ccNotePanelActions .btn,
+.ccNotePanelActions .action-button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ccNotePanelActions .btn:hover:not(:disabled),
+.ccNotePanelActions .action-button:hover:not(:disabled) {
+  background: rgba(var(--white-rgb), 0.08);
+  color: var(--text);
+}
+
+.ccNotePanelActions .btn:disabled,
+.ccNotePanelActions .action-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ccNotePanelActions .btn-danger {
+  color: var(--danger);
+  opacity: 0.6;
+}
+
+.ccNotePanelActions .btn-danger:hover:not(:disabled) {
+  color: var(--danger);
+  background: rgba(var(--danger-rgb, 220, 53, 69), 0.1);
+  opacity: 1;
 }
 
 .ccNotePanelDirty {

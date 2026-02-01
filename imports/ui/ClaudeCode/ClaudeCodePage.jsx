@@ -13,6 +13,7 @@ import './ClaudeCodePage.css';
 
 const STORAGE_KEY = 'claude-activePanel';
 const PROJECT_STORAGE_KEY = 'claude-activeProject';
+const NOTE_STORAGE_KEY = 'claude-openNote';
 
 const serializePanel = (panel) => panel ? JSON.stringify(panel) : null;
 const deserializePanel = (str) => {
@@ -21,7 +22,8 @@ const deserializePanel = (str) => {
 
 export const ClaudeCodePage = ({ projectId }) => {
   const homeDir = useHomeDir();
-  const [activePanel, setActivePanel] = useState(null); // { type: 'session'|'note', id: string }
+  const [activePanel, setActivePanel] = useState(null); // { type: 'session', id: string }
+  const [openNoteId, setOpenNoteId] = useState(null);
   const panelRefs = useRef([]);
   const restoredForProject = useRef(null);
 
@@ -59,26 +61,27 @@ export const ClaudeCodePage = ({ projectId }) => {
     [projectId]
   );
 
-  // Validate activePanel: if the referenced item no longer exists, fallback
+  // Validate activePanel: if the referenced session no longer exists, fallback
   useEffect(() => {
     if (!activePanel) return;
-    if (activePanel.type === 'session') {
-      if (!sessions.find(s => s._id === activePanel.id)) {
-        // Session gone — fallback to first session
-        setActivePanel(sessions.length > 0 ? { type: 'session', id: sessions[0]._id } : null);
-      }
-    } else if (activePanel.type === 'note') {
-      if (!notes.find(n => n._id === activePanel.id)) {
-        // Note gone — fallback to first session
-        setActivePanel(sessions.length > 0 ? { type: 'session', id: sessions[0]._id } : null);
-      }
+    if (!sessions.find(s => s._id === activePanel.id)) {
+      setActivePanel(sessions.length > 0 ? { type: 'session', id: sessions[0]._id } : null);
     }
-  }, [sessions, notes, activePanel]);
+  }, [sessions, activePanel]);
 
-  // Restore active panel from localStorage when project changes or sessions load
+  // Validate openNoteId: if the note no longer exists, close sidebar
+  useEffect(() => {
+    if (!openNoteId) return;
+    if (!notes.find(n => n._id === openNoteId)) {
+      setOpenNoteId(null);
+    }
+  }, [notes, openNoteId]);
+
+  // Restore active panel and note sidebar from localStorage
   useEffect(() => {
     if (!projectId) {
       setActivePanel(null);
+      setOpenNoteId(null);
       restoredForProject.current = null;
       return;
     }
@@ -86,23 +89,27 @@ export const ClaudeCodePage = ({ projectId }) => {
     if (restoredForProject.current === projectId) return;
 
     const saved = deserializePanel(localStorage.getItem(`${STORAGE_KEY}-${projectId}`));
-    // If saved panel is a note but notes haven't loaded yet, wait
-    if (saved?.type === 'note' && notes.length === 0) return;
+    const savedNoteId = localStorage.getItem(`${NOTE_STORAGE_KEY}-${projectId}`);
+
+    // Wait for notes if we need them for restore
+    if ((saved?.type === 'note' || savedNoteId) && notes.length === 0) return;
 
     restoredForProject.current = projectId;
-    if (saved) {
-      // Verify the saved item still exists
-      if (saved.type === 'session' && sessions.find(s => s._id === saved.id)) {
-        setActivePanel(saved);
-        return;
-      }
-      if (saved.type === 'note' && notes.find(n => n._id === saved.id)) {
-        setActivePanel(saved);
-        return;
-      }
+
+    // Restore session focus
+    if (saved?.type === 'session' && sessions.find(s => s._id === saved.id)) {
+      setActivePanel(saved);
+    } else {
+      setActivePanel({ type: 'session', id: sessions[0]._id });
     }
-    // Default to first session
-    setActivePanel({ type: 'session', id: sessions[0]._id });
+
+    // Restore note sidebar (new format takes precedence over backward compat)
+    if (savedNoteId && notes.find(n => n._id === savedNoteId)) {
+      setOpenNoteId(savedNoteId);
+    } else if (saved?.type === 'note' && notes.find(n => n._id === saved.id)) {
+      // Backward compat: migrate from old activePanel format
+      setOpenNoteId(saved.id);
+    }
   }, [projectId, sessions, notes]);
 
   // Persist active panel to localStorage
@@ -111,6 +118,17 @@ export const ClaudeCodePage = ({ projectId }) => {
       localStorage.setItem(`${STORAGE_KEY}-${projectId}`, serializePanel(activePanel));
     }
   }, [projectId, activePanel]);
+
+  // Persist open note sidebar to localStorage (only after restore is complete)
+  useEffect(() => {
+    if (projectId && restoredForProject.current === projectId) {
+      if (openNoteId) {
+        localStorage.setItem(`${NOTE_STORAGE_KEY}-${projectId}`, openNoteId);
+      } else {
+        localStorage.removeItem(`${NOTE_STORAGE_KEY}-${projectId}`);
+      }
+    }
+  }, [projectId, openNoteId]);
 
   // Jump to session from Cmd+Shift+C shortcut
   useEffect(() => {
@@ -139,30 +157,28 @@ export const ClaudeCodePage = ({ projectId }) => {
       }
       if (e.key === 'w' || e.key === 'W') {
         e.preventDefault();
-        // If a note is active, just go back to last session (don't delete)
-        if (activePanel?.type === 'note') {
-          if (sessions.length > 0) {
-            setActivePanel({ type: 'session', id: sessions[sessions.length - 1]._id });
-          }
+        // If multiple sessions, close the last one (LIFO)
+        if (sessions.length > 1) {
+          const sessionToRemove = sessions[sessions.length - 1];
+          Meteor.call('claudeSessions.remove', sessionToRemove._id, (err) => {
+            if (err) {
+              notify({ message: `Close failed: ${err.reason || err.message}`, kind: 'error' });
+              return;
+            }
+            const remaining = sessions.filter(s => s._id !== sessionToRemove._id);
+            setActivePanel(remaining.length > 0 ? { type: 'session', id: remaining[remaining.length - 1]._id } : null);
+          });
           return;
         }
-        // LIFO: close the last (most recently created) session
-        if (sessions.length <= 1) return;
-        const sessionToRemove = sessions[sessions.length - 1];
-        Meteor.call('claudeSessions.remove', sessionToRemove._id, (err) => {
-          if (err) {
-            notify({ message: `Close failed: ${err.reason || err.message}`, kind: 'error' });
-            return;
-          }
-          // Switch to the new last session (LIFO)
-          const remaining = sessions.filter(s => s._id !== sessionToRemove._id);
-          setActivePanel(remaining.length > 0 ? { type: 'session', id: remaining[remaining.length - 1]._id } : null);
-        });
+        // Single session: close note sidebar if open
+        if (openNoteId) {
+          setOpenNoteId(null);
+        }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [projectId, activePanel, sessions]);
+  }, [projectId, activePanel, openNoteId, sessions]);
 
   const handleCreateNote = () => {
     if (!projectId) return;
@@ -171,7 +187,7 @@ export const ClaudeCodePage = ({ projectId }) => {
         notify({ message: `Create note failed: ${err.reason || err.message}`, kind: 'error' });
         return;
       }
-      setActivePanel({ type: 'note', id: newId });
+      setOpenNoteId(newId);
     });
   };
 
@@ -185,7 +201,9 @@ export const ClaudeCodePage = ({ projectId }) => {
         activeProjectId={projectId}
         homeDir={homeDir}
         activePanel={activePanel}
+        openNoteId={openNoteId}
         onPanelClick={(panel) => setActivePanel(panel)}
+        onNoteToggle={(noteId) => setOpenNoteId(openNoteId === noteId ? null : noteId)}
       />
       <div className="ccMain">
         {!projectId && (
@@ -213,8 +231,8 @@ export const ClaudeCodePage = ({ projectId }) => {
             {notes.map((note) => (
               <button
                 key={note._id}
-                className={`ccSessionTab ccNoteTab ${activePanel?.type === 'note' && activePanel.id === note._id ? 'ccSessionTabActive' : ''}`}
-                onClick={() => setActivePanel({ type: 'note', id: note._id })}
+                className={`ccSessionTab ccNoteTab ${openNoteId === note._id ? 'ccSessionTabActive' : ''}`}
+                onClick={() => setOpenNoteId(openNoteId === note._id ? null : note._id)}
               >
                 <span className="ccNoteTabIcon">N</span>
                 {note.title || 'Untitled'}
@@ -226,12 +244,8 @@ export const ClaudeCodePage = ({ projectId }) => {
           </div>
         )}
         <div className="ccPanels">
-          {activePanel?.type === 'note' ? (
-            <div className="ccPanel ccPanelActive">
-              <NotePanel key={activePanel.id} noteId={activePanel.id} claudeProjectId={projectId} />
-            </div>
-          ) : (
-            sessions.map((session, idx) => (
+          <div className="ccSessionsPanels">
+            {sessions.map((session, idx) => (
               <React.Fragment key={session._id}>
                 {idx > 0 && <div className="ccPanelDivider" />}
                 <div
@@ -244,10 +258,19 @@ export const ClaudeCodePage = ({ projectId }) => {
                     homeDir={homeDir}
                     isActive={idx === activePanelIdx}
                     onFocus={() => setActivePanel({ type: 'session', id: session._id })}
+                    onNewSession={(newId) => setActivePanel({ type: 'session', id: newId })}
                   />
                 </div>
               </React.Fragment>
-            ))
+            ))}
+          </div>
+          {openNoteId && (
+            <>
+              <div className="ccPanelDivider" />
+              <div className="ccNoteSidebar">
+                <NotePanel key={openNoteId} noteId={openNoteId} claudeProjectId={projectId} />
+              </div>
+            </>
           )}
         </div>
       </div>
