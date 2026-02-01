@@ -77,7 +77,8 @@ Meteor.methods({
     const duplicatedDoc = {
       title: originalNote.title ? `${originalNote.title} (copy)` : 'Untitled (copy)',
       content: originalNote.content || '',
-      projectId: originalNote.projectId || null
+      projectId: originalNote.projectId || null,
+      ...(originalNote.claudeProjectId ? { claudeProjectId: originalNote.claudeProjectId } : {}),
     };
     
     const sanitized = sanitizeNoteDoc(duplicatedDoc);

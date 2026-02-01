@@ -168,6 +168,9 @@ Meteor.methods({
     return ClaudeSessionsCollection.updateAsync(sessionId, {
       $set: {
         claudeSessionId: null,
+        claudeCodeVersion: null,
+        activeModel: null,
+        lastModelUsage: null,
         totalCostUsd: 0,
         totalDurationMs: 0,
         updatedAt: new Date(),
