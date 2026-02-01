@@ -85,8 +85,11 @@ export const ClaudeCodePage = ({ projectId }) => {
     if (sessions.length === 0) return;
     if (restoredForProject.current === projectId) return;
 
-    restoredForProject.current = projectId;
     const saved = deserializePanel(localStorage.getItem(`${STORAGE_KEY}-${projectId}`));
+    // If saved panel is a note but notes haven't loaded yet, wait
+    if (saved?.type === 'note' && notes.length === 0) return;
+
+    restoredForProject.current = projectId;
     if (saved) {
       // Verify the saved item still exists
       if (saved.type === 'session' && sessions.find(s => s._id === saved.id)) {
