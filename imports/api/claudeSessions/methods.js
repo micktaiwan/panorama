@@ -157,10 +157,11 @@ Meteor.methods({
     return ClaudeSessionsCollection.removeAsync(sessionId);
   },
 
-  'claudeSessions.respondToPermission'(sessionId, behavior) {
+  'claudeSessions.respondToPermission'(sessionId, behavior, updatedToolInput) {
     check(sessionId, String);
     check(behavior, Match.OneOf('allow', 'allowAll', 'deny'));
-    respondToPermission(sessionId, behavior);
+    check(updatedToolInput, Match.Maybe(Object));
+    respondToPermission(sessionId, behavior, updatedToolInput);
   },
 
   async 'claudeSessions.clearMessages'(sessionId) {
@@ -185,5 +186,19 @@ Meteor.methods({
     return ClaudeSessionsCollection.updateAsync(sessionId, {
       $set: { unseenCompleted: false, updatedAt: new Date() }
     });
+  },
+
+  async 'claudeSessions.countInterrupted'() {
+    return ClaudeSessionsCollection.find({ status: 'interrupted' }).countAsync();
+  },
+
+  async 'claudeSessions.cleanupInterrupted'() {
+    const count = await ClaudeSessionsCollection.updateAsync(
+      { status: 'interrupted' },
+      { $set: { status: 'idle', pid: null, updatedAt: new Date() } },
+      { multi: true }
+    );
+    console.log(TAG, 'cleanupInterrupted:', count, 'session(s) reset to idle');
+    return count;
   },
 });
