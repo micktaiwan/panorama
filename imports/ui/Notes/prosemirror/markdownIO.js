@@ -25,6 +25,32 @@ function normalizeLineBreaks(md) {
   }).join('');
 }
 
+// --- Task list support: detect [ ] / [x] in list items ---
+
+function taskListPlugin(md) {
+  // Runs before inline parsing so children are built from the stripped content
+  md.core.ruler.before('inline', 'task-lists', (state) => {
+    const tokens = state.tokens;
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i].type !== 'list_item_open') continue;
+
+      // Find the next inline token (after paragraph_open)
+      for (let j = i + 1; j < tokens.length; j++) {
+        if (tokens[j].type === 'inline') {
+          const match = /^\[([ xX])\] /.exec(tokens[j].content);
+          if (match) {
+            const checked = match[1] !== ' ';
+            tokens[i].attrSet('data-checked', checked ? 'true' : 'false');
+            tokens[j].content = tokens[j].content.slice(match[0].length);
+          }
+          break;
+        }
+        if (tokens[j].type === 'list_item_close') break;
+      }
+    }
+  });
+}
+
 // --- Parser: markdown string → ProseMirror Doc ---
 
 function listIsTight(tokens, i) {
@@ -33,10 +59,20 @@ function listIsTight(tokens, i) {
   return false;
 }
 
-const markdownParser = new MarkdownParser(schema, MarkdownIt('commonmark', { html: false }), {
+const md = MarkdownIt('commonmark', { html: false });
+md.use(taskListPlugin);
+
+const markdownParser = new MarkdownParser(schema, md, {
   blockquote: { block: 'blockquote' },
   paragraph: { block: 'paragraph' },
-  list_item: { block: 'list_item' },
+  list_item: {
+    block: 'list_item',
+    getAttrs: (tok) => {
+      const checked = tok.attrGet('data-checked');
+      if (checked === null) return { checked: null };
+      return { checked: checked === 'true' };
+    },
+  },
   bullet_list: { block: 'bullet_list', getAttrs: (_, tokens, i) => ({ tight: listIsTight(tokens, i) }) },
   ordered_list: {
     block: 'ordered_list',
@@ -83,6 +119,12 @@ const markdownSerializer = new MarkdownSerializer(
         state.renderInline(node);
       }
       state.closeBlock(node);
+    },
+    list_item(state, node) {
+      if (node.attrs.checked !== null) {
+        state.write(node.attrs.checked ? '[x] ' : '[ ] ');
+      }
+      state.renderContent(node);
     },
   },
   defaultMarkdownSerializer.marks,

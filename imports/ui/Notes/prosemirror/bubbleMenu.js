@@ -1,5 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { toggleMark, setBlockType } from 'prosemirror-commands';
+import { wrapInList } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
 
 export const bubbleMenuKey = new PluginKey('bubbleMenu');
@@ -113,6 +114,66 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
           };
           tooltip.appendChild(btn);
         });
+
+        // Separator + Todo button
+        const sep2 = document.createElement('div');
+        sep2.className = 'bubble-menu-sep';
+        tooltip.appendChild(sep2);
+
+        // Check if all list_items in selection are already tasks
+        const items = [];
+        state.doc.nodesBetween(from, to, (node, pos) => {
+          if (node.type === schema.nodes.list_item) {
+            items.push({ node, pos });
+            return false;
+          }
+        });
+        const allTasks = items.length > 0 && items.every(i => i.node.attrs.checked !== null);
+
+        const todoBtn = document.createElement('button');
+        todoBtn.className = 'bubble-menu-btn';
+        todoBtn.textContent = 'Todo';
+        todoBtn.title = 'Convert to task list';
+        if (allTasks) todoBtn.classList.add('active');
+
+        todoBtn.onmousedown = (e) => {
+          e.preventDefault();
+
+          if (allTasks) {
+            // Toggle off: remove checked from all list_items
+            let tr = editorView.state.tr;
+            items.forEach(({ node, pos }) => {
+              tr = tr.setNodeMarkup(tr.mapping.map(pos), null, { ...node.attrs, checked: null });
+            });
+            editorView.dispatch(tr);
+          } else if (items.length > 0) {
+            // Already in list items: set checked on those that aren't tasks
+            let tr = editorView.state.tr;
+            items.forEach(({ node, pos }) => {
+              if (node.attrs.checked === null) {
+                tr = tr.setNodeMarkup(tr.mapping.map(pos), null, { ...node.attrs, checked: false });
+              }
+            });
+            editorView.dispatch(tr);
+          } else {
+            // Not in a list: wrap in bullet_list then set checked
+            if (wrapInList(schema.nodes.bullet_list)(editorView.state, editorView.dispatch)) {
+              const ns = editorView.state;
+              const { from: nf, to: nt } = ns.selection;
+              let tr = ns.tr;
+              ns.doc.nodesBetween(nf, nt, (node, pos) => {
+                if (node.type === schema.nodes.list_item) {
+                  tr = tr.setNodeMarkup(tr.mapping.map(pos), null, { ...node.attrs, checked: false });
+                  return false;
+                }
+              });
+              if (tr.docChanged) editorView.dispatch(tr);
+            }
+          }
+          editorView.focus();
+          updateTooltip(editorView);
+        };
+        tooltip.appendChild(todoBtn);
 
         // Separator before Ask AI
         if (onAskAI) {
