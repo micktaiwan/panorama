@@ -19,7 +19,7 @@ const COMMANDS = [
   { name: 'help', description: 'Show available commands', hasArgs: false },
 ];
 
-export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
+export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSession }) => {
   const [input, setInput] = useState('');
   const [editingSettings, setEditingSettings] = useState(false);
   const [localMessages, setLocalMessages] = useState([]);
@@ -44,6 +44,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
   );
 
   const isRunning = session?.status === 'running';
+  const isFrozen = session?.status === 'error';
 
   // Auto-clear unseenCompleted when viewing this session
   useEffect(() => {
@@ -229,6 +230,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
   };
 
   const handleSend = () => {
+    if (isFrozen) return;
     const text = input.trim();
     if (!text) return;
 
@@ -270,6 +272,17 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
     Meteor.call('claudeSessions.clearMessages', sessionId, (err) => {
       if (err) notify({ message: `Clear failed: ${err.reason || err.message}`, kind: 'error' });
       else notify({ message: 'Messages cleared', kind: 'success' });
+    });
+  };
+
+  const handleNewSession = () => {
+    if (!session?.projectId || !onNewSession) return;
+    Meteor.call('claudeSessions.createInProject', session.projectId, (err, newId) => {
+      if (err) {
+        notify({ message: `New session failed: ${err.reason || err.message}`, kind: 'error' });
+        return;
+      }
+      onNewSession(newId);
     });
   };
 
@@ -443,14 +456,19 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Error display */}
-      {session.lastError && (
+      {/* Error / frozen banner */}
+      {isFrozen && session.lastError ? (
+        <div className="ccFrozenBanner">
+          <span className="ccFrozenError">{session.lastError}</span>
+          <button className="btn btn-small" onClick={handleNewSession}>New Session</button>
+        </div>
+      ) : session.lastError ? (
         <div className="ccError">{session.lastError}</div>
-      )}
+      ) : null}
 
       {/* Composer */}
       <div className="ccComposer">
-        {filteredCommands.length > 0 && (
+        {!isFrozen && filteredCommands.length > 0 && (
           <CommandPopup
             commands={filteredCommands}
             activeIdx={commandIdx}
@@ -463,16 +481,17 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send, !cmd for shell, /help for commands)"
+          placeholder={isFrozen ? 'Session ended with error. Start a new session to continue.' : 'Type a message... (Enter to send, !cmd for shell, /help for commands)'}
           rows={3}
+          disabled={isFrozen}
         />
-        {isRunning && (
+        {!isFrozen && isRunning && (
           <div className="ccComposerActions">
             <button className="btn btn-danger btn-small" onClick={handleStop}>Stop</button>
           </div>
         )}
       </div>
-      <div className="ccComposerFooter">
+      <div className="ccStatusBar">
         <select
           className={`ccPermModeSelect${session.permissionMode ? ` ccMode-${session.permissionMode}` : ''}`}
           value={session.permissionMode || ''}
@@ -483,21 +502,17 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
             });
           }}
         >
-          <option value="">💬 Default</option>
-          <option value="plan">📋 Plan</option>
-          <option value="acceptEdits">✏️ Accept Edits</option>
-          <option value="dontAsk">🚀 Don't Ask</option>
-          <option value="bypassPermissions">⚠️ Bypass</option>
+          <option value="">▷ Default</option>
+          <option value="plan">☰ Plan</option>
+          <option value="acceptEdits">✎ Accept Edits</option>
+          <option value="dontAsk">▶ Don&#39;t Ask</option>
+          <option value="bypassPermissions">◆ Bypass</option>
         </select>
+        <span className={`ccStatusBadge ccStatus-${session.status}`}>{session.status}</span>
+        <div className="ccStatusBarSpacer" />
+        {session.totalCostUsd > 0 && <span>${session.totalCostUsd.toFixed(4)}</span>}
+        {session.totalDurationMs > 0 && <span>{(session.totalDurationMs / 1000).toFixed(1)}s</span>}
       </div>
-
-      {/* Footer stats */}
-      {(session.totalCostUsd > 0 || session.totalDurationMs > 0) && (
-        <div className="ccSessionStats muted">
-          {session.totalCostUsd > 0 && <span>Total cost: ${session.totalCostUsd.toFixed(4)}</span>}
-          {session.totalDurationMs > 0 && <span>Total time: {(session.totalDurationMs / 1000).toFixed(1)}s</span>}
-        </div>
-      )}
     </div>
   );
 };

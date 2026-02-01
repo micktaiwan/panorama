@@ -48,27 +48,6 @@
   max-width: 200px;
 }
 
-select.ccPermModeSelect {
-  font-size: 11px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-  border-radius: 0;
-}
-
-select.ccPermModeSelect:focus,
-select.ccPermModeSelect:hover {
-  outline: none;
-  border: none;
-}
-
-select.ccPermModeSelect.ccMode-plan { color: var(--info-400); }
-select.ccPermModeSelect.ccMode-acceptEdits { color: var(--success-text); }
-select.ccPermModeSelect.ccMode-dontAsk { color: var(--warning); }
-select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
-
 .ccSessionActions {
   display: flex;
   gap: 4px;
@@ -192,6 +171,31 @@ select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
   flex-shrink: 0;
 }
 
+/* Frozen banner */
+.ccFrozenBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: rgba(var(--danger-rgb), 0.15);
+  border-top: 1px solid rgba(var(--danger-rgb), 0.3);
+  flex-shrink: 0;
+}
+
+.ccFrozenError {
+  flex: 1;
+  color: var(--danger-400);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ccFrozenBanner .btn {
+  flex-shrink: 0;
+}
+
 /* Composer */
 .ccComposer {
   position: relative;
@@ -208,9 +212,9 @@ select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
   resize: none;
   font-size: 13px;
   padding: 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  border-radius: 0;
+  border: none;
+  background: transparent;
   color: var(--text);
   font-family: inherit;
   line-height: 1.4;
@@ -218,8 +222,12 @@ select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
 
 .ccInput:focus {
   outline: none;
-  border-color: var(--info);
-  box-shadow: 0 0 0 2px rgba(var(--info-rgb), 0.2);
+  border: none;
+  box-shadow: none;
+}
+
+.ccInput:focus::placeholder {
+  color: transparent;
 }
 
 .ccInput:disabled {
@@ -233,26 +241,40 @@ select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
   gap: 4px;
 }
 
-.ccComposerFooter {
+/* Status bar */
+.ccStatusBar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
+  gap: 12px;
+  padding: 3px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-sunken);
   flex-shrink: 0;
-}
-
-.ccModePending {
   font-size: 11px;
   color: var(--muted);
-  opacity: 0.7;
 }
 
-/* Session stats footer */
-.ccSessionStats {
-  display: flex;
-  gap: 16px;
-  padding: 4px 12px;
-  font-size: 11px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+.ccStatusBarSpacer {
+  flex: 1;
 }
+
+select.ccPermModeSelect {
+  font-size: 11px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 0;
+}
+
+select.ccPermModeSelect:focus,
+select.ccPermModeSelect:hover {
+  outline: none;
+  border: none;
+}
+
+select.ccPermModeSelect.ccMode-plan { color: var(--info-400); }
+select.ccPermModeSelect.ccMode-acceptEdits { color: var(--success-text); }
+select.ccPermModeSelect.ccMode-dontAsk { color: var(--warning); }
+select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
