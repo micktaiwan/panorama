@@ -116,6 +116,7 @@ Configuration is resolved in this order (highest priority first):
 - **Export/Import**: Export to JSON (small DBs) or NDJSON archive (large DBs). Calendar events excluded. Qdrant vectors: recompute on import.
 - **Situations Analyzer**: LLM-powered workspace for analyzing scenarios. Prompt helpers in `imports/api/situations/promptHelpers.js`
 - **Gmail Integration**: OAuth2 integration for reading emails. Collections: `emails`. See `docs/gmail-setup.md`
+- **Claude Code**: In-app Claude CLI integration with session management, permission prompts, and shell escape (`!command`). UI: `imports/ui/ClaudeCode/`, API: `imports/api/claudeSessions/`, `imports/api/claudeMessages/`. See `docs/features/23-feature-claude-code.md`
 
 ## Testing
 
