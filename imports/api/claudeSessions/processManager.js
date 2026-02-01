@@ -321,6 +321,7 @@ export async function spawnClaudeProcess(session, message) {
         };
         if (!hasQueuedMessages(sessionId)) {
           errorUpdate.status = 'error';
+          errorUpdate.unseenCompleted = true;
         }
         await ClaudeSessionsCollection.updateAsync(sessionId, { $set: errorUpdate });
         currentAssistantMsgId = null;
@@ -374,6 +375,7 @@ export async function spawnClaudeProcess(session, message) {
       };
       if (!hasQueuedMessages(sessionId)) {
         sessionUpdate.status = 'idle';
+        sessionUpdate.unseenCompleted = true;
       }
       if (data.cost_usd != null) {
         sessionUpdate.totalCostUsd = (session.totalCostUsd || 0) + data.cost_usd;

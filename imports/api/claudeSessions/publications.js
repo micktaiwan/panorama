@@ -10,3 +10,10 @@ Meteor.publish('claudeSessions.byProject', function publishClaudeSessionsByProje
   check(projectId, String);
   return ClaudeSessionsCollection.find({ projectId }, { sort: { createdAt: 1 } });
 });
+
+Meteor.publish('claudeSessions.unseen', function publishClaudeSessionsUnseen() {
+  return ClaudeSessionsCollection.find(
+    { unseenCompleted: true },
+    { fields: { projectId: 1, name: 1, status: 1, unseenCompleted: 1, updatedAt: 1 } }
+  );
+});

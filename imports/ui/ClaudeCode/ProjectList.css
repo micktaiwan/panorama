@@ -220,6 +220,11 @@
   animation: ccPulse 1.5s ease-in-out infinite;
 }
 
+.ccStatusDot.ccStatus-completed {
+  background: var(--success);
+  animation: ccPulse 2s ease-in-out infinite;
+}
+
 .ccStatusDot.ccStatus-error {
   background: var(--danger);
 }

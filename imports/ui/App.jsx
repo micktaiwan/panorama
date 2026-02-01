@@ -45,6 +45,8 @@ import { InboxZero } from '/imports/ui/Emails/InboxZero.jsx';
 import { NotionReporting } from '/imports/ui/NotionReporting/NotionReporting.jsx';
 import { MCPServers } from '/imports/ui/MCPServers/MCPServers.jsx';
 import { ClaudeCodePage } from '/imports/ui/ClaudeCode/ClaudeCodePage.jsx';
+import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
+import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
@@ -128,6 +130,33 @@ function App() {
   // Preferences
   const subPrefs = useSubscribe('appPreferences');
   const appPrefs = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
+
+  // Claude Code: subscribe to unseen sessions + projects for notifications
+  useSubscribe('claudeSessions.unseen');
+  useSubscribe('claudeProjects');
+  const unseenSessions = useFind(() => ClaudeSessionsCollection.find({ unseenCompleted: true }, { sort: { updatedAt: 1 } }));
+  const claudeProjects = useFind(() => ClaudeProjectsCollection.find({}));
+
+  // Detect new unseen sessions and show notifications
+  const prevUnseenIdsRef = useRef(null);
+  useEffect(() => {
+    const currentIds = new Set(unseenSessions.map(s => s._id));
+    // Skip first render — don't notify for sessions already unseen at startup
+    if (prevUnseenIdsRef.current === null) {
+      prevUnseenIdsRef.current = currentIds;
+      return;
+    }
+    const prevIds = prevUnseenIdsRef.current;
+    for (const s of unseenSessions) {
+      if (!prevIds.has(s._id)) {
+        const project = claudeProjects.find(p => p._id === s.projectId);
+        const projectName = project?.name || 'Unknown';
+        const kind = s.status === 'error' ? 'error' : 'success';
+        notify({ message: `Session "${s.name}" in ${projectName} ${s.status === 'error' ? 'failed' : 'completed'}`, kind });
+      }
+    }
+    prevUnseenIdsRef.current = currentIds;
+  }, [unseenSessions, claudeProjects]);
 
   // Sync theme preference to document + localStorage
   useEffect(() => {
@@ -537,6 +566,25 @@ function App() {
     };
     window.addEventListener('keydown', onGoOverview);
     return () => window.removeEventListener('keydown', onGoOverview);
+  }, []);
+
+  // Global shortcut: Cmd/Ctrl + Shift + C → jump to next unseen Claude session
+  useEffect(() => {
+    const onJumpUnseen = (e) => {
+      const key = String(e.key || '').toLowerCase();
+      const hasMod = e.metaKey || e.ctrlKey;
+      if (!hasMod || !e.shiftKey || key !== 'c') return;
+      e.preventDefault();
+      const unseen = ClaudeSessionsCollection.findOne({ unseenCompleted: true }, { sort: { updatedAt: 1 } });
+      if (unseen) {
+        navigateTo({ name: 'claude', projectId: unseen.projectId });
+        localStorage.setItem('claude-jumpToSession', unseen._id);
+      } else {
+        notify({ message: 'No completed session to review', kind: 'info', durationMs: 2000 });
+      }
+    };
+    window.addEventListener('keydown', onJumpUnseen);
+    return () => window.removeEventListener('keydown', onJumpUnseen);
   }, []);
 
   const handleNewProject = () => {

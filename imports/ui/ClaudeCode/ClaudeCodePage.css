@@ -62,6 +62,11 @@
   background: var(--success-text);
 }
 
+.ccTabStatus.ccStatus-completed {
+  background: var(--success);
+  animation: ccPulse 2s ease-in-out infinite;
+}
+
 .ccTabStatus.ccStatus-error {
   background: var(--danger);
 }

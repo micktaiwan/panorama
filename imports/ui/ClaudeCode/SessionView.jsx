@@ -45,6 +45,13 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus }) => {
 
   const isRunning = session?.status === 'running';
 
+  // Auto-clear unseenCompleted when viewing this session
+  useEffect(() => {
+    if (session?.unseenCompleted && isActive) {
+      Meteor.call('claudeSessions.markSeen', session._id);
+    }
+  }, [session?._id, session?.unseenCompleted, isActive]);
+
   const groupedMessages = useMemo(() => {
     const isToolOnly = (msg) => {
       if (!Array.isArray(msg.content) || msg.content.length === 0) return false;
