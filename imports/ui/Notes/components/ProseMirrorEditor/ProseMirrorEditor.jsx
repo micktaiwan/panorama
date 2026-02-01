@@ -29,6 +29,13 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
   // Expose the editor view to parent via ref
   useImperativeHandle(ref, () => ({
     get view() { return viewRef.current; },
+    setContent(markdown) {
+      const view = viewRef.current;
+      if (!view) return;
+      const doc = parseMarkdown(markdown || '');
+      const state = EditorState.create({ doc, plugins: view.state.plugins });
+      view.updateState(state);
+    },
   }), []);
 
   // Create the editor once on mount
