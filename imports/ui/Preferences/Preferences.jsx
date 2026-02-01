@@ -21,6 +21,10 @@ export const Preferences = () => {
   const [pennyToken, setPennyToken] = React.useState('');
   const [qdrantUrl, setQdrantUrl] = React.useState('');
   const [calendarIcsUrl, setCalendarIcsUrl] = React.useState('');
+  const [slackEnabled, setSlackEnabled] = React.useState(false);
+  const [slackBotToken, setSlackBotToken] = React.useState('');
+  const [slackAppToken, setSlackAppToken] = React.useState('');
+  const [slackAllowedUserId, setSlackAllowedUserId] = React.useState('');
   const [googleCalendarClientId, setGoogleCalendarClientId] = React.useState('');
   const [googleCalendarClientSecret, setGoogleCalendarClientSecret] = React.useState('');
   const [googleCalendarConnected, setGoogleCalendarConnected] = React.useState(false);
@@ -383,6 +387,10 @@ export const Preferences = () => {
     setGoogleCalendarClientSecret(pref.googleCalendar?.clientSecret || '');
     setGoogleCalendarConnected(!!(pref.googleCalendar?.refreshToken));
     setGoogleCalendarLastSync(pref.googleCalendar?.lastSyncAt || null);
+    setSlackEnabled(!!pref.slack?.enabled);
+    setSlackBotToken(pref.slack?.botToken || '');
+    setSlackAppToken(pref.slack?.appToken || '');
+    setSlackAllowedUserId(pref.slack?.allowedUserId || '');
   }, [pref?._id]);
   if (sub()) return <div>Loading…</div>;
   return (
@@ -615,6 +623,66 @@ export const Preferences = () => {
             >
               Manage MCP Servers
             </button>
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Slack Integration</div>
+          <div className="prefsValue">
+            <div style={{ marginBottom: '8px' }}>
+              <InlineEditable
+                as="select"
+                value={slackEnabled ? 'enabled' : 'disabled'}
+                options={[{ value: 'disabled', label: 'Disabled' }, { value: 'enabled', label: 'Enabled' }]}
+                onSubmit={(next) => {
+                  const v = next === 'enabled';
+                  setSlackEnabled(v);
+                  Meteor.call('appPreferences.update', { slack: { enabled: v, botToken: slackBotToken, appToken: slackAppToken, allowedUserId: slackAllowedUserId } }, () => {});
+                }}
+              />
+            </div>
+            {slackEnabled && (
+              <div>
+                <div style={{ marginBottom: '8px' }}>
+                  <div className="muted" style={{ fontSize: '12px', marginBottom: '4px' }}>Bot Token (xoxb-...)</div>
+                  <InlineEditable
+                    value={slackBotToken}
+                    placeholder="xoxb-..."
+                    fullWidth
+                    onSubmit={(next) => {
+                      setSlackBotToken(next);
+                      Meteor.call('appPreferences.update', { slack: { enabled: slackEnabled, botToken: next, appToken: slackAppToken, allowedUserId: slackAllowedUserId } }, () => {});
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <div className="muted" style={{ fontSize: '12px', marginBottom: '4px' }}>App Token (xapp-...)</div>
+                  <InlineEditable
+                    value={slackAppToken}
+                    placeholder="xapp-..."
+                    fullWidth
+                    onSubmit={(next) => {
+                      setSlackAppToken(next);
+                      Meteor.call('appPreferences.update', { slack: { enabled: slackEnabled, botToken: slackBotToken, appToken: next, allowedUserId: slackAllowedUserId } }, () => {});
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <div className="muted" style={{ fontSize: '12px', marginBottom: '4px' }}>Allowed User ID (U...)</div>
+                  <InlineEditable
+                    value={slackAllowedUserId}
+                    placeholder="U0123456789"
+                    fullWidth
+                    onSubmit={(next) => {
+                      setSlackAllowedUserId(next);
+                      Meteor.call('appPreferences.update', { slack: { enabled: slackEnabled, botToken: slackBotToken, appToken: slackAppToken, allowedUserId: next } }, () => {});
+                    }}
+                  />
+                </div>
+                <div className="muted" style={{ fontSize: '12px' }}>
+                  Requires Meteor restart to take effect
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="prefsRow">

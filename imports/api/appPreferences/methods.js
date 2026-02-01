@@ -36,6 +36,15 @@ Meteor.methods({
     if (typeof modifier.pennylaneBaseUrl === 'string') set.pennylaneBaseUrl = modifier.pennylaneBaseUrl.trim() || null;
     if (typeof modifier.pennylaneToken === 'string') set.pennylaneToken = modifier.pennylaneToken.trim() || null;
     if (typeof modifier.qdrantUrl === 'string') set.qdrantUrl = modifier.qdrantUrl.trim() || null;
+    if (modifier.slack != null && typeof modifier.slack === 'object') {
+      const s = modifier.slack;
+      const slack = {};
+      if (typeof s.enabled === 'boolean') slack.enabled = s.enabled;
+      if (typeof s.botToken === 'string') slack.botToken = s.botToken.trim() || null;
+      if (typeof s.appToken === 'string') slack.appToken = s.appToken.trim() || null;
+      if (typeof s.allowedUserId === 'string') slack.allowedUserId = s.allowedUserId.trim() || null;
+      set.slack = slack;
+    }
     if (Number.isFinite(modifier.settingsVersion)) set.settingsVersion = modifier.settingsVersion;
     const doc = await AppPreferencesCollection.findOneAsync({});
     if (!doc) {

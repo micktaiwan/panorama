@@ -292,4 +292,16 @@ Meteor.startup(async () => {
       res.end(`<html><body><h1>Error</h1><p>${e?.message || 'Failed to complete OAuth'}</p></body></html>`);
     }
   });
+
+  // Slack bot (Socket Mode)
+  try {
+    const { getSlackConfig } = await import('/imports/api/_shared/config');
+    const sc = getSlackConfig();
+    if (sc.enabled && sc.botToken && sc.appToken) {
+      const { initSlackBot } = await import('/server/slack/bot');
+      await initSlackBot();
+    }
+  } catch (e) {
+    console.error('[startup] Slack bot failed', e);
+  }
 });
