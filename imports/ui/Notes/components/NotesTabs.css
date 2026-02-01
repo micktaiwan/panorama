@@ -151,6 +151,30 @@
   background: var(--notes-surface);
 }
 
+/* Claude Code project tab icon */
+.tab-claude-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  flex-shrink: 0;
+  vertical-align: -2px;
+  color: var(--purple);
+}
+
+/* Claude Code project tab accent */
+.note-tab.claude-project {
+  background: rgba(var(--purple-rgb), 0.12) !important;
+}
+
+.note-tab.claude-project:hover {
+  background: rgba(var(--purple-rgb), 0.2) !important;
+}
+
+.note-tab.claude-project.active {
+  background: rgba(var(--purple-rgb), 0.18) !important;
+  border-bottom-color: var(--purple) !important;
+}
+
 .new-note-button {
   display: flex;
   align-items: center;

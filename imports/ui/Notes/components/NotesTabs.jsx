@@ -44,7 +44,7 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       ref={setNodeRef}
       style={style}
       key={tab.id}
-      className={`note-tab ${isActive ? 'active' : ''}`}
+      className={`note-tab ${isActive ? 'active' : ''} ${tab.note?.claudeProjectId ? 'claude-project' : ''}`}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
@@ -67,7 +67,7 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{tab.title}</span>
+        <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{tab.note?.claudeProjectId && <svg className="tab-claude-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm2.5 6.5L6.5 8 4.5 6.5M8 9.5h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}{tab.title}</span>
       )}
       </div>
       <button
@@ -98,7 +98,8 @@ SortableTab.propTypes = {
     id: PropTypes.string, 
     title: PropTypes.string,
     note: PropTypes.shape({
-      projectId: PropTypes.string
+      projectId: PropTypes.string,
+      claudeProjectId: PropTypes.string
     })
   }),
   isActive: PropTypes.bool,

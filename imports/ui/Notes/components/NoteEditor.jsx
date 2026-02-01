@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { formatDateTime } from '/imports/ui/utils/date.js';
+import { navigateTo } from '/imports/ui/router.js';
 import { CleanPromptModal } from './CleanPromptModal.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { ProseMirrorEditor } from './ProseMirrorEditor/ProseMirrorEditor.jsx';
@@ -128,6 +129,16 @@ export const NoteEditor = ({
           </div>
 
           <div className="notes-actions-right">
+            {activeNote?.claudeProjectId && (
+              <button
+                className="action-button claude-project-button"
+                onClick={() => navigateTo({ name: 'claude', projectId: activeNote.claudeProjectId })}
+                title="Open Claude Code project"
+              >
+                Claude Code
+              </button>
+            )}
+
             {projectOptions.length > 0 && (
               <InlineEditable
                 as="select"
@@ -218,6 +229,7 @@ NoteEditor.propTypes = {
     title: PropTypes.string,
     content: PropTypes.string,
     projectId: PropTypes.string,
+    claudeProjectId: PropTypes.string,
     createdAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
     updatedAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
   }),
