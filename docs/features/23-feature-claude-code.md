@@ -8,12 +8,13 @@ Interface web pour interagir avec Claude Code (CLI) depuis Panorama. Chaque conv
 UI (React)                    Server (Meteor)
 ─────────                     ───────────────
 ClaudeCodePage                methods.js
-├── SessionList                 ├── claudeSessions.create
-└── SessionView                 ├── claudeSessions.sendMessage → processManager.spawnClaudeProcess()
-    ├── CommandPopup            ├── claudeSessions.stop → processManager.killProcess()
-    └── MessageBubble           ├── claudeSessions.respondToPermission → processManager.respondToPermission()
-                                ├── claudeSessions.update
-                                ├── claudeSessions.remove
+├── ProjectList                 ├── claudeSessions.create
+├── SessionView (×N)            ├── claudeSessions.createInProject
+│   ├── CommandPopup            ├── claudeSessions.sendMessage → processManager.spawnClaudeProcess()
+│   └── MessageBubble           ├── claudeSessions.stop → processManager.killProcess()
+│   Props:                      ├── claudeSessions.respondToPermission → processManager.respondToPermission()
+│   └── onNewSession(newId)     ├── claudeSessions.update
+└── NotePanel                   ├── claudeSessions.remove
                                 └── claudeSessions.clearMessages
 ```
 
@@ -31,7 +32,8 @@ Une session = une conversation avec Claude Code.
 | `permissionMode` | String | `plan`, `acceptEdits`, `dontAsk`, `bypassPermissions` |
 | `appendSystemPrompt` | String | Prompt système additionnel |
 | `claudeSessionId` | String | ID de session Claude (pour `--resume`) |
-| `status` | String | `idle`, `running`, `error` |
+| `status` | String | `idle`, `running`, `error`, `interrupted` |
+| `pid` | Number | PID du process OS (set au spawn, null quand idle) |
 | `lastError` | String | Dernière erreur |
 | `totalCostUsd` | Number | Coût cumulé |
 | `totalDurationMs` | Number | Durée cumulée |
@@ -148,6 +150,77 @@ Pour que le flow interactif couvre plus d'outils, il faudrait **retirer les rule
 
 L'ancien mécanisme (détection de `"requested permissions"` dans les events `type=user`) est conservé en fallback pour les cas où le protocole stdio ne s'applique pas.
 
+## Process Identification
+
+Les process Claude spawnés par Panorama reçoivent la variable d'environnement `PANORAMA_SESSION=<sessionId>`. Cela permet de les distinguer des process Claude lancés manuellement dans un terminal :
+
+```bash
+ps eww | grep PANORAMA_SESSION
+```
+
+Le PID est aussi stocké dans le champ `pid` de la session MongoDB, ce qui permet un cross-référencement DB ↔ OS.
+
+## Interrupted Sessions (Server Restart)
+
+Au redémarrage du serveur Meteor, les sessions `running` deviennent orphelines (le process OS est mort).
+
+**Comportement au startup (`server/main.js`)** :
+1. Recherche toutes les sessions `{ status: 'running' }`
+2. Tente un `process.kill(session.pid)` best-effort pour nettoyer les zombies OS
+3. Marque chaque session `status: 'interrupted'`, `pid: null`
+4. Insère un message système "Session interrupted by a server restart." dans le chat
+
+**Notification client (`App.jsx`)** :
+1. Au mount, appelle `claudeSessions.countInterrupted`
+2. Si > 0 : navigue vers la page Claude Code, affiche une modale non-dismissable
+3. Le bouton "Proceed" appelle `claudeSessions.cleanupInterrupted` qui remet les sessions en `idle`
+
+**Methods** :
+- `claudeSessions.countInterrupted` — retourne le nombre de sessions `interrupted`
+- `claudeSessions.cleanupInterrupted` — reset bulk `interrupted` → `idle`, `pid: null`
+
+## Frozen Sessions (Error State)
+
+Quand une session passe en `status: 'error'`, l'UI est **freezée** (lecture seule). L'utilisateur peut consulter les messages mais ne peut plus interagir avec le process.
+
+### Comportement UI
+
+- **Textarea** : `disabled`, placeholder "Session ended with error..."
+- **handleSend** : guard `if (isFrozen) return` — aucun envoi possible
+- **CommandPopup** : masquée (les slash commands sont inutiles)
+- **Bouton Stop** : masqué (pas de process à arrêter)
+- **Frozen banner** : remplace la barre d'erreur simple, affiche le `lastError` + bouton "New Session"
+- **Ce qui reste fonctionnel** : scroll des messages, copier-coller, bouton Clear, bouton Settings, renommage de la session
+
+### Bouton "New Session"
+
+Crée une nouvelle session dans le même projet (`claudeSessions.createInProject`) et switch l'onglet actif via le callback `onNewSession` passé par `ClaudeCodePage`. L'ancienne session reste dans la liste des tabs, consultable.
+
+### Pourquoi le process est déjà mort
+
+Quand `status === 'error'`, le process OS est **toujours déjà terminé**. Trois chemins mènent à ce status, et dans chacun le process est mort ou sur le point de mourir :
+
+1. **`result` avec `subtype: 'error'`** — Claude CLI a envoyé son résultat d'erreur sur stdout puis se termine. Le handler `proc.on('exit')` fait `activeProcesses.delete(sessionId)`.
+
+2. **`proc.on('error')`** (erreur de spawn) — le process n'a jamais démarré ou a crashé immédiatement. `activeProcesses.delete(sessionId)` est fait dans le handler.
+
+3. **`proc.on('exit')` avec code anormal** (code !== 0, signal !== SIGTERM) — on est *dans* le handler `exit`, le process est déjà mort. `activeProcesses.delete(sessionId)` est fait en premier.
+
+Pas besoin de kill explicite. Le freeze est purement côté UI pour empêcher l'envoi de messages à un process qui n'existe plus.
+
+### Cycle de vie complet
+
+```text
+running → [error result / spawn error / abnormal exit]
+       → process meurt
+       → activeProcesses.delete(sessionId)
+       → status: 'error', lastError: "..."
+       → UI freeze (textarea disabled, frozen banner)
+       → User clique "New Session"
+       → claudeSessions.createInProject(projectId)
+       → nouvelle session idle, ancienne consultable
+```
+
 ## Slash Commands
 
 Commandes tapées dans le composer, interceptées côté client (jamais envoyées à Claude).
@@ -176,11 +249,12 @@ imports/api/claudeMessages/
   publications.js         # Publication par session
 
 imports/ui/ClaudeCode/
-  ClaudeCodePage.jsx      # Layout : SessionList + SessionView
-  SessionList.jsx         # Liste des sessions, création, suppression
-  SessionView.jsx         # Chat, composer, slash commands
+  ClaudeCodePage.jsx      # Layout : ProjectList + SessionView(s) + NotePanel
+  ProjectList.jsx         # Liste des projets et sessions, création
+  SessionView.jsx         # Chat, composer, slash commands, frozen state
   CommandPopup.jsx        # Popup autocomplete des commandes
   MessageBubble.jsx       # Rendu d'un message (markdown, tool_use, tool_result)
+  NotePanel.jsx           # Sidebar note liée au projet
 ```
 
 ## Route
