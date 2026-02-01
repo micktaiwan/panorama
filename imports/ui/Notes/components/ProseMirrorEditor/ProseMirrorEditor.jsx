@@ -4,6 +4,7 @@ import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { parseMarkdown, serializeMarkdown } from '../../prosemirror/markdownIO.js';
 import { createPlugins } from '../../prosemirror/plugins.js';
+import { TaskItemView } from '../../prosemirror/taskItemView.js';
 import './ProseMirrorEditor.css';
 import '../BubbleMenu/BubbleMenu.css';
 import '../SlashMenu/SlashMenu.css';
@@ -53,6 +54,9 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
 
     const view = new EditorView(mountRef.current, {
       state,
+      nodeViews: {
+        list_item: (node, view, getPos) => new TaskItemView(node, view, getPos),
+      },
       dispatchTransaction(tr) {
         const newState = view.state.apply(tr);
         view.updateState(newState);

@@ -59,7 +59,18 @@ export function createFormattingKeymap() {
       // Outside list: just consume the event (don't leave editor)
       return true;
     },
-    'Enter': splitListItem(schema.nodes.list_item),
+    'Enter': (state, dispatch) => {
+      const { $from } = state.selection;
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type === schema.nodes.list_item) {
+          if ($from.node(d).attrs.checked !== null) {
+            return splitListItem(schema.nodes.list_item, { checked: false })(state, dispatch);
+          }
+          break;
+        }
+      }
+      return splitListItem(schema.nodes.list_item)(state, dispatch);
+    },
   });
 }
 

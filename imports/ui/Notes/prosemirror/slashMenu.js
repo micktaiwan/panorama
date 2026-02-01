@@ -1,5 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { setBlockType, wrapIn } from 'prosemirror-commands';
+import { wrapInList } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
 
 export const slashMenuKey = new PluginKey('slashMenu');
@@ -10,6 +11,32 @@ const COMMANDS = [
   { label: 'Heading 3', keyword: 'h3', action: (view) => setBlockType(schema.nodes.heading, { level: 3 })(view.state, view.dispatch) },
   { label: 'Code Block', keyword: 'code', action: (view) => setBlockType(schema.nodes.code_block)(view.state, view.dispatch) },
   { label: 'Blockquote', keyword: 'quote', action: (view) => wrapIn(schema.nodes.blockquote)(view.state, view.dispatch) },
+  {
+    label: 'Task List', keyword: 'todo task', action: (view) => {
+      const { state } = view;
+      const { $from } = state.selection;
+
+      // Already inside a list item: just toggle checked on current item
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type === schema.nodes.list_item) {
+          view.dispatch(state.tr.setNodeMarkup($from.before(d), null, { ...$from.node(d).attrs, checked: false }));
+          return true;
+        }
+      }
+
+      // Not in a list: wrap in bullet_list then set checked
+      if (!wrapInList(schema.nodes.bullet_list)(view.state, view.dispatch)) return false;
+      const newState = view.state;
+      const { $from: $f } = newState.selection;
+      for (let d = $f.depth; d > 0; d--) {
+        if ($f.node(d).type === schema.nodes.list_item) {
+          view.dispatch(newState.tr.setNodeMarkup($f.before(d), null, { checked: false }));
+          break;
+        }
+      }
+      return true;
+    },
+  },
   {
     label: 'Horizontal Rule', keyword: 'hr', action: (view) => {
       const { state, dispatch } = view;
@@ -86,38 +113,38 @@ export function slashMenuPlugin() {
     hide();
   }
 
+  // Document-level capture handler — fires before any other keydown handler,
+  // ensuring arrow navigation works regardless of parent component context.
+  // Checks tooltip DOM visibility directly (more robust than closure `active` flag
+  // which can be toggled by rapid update() calls after character insertion).
+  function handleCaptureKeyDown(event) {
+    if (!tooltip || tooltip.style.display === 'none') return;
+    if (filteredCommands.length === 0) return;
+    if (!_currentView?.hasFocus()) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      selectedIndex = (selectedIndex + 1) % filteredCommands.length;
+      renderMenu();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length;
+      renderMenu();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      executeCommand(selectedIndex);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      hide();
+    }
+  }
+
   return new Plugin({
     key: slashMenuKey,
-
-    props: {
-      handleKeyDown(view, event) {
-        if (!active) return false;
-
-        if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          selectedIndex = (selectedIndex + 1) % filteredCommands.length;
-          renderMenu();
-          return true;
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length;
-          renderMenu();
-          return true;
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          executeCommand(selectedIndex);
-          return true;
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          hide();
-          return true;
-        }
-        return false;
-      },
-    },
 
     view(editorView) {
       tooltip = document.createElement('div');
@@ -125,6 +152,8 @@ export function slashMenuPlugin() {
       tooltip.style.display = 'none';
       document.body.appendChild(tooltip);
       _currentView = editorView;
+
+      document.addEventListener('keydown', handleCaptureKeyDown, true);
 
       return {
         update(view) {
@@ -162,6 +191,8 @@ export function slashMenuPlugin() {
           tooltip.style.top = `${coords.bottom + 4}px`;
         },
         destroy() {
+          document.removeEventListener('keydown', handleCaptureKeyDown, true);
+          active = false;
           tooltip.remove();
           tooltip = null;
           _currentView = null;

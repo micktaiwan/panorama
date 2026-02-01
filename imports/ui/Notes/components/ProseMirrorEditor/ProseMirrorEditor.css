@@ -3,8 +3,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  background: #171a21;
-  color: #e5e7eb;
+  background: var(--panel);
+  color: var(--text);
 }
 
 /* ProseMirror content area */
@@ -15,7 +15,7 @@
   font-size: 14px;
   line-height: 1.6;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  caret-color: #e5e7eb;
+  caret-color: var(--text);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
@@ -23,19 +23,19 @@
 /* Placeholder — CSS-only approach via empty doc class to avoid widget/caret conflict */
 .prosemirror-editor .ProseMirror.pm-empty > p:first-child::before {
   content: 'Start writing your note...';
-  color: #6b7280;
+  color: var(--muted-2);
   font-style: italic;
   pointer-events: none;
   position: absolute;
 }
 
 /* Headings */
-.prosemirror-editor h1 { font-size: 1.8em; font-weight: 700; margin: 0.6em 0 0.4em; color: #f3f4f6; }
-.prosemirror-editor h2 { font-size: 1.5em; font-weight: 600; margin: 0.5em 0 0.3em; color: #f3f4f6; }
-.prosemirror-editor h3 { font-size: 1.25em; font-weight: 600; margin: 0.4em 0 0.3em; color: #e5e7eb; }
-.prosemirror-editor h4 { font-size: 1.1em; font-weight: 600; margin: 0.4em 0 0.2em; color: #e5e7eb; }
-.prosemirror-editor h5 { font-size: 1em; font-weight: 600; margin: 0.3em 0 0.2em; color: #d1d5db; }
-.prosemirror-editor h6 { font-size: 0.9em; font-weight: 600; margin: 0.3em 0 0.2em; color: #9ca3af; }
+.prosemirror-editor h1 { font-size: 1.8em; font-weight: 700; margin: 0.6em 0 0.4em; color: var(--text-heading); }
+.prosemirror-editor h2 { font-size: 1.5em; font-weight: 600; margin: 0.5em 0 0.3em; color: var(--text-heading); }
+.prosemirror-editor h3 { font-size: 1.25em; font-weight: 600; margin: 0.4em 0 0.3em; color: var(--text); }
+.prosemirror-editor h4 { font-size: 1.1em; font-weight: 600; margin: 0.4em 0 0.2em; color: var(--text); }
+.prosemirror-editor h5 { font-size: 1em; font-weight: 600; margin: 0.3em 0 0.2em; color: var(--muted); }
+.prosemirror-editor h6 { font-size: 0.9em; font-weight: 600; margin: 0.3em 0 0.2em; color: var(--muted); }
 
 /* Paragraphs — compact spacing (each \n is its own paragraph) */
 .prosemirror-editor p {
@@ -44,16 +44,16 @@
 
 /* Blockquote */
 .prosemirror-editor blockquote {
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--info);
   margin: 0.5em 0;
   padding: 0.3em 0 0.3em 1em;
-  color: #9ca3af;
+  color: var(--muted);
 }
 
 /* Code block */
 .prosemirror-editor pre {
-  background: #0d1117;
-  border: 1px solid #30363d;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
   border-radius: 6px;
   padding: 12px 16px;
   margin: 0.5em 0;
@@ -61,17 +61,17 @@
   font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.5;
-  color: #c9d1d9;
+  color: var(--text-code);
 }
 
 /* Inline code */
 .prosemirror-editor code {
-  background: #21262d;
+  background: var(--code-surface);
   border-radius: 3px;
   padding: 0.15em 0.4em;
   font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
   font-size: 0.9em;
-  color: #c9d1d9;
+  color: var(--text-code);
 }
 
 .prosemirror-editor pre code {
@@ -104,13 +104,13 @@
 /* Horizontal rule */
 .prosemirror-editor hr {
   border: none;
-  border-top: 1px solid #30363d;
+  border-top: 1px solid var(--code-border);
   margin: 1em 0;
 }
 
 /* Links */
 .prosemirror-editor a {
-  color: #58a6ff;
+  color: var(--link);
   text-decoration: none;
 }
 
@@ -121,7 +121,7 @@
 /* Bold & italic */
 .prosemirror-editor strong {
   font-weight: 700;
-  color: #f3f4f6;
+  color: var(--text-heading);
 }
 
 .prosemirror-editor em {
@@ -136,15 +136,69 @@
 
 /* Selection highlight */
 .prosemirror-editor .ProseMirror-selectednode {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--info);
 }
 
 /* Gap cursor */
 .prosemirror-editor .ProseMirror-gapcursor::after {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
 }
 
 /* Drop cursor */
 .prosemirror-editor .ProseMirror-dropcursor {
-  color: #3b82f6;
+  color: var(--info);
+}
+
+/* Task items (checkboxes) */
+.prosemirror-editor li.task-item {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+}
+
+.prosemirror-editor li.task-item > input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  margin: 4px 8px 0 0;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  transition: background 150ms ease, border-color 150ms ease;
+  position: relative;
+}
+
+.prosemirror-editor li.task-item > input[type="checkbox"]:hover {
+  border-color: var(--info);
+}
+
+.prosemirror-editor li.task-item > input[type="checkbox"]:checked {
+  background: var(--success);
+  border-color: var(--success);
+  border-radius: 50%;
+}
+
+.prosemirror-editor li.task-item > input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.prosemirror-editor li.task-item > .task-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.prosemirror-editor li.task-item-checked > .task-item-content {
+  font-style: italic;
+  color: var(--muted);
 }
