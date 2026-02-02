@@ -5,6 +5,7 @@ import { TextSelection } from 'prosemirror-state';
 import { Fragment } from 'prosemirror-model';
 import { undo, redo } from 'prosemirror-history';
 import { schema } from './schema.js';
+import { promptUrl } from './promptUrl.js';
 
 /**
  * Create the app-level keymap (Cmd+S, Cmd+W).
@@ -34,17 +35,21 @@ export function createFormattingKeymap() {
     'Mod-e': toggleMark(code),
     'Mod-k': (state, dispatch, view) => {
       if (state.selection.empty) return false;
-      const hasLink = state.doc.rangeHasMark(state.selection.from, state.selection.to, link);
+      const { from, to } = state.selection;
+      const hasLink = state.doc.rangeHasMark(from, to, link);
       if (hasLink) {
-        // Remove the link
-        if (dispatch) dispatch(state.tr.removeMark(state.selection.from, state.selection.to, link));
+        if (dispatch) dispatch(state.tr.removeMark(from, to, link));
         return true;
       }
-      const href = prompt('Enter URL:');
-      if (!href) return true;
-      if (dispatch) {
-        const mark = link.create({ href });
-        dispatch(state.tr.addMark(state.selection.from, state.selection.to, mark));
+      if (view) {
+        promptUrl().then((href) => {
+          if (href) {
+            const mark = link.create({ href });
+            const currentState = view.state;
+            view.dispatch(currentState.tr.addMark(from, to, mark));
+          }
+          view.focus();
+        });
       }
       return true;
     },
