@@ -86,6 +86,9 @@ import '/imports/api/links/collections';
 import '/imports/api/links/publications';
 import '/imports/api/links/methods';
 
+// Disk Files (read/write local filesystem)
+import '/imports/api/diskFiles/methods';
+
 // Search & AI
 import '/imports/api/search/qdrantInit';
 import '/imports/api/search/methods';

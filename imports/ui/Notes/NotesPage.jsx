@@ -9,6 +9,7 @@ import { NotesSearch } from './components/NotesSearch.jsx';
 import { NotesList } from './components/NotesList.jsx';
 import { NotesTabs } from './components/NotesTabs.jsx';
 import { NoteEditor } from './components/NoteEditor.jsx';
+import { DiskFileEditor } from '/imports/ui/components/DiskFileEditor/DiskFileEditor.jsx';
 import './NotesPage.css';
 
 // Constants
@@ -31,6 +32,7 @@ export const NotesPage = () => {
     }
     return false;
   });
+  const [fileBaselines, setFileBaselines] = useState({}); // { [tabId]: baselineContent }
 
   const parseLocalJson = (key, fallback) => {
     const raw = localStorage.getItem(key);
@@ -99,9 +101,14 @@ export const NotesPage = () => {
         return true;
       });
       setOpenTabs(validTabs);
-      // Load content of open notes
+      // Load content of open notes (file tabs will be loaded async)
       const contents = {};
+      const fileTabs = [];
       validTabs.forEach(tab => {
+        if (tab.type === 'file') {
+          fileTabs.push(tab);
+          return; // File content loaded async below
+        }
         const draft = getDraftFor(tab.id);
         const snapshotUpdatedAt = tab?.note?.updatedAt ? new Date(tab.note.updatedAt).getTime() : 0;
         if (draft) {
@@ -115,6 +122,30 @@ export const NotesPage = () => {
         }
       });
       setNoteContents(contents);
+
+      // Load file tabs from disk
+      if (fileTabs.length > 0) {
+        Promise.all(fileTabs.map(async (tab) => {
+          try {
+            const result = await Meteor.callAsync('diskFile.read', tab.filePath);
+            return { tabId: tab.id, content: result.content };
+          } catch {
+            return { tabId: tab.id, content: null }; // Will show error in editor
+          }
+        })).then(results => {
+          const fileContents = {};
+          const baselines = {};
+          for (const r of results) {
+            if (r.content !== null) {
+              fileContents[r.tabId] = r.content;
+              baselines[r.tabId] = r.content;
+            }
+          }
+          setNoteContents(prev => ({ ...prev, ...fileContents }));
+          setFileBaselines(prev => ({ ...prev, ...baselines }));
+        });
+      }
+
       if (savedActiveTab && validTabs.find(tab => tab.id === savedActiveTab)) {
         setActiveTabId(savedActiveTab);
       } else if (validTabs.length > 0) {
@@ -171,11 +202,15 @@ export const NotesPage = () => {
   }, [showOnlyOpen]);
 
   // Save note contents to localStorage (JSON with savedAt), avoid storing if equals DB baseline
+  // Skip file tabs (they are not persisted as drafts)
   useEffect(() => {
     Object.keys(noteContents).forEach(noteId => {
       // Only persist drafts for notes that were actively edited by the user
       if (!touchedNotes.has(noteId)) return;
-      const dbBaseline = notesById.get(noteId)?.content ?? openTabs.find(t => t.id === noteId)?.note?.content ?? '';
+      // Skip file tabs
+      const tab = openTabs.find(t => t.id === noteId);
+      if (tab?.type === 'file') return;
+      const dbBaseline = notesById.get(noteId)?.content ?? tab?.note?.content ?? '';
       setDraftFor(noteId, noteContents[noteId], dbBaseline);
     });
   }, [noteContents, notesById, openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), touchedNotes]);
@@ -267,16 +302,22 @@ export const NotesPage = () => {
       .sort((a, b) => toMs(b.updatedAt || b.createdAt) - toMs(a.updatedAt || a.createdAt));
   }, [notes, searchTerm, showOnlyOpen, openTabs]);
 
-  // Dirty tabs: compare against current DB baseline when available
+  // Dirty tabs: compare against current DB baseline (notes) or disk baseline (files)
   const dirtySet = useMemo(() => {
     const set = new Set();
     for (const tab of openTabs) {
-      const dbBaseline = notesById.get(tab.id)?.content ?? tab?.note?.content ?? '';
-      const current = (noteContents[tab.id] ?? dbBaseline);
-      if (current !== dbBaseline) set.add(tab.id);
+      if (tab.type === 'file') {
+        const baseline = fileBaselines[tab.id] ?? '';
+        const current = noteContents[tab.id] ?? baseline;
+        if (current !== baseline) set.add(tab.id);
+      } else {
+        const dbBaseline = notesById.get(tab.id)?.content ?? tab?.note?.content ?? '';
+        const current = (noteContents[tab.id] ?? dbBaseline);
+        if (current !== dbBaseline) set.add(tab.id);
+      }
     }
     return set;
-  }, [openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), Object.keys(noteContents).length, notesById]);
+  }, [openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), Object.keys(noteContents).length, notesById, fileBaselines]);
 
   // Open a note in a new tab
   const openNote = (note, shouldFocus = false) => {
@@ -345,9 +386,14 @@ export const NotesPage = () => {
       return newContents;
     });
 
-    // Clean localStorage for this note
-    localStorage.removeItem(`note-content-${tabId}`);
+    // Clean localStorage for this note (skip file tabs)
+    const closingTab = openTabs.find(t => t.id === tabId);
+    if (closingTab?.type !== 'file') {
+      localStorage.removeItem(`note-content-${tabId}`);
+    }
     setTouchedNotes(prev => { const n = new Set(prev); n.delete(tabId); return n; });
+    // Clean file baselines
+    setFileBaselines(prev => { const next = { ...prev }; delete next[tabId]; return next; });
 
     // Remove from renamed tabs set
     setRenamedTabs(prev => {
@@ -362,41 +408,89 @@ export const NotesPage = () => {
     }
   };
 
-  // Save a note
+  // Open a disk file in a new tab (via native Electron dialog)
+  const openFile = async () => {
+    if (!window.electron?.openFileDialog) {
+      notify({ message: 'File dialog only available in Electron', kind: 'error' });
+      return;
+    }
+    const filePath = await window.electron.openFileDialog();
+    if (!filePath) return; // User cancelled
+
+    const tabId = `file:${filePath}`;
+    if (openTabs.find(tab => tab.id === tabId)) {
+      setActiveTabId(tabId);
+      return;
+    }
+    try {
+      const result = await Meteor.callAsync('diskFile.read', filePath);
+      const newTab = {
+        id: tabId,
+        title: result.basename,
+        type: 'file',
+        filePath,
+      };
+      setOpenTabs(prev => [...prev, newTab]);
+      setNoteContents(prev => ({ ...prev, [tabId]: result.content }));
+      setFileBaselines(prev => ({ ...prev, [tabId]: result.content }));
+      setActiveTabId(tabId);
+    } catch (err) {
+      notify({ message: `Failed to open file: ${err.reason || err.message}`, kind: 'error' });
+    }
+  };
+
+  // Save a note or file
   const saveNote = async (noteId) => {
     if (!noteContents[noteId]) return;
-    
+
+    // Branch: file tab
+    const tab = openTabs.find(t => t.id === noteId);
+    if (tab?.type === 'file') {
+      setIsSaving(true);
+      try {
+        await Meteor.callAsync('diskFile.write', tab.filePath, noteContents[noteId]);
+        setFileBaselines(prev => ({ ...prev, [noteId]: noteContents[noteId] }));
+        notify({ message: 'File saved', kind: 'success' });
+      } catch (error) {
+        console.error('Error saving file:', error);
+        notify({ message: `Error saving file: ${error.reason || error.message}`, kind: 'error' });
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
     setIsSaving(true);
     try {
       const note = notesById.get(noteId);
       const content = noteContents[noteId];
-      
+
       // Check if this is the first save and note has no title
       const isFirstSave = !note?.updatedAt || note.updatedAt === note.createdAt;
       const hasNoTitle = !note?.title || note.title === 'New note' || note.title.trim() === '';
-      
+
       let updateData = { content };
-      
+
       // Auto-generate title from first line if it's first save and no title
       if (isFirstSave && hasNoTitle && content.trim()) {
         const firstLine = content.split('\n')[0].trim();
         if (firstLine) {
           updateData.title = firstLine;
           // Update the tab title locally
-          setOpenTabs(prev => prev.map(tab => 
-            tab.id === noteId ? { ...tab, title: firstLine } : tab
+          setOpenTabs(prev => prev.map(t =>
+            t.id === noteId ? { ...t, title: firstLine } : t
           ));
         }
       }
-      
+
       await Meteor.callAsync('notes.update', noteId, updateData);
-      
+
       // Clean localStorage after successful save
       localStorage.removeItem(`note-content-${noteId}`);
       setTouchedNotes(prev => { const n = new Set(prev); n.delete(noteId); return n; });
 
       // Update baseline content so the tab is no longer dirty
-      setOpenTabs(prev => prev.map(tab => tab.id === noteId ? { ...tab, note: { ...(tab.note || {}), content: noteContents[noteId] } } : tab));
+      setOpenTabs(prev => prev.map(t => t.id === noteId ? { ...t, note: { ...(t.note || {}), content: noteContents[noteId] } } : t));
     } catch (error) {
       console.error('Error saving note:', error);
       notify({ message: 'Error saving note', kind: 'error' });
@@ -459,18 +553,28 @@ export const NotesPage = () => {
 
   // Close all tabs except one
   const closeOtherTabs = (tabId) => {
-    const otherIds = openTabs.filter(t => t.id !== tabId).map(t => t.id);
-    otherIds.forEach(id => localStorage.removeItem(`note-content-${id}`));
+    const others = openTabs.filter(t => t.id !== tabId);
+    others.forEach(t => {
+      if (t.type !== 'file') localStorage.removeItem(`note-content-${t.id}`);
+    });
     setOpenTabs(prev => prev.filter(t => t.id === tabId));
     setNoteContents(prev => ({ [tabId]: prev[tabId] }));
+    setFileBaselines(prev => {
+      const kept = openTabs.find(t => t.id === tabId);
+      if (kept?.type === 'file') return { [tabId]: prev[tabId] };
+      return {};
+    });
     setActiveTabId(tabId);
   };
 
   // Close all tabs
   const closeAllTabs = () => {
-    openTabs.forEach(t => localStorage.removeItem(`note-content-${t.id}`));
+    openTabs.forEach(t => {
+      if (t.type !== 'file') localStorage.removeItem(`note-content-${t.id}`);
+    });
     setOpenTabs([]);
     setNoteContents({});
+    setFileBaselines({});
     setActiveTabId(null);
   };
 
@@ -577,6 +681,9 @@ export const NotesPage = () => {
     }
   }, [notesById, openTabs]);
 
+  const activeTab = openTabs.find(t => t.id === activeTabId);
+  const isFileTab = activeTab?.type === 'file';
+
   return (
     <div className="notes-page">
       <div className="notes-sidebar">
@@ -614,24 +721,33 @@ export const NotesPage = () => {
               onCloseAll={closeAllTabs}
               onCreateNote={handleCreateNote}
               isCreatingNote={isCreatingNote}
+              onOpenFile={openFile}
             />
-            
+
             <div className="notes-content">
-              <NoteEditor
-                activeTabId={activeTabId}
-                noteContents={noteContents}
-                onContentChange={updateNoteContent}
-                onSave={saveNote}
-                onSaveAll={saveAllNotes}
-                onClose={closeTab}
-                isSaving={isSaving}
-                activeNote={activeTabId ? (notesById.get(activeTabId) || openTabs.find(tab => tab.id === activeTabId)?.note) : null}
-                projectOptions={projectOptions}
-                onMoveProject={handleMoveProject}
-                onDuplicate={handleDuplicateNote}
-                shouldFocus={shouldFocusNote === activeTabId}
-                dirtySet={dirtySet}
-              />
+              {isFileTab ? (
+                <DiskFileEditor
+                  key={activeTab.filePath}
+                  filePath={activeTab.filePath}
+                  onClose={() => closeTab(activeTabId)}
+                />
+              ) : (
+                <NoteEditor
+                  activeTabId={activeTabId}
+                  noteContents={noteContents}
+                  onContentChange={updateNoteContent}
+                  onSave={saveNote}
+                  onSaveAll={saveAllNotes}
+                  onClose={closeTab}
+                  isSaving={isSaving}
+                  activeNote={activeTabId ? (notesById.get(activeTabId) || openTabs.find(tab => tab.id === activeTabId)?.note) : null}
+                  projectOptions={projectOptions}
+                  onMoveProject={handleMoveProject}
+                  onDuplicate={handleDuplicateNote}
+                  shouldFocus={shouldFocusNote === activeTabId}
+                  dirtySet={dirtySet}
+                />
+              )}
             </div>
           </>
         ) : (
@@ -641,6 +757,7 @@ export const NotesPage = () => {
           </div>
         )}
       </div>
+
     </div>
   );
 };

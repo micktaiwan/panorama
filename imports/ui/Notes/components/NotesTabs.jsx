@@ -18,11 +18,12 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
     return null;
   }
   const style = { transform: CSS.Transform.toString(transform), transition };
-  
+  const isFileTab = tab.type === 'file';
+
   const handleClick = (e) => {
     if (e.metaKey || e.ctrlKey) {
-      // Cmd-Click or Ctrl-Click: open project
-      if (tab.note?.projectId) {
+      // Cmd-Click or Ctrl-Click: open project (only for note tabs)
+      if (!isFileTab && tab.note?.projectId) {
         e.preventDefault();
         navigateTo({ name: 'project', projectId: tab.note.projectId });
       }
@@ -44,12 +45,13 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       ref={setNodeRef}
       style={style}
       key={tab.id}
-      className={`note-tab ${isActive ? 'active' : ''} ${tab.note?.claudeProjectId ? 'claude-project' : ''}`}
+      className={`note-tab ${isActive ? 'active' : ''} ${isFileTab ? 'file-tab' : ''} ${tab.note?.claudeProjectId ? 'claude-project' : ''}`}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
       role="tab"
       tabIndex={0}
+      title={isFileTab ? tab.filePath : undefined}
     >
       <div
         className="tab-draggable"
@@ -67,7 +69,7 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{tab.note?.claudeProjectId && <svg className="tab-claude-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm2.5 6.5L6.5 8 4.5 6.5M8 9.5h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}{tab.title}</span>
+        <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{isFileTab && <span className="tab-file-icon">F</span>}{tab.note?.claudeProjectId && <svg className="tab-claude-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm2.5 6.5L6.5 8 4.5 6.5M8 9.5h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}{tab.title}</span>
       )}
       </div>
       <button
@@ -94,9 +96,11 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
   );
 };
 SortableTab.propTypes = {
-  tab: PropTypes.shape({ 
-    id: PropTypes.string, 
+  tab: PropTypes.shape({
+    id: PropTypes.string,
     title: PropTypes.string,
+    type: PropTypes.oneOf(['note', 'file']),
+    filePath: PropTypes.string,
     note: PropTypes.shape({
       projectId: PropTypes.string,
       claudeProjectId: PropTypes.string
@@ -115,7 +119,7 @@ SortableTab.propTypes = {
   onKeyDown: PropTypes.func.isRequired,
 };
 
-export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false }) => {
+export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false, onOpenFile }) => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
   const [editingTab, setEditingTab] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -261,26 +265,41 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
             >
               {isCreatingNote ? "..." : "+"}
             </button>
+            {onOpenFile && (
+              <button
+                className="new-note-button open-file-button"
+                onClick={onOpenFile}
+                title="Open file from disk"
+                type="button"
+              >
+                F
+              </button>
+            )}
           </div>
         </SortableContext>
       </DndContext>
 
-      {contextMenu.visible && (
-        <div
-          className="tab-context-menu"
-          style={{
-            position: 'fixed',
-            left: contextMenu.x,
-            top: contextMenu.y,
-            zIndex: 1000
-          }}
-        >
-          <button className="context-menu-item" onClick={() => handleRename(contextMenu.tabId)} type="button">Rename</button>
-          <button className="context-menu-item" onClick={() => requestCloseOthers(contextMenu.tabId)} type="button">Close Other</button>
-          <button className="context-menu-item" onClick={requestCloseAll} type="button">Close All</button>
-          <button className="context-menu-item" onClick={() => handleDeleteRequest(contextMenu.tabId)} type="button">Delete</button>
-        </div>
-      )}
+      {contextMenu.visible && (() => {
+        const ctxTab = openTabs.find(t => t.id === contextMenu.tabId);
+        const isFile = ctxTab?.type === 'file';
+        return (
+          <div
+            className="tab-context-menu"
+            style={{
+              position: 'fixed',
+              left: contextMenu.x,
+              top: contextMenu.y,
+              zIndex: 1000
+            }}
+          >
+            {!isFile && <button className="context-menu-item" onClick={() => handleRename(contextMenu.tabId)} type="button">Rename</button>}
+            <button className="context-menu-item" onClick={() => { setContextMenu({ visible: false, x: 0, y: 0, tabId: null }); onTabClose(contextMenu.tabId); }} type="button">Close</button>
+            <button className="context-menu-item" onClick={() => requestCloseOthers(contextMenu.tabId)} type="button">Close Other</button>
+            <button className="context-menu-item" onClick={requestCloseAll} type="button">Close All</button>
+            {!isFile && <button className="context-menu-item" onClick={() => handleDeleteRequest(contextMenu.tabId)} type="button">Delete</button>}
+          </div>
+        );
+      })()}
 
       <Modal
         open={!!confirmDeleteId}
@@ -333,4 +352,5 @@ NotesTabs.propTypes = {
   onCloseAll: PropTypes.func,
   onCreateNote: PropTypes.func,
   isCreatingNote: PropTypes.bool,
+  onOpenFile: PropTypes.func,
 };

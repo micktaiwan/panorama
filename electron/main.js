@@ -2,7 +2,7 @@
 if (process.env.NODE_ENV !== 'production') {
   process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 }
-const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain, Notification, globalShortcut } = require('electron');
+const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain, Notification, globalShortcut, dialog } = require('electron');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require('path');
 const fs = require('fs');
@@ -529,6 +529,27 @@ ipcMain.handle('chat:focusWindow', () => {
 
 ipcMain.handle('chat:isWindowOpen', () => {
   return chatWindow !== null && !chatWindow.isDestroyed();
+});
+
+// File dialog
+ipcMain.handle('dialog:openFile', async (_event, options = {}) => {
+  const win = BrowserWindow.getFocusedWindow() || getMainWindow();
+  let defaultPath = options.defaultPath || app.getPath('home');
+  // Expand tilde
+  if (defaultPath === '~' || defaultPath.startsWith('~/')) {
+    defaultPath = path.join(app.getPath('home'), defaultPath.slice(1));
+  }
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Open File',
+    defaultPath,
+    properties: ['openFile'],
+    filters: [
+      { name: 'Text Files', extensions: ['md', 'txt', 'js', 'jsx', 'ts', 'tsx', 'json', 'css', 'html', 'yaml', 'yml', 'toml', 'py', 'rb', 'go', 'rs', 'sh', 'sql', 'vue', 'svelte', 'csv', 'log', 'prisma', 'proto', 'xml'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
 });
 
 
