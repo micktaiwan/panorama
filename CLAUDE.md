@@ -8,6 +8,21 @@ Panorama is a **local-first, single-user** project management and notes applicat
 
 **Stack**: Meteor standard structure (imports/api for server, imports/ui for client, server/main.js, client/main.jsx, electron/ for desktop, docs/ for documentation). Commands: see package.json.
 
+### Database Access
+
+Meteor dev mode runs its own MongoDB instance on **port 4001** (not the system MongoDB). Data is stored in `.meteor/local/db`.
+
+```bash
+# Connect to the dev database
+mongosh "mongodb://127.0.0.1:4001/meteor"
+
+# Example queries
+mongosh --quiet "mongodb://127.0.0.1:4001/meteor" --eval 'db.getCollectionNames()'
+mongosh --quiet "mongodb://127.0.0.1:4001/meteor" --eval 'db.tasks.find({}).limit(5).toArray()'
+```
+
+**Do NOT use** `mongosh meteor` or the system MongoDB — those are different databases and will return empty results.
+
 ## Architecture Overview
 
 ### Data Layer (Meteor Collections)
@@ -53,6 +68,10 @@ The app uses a **proxy pattern** to route AI calls between local and remote prov
 - **No inline styles**: All styling via CSS classes
 - **Reusable components** in `imports/ui/components/` (TaskRow, Card, Modal, Notify)
 - **Page components** in `imports/ui/` subdirectories (Dashboard, ProjectDetails, Preferences)
+
+#### Theming
+- **Always use CSS variables** (`var(--panel)`, `var(--text)`, `var(--border)`, etc.) for colors — never hardcode hex/rgb values
+- The app supports light and dark themes; hardcoded colors break one or the other
 
 #### Key Patterns
 - **Inline editing**: Click to edit, Enter to save, Esc to cancel (via `InlineEditable` component)
@@ -116,7 +135,7 @@ Configuration is resolved in this order (highest priority first):
 - **Export/Import**: Export to JSON (small DBs) or NDJSON archive (large DBs). Calendar events excluded. Qdrant vectors: recompute on import.
 - **Situations Analyzer**: LLM-powered workspace for analyzing scenarios. Prompt helpers in `imports/api/situations/promptHelpers.js`
 - **Gmail Integration**: OAuth2 integration for reading emails. Collections: `emails`. See `docs/gmail-setup.md`
-- **Claude Code**: In-app Claude CLI integration with session management, permission prompts, and shell escape (`!command`). UI: `imports/ui/ClaudeCode/`, API: `imports/api/claudeSessions/`, `imports/api/claudeMessages/`. See `docs/features/23-feature-claude-code.md`
+- **Claude Code**: In-app Claude CLI integration with session management, permission prompts, and shell escape (`!command`). UI: `imports/ui/ClaudeCode/`, API: `imports/api/claudeSessions/`, `imports/api/claudeMessages/`. Logs: `~/.panorama-claude.log`. See `docs/features/23-feature-claude-code.md`
 
 ## Testing
 
