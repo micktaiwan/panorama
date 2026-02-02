@@ -210,3 +210,42 @@
 .new-note-button:disabled:hover {
   background: var(--notes-surface);
 }
+
+/* File tab icon badge */
+.tab-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: rgba(var(--info-rgb, 100, 149, 237), 0.15);
+  color: var(--info);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  flex-shrink: 0;
+  margin-right: 5px;
+}
+
+/* File tab accent */
+.note-tab.file-tab {
+  background: rgba(var(--info-rgb, 100, 149, 237), 0.06) !important;
+}
+
+.note-tab.file-tab:hover {
+  background: rgba(var(--info-rgb, 100, 149, 237), 0.12) !important;
+}
+
+.note-tab.file-tab.active {
+  background: rgba(var(--info-rgb, 100, 149, 237), 0.10) !important;
+  border-bottom-color: var(--info) !important;
+}
+
+/* Open file button */
+.open-file-button {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px !important;
+  font-weight: 700;
+  color: var(--info) !important;
+}

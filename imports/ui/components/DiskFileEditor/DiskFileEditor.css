@@ -1,0 +1,113 @@
+.disk-file-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.disk-file-editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.disk-file-editor-error {
+  padding: 16px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.disk-file-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.disk-file-editor-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.disk-file-editor-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: rgba(var(--info-rgb, 100, 149, 237), 0.15);
+  color: var(--info);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  flex-shrink: 0;
+}
+
+.disk-file-editor-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disk-file-editor-path {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disk-file-editor-dirty {
+  font-size: 11px;
+  color: var(--warning);
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+.disk-file-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Flat/ghost buttons inside header */
+.disk-file-editor-actions .btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.disk-file-editor-actions .btn:hover:not(:disabled) {
+  background: rgba(var(--white-rgb), 0.08);
+  color: var(--text);
+}
+
+.disk-file-editor-actions .btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.disk-file-editor-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}

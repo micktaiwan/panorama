@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Check if this is the chat window
   isChatWindow: () => window.location.search.includes('chatWindow=1'),
 
+  // File dialog
+  openFileDialog: (options) => ipcRenderer.invoke('dialog:openFile', options),
+
   // Quit the app
   quit: () => ipcRenderer.invoke('app:quit'),
 
