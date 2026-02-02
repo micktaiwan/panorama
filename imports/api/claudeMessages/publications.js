@@ -6,6 +6,6 @@ Meteor.publish('claudeMessages.bySession', function publishClaudeMessages(sessio
   check(sessionId, String);
   return ClaudeMessagesCollection.find(
     { sessionId },
-    { sort: { createdAt: 1 }, limit: 200 }
+    { sort: { createdAt: 1 } }
   );
 });

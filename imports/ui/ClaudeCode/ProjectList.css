@@ -242,6 +242,24 @@
 .ccNoteItem {
 }
 
+.ccFileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background: rgba(var(--info-rgb, 100, 149, 237), 0.15);
+  color: var(--info);
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  flex-shrink: 0;
+}
+
+.ccFileItem {
+}
+
 /* Status dot */
 .ccStatusDot {
   width: 8px;
