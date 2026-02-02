@@ -2,6 +2,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { toggleMark, setBlockType } from 'prosemirror-commands';
 import { wrapInList } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
+import { promptUrl } from './promptUrl.js';
 
 export const bubbleMenuKey = new PluginKey('bubbleMenu');
 
@@ -71,15 +72,19 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
           e.preventDefault();
           if (hasLink) {
             editorView.dispatch(state.tr.removeMark(from, to, schema.marks.link));
+            editorView.focus();
+            updateTooltip(editorView);
           } else {
-            const href = prompt('Enter URL:');
-            if (href) {
-              const mark = schema.marks.link.create({ href });
-              editorView.dispatch(state.tr.addMark(from, to, mark));
-            }
+            promptUrl().then((href) => {
+              if (href) {
+                const mark = schema.marks.link.create({ href });
+                const currentState = editorView.state;
+                editorView.dispatch(currentState.tr.addMark(from, to, mark));
+              }
+              editorView.focus();
+              updateTooltip(editorView);
+            });
           }
-          editorView.focus();
-          updateTooltip(editorView);
         };
         tooltip.appendChild(linkBtn);
 
