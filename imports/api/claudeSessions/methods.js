@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { ClaudeSessionsCollection } from './collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
-import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, respondToPermission, execShellCommand } from './processManager';
+import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, respondToPermission, execShellCommand, isRunning, syncPermissionMode } from './processManager';
 
 const TAG = '[claude-methods]';
 
@@ -79,7 +79,14 @@ Meteor.methods({
         await ClaudeProjectsCollection.updateAsync(session.projectId, { $set: { cwd: set.cwd, updatedAt: new Date() } });
       }
     }
-    return ClaudeSessionsCollection.updateAsync(sessionId, { $set: set });
+    const result = await ClaudeSessionsCollection.updateAsync(sessionId, { $set: set });
+
+    // If permissionMode changed and process is running, sync mode to the running process
+    if ('permissionMode' in modifier && isRunning(sessionId)) {
+      await syncPermissionMode(sessionId, set.permissionMode || '');
+    }
+
+    return result;
   },
 
   async 'claudeSessions.sendMessage'(sessionId, message) {
@@ -188,6 +195,65 @@ Meteor.methods({
         updatedAt: new Date(),
       }
     });
+  },
+
+  async 'claudeSessions.changeCwd'(sessionId, newCwd) {
+    check(sessionId, String);
+    check(newCwd, String);
+    newCwd = newCwd.trim();
+    if (!newCwd) throw new Meteor.Error('invalid', 'CWD cannot be empty');
+
+    const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
+    if (!session) throw new Meteor.Error('not-found', 'Session not found');
+
+    // Propagate cwd to project
+    if (session.projectId) {
+      const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
+      await ClaudeProjectsCollection.updateAsync(session.projectId, { $set: { cwd: newCwd, updatedAt: new Date() } });
+    }
+
+    // No active Claude session — just update cwd in place
+    if (!session.claudeSessionId) {
+      await ClaudeSessionsCollection.updateAsync(sessionId, { $set: { cwd: newCwd, updatedAt: new Date() } });
+      return { sessionId };
+    }
+
+    // Active Claude session — stop it and create a new one
+    await killProcess(sessionId);
+    await ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: {
+        status: 'error',
+        lastError: `Session stopped: working directory changed to ${newCwd}`,
+        claudeSessionId: null,
+        pid: null,
+        updatedAt: new Date(),
+      }
+    });
+
+    // Create new session in the same project
+    const now = new Date();
+    const count = session.projectId
+      ? await ClaudeSessionsCollection.find({ projectId: session.projectId }).countAsync()
+      : 0;
+    const newSessionId = await ClaudeSessionsCollection.insertAsync({
+      projectId: session.projectId,
+      name: session.projectId ? `Session ${count + 1}` : (session.name + ' (new cwd)'),
+      cwd: newCwd,
+      model: session.model,
+      permissionMode: session.permissionMode,
+      appendSystemPrompt: session.appendSystemPrompt,
+      claudeSessionId: null,
+      status: 'idle',
+      lastError: null,
+      unseenCompleted: false,
+      totalCostUsd: 0,
+      totalDurationMs: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    console.log(TAG, 'changeCwd', sessionId, '→', newSessionId, 'cwd:', newCwd);
+    return { sessionId: newSessionId, stopped: true };
   },
 
   async 'claudeSessions.markSeen'(sessionId) {

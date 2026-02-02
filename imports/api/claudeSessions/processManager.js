@@ -105,6 +105,51 @@ export async function killProcess(sessionId) {
   });
 }
 
+// Determine if a permission mode auto-allows a given tool
+function shouldAutoAllow(permissionMode, toolName) {
+  if (permissionMode === 'bypassPermissions') return true;
+  if (permissionMode === 'acceptEdits') {
+    const editTools = ['Edit', 'Write', 'Read', 'NotebookEdit', 'MultiEdit', 'Glob', 'Grep', 'WebFetch', 'WebSearch'];
+    return editTools.includes(toolName);
+  }
+  return false;
+}
+
+// Auto-respond to a pending permission when the user changes permission mode
+export async function syncPermissionMode(sessionId, newMode) {
+  const pending = pendingPermissions.get(sessionId);
+  if (!pending) return;
+
+  const proc = activeProcesses.get(sessionId);
+  if (!proc) return;
+
+  if (!shouldAutoAllow(newMode, pending.toolName)) return;
+
+  log('syncPermissionMode: auto-allowing pending', pending.toolName, 'per new mode:', newMode);
+
+  const response = {
+    type: 'control_response',
+    response: {
+      subtype: 'success',
+      request_id: pending.requestId,
+      response: {
+        behavior: 'allow',
+        updatedInput: pending.toolInput,
+        updatedPermissions: [{ type: 'setMode', mode: newMode, destination: 'session' }],
+      },
+    },
+  };
+
+  proc.stdin.write(JSON.stringify(response) + '\n');
+  pendingPermissions.delete(sessionId);
+
+  // Mark the permission_request message as auto-responded
+  await ClaudeMessagesCollection.updateAsync(
+    { sessionId, type: 'permission_request', toolName: pending.toolName, autoResponded: { $ne: true } },
+    { $set: { autoResponded: true, autoRespondedMode: newMode } },
+  );
+}
+
 export function respondToPermission(sessionId, behavior, updatedToolInput) {
   const pending = pendingPermissions.get(sessionId);
   if (!pending) {
@@ -424,6 +469,24 @@ export async function spawnClaudeProcess(session, message) {
       const toolName = data.request?.tool_name;
       const toolInput = data.request?.input;
       log('control_request:', requestId, 'tool:', toolName);
+
+      // Check current session mode — auto-respond if mode allows this tool
+      const currentSession = await ClaudeSessionsCollection.findOneAsync(sessionId);
+      const mode = currentSession?.permissionMode || '';
+
+      if (shouldAutoAllow(mode, toolName)) {
+        log('auto-allowing', toolName, 'per current mode:', mode);
+        const autoResponse = {
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: requestId,
+            response: { behavior: 'allow', updatedInput: toolInput },
+          },
+        };
+        proc.stdin.write(JSON.stringify(autoResponse) + '\n');
+        return;
+      }
 
       pendingPermissions.set(sessionId, { requestId, toolName, toolInput });
 

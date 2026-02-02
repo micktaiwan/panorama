@@ -29,7 +29,7 @@ const projectStatus = (sessions) => {
   return 'idle';
 };
 
-export const ProjectList = ({ activeProjectId, homeDir, activePanel, openNoteId, onPanelClick, onNoteToggle }) => {
+export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItems = [], activeSidebarId, onPanelClick, onSidebarToggle }) => {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCwd, setNewCwd] = useState('');
@@ -198,9 +198,10 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, openNoteId,
                             onClick={(e) => {
                               e.stopPropagation();
                               if (p._id !== activeProjectId) {
+                                // Pre-save target session so restore effect picks it up
+                                localStorage.setItem(`claude-activePanel-${p._id}`, JSON.stringify({ type: 'session', id: s._id }));
                                 navigateTo({ name: 'claude', projectId: p._id });
-                              }
-                              if (activePanel?.type !== 'session' || activePanel?.id !== s._id) {
+                              } else if (activePanel?.type !== 'session' || activePanel?.id !== s._id) {
                                 onPanelClick?.({ type: 'session', id: s._id });
                               }
                             }}
@@ -224,14 +225,40 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, openNoteId,
                         {projectNotes.map((n) => (
                           <div
                             key={n._id}
-                            className={`ccSessionItem ccNoteItem ${openNoteId === n._id ? 'ccSessionItemActive' : ''}`}
+                            className={`ccSessionItem ccNoteItem ${sidebarItems.includes(n._id) ? 'ccSessionItemActive' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onNoteToggle?.(n._id);
+                              if (p._id !== activeProjectId) {
+                                // Pre-save sidebar state so restore effect opens the note
+                                const existing = (() => {
+                                  try { return JSON.parse(localStorage.getItem(`claude-sidebar-${p._id}`) || '[]'); }
+                                  catch { return []; }
+                                })();
+                                if (!existing.includes(n._id)) existing.push(n._id);
+                                localStorage.setItem(`claude-sidebar-${p._id}`, JSON.stringify(existing));
+                                localStorage.setItem(`claude-activeSidebar-${p._id}`, n._id);
+                                navigateTo({ name: 'claude', projectId: p._id });
+                              } else {
+                                onSidebarToggle?.(n._id);
+                              }
                             }}
                           >
                             <span className="ccNoteIcon">N</span>
                             <span className="ccSessionItemName">{n.title || 'Untitled'}</span>
+                          </div>
+                        ))}
+                        {p._id === activeProjectId && sidebarItems.filter(id => id.startsWith('file:')).map((id) => (
+                          <div
+                            key={id}
+                            className={`ccSessionItem ccFileItem ${activeSidebarId === id ? 'ccSessionItemActive' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSidebarToggle?.(id);
+                            }}
+                            title={id.slice(5)}
+                          >
+                            <span className="ccFileIcon">F</span>
+                            <span className="ccSessionItemName">{id.slice(5).split('/').pop()}</span>
                           </div>
                         ))}
                       </div>

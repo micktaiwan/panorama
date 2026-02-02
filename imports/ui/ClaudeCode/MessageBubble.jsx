@@ -309,7 +309,8 @@ export const MessageBubble = ({ message, onAnswer, sessionId }) => {
             />
           )
         }
-        {isPermission && sessionId && <PermissionActions sessionId={sessionId} toolName={message.toolName} toolInput={message.toolInput} />}
+        {isPermission && sessionId && !message.autoResponded && <PermissionActions sessionId={sessionId} toolName={message.toolName} toolInput={message.toolInput} />}
+        {isPermission && message.autoResponded && <div className="ccPermissionActions"><span className="ccPermissionSent">Auto-allowed ({message.autoRespondedMode})</span></div>}
         {isStreaming && <span className="ccCursor" />}
       </div>
     </div>

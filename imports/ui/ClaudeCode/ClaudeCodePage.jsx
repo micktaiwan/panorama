@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
+import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
 import { ProjectList } from './ProjectList.jsx';
 import { SessionView } from './SessionView.jsx';
 import { NotePanel } from './NotePanel.jsx';
+import { DiskFileEditor } from '/imports/ui/components/DiskFileEditor/DiskFileEditor.jsx';
 import { useHomeDir } from './useHomeDir.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { navigateTo } from '/imports/ui/router.js';
@@ -13,17 +15,35 @@ import './ClaudeCodePage.css';
 
 const STORAGE_KEY = 'claude-activePanel';
 const PROJECT_STORAGE_KEY = 'claude-activeProject';
-const NOTE_STORAGE_KEY = 'claude-openNote';
+const SIDEBAR_STORAGE_KEY = 'claude-sidebar';
+const ACTIVE_SIDEBAR_STORAGE_KEY = 'claude-activeSidebar';
 
 const serializePanel = (panel) => panel ? JSON.stringify(panel) : null;
 const deserializePanel = (str) => {
   try { return str ? JSON.parse(str) : null; } catch { return null; }
 };
 
+const parseJson = (str, fallback) => {
+  try { return str ? JSON.parse(str) : fallback; } catch { return fallback; }
+};
+
+// Sidebar item helpers
+const isFileItem = (id) => id?.startsWith('file:');
+const filePathFromId = (id) => id?.slice(5);
+const fileIdFromPath = (path) => `file:${path}`;
+const itemLabel = (id, notes) => {
+  if (isFileItem(id)) return filePathFromId(id).split('/').pop();
+  const note = notes.find(n => n._id === id);
+  return note?.title || 'Untitled';
+};
+
 export const ClaudeCodePage = ({ projectId }) => {
   const homeDir = useHomeDir();
   const [activePanel, setActivePanel] = useState(null); // { type: 'session', id: string }
-  const [openNoteId, setOpenNoteId] = useState(null);
+  // Sidebar: multiple items open, one active
+  const [sidebarItems, setSidebarItems] = useState([]); // array of IDs (noteId or 'file:/path')
+  const [activeSidebarId, setActiveSidebarId] = useState(null);
+  const [lastFocus, setLastFocus] = useState('session'); // 'session' | 'sidebar'
   const panelRefs = useRef([]);
   const restoredForProject = useRef(null);
 
@@ -39,9 +59,10 @@ export const ClaudeCodePage = ({ projectId }) => {
     }
   }, [projectId]);
 
-  // Subscribe to sessions and notes for the active project
+  // Subscribe to sessions, notes, and projects
   useSubscribe('claudeSessions.byProject', projectId || '__none__');
   useSubscribe('notes.byClaudeProject', projectId || '__none__');
+  useSubscribe('claudeProjects');
 
   // Sessions (reactive)
   const sessions = useFind(() =>
@@ -61,6 +82,14 @@ export const ClaudeCodePage = ({ projectId }) => {
     [projectId]
   );
 
+  // Active project (for cwd in file browser)
+  const activeProject = useFind(() =>
+    ClaudeProjectsCollection.find(
+      projectId ? { _id: projectId } : { _id: '__none__' }
+    ),
+    [projectId]
+  )[0];
+
   // Validate activePanel: if the referenced session no longer exists, fallback
   useEffect(() => {
     if (!activePanel) return;
@@ -69,19 +98,27 @@ export const ClaudeCodePage = ({ projectId }) => {
     }
   }, [sessions, activePanel]);
 
-  // Validate openNoteId: if the note no longer exists, close sidebar
+  // Validate sidebar items: remove note IDs that no longer exist
   useEffect(() => {
-    if (!openNoteId) return;
-    if (!notes.find(n => n._id === openNoteId)) {
-      setOpenNoteId(null);
+    if (sidebarItems.length === 0) return;
+    const validItems = sidebarItems.filter(id => {
+      if (isFileItem(id)) return true; // files don't need validation against notes
+      return notes.find(n => n._id === id);
+    });
+    if (validItems.length !== sidebarItems.length) {
+      setSidebarItems(validItems);
+      if (activeSidebarId && !validItems.includes(activeSidebarId)) {
+        setActiveSidebarId(validItems.length > 0 ? validItems[validItems.length - 1] : null);
+      }
     }
-  }, [notes, openNoteId]);
+  }, [notes, sidebarItems, activeSidebarId]);
 
-  // Restore active panel and note sidebar from localStorage
+  // Restore active panel and sidebar from localStorage
   useEffect(() => {
     if (!projectId) {
       setActivePanel(null);
-      setOpenNoteId(null);
+      setSidebarItems([]);
+      setActiveSidebarId(null);
       restoredForProject.current = null;
       return;
     }
@@ -89,10 +126,17 @@ export const ClaudeCodePage = ({ projectId }) => {
     if (restoredForProject.current === projectId) return;
 
     const saved = deserializePanel(localStorage.getItem(`${STORAGE_KEY}-${projectId}`));
-    const savedNoteId = localStorage.getItem(`${NOTE_STORAGE_KEY}-${projectId}`);
 
-    // Wait for notes if we need them for restore
-    if ((saved?.type === 'note' || savedNoteId) && notes.length === 0) return;
+    // Restore sidebar items
+    const savedSidebar = parseJson(localStorage.getItem(`${SIDEBAR_STORAGE_KEY}-${projectId}`), []);
+    const savedActive = localStorage.getItem(`${ACTIVE_SIDEBAR_STORAGE_KEY}-${projectId}`);
+
+    // Backward compat: migrate from old single-note format
+    const oldNoteId = localStorage.getItem(`claude-openNote-${projectId}`);
+
+    // Wait for notes if we have note-based sidebar items to restore
+    const hasNoteItems = savedSidebar.some(id => !isFileItem(id)) || oldNoteId;
+    if (hasNoteItems && notes.length === 0) return;
 
     restoredForProject.current = projectId;
 
@@ -103,12 +147,28 @@ export const ClaudeCodePage = ({ projectId }) => {
       setActivePanel({ type: 'session', id: sessions[0]._id });
     }
 
-    // Restore note sidebar (new format takes precedence over backward compat)
-    if (savedNoteId && notes.find(n => n._id === savedNoteId)) {
-      setOpenNoteId(savedNoteId);
+    // Restore sidebar
+    if (savedSidebar.length > 0) {
+      // Filter valid note IDs
+      const validItems = savedSidebar.filter(id => {
+        if (isFileItem(id)) return true;
+        return notes.find(n => n._id === id);
+      });
+      setSidebarItems(validItems);
+      if (savedActive && validItems.includes(savedActive)) {
+        setActiveSidebarId(savedActive);
+      } else if (validItems.length > 0) {
+        setActiveSidebarId(validItems[0]);
+      }
+    } else if (oldNoteId && notes.find(n => n._id === oldNoteId)) {
+      // Backward compat: migrate single note
+      setSidebarItems([oldNoteId]);
+      setActiveSidebarId(oldNoteId);
+      localStorage.removeItem(`claude-openNote-${projectId}`);
     } else if (saved?.type === 'note' && notes.find(n => n._id === saved.id)) {
       // Backward compat: migrate from old activePanel format
-      setOpenNoteId(saved.id);
+      setSidebarItems([saved.id]);
+      setActiveSidebarId(saved.id);
     }
   }, [projectId, sessions, notes]);
 
@@ -119,16 +179,21 @@ export const ClaudeCodePage = ({ projectId }) => {
     }
   }, [projectId, activePanel]);
 
-  // Persist open note sidebar to localStorage (only after restore is complete)
+  // Persist sidebar state to localStorage (only after restore is complete)
   useEffect(() => {
     if (projectId && restoredForProject.current === projectId) {
-      if (openNoteId) {
-        localStorage.setItem(`${NOTE_STORAGE_KEY}-${projectId}`, openNoteId);
+      if (sidebarItems.length > 0) {
+        localStorage.setItem(`${SIDEBAR_STORAGE_KEY}-${projectId}`, JSON.stringify(sidebarItems));
       } else {
-        localStorage.removeItem(`${NOTE_STORAGE_KEY}-${projectId}`);
+        localStorage.removeItem(`${SIDEBAR_STORAGE_KEY}-${projectId}`);
+      }
+      if (activeSidebarId) {
+        localStorage.setItem(`${ACTIVE_SIDEBAR_STORAGE_KEY}-${projectId}`, activeSidebarId);
+      } else {
+        localStorage.removeItem(`${ACTIVE_SIDEBAR_STORAGE_KEY}-${projectId}`);
       }
     }
-  }, [projectId, openNoteId]);
+  }, [projectId, sidebarItems, activeSidebarId]);
 
   // Jump to session from Cmd+Shift+C shortcut
   useEffect(() => {
@@ -139,6 +204,42 @@ export const ClaudeCodePage = ({ projectId }) => {
     }
     localStorage.removeItem('claude-jumpToSession');
   }, [sessions]);
+
+  // Sidebar helpers
+  const openInSidebar = useCallback((id) => {
+    setSidebarItems(prev => prev.includes(id) ? prev : [...prev, id]);
+    setActiveSidebarId(id);
+    setLastFocus('sidebar');
+  }, []);
+
+  const closeFromSidebar = useCallback((id) => {
+    setSidebarItems(prev => {
+      const next = prev.filter(i => i !== id);
+      // If closing the active item, switch to next
+      if (activeSidebarId === id) {
+        const idx = prev.indexOf(id);
+        const fallback = next.length > 0 ? next[Math.min(idx, next.length - 1)] : null;
+        setActiveSidebarId(fallback);
+      }
+      return next;
+    });
+  }, [activeSidebarId]);
+
+  const toggleInSidebar = useCallback((id) => {
+    if (sidebarItems.includes(id)) {
+      if (activeSidebarId === id) {
+        // Already active: close it
+        closeFromSidebar(id);
+      } else {
+        // In sidebar but not active: make it active
+        setActiveSidebarId(id);
+        setLastFocus('sidebar');
+      }
+    } else {
+      // Not in sidebar: add and activate
+      openInSidebar(id);
+    }
+  }, [sidebarItems, activeSidebarId, openInSidebar, closeFromSidebar]);
 
   // Keyboard shortcuts: Cmd-D (new session / split), Cmd-W (close/deselect)
   useEffect(() => {
@@ -157,6 +258,11 @@ export const ClaudeCodePage = ({ projectId }) => {
       }
       if (e.key === 'w' || e.key === 'W') {
         e.preventDefault();
+        // Close whatever has focus: sidebar item or session
+        if (lastFocus === 'sidebar' && activeSidebarId) {
+          closeFromSidebar(activeSidebarId);
+          return;
+        }
         // Close the active (focused) session
         if (sessions.length > 1 && activePanel?.type === 'session') {
           const idx = sessions.findIndex(s => s._id === activePanel.id);
@@ -168,21 +274,15 @@ export const ClaudeCodePage = ({ projectId }) => {
               return;
             }
             const remaining = sessions.filter(s => s._id !== sessionToRemove._id);
-            // Switch to the nearest session (prefer previous, fallback to next)
             const nextIdx = Math.min(idx, remaining.length - 1);
             setActivePanel(remaining.length > 0 ? { type: 'session', id: remaining[nextIdx]._id } : null);
           });
-          return;
-        }
-        // Single session: close note sidebar if open
-        if (openNoteId) {
-          setOpenNoteId(null);
         }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [projectId, activePanel, openNoteId, sessions]);
+  }, [projectId, activePanel, activeSidebarId, lastFocus, sessions, closeFromSidebar]);
 
   const handleCreateNote = () => {
     if (!projectId) return;
@@ -191,20 +291,32 @@ export const ClaudeCodePage = ({ projectId }) => {
         notify({ message: `Create note failed: ${err.reason || err.message}`, kind: 'error' });
         return;
       }
-      setOpenNoteId(newId);
+      openInSidebar(newId);
     });
+  };
+
+  const handleOpenFile = async () => {
+    if (!window.electron?.openFileDialog) {
+      notify({ message: 'File dialog only available in Electron', kind: 'error' });
+      return;
+    }
+    const filePath = await window.electron.openFileDialog({ defaultPath: activeProject?.cwd });
+    if (!filePath) return;
+    openInSidebar(fileIdFromPath(filePath));
   };
 
   const activePanelIdx = activePanel?.type === 'session'
     ? sessions.findIndex(s => s._id === activePanel.id)
     : -1;
 
-  // Scroll active panel into view when tab is clicked (especially when note sidebar is open)
+  // Scroll active panel into view when tab is clicked
   useEffect(() => {
     if (activePanelIdx >= 0 && panelRefs.current[activePanelIdx]) {
       panelRefs.current[activePanelIdx].scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
     }
   }, [activePanelIdx]);
+
+  const hasSidebar = sidebarItems.length > 0;
 
   return (
     <div className="ccPage">
@@ -212,9 +324,10 @@ export const ClaudeCodePage = ({ projectId }) => {
         activeProjectId={projectId}
         homeDir={homeDir}
         activePanel={activePanel}
-        openNoteId={openNoteId}
-        onPanelClick={(panel) => setActivePanel(panel)}
-        onNoteToggle={(noteId) => setOpenNoteId(openNoteId === noteId ? null : noteId)}
+        sidebarItems={sidebarItems}
+        activeSidebarId={activeSidebarId}
+        onPanelClick={(panel) => { setActivePanel(panel); setLastFocus('session'); }}
+        onSidebarToggle={toggleInSidebar}
       />
       <div className="ccMain">
         {!projectId && (
@@ -233,7 +346,7 @@ export const ClaudeCodePage = ({ projectId }) => {
               <button
                 key={session._id}
                 className={`ccSessionTab ${activePanel?.type === 'session' && activePanel.id === session._id ? 'ccSessionTabActive' : ''}`}
-                onClick={() => setActivePanel({ type: 'session', id: session._id })}
+                onClick={() => { setActivePanel({ type: 'session', id: session._id }); setLastFocus('session'); }}
               >
                 {session.name}
                 <span className={`ccTabStatus ccStatus-${session.unseenCompleted ? 'completed' : session.status}`} />
@@ -242,15 +355,29 @@ export const ClaudeCodePage = ({ projectId }) => {
             {notes.map((note) => (
               <button
                 key={note._id}
-                className={`ccSessionTab ccNoteTab ${openNoteId === note._id ? 'ccSessionTabActive' : ''}`}
-                onClick={() => setOpenNoteId(openNoteId === note._id ? null : note._id)}
+                className={`ccSessionTab ccNoteTab ${sidebarItems.includes(note._id) ? 'ccSessionTabActive' : ''}`}
+                onClick={() => toggleInSidebar(note._id)}
               >
                 <span className="ccNoteTabIcon">N</span>
                 {note.title || 'Untitled'}
               </button>
             ))}
+            {sidebarItems.filter(isFileItem).map((id) => (
+              <button
+                key={id}
+                className={`ccSessionTab ccFileTab ${activeSidebarId === id ? 'ccSessionTabActive' : ''}`}
+                onClick={() => { setActiveSidebarId(id); setLastFocus('sidebar'); }}
+                title={filePathFromId(id)}
+              >
+                <span className="ccFileTabIcon">F</span>
+                {filePathFromId(id).split('/').pop()}
+              </button>
+            ))}
             <button className="ccSessionTab ccNewNoteTab" onClick={handleCreateNote} title="New note">
               + Note
+            </button>
+            <button className="ccSessionTab ccNewNoteTab" onClick={handleOpenFile} title="Open file">
+              + File
             </button>
           </div>
         )}
@@ -262,29 +389,61 @@ export const ClaudeCodePage = ({ projectId }) => {
                 <div
                   className={`ccPanel ${idx === activePanelIdx ? 'ccPanelActive' : ''}`}
                   ref={el => panelRefs.current[idx] = el}
-                  onClick={() => setActivePanel({ type: 'session', id: session._id })}
+                  onClick={() => { setActivePanel({ type: 'session', id: session._id }); setLastFocus('session'); }}
                 >
                   <SessionView
                     sessionId={session._id}
                     homeDir={homeDir}
                     isActive={idx === activePanelIdx}
-                    onFocus={() => setActivePanel({ type: 'session', id: session._id })}
+                    onFocus={() => { setActivePanel({ type: 'session', id: session._id }); setLastFocus('session'); }}
                     onNewSession={(newId) => setActivePanel({ type: 'session', id: newId })}
                   />
                 </div>
               </React.Fragment>
             ))}
           </div>
-          {openNoteId && (
+          {hasSidebar && (
             <>
               <div className="ccPanelDivider" />
               <div className="ccNoteSidebar">
-                <NotePanel key={openNoteId} noteId={openNoteId} claudeProjectId={projectId} />
+                {sidebarItems.length > 1 && (
+                  <div className="ccSidebarTabs">
+                    {sidebarItems.map((id) => (
+                      <div
+                        key={id}
+                        className={`ccSidebarTab ${activeSidebarId === id ? 'ccSidebarTabActive' : ''}`}
+                        onClick={() => { setActiveSidebarId(id); setLastFocus('sidebar'); }}
+                        title={isFileItem(id) ? filePathFromId(id) : undefined}
+                      >
+                        <span className={isFileItem(id) ? 'ccFileTabIcon' : 'ccNoteTabIcon'}>
+                          {isFileItem(id) ? 'F' : 'N'}
+                        </span>
+                        <span className="ccSidebarTabLabel">{itemLabel(id, notes)}</span>
+                        <button
+                          className="ccSidebarTabClose"
+                          onClick={(e) => { e.stopPropagation(); closeFromSidebar(id); }}
+                          type="button"
+                        >&times;</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {activeSidebarId && !isFileItem(activeSidebarId) && (
+                  <NotePanel key={activeSidebarId} noteId={activeSidebarId} claudeProjectId={projectId} />
+                )}
+                {activeSidebarId && isFileItem(activeSidebarId) && (
+                  <DiskFileEditor
+                    key={activeSidebarId}
+                    filePath={filePathFromId(activeSidebarId)}
+                    onClose={() => closeFromSidebar(activeSidebarId)}
+                  />
+                )}
               </div>
             </>
           )}
         </div>
       </div>
+
     </div>
   );
 };

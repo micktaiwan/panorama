@@ -24,7 +24,7 @@ const COMMANDS = [
   { name: 'clear', description: 'Clear messages and start fresh', hasArgs: false },
   { name: 'stop', description: 'Stop the running process', hasArgs: false },
   { name: 'model', description: 'Change model (e.g. /model claude-sonnet-4-20250514)', hasArgs: true },
-  { name: 'cwd', description: 'Change working directory', hasArgs: true },
+  { name: 'cwd', description: 'Change working directory (WARNING: stops active session)', hasArgs: true },
   { name: 'info', description: 'Show Claude version and context usage', hasArgs: false },
   { name: 'help', description: 'Show available commands', hasArgs: false },
 ];
@@ -149,9 +149,14 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
       case 'cwd': {
         const cwd = args.trim();
         if (!cwd) { notify({ message: 'Usage: /cwd <path>', kind: 'error' }); return; }
-        Meteor.call('claudeSessions.update', sessionId, { cwd }, (err) => {
-          if (err) notify({ message: `Update failed: ${err.reason || err.message}`, kind: 'error' });
-          else notify({ message: `Working directory set to ${cwd}`, kind: 'success' });
+        Meteor.call('claudeSessions.changeCwd', sessionId, cwd, (err, result) => {
+          if (err) { notify({ message: `Update failed: ${err.reason || err.message}`, kind: 'error' }); return; }
+          if (result?.stopped) {
+            notify({ message: `Session stopped. New session created with cwd: ${cwd}`, kind: 'info' });
+            onNewSession?.(result.sessionId);
+          } else {
+            notify({ message: `Working directory set to ${cwd}`, kind: 'success' });
+          }
         });
         break;
       }
