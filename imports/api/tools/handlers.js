@@ -415,10 +415,19 @@ export const TOOL_HANDLERS = {
       } else if (collection === 'notionTickets') {
         const { NotionTicketsCollection } = await import('/imports/api/notionTickets/collections');
         cursor = NotionTicketsCollection;
+      } else if (collection === 'claudeProjects') {
+        const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
+        cursor = ClaudeProjectsCollection;
+      } else if (collection === 'claudeSessions') {
+        const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
+        cursor = ClaudeSessionsCollection;
+      } else if (collection === 'claudeMessages') {
+        const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
+        cursor = ClaudeMessagesCollection;
       } else {
         return buildErrorResponse(`Unsupported collection: ${collection}`, 'tool_collectionQuery', {
           code: 'INVALID_COLLECTION',
-          suggestion: 'Use one of: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets'
+          suggestion: 'Use one of: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets, claudeProjects, claudeSessions, claudeMessages'
         });
       }
       const fields = select.length > 0 ? Object.fromEntries(select.map(f => [f, 1])) : undefined;
@@ -1824,6 +1833,244 @@ export const TOOL_HANDLERS = {
       console.error('[tool_mcpServersSync] Error:', error);
       throw new Error(`Failed to sync MCP servers: ${error.message}`);
     }
+  },
+
+  async tool_claudeProjectsList(args, memory) {
+    const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
+    const projects = await ClaudeProjectsCollection.find({}, {
+      fields: { name: 1, cwd: 1, model: 1, permissionMode: 1, createdAt: 1, updatedAt: 1 },
+      sort: { updatedAt: -1 }
+    }).fetchAsync();
+    const mapped = (projects || []).map(p => ({
+      id: p._id, name: p.name || '', cwd: p.cwd || '', model: p.model || null,
+      permissionMode: p.permissionMode || null, createdAt: p.createdAt, updatedAt: p.updatedAt
+    }));
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.claudeProjects = mapped;
+    }
+    return buildSuccessResponse({ projects: mapped, total: mapped.length }, 'tool_claudeProjectsList');
+  },
+
+  async tool_claudeSessionsByProject(args, memory) {
+    const projectId = String(args?.projectId || '').trim();
+    if (!projectId) {
+      return buildErrorResponse('projectId is required', 'tool_claudeSessionsByProject', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Use tool_claudeProjectsList to find the correct project ID first.'
+      });
+    }
+    // Validate that the Claude project exists
+    const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
+    const project = await ClaudeProjectsCollection.findOneAsync({ _id: projectId }, { fields: { _id: 1 } });
+    if (!project) {
+      return buildErrorResponse(`Claude project not found: "${projectId}"`, 'tool_claudeSessionsByProject', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_claudeProjectsList to find the correct project ID.'
+      });
+    }
+    const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
+    const sessions = await ClaudeSessionsCollection.find({ projectId }, {
+      fields: { name: 1, projectId: 1, status: 1, totalCostUsd: 1, totalDurationMs: 1, claudeCodeVersion: 1, activeModel: 1, createdAt: 1, updatedAt: 1 },
+      sort: { createdAt: -1 }
+    }).fetchAsync();
+    const mapped = (sessions || []).map(s => ({
+      id: s._id, name: s.name || '', projectId: s.projectId, status: s.status || null,
+      totalCostUsd: s.totalCostUsd || 0, totalDurationMs: s.totalDurationMs || 0,
+      claudeCodeVersion: s.claudeCodeVersion || null, activeModel: s.activeModel || null,
+      createdAt: s.createdAt, updatedAt: s.updatedAt
+    }));
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.claudeSessions = mapped;
+      memory.ids = memory.ids || {};
+      memory.ids.claudeProjectId = projectId;
+    }
+    return buildSuccessResponse({ sessions: mapped, total: mapped.length }, 'tool_claudeSessionsByProject');
+  },
+
+  async tool_claudeSessionStats(args, memory) {
+    const sessionId = String(args?.sessionId || '').trim();
+    if (!sessionId) {
+      return buildErrorResponse('sessionId is required', 'tool_claudeSessionStats', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Use tool_claudeSessionsByProject to find the correct session ID.'
+      });
+    }
+    const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
+    const session = await ClaudeSessionsCollection.findOneAsync({ _id: sessionId }, {
+      fields: { name: 1, projectId: 1, status: 1, totalCostUsd: 1, totalDurationMs: 1, claudeCodeVersion: 1, activeModel: 1, createdAt: 1, updatedAt: 1 }
+    });
+    if (!session) {
+      return buildErrorResponse(`Claude session not found: "${sessionId}"`, 'tool_claudeSessionStats', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_claudeSessionsByProject to find the correct session ID.'
+      });
+    }
+    const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
+    const messages = await ClaudeMessagesCollection.find({ sessionId }, {
+      fields: { role: 1, type: 1, costUsd: 1, durationMs: 1 }
+    }).fetchAsync();
+
+    const byRole = {};
+    const byType = {};
+    let costUsd = 0;
+    let durationMs = 0;
+    for (const m of messages) {
+      const role = m.role || 'unknown';
+      const type = m.type || 'unknown';
+      byRole[role] = (byRole[role] || 0) + 1;
+      byType[type] = (byType[type] || 0) + 1;
+      costUsd += m.costUsd || 0;
+      durationMs += m.durationMs || 0;
+    }
+
+    const sessionData = {
+      id: session._id, name: session.name || '', projectId: session.projectId,
+      status: session.status || null, totalCostUsd: session.totalCostUsd || 0,
+      totalDurationMs: session.totalDurationMs || 0,
+      claudeCodeVersion: session.claudeCodeVersion || null, activeModel: session.activeModel || null,
+      createdAt: session.createdAt, updatedAt: session.updatedAt
+    };
+
+    const result = {
+      session: sessionData,
+      messageStats: { total: messages.length, byRole, byType },
+      costUsd, durationMs
+    };
+
+    if (memory) {
+      memory.entities = memory.entities || {};
+      memory.entities.claudeSession = result;
+      memory.ids = memory.ids || {};
+      memory.ids.claudeSessionId = sessionId;
+    }
+    return buildSuccessResponse(result, 'tool_claudeSessionStats');
+  },
+
+  async tool_claudeMessagesBySession(args, memory) {
+    const sessionId = String(args?.sessionId || '').trim();
+    if (!sessionId) {
+      return buildErrorResponse('sessionId is required', 'tool_claudeMessagesBySession', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Use tool_claudeSessionsByProject to find the correct session ID.'
+      });
+    }
+    const limit = Math.min(200, Math.max(1, Number(args?.limit) || 50));
+    const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
+    const messages = await ClaudeMessagesCollection.find({ sessionId }, {
+      fields: { role: 1, type: 1, contentText: 1, toolName: 1, costUsd: 1, durationMs: 1, model: 1, createdAt: 1 },
+      sort: { createdAt: 1 },
+      limit
+    }).fetchAsync();
+    const mapped = (messages || []).map(m => ({
+      id: m._id, role: m.role || null, type: m.type || null,
+      contentText: clampText(m.contentText || '', 500),
+      toolName: m.toolName || null, costUsd: m.costUsd || 0,
+      durationMs: m.durationMs || 0, model: m.model || null, createdAt: m.createdAt
+    }));
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.claudeMessages = mapped;
+      memory.ids = memory.ids || {};
+      memory.ids.claudeSessionId = sessionId;
+    }
+    return buildSuccessResponse({ messages: mapped, total: mapped.length }, 'tool_claudeMessagesBySession');
+  },
+
+  async tool_claudeMessagesSearch(args, memory) {
+    const query = String(args?.query || '').trim();
+    if (!query) {
+      return buildErrorResponse('query is required', 'tool_claudeMessagesSearch', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide a search query, e.g., {query: "error"}'
+      });
+    }
+    const limit = Math.min(200, Math.max(1, Number(args?.limit) || 20));
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = { $regex: escaped, $options: 'i' };
+    const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
+    const messages = await ClaudeMessagesCollection.find({ contentText: regex }, {
+      fields: { sessionId: 1, role: 1, type: 1, contentText: 1, createdAt: 1 },
+      sort: { createdAt: -1 },
+      limit
+    }).fetchAsync();
+    const mapped = (messages || []).map(m => ({
+      id: m._id, sessionId: m.sessionId || null, role: m.role || null, type: m.type || null,
+      contentText: clampText(m.contentText || '', 500), createdAt: m.createdAt
+    }));
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.claudeMessages = mapped;
+    }
+    return buildSuccessResponse({ messages: mapped, total: mapped.length, query }, 'tool_claudeMessagesSearch');
+  },
+
+  async tool_claudeSessionsList(args, memory) {
+    const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
+    const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
+
+    // 1. Parse & validate params
+    const limit = Math.min(Math.max(1, parseInt(args?.limit, 10) || 50), 200);
+    const status = ['idle', 'running', 'error', 'interrupted'].includes(args?.status)
+      ? args.status : null;
+    const sortBy = ['updatedAt', 'createdAt', 'totalCostUsd'].includes(args?.sortBy)
+      ? args.sortBy : 'updatedAt';
+    const sortOrder = args?.sortOrder === 'asc' ? 1 : -1;
+
+    // 2. Build selector
+    const selector = status ? { status } : {};
+
+    // 3. Query sessions
+    const sessions = await ClaudeSessionsCollection.find(selector, {
+      sort: { [sortBy]: sortOrder },
+      limit,
+      fields: {
+        name: 1, projectId: 1, status: 1, cwd: 1, model: 1,
+        totalCostUsd: 1, totalDurationMs: 1, activeModel: 1,
+        claudeCodeVersion: 1, lastError: 1, createdAt: 1, updatedAt: 1
+      }
+    }).fetchAsync();
+
+    // 4. Fetch projects for join (batch query)
+    const projectIds = [...new Set(sessions.map(s => s.projectId).filter(Boolean))];
+    const projects = projectIds.length > 0
+      ? await ClaudeProjectsCollection.find(
+          { _id: { $in: projectIds } },
+          { fields: { name: 1 } }
+        ).fetchAsync()
+      : [];
+    const projectMap = Object.fromEntries(projects.map(p => [p._id, p.name]));
+
+    // 5. Map results
+    const mapped = sessions.map(s => ({
+      id: s._id,
+      name: clampText(s.name || ''),
+      projectId: s.projectId || null,
+      projectName: s.projectId ? (projectMap[s.projectId] || null) : null,
+      status: s.status || 'idle',
+      cwd: s.cwd || null,
+      model: s.model || null,
+      totalCostUsd: s.totalCostUsd || 0,
+      totalDurationMs: s.totalDurationMs || 0,
+      activeModel: s.activeModel || null,
+      claudeCodeVersion: s.claudeCodeVersion || null,
+      lastError: s.lastError || null,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt
+    }));
+
+    // 6. Store in memory
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.claudeSessions = mapped;
+    }
+
+    // 7. Return response
+    return buildSuccessResponse(
+      { sessions: mapped, total: mapped.length },
+      'tool_claudeSessionsList'
+    );
   },
 
   /**

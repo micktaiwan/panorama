@@ -251,6 +251,34 @@ export function generateSummary(data, toolName) {
       return `Retrieved ${total || items.length} email${items.length !== 1 ? 's' : ''}${includeThread ? ' with thread' : ''}`;
     }
 
+    // Claude Code
+    case 'tool_claudeProjectsList':
+      return `Found ${total} Claude Code project${total !== 1 ? 's' : ''}`;
+
+    case 'tool_claudeSessionsByProject': {
+      const sessions = data?.sessions || [];
+      const running = sessions.filter(s => s.status === 'running').length;
+      const totalCost = sessions.reduce((sum, s) => sum + (s.totalCostUsd || 0), 0);
+      let parts = [`Found ${sessions.length} session${sessions.length !== 1 ? 's' : ''}`];
+      if (running > 0) parts.push(`${running} running`);
+      if (totalCost > 0) parts.push(`$${totalCost.toFixed(4)} total cost`);
+      return parts.join(', ');
+    }
+
+    case 'tool_claudeSessionStats': {
+      const session = data?.session || {};
+      const stats = data?.messageStats || {};
+      return `Session "${session.name || 'unnamed'}": ${stats.total || 0} messages, $${(data?.costUsd || 0).toFixed(4)} cost`;
+    }
+
+    case 'tool_claudeMessagesBySession':
+      return `Found ${total} message${total !== 1 ? 's' : ''} in session`;
+
+    case 'tool_claudeMessagesSearch': {
+      const q = data?.query || '';
+      return `Found ${total} message${total !== 1 ? 's' : ''} matching "${q}"`;
+    }
+
     // Generic collection query
     case 'tool_collectionQuery': {
       const collectionName = Object.keys(data).find(k => k !== 'total') || 'items';
