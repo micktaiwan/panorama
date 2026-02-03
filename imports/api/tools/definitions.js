@@ -602,6 +602,70 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_claudeProjectsList',
+    description: 'List all Claude Code projects (sorted by updatedAt desc). Use when the user asks about Claude Code projects, workspaces, or coding sessions.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {}
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_claudeSessionsByProject',
+    description: 'Return Claude Code sessions for a specific Claude project. Use when the user asks about sessions or coding activity within a Claude project.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        projectId: { type: 'string', description: 'Claude project ID' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_claudeSessionStats',
+    description: 'Get detailed statistics for a Claude Code session: message counts by role/type, cost, duration. Use when the user asks about session details or metrics.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        sessionId: { type: 'string', description: 'Claude session ID' }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_claudeMessagesBySession',
+    description: 'Return messages for a Claude Code session (sorted chronologically). Use when the user wants to see the conversation history of a session.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        sessionId: { type: 'string', description: 'Claude session ID' },
+        limit: { type: 'number', description: 'Max messages to return (default 50, max 200)' }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_claudeMessagesSearch',
+    description: 'Search Claude Code messages by text content (case-insensitive regex). Use when the user wants to find specific messages across sessions.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        query: { type: 'string', description: 'Text to search in message content' },
+        limit: { type: 'number', description: 'Max results to return (default 20, max 200)' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_readFile',
     description: 'Read the contents of a file from the local filesystem. Supports text files (markdown, JSON, JavaScript, etc.). Use when the user wants to read or examine file contents.',
     parameters: {
@@ -619,6 +683,33 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ['filePath']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_claudeSessionsList',
+    description: 'List all Claude Code sessions across all projects. Use when the user asks about Claude sessions, running processes, or wants an overview of Claude activity.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Max sessions to return (default 50, max 200)'
+        },
+        status: {
+          type: 'string',
+          description: 'Filter by status: idle, running, error, interrupted'
+        },
+        sortBy: {
+          type: 'string',
+          description: 'Sort field: updatedAt (default), createdAt, totalCostUsd'
+        },
+        sortOrder: {
+          type: 'string',
+          description: 'Sort direction: asc, desc (default)'
+        }
+      }
     }
   },
 ];

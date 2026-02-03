@@ -23,5 +23,11 @@ export const TOOL_SCHEMAS = {
   tool_updateTask: { required: ['taskId'], readOnly: false },
   tool_createNote: { required: ['title'], readOnly: false },
   tool_updateNote: { required: ['noteId'], readOnly: false },
-  tool_userLogsFilter: { required: [], readOnly: true }
+  tool_userLogsFilter: { required: [], readOnly: true },
+  tool_claudeProjectsList: { required: [], readOnly: true },
+  tool_claudeSessionsByProject: { required: ['projectId'], readOnly: true },
+  tool_claudeSessionStats: { required: ['sessionId'], readOnly: true },
+  tool_claudeMessagesBySession: { required: ['sessionId'], readOnly: true },
+  tool_claudeMessagesSearch: { required: ['query'], readOnly: true },
+  tool_claudeSessionsList: { required: [], readOnly: true }
 };

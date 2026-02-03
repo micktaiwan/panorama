@@ -144,6 +144,15 @@ export const bindArgsWithMemory = (toolName, rawArgs, memory) => {
       args.query = mem.params.userQuery;
     }
   }
+  if (toolName === 'tool_claudeSessionsByProject' && !args.projectId) {
+    args.projectId = mem.ids?.claudeProjectId || mem.ids?.projectId;
+  }
+  if (toolName === 'tool_claudeSessionStats' && !args.sessionId) {
+    args.sessionId = mem.ids?.claudeSessionId;
+  }
+  if (toolName === 'tool_claudeMessagesBySession' && !args.sessionId) {
+    args.sessionId = mem.ids?.claudeSessionId;
+  }
 
   return args;
 };
@@ -202,20 +211,23 @@ export const evaluateStopWhen = (have, memory) => {
 
 // Generic registry: allowed fields per collection for read-only queries
 export const FIELD_ALLOWLIST = {
-  tasks: ['_id', 'title', 'status', 'deadline', 'projectId', 'isUrgent', 'isImportant', 'tags', 'createdAt', 'updatedAt'],
+  tasks: ['_id', 'title', 'status', 'deadline', 'projectId', 'isUrgent', 'isImportant', 'tags', 'createdAt', 'updatedAt', 'notes', 'source'],
   projects: ['_id', 'name', 'description', 'createdAt', 'updatedAt'],
-  notes: ['_id', 'projectId', 'title', 'content', 'createdAt', 'updatedAt'],
+  notes: ['_id', 'projectId', 'title', 'content', 'createdAt', 'updatedAt', 'claudeProjectId'],
   noteSessions: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt'],
   noteLines: ['_id', 'sessionId', 'content', 'createdAt', 'updatedAt'],
   links: ['_id', 'projectId', 'name', 'url', 'createdAt', 'updatedAt'],
-  people: ['_id', 'name', 'createdAt', 'updatedAt'],
+  people: ['_id', 'name', 'createdAt', 'updatedAt', 'role', 'teamId', 'email'],
   teams: ['_id', 'name', 'createdAt', 'updatedAt'],
-  files: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt'],
-  alarms: ['_id', 'title', 'enabled', 'when', 'createdAt', 'updatedAt'],
+  files: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt', 'storedFileName', 'size', 'mimeType'],
+  alarms: ['_id', 'title', 'enabled', 'when', 'createdAt', 'updatedAt', 'recurrence', 'snoozedUntilAt', 'nextTriggerAt'],
   userLogs: ['_id', 'content', 'createdAt'],
   emails: ['_id', 'id', 'threadId', 'from', 'to', 'subject', 'snippet', 'body', 'gmailDate', 'labelIds', 'createdAt'],
   notionIntegrations: ['_id', 'name', 'databaseId', 'description', 'filters', 'ownerMapping', 'pageSize', 'enabled', 'lastSyncAt', 'syncInProgress', 'syncProgress', 'syncCancelRequested', 'createdAt'],
-  notionTickets: ['_id', 'integrationId', 'notionId', 'id', 'title', 'owners', 'age', 'priority', 'lifecycle', 'nextStep', 'url', 'syncedAt', 'createdAt', 'updatedAt']
+  notionTickets: ['_id', 'integrationId', 'notionId', 'id', 'title', 'owners', 'age', 'priority', 'lifecycle', 'nextStep', 'url', 'syncedAt', 'createdAt', 'updatedAt'],
+  claudeProjects: ['_id', 'name', 'cwd', 'model', 'permissionMode', 'appendSystemPrompt', 'createdAt', 'updatedAt'],
+  claudeSessions: ['_id', 'projectId', 'name', 'cwd', 'model', 'permissionMode', 'status', 'totalCostUsd', 'totalDurationMs', 'claudeCodeVersion', 'activeModel', 'createdAt', 'updatedAt'],
+  claudeMessages: ['_id', 'sessionId', 'role', 'type', 'contentText', 'toolName', 'costUsd', 'durationMs', 'model', 'createdAt']
 };
 
 // Map collection name to lists.* memory key
@@ -236,7 +248,10 @@ export const getListKeyForCollection = (collection) => {
     emails: 'emails',
     mcpServers: 'mcpServers',
     notionIntegrations: 'notionIntegrations',
-    notionTickets: 'notionTickets'
+    notionTickets: 'notionTickets',
+    claudeProjects: 'claudeProjects',
+    claudeSessions: 'claudeSessions',
+    claudeMessages: 'claudeMessages'
   };
   return map[c] || c;
 };
@@ -376,6 +391,29 @@ export const COMMON_QUERIES = {
     where: {
       status: { in: ['todo', 'in_progress'] }
     }
+  },
+
+  // Claude Code: all open sessions (any status - idle, running, or error)
+  activeSessions: {
+    collection: 'claudeSessions',
+    where: {},
+    sort: { updatedAt: -1 }
+  },
+
+  // Claude Code: recent sessions
+  recentSessions: {
+    collection: 'claudeSessions',
+    where: {},
+    sort: { createdAt: -1 },
+    limit: 20
+  },
+
+  // Claude Code: sessions sorted by cost
+  costlySessions: {
+    collection: 'claudeSessions',
+    where: { totalCostUsd: { gt: 0 } },
+    sort: { totalCostUsd: -1 },
+    limit: 20
   }
 };
 
