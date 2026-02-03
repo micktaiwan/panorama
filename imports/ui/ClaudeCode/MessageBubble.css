@@ -177,9 +177,6 @@
   font-family: monospace;
   font-size: 11px;
   opacity: 0.8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   min-width: 0;
 }
 
@@ -370,6 +367,15 @@
   color: var(--muted);
   max-height: 400px;
   overflow-y: auto;
+}
+
+/* Image block in chat */
+.ccImageBlock {
+  max-width: 300px;
+  max-height: 300px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin: 4px 0;
 }
 
 /* Streaming cursor */

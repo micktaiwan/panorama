@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { ClaudeSessionsCollection } from './collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
-import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, respondToPermission, execShellCommand, isRunning, syncPermissionMode } from './processManager';
+import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, dequeueMessage, respondToPermission, execShellCommand, isRunning, syncPermissionMode } from './processManager';
 
 const TAG = '[claude-methods]';
 
@@ -89,13 +89,14 @@ Meteor.methods({
     return result;
   },
 
-  async 'claudeSessions.sendMessage'(sessionId, message) {
+  async 'claudeSessions.sendMessage'(sessionId, message, images) {
     check(sessionId, String);
     check(message, String);
+    check(images, Match.Maybe([{ data: String, mediaType: String }]));
     const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
 
-    console.log(TAG, 'sendMessage', sessionId, 'status:', session.status, 'claudeSessionId:', session.claudeSessionId);
+    console.log(TAG, 'sendMessage', sessionId, 'status:', session.status, 'images:', images?.length || 0);
 
     // Collect unconsumed shell results to inject as context
     const shellResults = await ClaudeMessagesCollection.find(
@@ -103,12 +104,12 @@ Meteor.methods({
       { sort: { createdAt: 1 } }
     ).fetchAsync();
 
-    let messageForClaude = message;
+    let textForClaude = message;
     if (shellResults.length > 0) {
       const shellContext = shellResults.map(sr =>
         `$ ${sr.shellCommand}\n${sr.contentText}`
       ).join('\n\n');
-      messageForClaude = `[Shell commands executed]\n\`\`\`\n${shellContext}\n\`\`\`\n\n${message}`;
+      textForClaude = `[Shell commands executed]\n\`\`\`\n${shellContext}\n\`\`\`\n\n${message}`;
 
       const ids = shellResults.map(sr => sr._id);
       await ClaudeMessagesCollection.updateAsync(
@@ -118,19 +119,43 @@ Meteor.methods({
       );
     }
 
+    // Build content blocks for the DB message (display: images + original text)
+    const displayBlocks = [];
+    if (images?.length) {
+      for (const img of images) {
+        displayBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
+      }
+    }
+    displayBlocks.push({ type: 'text', text: message });
+
     // Insert user message immediately so it appears in the chat
-    await ClaudeMessagesCollection.insertAsync({
+    const isQueued = session.status === 'running';
+    const msgId = await ClaudeMessagesCollection.insertAsync({
       sessionId,
       role: 'user',
       type: 'user',
-      content: [{ type: 'text', text: message }],
+      content: displayBlocks,
       contentText: message,
+      ...(isQueued && { queued: true }),
       createdAt: new Date(),
     });
 
+    // Build content for Claude: image blocks + text (with shell context)
+    let messageForClaude;
+    if (images?.length) {
+      const contentBlocks = [];
+      for (const img of images) {
+        contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
+      }
+      contentBlocks.push({ type: 'text', text: textForClaude });
+      messageForClaude = contentBlocks;
+    } else {
+      messageForClaude = textForClaude;
+    }
+
     if (session.status === 'running') {
       // Claude is busy — queue message for later processing
-      queueMessage(sessionId, messageForClaude);
+      queueMessage(sessionId, messageForClaude, msgId);
     } else {
       // Spawn is fire-and-forget from the method's perspective
       spawnClaudeProcess(session, messageForClaude);
@@ -143,7 +168,8 @@ Meteor.methods({
     check(command, String);
     const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
-    const cwd = session.cwd || process.env.HOME + '/projects';
+    let cwd = session.cwd || process.env.HOME + '/projects';
+    if (cwd.startsWith('~/')) cwd = process.env.HOME + cwd.slice(1);
 
     // Insert the command message immediately
     await ClaudeMessagesCollection.insertAsync({
@@ -182,7 +208,7 @@ Meteor.methods({
 
   async 'claudeSessions.clearMessages'(sessionId) {
     check(sessionId, String);
-    clearQueue(sessionId);
+    await clearQueue(sessionId);
     await ClaudeMessagesCollection.removeAsync({ sessionId });
     return ClaudeSessionsCollection.updateAsync(sessionId, {
       $set: {
@@ -195,6 +221,16 @@ Meteor.methods({
         updatedAt: new Date(),
       }
     });
+  },
+
+  async 'claudeSessions.dequeueMessage'(sessionId, msgId) {
+    check(sessionId, String);
+    check(msgId, String);
+    const removed = await dequeueMessage(sessionId, msgId);
+    if (removed) {
+      await ClaudeMessagesCollection.removeAsync(msgId);
+    }
+    return removed;
   },
 
   async 'claudeSessions.changeCwd'(sessionId, newCwd) {

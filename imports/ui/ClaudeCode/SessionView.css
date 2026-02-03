@@ -148,11 +148,44 @@
 }
 
 /* Messages area */
+.ccMessagesWrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .ccMessages {
   flex: 1;
   overflow-y: auto;
   padding: 12px;
   min-height: 0;
+}
+
+.ccScrollToBottom {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0.8;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+
+.ccScrollToBottom:hover {
+  opacity: 1;
 }
 
 .ccEmptyChat {
@@ -193,6 +226,73 @@
   font-size: 11px;
   color: var(--muted);
   margin-left: 4px;
+}
+
+/* Queued messages stack (above composer) */
+.ccQueuedStack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+  border-top: 1px dashed var(--border);
+  background: rgba(var(--black-rgb), 0.08);
+  flex-shrink: 0;
+}
+
+.ccQueuedItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(var(--black-rgb), 0.1);
+  border-left: 3px dashed var(--muted);
+  opacity: 0.7;
+}
+
+.ccQueuedText {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ccQueuedBadge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(var(--white-rgb), 0.08);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.ccDequeueBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  border-radius: 3px;
+  background: rgba(var(--danger-rgb), 0.1);
+  color: var(--danger);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.ccDequeueBtn:hover {
+  background: rgba(var(--danger-rgb), 0.25);
+  border-color: rgba(var(--danger-rgb), 0.6);
 }
 
 /* Error bar */
@@ -312,3 +412,64 @@ select.ccPermModeSelect.ccMode-plan { color: var(--info-400); }
 select.ccPermModeSelect.ccMode-acceptEdits { color: var(--success-text); }
 select.ccPermModeSelect.ccMode-dontAsk { color: var(--warning); }
 select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
+
+/* Drag-over state */
+.ccComposer--dragover {
+  background: rgba(var(--primary-rgb), 0.08);
+  border-color: rgba(var(--primary-rgb), 0.4);
+}
+
+/* Composer needs flex-wrap for image preview above textarea */
+.ccComposer {
+  flex-wrap: wrap;
+}
+
+/* Image preview strip */
+.ccImagePreview {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.ccImageThumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ccImageThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ccImageRemove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ccImageThumb:hover .ccImageRemove {
+  opacity: 1;
+}

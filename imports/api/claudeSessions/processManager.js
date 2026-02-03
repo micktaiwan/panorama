@@ -36,21 +36,42 @@ const activeProcesses = new Map();
 // In-memory map: sessionId -> { requestId, toolName, toolInput }
 const pendingPermissions = new Map();
 
-// In-memory message queue: sessionId -> [string, ...]
+// In-memory message queue: sessionId -> [{ msgId, content }, ...]
 const messageQueues = new Map();
 
-export function queueMessage(sessionId, message) {
+export function queueMessage(sessionId, message, msgId) {
   if (!messageQueues.has(sessionId)) messageQueues.set(sessionId, []);
-  messageQueues.get(sessionId).push(message);
-  log('queued message for', sessionId, '| queue size:', messageQueues.get(sessionId).length);
+  messageQueues.get(sessionId).push({ msgId, content: message });
+  log('queued message for', sessionId, '| msgId:', msgId, '| queue size:', messageQueues.get(sessionId).length);
   syncQueueCount(sessionId);
 }
 
-export function clearQueue(sessionId) {
+export async function clearQueue(sessionId) {
   const q = messageQueues.get(sessionId);
-  if (q?.length) log('clearing queue for', sessionId, '| discarding', q.length, 'messages');
+  if (q?.length) {
+    log('clearing queue for', sessionId, '| discarding', q.length, 'messages');
+    // Mark all queued messages as no longer queued in DB
+    for (const entry of q) {
+      if (entry.msgId) {
+        await ClaudeMessagesCollection.updateAsync(entry.msgId, { $unset: { queued: 1 } });
+      }
+    }
+  }
   messageQueues.delete(sessionId);
   syncQueueCount(sessionId);
+}
+
+export async function dequeueMessage(sessionId, msgId) {
+  const q = messageQueues.get(sessionId);
+  if (!q) return false;
+  const idx = q.findIndex(entry => entry.msgId === msgId);
+  if (idx === -1) return false;
+  q.splice(idx, 1);
+  const remaining = q.length;
+  if (remaining === 0) messageQueues.delete(sessionId);
+  log('dequeued message', msgId, 'for', sessionId, '| remaining:', remaining);
+  syncQueueCount(sessionId);
+  return true;
 }
 
 function hasQueuedMessages(sessionId) {
@@ -67,13 +88,17 @@ function syncQueueCount(sessionId) {
 async function drainQueue(sessionId) {
   const q = messageQueues.get(sessionId);
   if (!q?.length) return;
-  const nextMsg = q.shift();
+  const entry = q.shift();
   if (q.length === 0) messageQueues.delete(sessionId);
   log('drainQueue for', sessionId, '| processing next message, remaining:', q?.length || 0);
   syncQueueCount(sessionId);
+  // Mark the message as no longer queued and update createdAt so it appears at the right position in the flow
+  if (entry.msgId) {
+    await ClaudeMessagesCollection.updateAsync(entry.msgId, { $unset: { queued: 1 }, $set: { createdAt: new Date() } });
+  }
   const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
   if (session) {
-    spawnClaudeProcess(session, nextMsg);
+    spawnClaudeProcess(session, entry.content);
   }
 }
 
@@ -82,7 +107,7 @@ export function isRunning(sessionId) {
 }
 
 export async function killProcess(sessionId) {
-  clearQueue(sessionId);
+  await clearQueue(sessionId);
   pendingPermissions.delete(sessionId);
   const proc = activeProcesses.get(sessionId);
   if (!proc) {
@@ -238,7 +263,8 @@ export function execShellCommand(sessionId, command, cwd) {
 export async function spawnClaudeProcess(session, message) {
   const sessionId = session._id;
   log('--- spawnClaudeProcess ---');
-  log('sessionId:', sessionId, 'message:', message.slice(0, 100));
+  const messagePreview = typeof message === 'string' ? message.slice(0, 100) : `[${message.length} content blocks]`;
+  log('sessionId:', sessionId, 'message:', messagePreview);
 
   // Kill any existing process for this session
   if (activeProcesses.has(sessionId)) {
@@ -395,6 +421,13 @@ export async function spawnClaudeProcess(session, message) {
         }
         await ClaudeSessionsCollection.updateAsync(sessionId, { $set: errorUpdate });
         currentAssistantMsgId = null;
+        // Remove finished process before draining queue so spawnClaudeProcess
+        // won't call killProcess (which clears the queue)
+        const errProc = activeProcesses.get(sessionId);
+        if (errProc === proc) {
+          activeProcesses.delete(sessionId);
+          pendingPermissions.delete(sessionId);
+        }
         drainQueue(sessionId);
         return;
       }
@@ -459,6 +492,13 @@ export async function spawnClaudeProcess(session, message) {
       await ClaudeSessionsCollection.updateAsync(sessionId, { $set: sessionUpdate });
       log('session → idle, stats updated');
       currentAssistantMsgId = null;
+      // Remove finished process before draining queue so spawnClaudeProcess
+      // won't call killProcess (which clears the queue)
+      const doneProc = activeProcesses.get(sessionId);
+      if (doneProc === proc) {
+        activeProcesses.delete(sessionId);
+        pendingPermissions.delete(sessionId);
+      }
       drainQueue(sessionId);
       return;
     }

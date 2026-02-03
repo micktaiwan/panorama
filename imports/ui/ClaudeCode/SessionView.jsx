@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
@@ -34,7 +34,12 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
   const [editingSettings, setEditingSettings] = useState(false);
   const [localMessages, setLocalMessages] = useState([]);
   const [commandIdx, setCommandIdx] = useState(0);
-  const messagesEndRef = useRef(null);
+  const [attachedImages, setAttachedImages] = useState([]);
+  const [dragOver, setDragOver] = useState(false);
+  const messagesContainerRef = useRef(null);
+  const stuckToBottom = useRef(true);
+  const isAutoScrolling = useRef(false);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const textareaRef = useRef(null);
 
   useSubscribe('claudeSessions');
@@ -45,13 +50,16 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     [sessionId]
   )[0];
 
-  const messages = useFind(() =>
+  const allMessages = useFind(() =>
     ClaudeMessagesCollection.find(
       sessionId ? { sessionId } : { sessionId: '__none__' },
       { sort: { createdAt: 1 } }
     ),
     [sessionId]
   );
+
+  const flowMessages = useMemo(() => allMessages.filter(m => !m.queued), [allMessages]);
+  const queuedMessages = useMemo(() => allMessages.filter(m => m.queued), [allMessages]);
 
   const isRunning = session?.status === 'running';
   const isFrozen = session?.status === 'error';
@@ -77,7 +85,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     const groups = [];
     let toolGroup = null;
 
-    for (const msg of messages) {
+    for (const msg of flowMessages) {
       if (isToolOnly(msg)) {
         if (!toolGroup) {
           toolGroup = { type: 'tool-group', messages: [], key: msg._id };
@@ -94,7 +102,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     if (toolGroup) groups.push(toolGroup);
 
     return groups;
-  }, [messages]);
+  }, [flowMessages]);
 
   // Slash command popup
   const showCommands = input.startsWith('/');
@@ -189,18 +197,53 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     }
   };
 
-  // Instant scroll on load/session switch, smooth only for new messages during conversation
-  const scrolledSession = useRef(null);
+  // Scroll helpers
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    if (behavior === 'instant') {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      isAutoScrolling.current = true;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      setTimeout(() => { isAutoScrolling.current = false; }, 1000);
+    }
+    stuckToBottom.current = true;
+    setShowScrollDown(false);
+  }, []);
+
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+    if (isAutoScrolling.current) {
+      if (atBottom) isAutoScrolling.current = false;
+      return;
+    }
+    stuckToBottom.current = atBottom;
+    setShowScrollDown(!atBottom);
+  };
+
+  // Auto-scroll: instant until first content on session switch, smooth for new messages
+  const initialScrollDone = useRef(null);
   useEffect(() => {
-    const isInitial = scrolledSession.current !== sessionId;
-    messagesEndRef.current?.scrollIntoView({ behavior: isInitial ? 'instant' : 'smooth' });
-    if (messages.length > 0) scrolledSession.current = sessionId;
-  }, [sessionId, messages.length, messages[messages.length - 1]?.contentText, localMessages.length, isRunning]);
+    const needsInitialScroll = initialScrollDone.current !== sessionId;
+    if (needsInitialScroll) {
+      stuckToBottom.current = true;
+      setShowScrollDown(false);
+      scrollToBottom('instant');
+      if (flowMessages.length > 0) initialScrollDone.current = sessionId;
+      return;
+    }
+    if (stuckToBottom.current) {
+      scrollToBottom('smooth');
+    }
+  }, [sessionId, flowMessages, localMessages.length, isRunning, scrollToBottom]);
 
   // Clear local messages when new DB messages arrive
   useEffect(() => {
     if (localMessages.length > 0) setLocalMessages([]);
-  }, [messages.length]);
+  }, [allMessages.length]);
 
   // Focus textarea when session becomes idle or panel becomes active
   useEffect(() => {
@@ -237,8 +280,55 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     );
   }
 
-  const sendMessage = (text) => {
-    Meteor.call('claudeSessions.sendMessage', sessionId, text, (err) => {
+  const addImages = (files) => {
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    for (const file of imageFiles) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1];
+        setAttachedImages(prev => [...prev, {
+          data: base64,
+          mediaType: file.type,
+          previewUrl: reader.result,
+          name: file.name,
+        }]);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = (idx) => {
+    setAttachedImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (isFrozen) return;
+    addImages(e.dataTransfer.files);
+  };
+
+  const handlePaste = (e) => {
+    const files = Array.from(e.clipboardData?.files || []);
+    if (files.some(f => f.type.startsWith('image/'))) {
+      e.preventDefault();
+      addImages(files);
+    }
+  };
+
+  const sendMessage = (text, images) => {
+    Meteor.call('claudeSessions.sendMessage', sessionId, text, images || null, (err) => {
       if (err) notify({ message: `Send failed: ${err.reason || err.message}`, kind: 'error' });
     });
     textareaRef.current?.focus();
@@ -247,10 +337,10 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
   const handleSend = () => {
     if (isFrozen) return;
     const text = input.trim();
-    if (!text) return;
+    if (!text && attachedImages.length === 0) return;
 
     // Intercept shell escape
-    if (text.startsWith('!')) {
+    if (text.startsWith('!') && attachedImages.length === 0) {
       const shellCmd = text.slice(1).trim();
       if (!shellCmd) return;
       setInput('');
@@ -261,7 +351,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     }
 
     // Intercept slash commands
-    if (text.startsWith('/')) {
+    if (text.startsWith('/') && attachedImages.length === 0) {
       const spaceIdx = text.indexOf(' ');
       const cmdName = spaceIdx > 0 ? text.slice(1, spaceIdx) : text.slice(1);
       const args = spaceIdx > 0 ? text.slice(spaceIdx + 1) : '';
@@ -273,8 +363,12 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
       }
     }
 
+    const images = attachedImages.length > 0
+      ? attachedImages.map(({ data, mediaType }) => ({ data, mediaType }))
+      : null;
     setInput('');
-    sendMessage(text);
+    setAttachedImages([]);
+    sendMessage(text || 'Describe this image.', images);
   };
 
   const handleStop = () => {
@@ -438,37 +532,41 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
       )}
 
       {/* Messages area */}
-      <div className="ccMessages scrollArea">
-        {messages.length === 0 && localMessages.length === 0 && (
-          <p className="muted ccEmptyChat">No messages yet. Send a message to start.</p>
+      <div className="ccMessagesWrapper">
+        <div className="ccMessages scrollArea" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
+          {flowMessages.length === 0 && localMessages.length === 0 && (
+            <p className="muted ccEmptyChat">No messages yet. Send a message to start.</p>
+          )}
+          {groupedMessages.map((group, idx) =>
+            group.type === 'tool-group'
+              ? <ToolGroupBlock
+                  key={group.key}
+                  messages={group.messages}
+                  autoExpanded={isRunning && idx === groupedMessages.length - 1}
+                  onAnswer={sendMessage}
+                />
+              : <MessageBubble
+                  key={group.key}
+                  message={group.message}
+                  onAnswer={sendMessage}
+                  sessionId={sessionId}
+                />
+          )}
+          {localMessages.map((msg) => (
+            <MessageBubble key={msg._id} message={msg} />
+          ))}
+          {isRunning && (
+            <div className="ccTypingIndicator">
+              <span className="ccTypingDot" /><span className="ccTypingDot" /><span className="ccTypingDot" />
+              {session.queuedCount > 0 && (
+                <span className="ccQueuedCount">{session.queuedCount} queued</span>
+              )}
+            </div>
+          )}
+        </div>
+        {showScrollDown && (
+          <button className="ccScrollToBottom" onClick={() => scrollToBottom('smooth')}>↓</button>
         )}
-        {groupedMessages.map((group, idx) =>
-          group.type === 'tool-group'
-            ? <ToolGroupBlock
-                key={group.key}
-                messages={group.messages}
-                autoExpanded={isRunning && idx === groupedMessages.length - 1}
-                onAnswer={sendMessage}
-              />
-            : <MessageBubble
-                key={group.key}
-                message={group.message}
-                onAnswer={sendMessage}
-                sessionId={sessionId}
-              />
-        )}
-        {localMessages.map((msg) => (
-          <MessageBubble key={msg._id} message={msg} />
-        ))}
-        {isRunning && (
-          <div className="ccTypingIndicator">
-            <span className="ccTypingDot" /><span className="ccTypingDot" /><span className="ccTypingDot" />
-            {session.queuedCount > 0 && (
-              <span className="ccQueuedCount">{session.queuedCount} queued</span>
-            )}
-          </div>
-        )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Error / frozen banner */}
@@ -481,8 +579,33 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         <div className="ccError">{session.lastError}</div>
       ) : null}
 
+      {/* Queued messages stack */}
+      {queuedMessages.length > 0 && (
+        <div className="ccQueuedStack">
+          {queuedMessages.map(msg => (
+            <div key={msg._id} className="ccQueuedItem">
+              <span className="ccQueuedBadge">queued</span>
+              <span className="ccQueuedText">{msg.contentText}</span>
+              <button
+                className="ccDequeueBtn"
+                onClick={() => {
+                  Meteor.call('claudeSessions.dequeueMessage', sessionId, msg._id, (err) => {
+                    if (err) notify({ message: `Dequeue failed: ${err.reason || err.message}`, kind: 'error' });
+                  });
+                }}
+              >&times;</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Composer */}
-      <div className="ccComposer">
+      <div
+        className={`ccComposer${dragOver ? ' ccComposer--dragover' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {!isFrozen && filteredCommands.length > 0 && (
           <CommandPopup
             commands={filteredCommands}
@@ -490,12 +613,23 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
             onSelect={handleCommandSelect}
           />
         )}
+        {attachedImages.length > 0 && (
+          <div className="ccImagePreview">
+            {attachedImages.map((img, i) => (
+              <div key={i} className="ccImageThumb">
+                <img src={img.previewUrl} alt={img.name} />
+                <button className="ccImageRemove" onClick={() => removeImage(i)}>&times;</button>
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           className="ccInput"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={isFrozen ? 'Session ended with error. Start a new session to continue.' : 'Type a message... (Enter to send, !cmd for shell, /help for commands)'}
           rows={3}
           disabled={isFrozen}

@@ -9,7 +9,6 @@ const renderMarkdown = (text) => {
 };
 
 const basename = (path) => path?.split('/').pop() || path;
-const truncate = (str, max) => str?.length > max ? str.slice(0, max) + '\u2026' : str;
 
 const formatToolLabel = (block) => {
   const name = block.name || 'tool';
@@ -19,21 +18,21 @@ const formatToolLabel = (block) => {
     case 'Read':
       return input.file_path ? `Read: ${basename(input.file_path)}` : 'Read';
     case 'Grep':
-      return input.pattern ? `Grep: "${truncate(input.pattern, 30)}"` : 'Grep';
+      return input.pattern ? `Grep: "${input.pattern}"` : 'Grep';
     case 'Glob':
-      return input.pattern ? `Glob: ${truncate(input.pattern, 30)}` : 'Glob';
+      return input.pattern ? `Glob: ${input.pattern}` : 'Glob';
     case 'Bash':
-      return input.command ? `Bash: ${truncate(input.command, 40)}` : 'Bash';
+      return input.command ? `Bash: ${input.command}` : 'Bash';
     case 'Edit':
       return input.file_path ? `Edit: ${basename(input.file_path)}` : 'Edit';
     case 'Write':
       return input.file_path ? `Write: ${basename(input.file_path)}` : 'Write';
     case 'Task':
-      return input.description ? `Task: ${truncate(input.description, 30)}` : 'Task';
+      return input.description ? `Task: ${input.description}` : 'Task';
     case 'WebFetch':
-      return input.url ? `WebFetch: ${truncate(input.url, 40)}` : 'WebFetch';
+      return input.url ? `WebFetch: ${input.url}` : 'WebFetch';
     case 'WebSearch':
-      return input.query ? `WebSearch: "${truncate(input.query, 30)}"` : 'WebSearch';
+      return input.query ? `WebSearch: "${input.query}"` : 'WebSearch';
     default:
       return name;
   }
@@ -140,6 +139,21 @@ const ToolResultBlock = ({ block }) => {
   );
 };
 
+const ImageBlock = ({ block }) => {
+  const src = block.source?.type === 'base64'
+    ? `data:${block.source.media_type};base64,${block.source.data}`
+    : null;
+  if (!src) return null;
+  return (
+    <img
+      className="ccImageBlock"
+      src={src}
+      alt="Attached image"
+      onClick={() => window.open(src, '_blank')}
+    />
+  );
+};
+
 const ContentBlock = ({ block, onAnswer }) => {
   if (block.type === 'text') {
     return (
@@ -148,6 +162,9 @@ const ContentBlock = ({ block, onAnswer }) => {
         dangerouslySetInnerHTML={{ __html: renderMarkdown(block.text) }}
       />
     );
+  }
+  if (block.type === 'image') {
+    return <ImageBlock block={block} />;
   }
   if (block.type === 'tool_use') {
     if (block.name === 'AskUserQuestion') {
