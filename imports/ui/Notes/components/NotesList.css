@@ -28,6 +28,16 @@
   margin-bottom: 4px;
   border-radius: 6px;
   position: relative;
+  cursor: grab;
+}
+
+.note-item-row:active {
+  cursor: grabbing;
+}
+
+.note-item-row.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
 }
 
 .note-item-row .note-delete-btn {
@@ -94,7 +104,35 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Claude Code project icon */
+.note-claude-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--purple);
+}
+
+/* Claude Code project note accent */
+.note-item.claude-project {
+  background: rgba(var(--purple-rgb), 0.08) !important;
+}
+
+.note-item.claude-project:hover {
+  background: rgba(var(--purple-rgb), 0.14) !important;
+}
+
+.note-item.claude-project.open {
+  background: rgba(var(--purple-rgb), 0.12) !important;
+}
+
+.note-item.claude-project.active {
+  background: rgba(var(--purple-rgb), 0.16) !important;
+  border-color: var(--purple) !important;
 }
 
 /* note-preview removed */

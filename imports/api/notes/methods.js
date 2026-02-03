@@ -40,8 +40,11 @@ Meteor.methods({
       }
     }
 
-    // Only update updatedAt if content has changed
-    const updateDoc = hasChanged ? { ...sanitized, updatedAt: new Date() } : sanitized;
+    // If updatedAt is explicitly provided (for reordering), use it as-is
+    // Otherwise, only update updatedAt if content has changed
+    const updateDoc = modifier.updatedAt
+      ? sanitized
+      : (hasChanged ? { ...sanitized, updatedAt: new Date() } : sanitized);
     const res = await NotesCollection.updateAsync(noteId, { $set: updateDoc });
 
     try {

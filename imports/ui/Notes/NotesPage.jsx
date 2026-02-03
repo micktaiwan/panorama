@@ -623,6 +623,15 @@ export const NotesPage = () => {
     }
   };
 
+  const handleReorderNote = async (noteId, newUpdatedAt) => {
+    try {
+      await Meteor.callAsync('notes.update', noteId, { updatedAt: newUpdatedAt });
+    } catch (error) {
+      console.error('Error reordering note:', error);
+      notify({ message: 'Error reordering note', kind: 'error' });
+    }
+  };
+
   const handleCreateNote = async () => {
     if (isCreatingNote) return; // Prevent multiple simultaneous calls
     
@@ -702,6 +711,7 @@ export const NotesPage = () => {
           projectNamesById={projectNamesById}
           onNoteClick={openNote}
           onRequestClose={closeTab}
+          onReorderNote={handleReorderNote}
         />
       </div>
 
