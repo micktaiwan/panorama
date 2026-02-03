@@ -209,7 +209,7 @@ body {
   --notes-open-border: #93c5fd;
 
   /* Misc */
-  --tooltip-bg: #1f2937;
+  --tooltip-bg: #ffffff;
 }
 
 html, body, #react-target {
@@ -294,11 +294,22 @@ button { cursor: pointer; }
 .btn.danger {
   border-color: var(--danger);
   background: var(--danger);
-  color: var(--text-bright);
+  color: #fff;
 }
 
 .btn.danger:hover {
   background: var(--danger-600);
+}
+
+/* Softer red in light mode */
+.theme-light .btn.danger {
+  background: var(--danger-400);
+  border-color: var(--danger-400);
+}
+
+.theme-light .btn.danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 .btn.success {

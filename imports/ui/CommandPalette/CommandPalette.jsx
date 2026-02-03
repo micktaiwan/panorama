@@ -23,24 +23,24 @@ const Tabs = ({ active, onChange }) => {
         onClick={() => onChange(0)}
       >Search</button>
       <button
-        className={`cmdTab ml8${active === 1 ? ' active' : ''}`}
+        className={`cmdTab${active === 1 ? ' active' : ''}`}
         role="tab"
         aria-selected={active === 1}
         onClick={() => onChange(1)}
       >Create Task</button>
       <button
-        className={`cmdTab ml8${active === 2 ? ' active' : ''}`}
+        className={`cmdTab${active === 2 ? ' active' : ''}`}
         role="tab"
         aria-selected={active === 2}
         onClick={() => onChange(2)}
       >Create Note</button>
       <button
-        className={`cmdTab ml8${active === 3 ? ' active' : ''}`}
+        className={`cmdTab${active === 3 ? ' active' : ''}`}
         role="tab"
         aria-selected={active === 3}
         onClick={() => onChange(3)}
       >Create Alarm</button>
-      <span className="muted ml8">(Tab to switch)</span>
+      <span className="cmdTabsHint"><kbd>Tab</kbd> to switch</span>
     </div>
   );
 };
@@ -236,7 +236,7 @@ const SearchPane = ({ onClose }) => {
         onActiveChange={setSearchActiveIdx}
         stale={searchDirty}
       />
-      <p className="muted">Tip: ⌘K / Ctrl+K to open this anywhere.</p>
+      <p className="cmdTip">Tip: ⌘K / Ctrl+K to open this anywhere.</p>
     </>
   );
 };
@@ -320,7 +320,7 @@ const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
         />
       </div>
       <div className="formRow mt8">
-        <label htmlFor="cmd_new_task_project">Project (optional)</label>
+        <label htmlFor="cmd_new_task_project">Project <span className="optional">(optional)</span></label>
         <select
           id="cmd_new_task_project"
           className="afSelect"
@@ -335,7 +335,7 @@ const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
         </select>
       </div>
       <div className="formRow mt8">
-        <label htmlFor="cmd_new_task_deadline">Deadline (optional)</label>
+        <label htmlFor="cmd_new_task_deadline">Deadline <span className="optional">(optional)</span></label>
         <InlineDate
           id="cmd_new_task_deadline"
           value={newTaskDeadline}
@@ -343,9 +343,9 @@ const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
           placeholder="No deadline"
         />
       </div>
-      <div className="formRow mt12">
-        <button className="btn btn-primary" disabled={creatingTask} onClick={handleCreateTask}>Create task</button>
-        <span className="muted ml8">Enter to submit</span>
+      <div className="formRow formRowSubmit mt12">
+        <span className="kbdHint"><kbd>↵</kbd> to submit</span>
+        <button className="btn btn-primary ml8" disabled={creatingTask} onClick={handleCreateTask}>Create task</button>
       </div>
     </div>
   );
@@ -452,7 +452,7 @@ const CreateNotePane = ({ defaultProjectId = '', isOpen = false }) => {
         />
       </div>
       <div className="formRow mt8">
-        <label htmlFor="cmd_new_note_project">Project (optional)</label>
+        <label htmlFor="cmd_new_note_project">Project <span className="optional">(optional)</span></label>
         <select
           id="cmd_new_note_project"
           className="afSelect"
@@ -466,9 +466,9 @@ const CreateNotePane = ({ defaultProjectId = '', isOpen = false }) => {
           ))}
         </select>
       </div>
-      <div className="formRow mt12">
-        <button className="btn btn-primary" disabled={creating} onClick={handleCreateNote}>Create note</button>
-        <span className="muted ml8">Enter to submit (if title or content)</span>
+      <div className="formRow formRowSubmit mt12">
+        <span className="kbdHint"><kbd>↵</kbd> to submit</span>
+        <button className="btn btn-primary ml8" disabled={creating} onClick={handleCreateNote}>Create note</button>
       </div>
     </div>
   );
@@ -555,9 +555,9 @@ const CreateAlarmPane = ({ isOpen = false }) => {
           }}
         />
       </div>
-      <div className="formRow mt12">
-        <button className="btn btn-primary" disabled={creating} onClick={handleCreateAlarm}>Create alarm</button>
-        <span className="muted ml8">Enter to submit</span>
+      <div className="formRow formRowSubmit mt12">
+        <span className="kbdHint"><kbd>↵</kbd> to submit</span>
+        <button className="btn btn-primary ml8" disabled={creating} onClick={handleCreateAlarm}>Create alarm</button>
       </div>
     </div>
   );
@@ -630,14 +630,14 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
       title="Command Palette"
       icon="⌘"
       leftPanel={(
-        <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
+        <svg className="cmdPaletteIcon" width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
           <defs>
             <linearGradient id="cmdPaletteGrad" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#4f46e5" />
               <stop offset="100%" stopColor="#22c55e" />
             </linearGradient>
           </defs>
-          <rect x="0" y="0" width="72" height="72" rx="12" fill="#0b1020" stroke="rgba(255,255,255,0.08)" />
+          <rect className="cmdPaletteIconBg" x="0" y="0" width="72" height="72" rx="12" />
           <g fill="none" stroke="url(#cmdPaletteGrad)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="30" cy="30" r="10" />
             <line x1="38" y1="38" x2="50" y2="50" />
