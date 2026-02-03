@@ -1,4 +1,4 @@
-.deadlineDisplay { cursor: pointer; color: var(--muted); min-width: 160px; background: transparent; border: none; padding: 0; }
+.deadlineDisplay { cursor: pointer; color: var(--muted); min-width: 160px; background: transparent; border: none; padding: 0; text-align: left; }
 .deadlineDisplay:hover { text-decoration: underline; }
 .deadlineDisplay.dueLater { color: var(--text); }
 

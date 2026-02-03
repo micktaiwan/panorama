@@ -1,12 +1,89 @@
-.cmdTabs { display: flex; align-items: center; margin-bottom: 12px; }
-.cmdTab { padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 6px; }
-.cmdTab + .cmdTab { margin-left: 8px; }
-.cmdTab.active { border-color: var(--primary); color: var(--primary); }
+/* Tabs - segment control style */
+.cmdTabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  background: var(--surface);
+  padding: 4px;
+  border-radius: 8px;
+}
+.cmdTab {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s, color 0.15s;
+}
+.cmdTab:hover { background: var(--border); }
+.cmdTab.active {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.cmdTabsHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cmdTabsHint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: inherit;
+  font-size: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--border);
+}
+
+/* kbd hints */
+.kbdHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.kbdHint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: inherit;
+  font-size: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--border);
+}
+
+/* Left panel icon theme adaptation */
+.cmdPaletteIcon {
+  display: block;
+}
+.cmdPaletteIconBg {
+  fill: var(--bg-deep, var(--surface));
+  stroke: var(--border);
+  stroke-opacity: 0.5;
+}
+
+/* Create panes */
 .createTaskPane { margin-top: 8px; }
 .formRow { display: flex; align-items: center; }
-.formRow label { width: 140px; color: var(--muted); }
+.formRow label { width: 120px; color: var(--muted); flex-shrink: 0; font-size: 13px; }
+.formRow label .optional { font-size: 11px; opacity: 0.7; }
 .formRow .afInput { flex: 1; }
 .formRow .afSelect { flex: 1; }
+.formRowSubmit { justify-content: flex-end; }
+
+/* Search pane tip */
+.cmdTip { font-size: 11px; color: var(--muted); margin-top: 12px; }
+
 .mt8 { margin-top: 8px; }
 .mt12 { margin-top: 12px; }
 .ml8 { margin-left: 8px; }
