@@ -17,6 +17,10 @@ const STORAGE_KEY = 'claude-activePanel';
 const PROJECT_STORAGE_KEY = 'claude-activeProject';
 const SIDEBAR_STORAGE_KEY = 'claude-sidebar';
 const ACTIVE_SIDEBAR_STORAGE_KEY = 'claude-activeSidebar';
+const SIDEBAR_WIDTH_STORAGE_KEY = 'claude-sidebarWidth';
+
+const MIN_SIDEBAR_WIDTH = 350;
+const DEFAULT_SIDEBAR_WIDTH = 500;
 
 const serializePanel = (panel) => panel ? JSON.stringify(panel) : null;
 const deserializePanel = (str) => {
@@ -44,8 +48,21 @@ export const ClaudeCodePage = ({ projectId }) => {
   const [sidebarItems, setSidebarItems] = useState([]); // array of IDs (noteId or 'file:/path')
   const [activeSidebarId, setActiveSidebarId] = useState(null);
   const [lastFocus, setLastFocus] = useState('session'); // 'session' | 'sidebar'
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem(`${SIDEBAR_WIDTH_STORAGE_KEY}-${projectId}`);
+    return saved ? Number(saved) : DEFAULT_SIDEBAR_WIDTH;
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const panelRefs = useRef([]);
   const restoredForProject = useRef(null);
+
+  // Restore sidebar width when project changes
+  useEffect(() => {
+    if (projectId) {
+      const saved = localStorage.getItem(`${SIDEBAR_WIDTH_STORAGE_KEY}-${projectId}`);
+      setSidebarWidth(saved ? Number(saved) : DEFAULT_SIDEBAR_WIDTH);
+    }
+  }, [projectId]);
 
   // Redirect to last active project if none in URL
   useEffect(() => {
@@ -305,6 +322,35 @@ export const ClaudeCodePage = ({ projectId }) => {
     openInSidebar(fileIdFromPath(filePath));
   };
 
+  const handleSidebarResizeStart = useCallback((e) => {
+    e.preventDefault();
+    setIsResizingSidebar(true);
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const maxWidth = window.innerWidth * 0.6;
+
+    const onMouseMove = (ev) => {
+      const delta = startX - ev.clientX;
+      const newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(maxWidth, startWidth + delta));
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      setIsResizingSidebar(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      // Persist at end of drag
+      if (projectId) {
+        const el = document.querySelector('.ccNoteSidebar');
+        const finalWidth = el ? el.offsetWidth : startWidth;
+        localStorage.setItem(`${SIDEBAR_WIDTH_STORAGE_KEY}-${projectId}`, String(finalWidth));
+      }
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [sidebarWidth, projectId]);
+
   const activePanelIdx = activePanel?.type === 'session'
     ? sessions.findIndex(s => s._id === activePanel.id)
     : -1;
@@ -319,7 +365,7 @@ export const ClaudeCodePage = ({ projectId }) => {
   const hasSidebar = sidebarItems.length > 0;
 
   return (
-    <div className="ccPage">
+    <div className={`ccPage${isResizingSidebar ? ' ccResizing' : ''}`}>
       <ProjectList
         activeProjectId={projectId}
         homeDir={homeDir}
@@ -404,8 +450,11 @@ export const ClaudeCodePage = ({ projectId }) => {
           </div>
           {hasSidebar && (
             <>
-              <div className="ccPanelDivider" />
-              <div className="ccNoteSidebar">
+              <div
+                className={`ccSidebarResizeHandle${isResizingSidebar ? ' ccSidebarResizing' : ''}`}
+                onMouseDown={handleSidebarResizeStart}
+              />
+              <div className="ccNoteSidebar" style={{ width: sidebarWidth }}>
                 {sidebarItems.length > 1 && (
                   <div className="ccSidebarTabs">
                     {sidebarItems.map((id) => (
