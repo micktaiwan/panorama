@@ -63,6 +63,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
 
   const isRunning = session?.status === 'running';
   const isFrozen = session?.status === 'error';
+  const displayModel = (session?.model || session?.activeModel || '').trim() || null;
 
   // Auto-clear unseenCompleted when viewing this session
   useEffect(() => {
@@ -657,6 +658,11 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
           <option value="dontAsk">▶ Don&#39;t Ask</option>
           <option value="bypassPermissions">◆ Bypass</option>
         </select>
+        {displayModel && (
+          <span className="ccModelBadge" title={displayModel}>
+            {displayModel.replace(/^claude-/, '').replace(/-\d{8}$/, '')}
+          </span>
+        )}
         <span className={`ccStatusBadge ccStatus-${session.status}`}>{session.status}</span>
         <div className="ccStatusBarSpacer" />
         {session.totalCostUsd > 0 && <span>${session.totalCostUsd.toFixed(4)}</span>}
