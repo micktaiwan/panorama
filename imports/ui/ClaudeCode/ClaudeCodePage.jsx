@@ -317,7 +317,22 @@ export const ClaudeCodePage = ({ projectId }) => {
       notify({ message: 'File dialog only available in Electron', kind: 'error' });
       return;
     }
-    const filePath = await window.electron.openFileDialog({ defaultPath: activeProject?.cwd });
+
+    // Determine default path: active file's directory > last file's directory > project cwd
+    let defaultPath = activeProject?.cwd;
+
+    if (isFileItem(activeSidebarId)) {
+      const currentFilePath = filePathFromId(activeSidebarId);
+      defaultPath = currentFilePath.substring(0, currentFilePath.lastIndexOf('/'));
+    } else {
+      const lastFile = [...sidebarItems].reverse().find(isFileItem);
+      if (lastFile) {
+        const lastFilePath = filePathFromId(lastFile);
+        defaultPath = lastFilePath.substring(0, lastFilePath.lastIndexOf('/'));
+      }
+    }
+
+    const filePath = await window.electron.openFileDialog({ defaultPath });
     if (!filePath) return;
     openInSidebar(fileIdFromPath(filePath));
   };
