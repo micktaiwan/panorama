@@ -413,6 +413,19 @@ select.ccPermModeSelect.ccMode-acceptEdits { color: var(--success-text); }
 select.ccPermModeSelect.ccMode-dontAsk { color: var(--warning); }
 select.ccPermModeSelect.ccMode-bypassPermissions { color: var(--danger-400); }
 
+.ccModelBadge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(var(--primary-rgb), 0.15);
+  color: var(--primary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+
 /* Drag-over state */
 .ccComposer--dragover {
   background: rgba(var(--primary-rgb), 0.08);
