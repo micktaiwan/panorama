@@ -115,11 +115,24 @@ export const ClaudeCodePage = ({ projectId }) => {
     }
   }, [sessions, activePanel]);
 
-  // Validate sidebar items: remove note IDs that no longer exist
+  // Validate sidebar items: remove notes that no longer exist and files outside project cwd
   useEffect(() => {
     if (sidebarItems.length === 0) return;
+    // Normalize cwd: expand ~ to homeDir and remove trailing slashes
+    let cwd = activeProject?.cwd;
+    if (cwd && homeDir && cwd.startsWith('~')) {
+      cwd = cwd.replace(/^~/, homeDir);
+    }
+    cwd = cwd?.replace(/\/+$/, '');
     const validItems = sidebarItems.filter(id => {
-      if (isFileItem(id)) return true; // files don't need validation against notes
+      if (isFileItem(id)) {
+        // Files must be within project's cwd (if cwd is set)
+        if (cwd) {
+          const filePath = filePathFromId(id);
+          return filePath === cwd || filePath.startsWith(cwd + '/');
+        }
+        return true;
+      }
       return notes.find(n => n._id === id);
     });
     if (validItems.length !== sidebarItems.length) {
@@ -128,7 +141,7 @@ export const ClaudeCodePage = ({ projectId }) => {
         setActiveSidebarId(validItems.length > 0 ? validItems[validItems.length - 1] : null);
       }
     }
-  }, [notes, sidebarItems, activeSidebarId]);
+  }, [notes, sidebarItems, activeSidebarId, activeProject?.cwd, homeDir]);
 
   // Restore active panel and sidebar from localStorage
   useEffect(() => {
@@ -165,10 +178,22 @@ export const ClaudeCodePage = ({ projectId }) => {
     }
 
     // Restore sidebar
+    // Normalize cwd: expand ~ to homeDir and remove trailing slashes
+    let cwd = activeProject?.cwd;
+    if (cwd && homeDir && cwd.startsWith('~')) {
+      cwd = cwd.replace(/^~/, homeDir);
+    }
+    cwd = cwd?.replace(/\/+$/, '');
     if (savedSidebar.length > 0) {
-      // Filter valid note IDs
+      // Filter valid items: notes must exist, files must be in project cwd
       const validItems = savedSidebar.filter(id => {
-        if (isFileItem(id)) return true;
+        if (isFileItem(id)) {
+          if (cwd) {
+            const filePath = filePathFromId(id);
+            return filePath === cwd || filePath.startsWith(cwd + '/');
+          }
+          return true;
+        }
         return notes.find(n => n._id === id);
       });
       setSidebarItems(validItems);
@@ -186,8 +211,12 @@ export const ClaudeCodePage = ({ projectId }) => {
       // Backward compat: migrate from old activePanel format
       setSidebarItems([saved.id]);
       setActiveSidebarId(saved.id);
+    } else {
+      // No saved sidebar for this project - reset to empty
+      setSidebarItems([]);
+      setActiveSidebarId(null);
     }
-  }, [projectId, sessions, notes]);
+  }, [projectId, sessions, notes, activeProject?.cwd, homeDir]);
 
   // Persist active panel to localStorage
   useEffect(() => {
