@@ -25,6 +25,106 @@ function normalizeLineBreaks(md) {
   }).join('');
 }
 
+// --- Highlight support: parse ==color:text== syntax ---
+
+function highlightPlugin(md) {
+  // Inline rule to detect ==color:text== or ==text==
+  md.inline.ruler.push('highlight', (state, silent) => {
+    const start = state.pos;
+    const max = state.posMax;
+    const src = state.src;
+
+    // Must start with ==
+    if (src.charCodeAt(start) !== 0x3D || src.charCodeAt(start + 1) !== 0x3D) return false;
+
+    // Find closing ==
+    let end = start + 2;
+    while (end < max - 1) {
+      if (src.charCodeAt(end) === 0x3D && src.charCodeAt(end + 1) === 0x3D) break;
+      end++;
+    }
+    if (end >= max - 1) return false;
+
+    const content = src.slice(start + 2, end);
+    if (!content) return false;
+
+    if (!silent) {
+      // Check for color prefix (e.g., "yellow:text" or just "text")
+      let color = 'yellow';
+      let text = content;
+      const colonIdx = content.indexOf(':');
+      if (colonIdx > 0) {
+        const possibleColor = content.slice(0, colonIdx);
+        if (['yellow', 'green', 'blue', 'pink', 'orange'].includes(possibleColor)) {
+          color = possibleColor;
+          text = content.slice(colonIdx + 1);
+        }
+      }
+
+      const tokenOpen = state.push('highlight_open', 'mark', 1);
+      tokenOpen.attrSet('data-color', color);
+
+      const tokenText = state.push('text', '', 0);
+      tokenText.content = text;
+
+      state.push('highlight_close', 'mark', -1);
+    }
+
+    state.pos = end + 2;
+    return true;
+  });
+}
+
+// --- Text color support: parse ~color:text~ syntax ---
+
+function textColorPlugin(md) {
+  // Inline rule to detect ~color:text~ (single tilde, not ~~ which is strikethrough)
+  md.inline.ruler.push('textColor', (state, silent) => {
+    const start = state.pos;
+    const max = state.posMax;
+    const src = state.src;
+
+    // Must start with ~ but not ~~
+    if (src.charCodeAt(start) !== 0x7E) return false;
+    if (src.charCodeAt(start + 1) === 0x7E) return false; // Skip ~~ (strikethrough)
+
+    // Find closing ~ (but not ~~)
+    let end = start + 1;
+    while (end < max) {
+      if (src.charCodeAt(end) === 0x7E && src.charCodeAt(end + 1) !== 0x7E) break;
+      end++;
+    }
+    if (end >= max) return false;
+
+    const content = src.slice(start + 1, end);
+    if (!content) return false;
+
+    // Must have color:text format
+    const colonIdx = content.indexOf(':');
+    if (colonIdx <= 0) return false;
+
+    const possibleColor = content.slice(0, colonIdx);
+    const validColors = ['red', 'green', 'blue', 'purple', 'orange'];
+    if (!validColors.includes(possibleColor)) return false;
+
+    const text = content.slice(colonIdx + 1);
+    if (!text) return false;
+
+    if (!silent) {
+      const tokenOpen = state.push('textcolor_open', 'span', 1);
+      tokenOpen.attrSet('data-color', possibleColor);
+
+      const tokenText = state.push('text', '', 0);
+      tokenText.content = text;
+
+      state.push('textcolor_close', 'span', -1);
+    }
+
+    state.pos = end + 1;
+    return true;
+  });
+}
+
 // --- Task list support: detect [ ] / [x] in list items ---
 
 function taskListPlugin(md) {
@@ -60,6 +160,8 @@ function listIsTight(tokens, i) {
 }
 
 const md = MarkdownIt('commonmark', { html: false });
+md.use(highlightPlugin);
+md.use(textColorPlugin);
 md.use(taskListPlugin);
 
 const markdownParser = new MarkdownParser(schema, md, {
@@ -104,6 +206,14 @@ const markdownParser = new MarkdownParser(schema, md, {
     }),
   },
   code_inline: { mark: 'code', noCloseToken: true },
+  highlight: {
+    mark: 'highlight',
+    getAttrs: (tok) => ({ color: tok.attrGet('data-color') || 'yellow' }),
+  },
+  textcolor: {
+    mark: 'textColor',
+    getAttrs: (tok) => ({ color: tok.attrGet('data-color') }),
+  },
 });
 
 // --- Serializer: ProseMirror Doc → markdown string ---
@@ -127,7 +237,25 @@ const markdownSerializer = new MarkdownSerializer(
       state.renderContent(node);
     },
   },
-  defaultMarkdownSerializer.marks,
+  {
+    ...defaultMarkdownSerializer.marks,
+    highlight: {
+      open(state, mark) {
+        return mark.attrs.color === 'yellow' ? '==' : `==${mark.attrs.color}:`;
+      },
+      close: '==',
+      mixable: true,
+      expelEnclosingWhitespace: true,
+    },
+    textColor: {
+      open(state, mark) {
+        return `~${mark.attrs.color}:`;
+      },
+      close: '~',
+      mixable: true,
+      expelEnclosingWhitespace: true,
+    },
+  },
 );
 
 /**

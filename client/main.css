@@ -111,6 +111,20 @@ body {
   /* Misc */
   --radius: 8px;
   --tooltip-bg: #1a1433;
+
+  /* Highlight colors (dark theme - lower opacity for readability) */
+  --highlight-yellow: rgba(250, 204, 21, 0.35);
+  --highlight-green: rgba(34, 197, 94, 0.35);
+  --highlight-blue: rgba(59, 130, 246, 0.35);
+  --highlight-pink: rgba(236, 72, 153, 0.35);
+  --highlight-orange: rgba(249, 115, 22, 0.35);
+
+  /* Text colors (dark theme - bright for contrast on dark background) */
+  --text-color-red: #ef4444;
+  --text-color-green: #22c55e;
+  --text-color-blue: #3b82f6;
+  --text-color-purple: #a855f7;
+  --text-color-orange: #f97316;
 }
 
 /* Light theme overrides */
@@ -210,6 +224,20 @@ body {
 
   /* Misc */
   --tooltip-bg: #ffffff;
+
+  /* Highlight colors (light theme - higher opacity for visibility) */
+  --highlight-yellow: rgba(250, 204, 21, 0.5);
+  --highlight-green: rgba(34, 197, 94, 0.4);
+  --highlight-blue: rgba(59, 130, 246, 0.35);
+  --highlight-pink: rgba(236, 72, 153, 0.35);
+  --highlight-orange: rgba(249, 115, 22, 0.4);
+
+  /* Text colors (light theme - more saturated for visibility) */
+  --text-color-red: #dc2626;
+  --text-color-green: #16a34a;
+  --text-color-blue: #2563eb;
+  --text-color-purple: #9333ea;
+  --text-color-orange: #ea580c;
 }
 
 html, body, #react-target {

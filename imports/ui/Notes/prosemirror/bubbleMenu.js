@@ -1,6 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { toggleMark, setBlockType } from 'prosemirror-commands';
-import { wrapInList } from 'prosemirror-schema-list';
+import { wrapInList, liftListItem } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
 import { promptUrl } from './promptUrl.js';
 
@@ -23,8 +23,9 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
       document.body.appendChild(tooltip);
 
       let mouseDown = false;
+      let pickerOpen = false; // Track if color picker is open
       const onMouseDown = () => { mouseDown = true; };
-      const onMouseUp = () => { mouseDown = false; updateTooltip(editorView); };
+      const onMouseUp = () => { mouseDown = false; if (!pickerOpen) updateTooltip(editorView); };
       editorView.dom.addEventListener('mousedown', onMouseDown);
       document.addEventListener('mouseup', onMouseUp);
 
@@ -180,11 +181,276 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
         };
         tooltip.appendChild(todoBtn);
 
+        // Separator before highlight/clear
+        const sep3 = document.createElement('div');
+        sep3.className = 'bubble-menu-sep';
+        tooltip.appendChild(sep3);
+
+        // Highlight button with color picker
+        const highlightContainer = document.createElement('div');
+        highlightContainer.className = 'bubble-menu-highlight-container';
+
+        const highlightBtn = document.createElement('button');
+        highlightBtn.className = 'bubble-menu-btn bubble-menu-highlight-btn';
+        highlightBtn.title = 'Highlight';
+
+        // Check if highlight is active and get current color
+        const highlightMark = schema.marks.highlight;
+        let currentHighlightColor = null;
+        state.doc.nodesBetween(from, to, (node) => {
+          if (node.marks) {
+            node.marks.forEach((mark) => {
+              if (mark.type === highlightMark) {
+                currentHighlightColor = mark.attrs.color;
+              }
+            });
+          }
+        });
+
+        const highlightIcon = document.createElement('span');
+        highlightIcon.className = 'bubble-menu-highlight-icon';
+        if (currentHighlightColor) {
+          highlightIcon.style.background = `var(--highlight-${currentHighlightColor})`;
+          highlightBtn.classList.add('active');
+        }
+        highlightBtn.appendChild(highlightIcon);
+
+        const highlightArrow = document.createElement('span');
+        highlightArrow.className = 'bubble-menu-highlight-arrow';
+        highlightArrow.textContent = '▼';
+        highlightBtn.appendChild(highlightArrow);
+
+        let pickerVisible = false;
+        let picker = null;
+
+        const showPicker = () => {
+          if (picker) return;
+          pickerVisible = true;
+          pickerOpen = true;
+
+          picker = document.createElement('div');
+          picker.className = 'bubble-menu-color-picker';
+
+          const colors = ['yellow', 'green', 'blue', 'pink', 'orange', 'none'];
+          colors.forEach((color) => {
+            const colorBtn = document.createElement('button');
+            colorBtn.className = `bubble-menu-color-btn color-${color}`;
+            colorBtn.title = color === 'none' ? 'Remove highlight' : color.charAt(0).toUpperCase() + color.slice(1);
+            if (color === currentHighlightColor) colorBtn.classList.add('active');
+
+            colorBtn.onmousedown = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
+              if (color === 'none') {
+                // Remove highlight mark
+                editorView.dispatch(state.tr.removeMark(from, to, highlightMark));
+              } else {
+                // Apply highlight with selected color
+                const mark = highlightMark.create({ color });
+                editorView.dispatch(state.tr.addMark(from, to, mark));
+              }
+
+              editorView.focus();
+              hidePicker();
+              updateTooltip(editorView);
+            };
+
+            picker.appendChild(colorBtn);
+          });
+
+          highlightContainer.appendChild(picker);
+
+          // Close picker when clicking outside
+          const closeOnClickOutside = (e) => {
+            if (!highlightContainer.contains(e.target)) {
+              hidePicker();
+              document.removeEventListener('mousedown', closeOnClickOutside);
+            }
+          };
+          setTimeout(() => document.addEventListener('mousedown', closeOnClickOutside), 0);
+        };
+
+        const hidePicker = () => {
+          if (picker) {
+            picker.remove();
+            picker = null;
+            pickerVisible = false;
+            pickerOpen = false;
+          }
+        };
+
+        highlightBtn.onmousedown = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (pickerVisible) {
+            hidePicker();
+          } else {
+            showPicker();
+          }
+        };
+
+        highlightContainer.appendChild(highlightBtn);
+        tooltip.appendChild(highlightContainer);
+
+        // Text color button with color picker
+        const textColorContainer = document.createElement('div');
+        textColorContainer.className = 'bubble-menu-textcolor-container';
+
+        const textColorBtn = document.createElement('button');
+        textColorBtn.className = 'bubble-menu-btn bubble-menu-textcolor-btn';
+        textColorBtn.title = 'Text color';
+
+        // Check if textColor is active and get current color
+        const textColorMark = schema.marks.textColor;
+        let currentTextColor = null;
+        state.doc.nodesBetween(from, to, (node) => {
+          if (node.marks) {
+            node.marks.forEach((mark) => {
+              if (mark.type === textColorMark) {
+                currentTextColor = mark.attrs.color;
+              }
+            });
+          }
+        });
+
+        const textColorIcon = document.createElement('span');
+        textColorIcon.className = 'bubble-menu-textcolor-icon';
+        textColorIcon.textContent = 'A';
+        if (currentTextColor) {
+          textColorIcon.style.color = `var(--text-color-${currentTextColor})`;
+          textColorBtn.classList.add('active');
+        }
+        textColorBtn.appendChild(textColorIcon);
+
+        const textColorArrow = document.createElement('span');
+        textColorArrow.className = 'bubble-menu-textcolor-arrow';
+        textColorArrow.textContent = '▼';
+        textColorBtn.appendChild(textColorArrow);
+
+        let tcPickerVisible = false;
+        let tcPicker = null;
+
+        const showTextColorPicker = () => {
+          if (tcPicker) return;
+          tcPickerVisible = true;
+          pickerOpen = true;
+
+          tcPicker = document.createElement('div');
+          tcPicker.className = 'bubble-menu-color-picker';
+
+          const tcColors = ['red', 'green', 'blue', 'purple', 'orange', 'none'];
+          tcColors.forEach((color) => {
+            const colorBtn = document.createElement('button');
+            colorBtn.className = `bubble-menu-color-btn textcolor-${color}`;
+            colorBtn.title = color === 'none' ? 'Remove text color' : color.charAt(0).toUpperCase() + color.slice(1);
+            if (color === currentTextColor) colorBtn.classList.add('active');
+
+            colorBtn.onmousedown = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
+              if (color === 'none') {
+                // Remove textColor mark
+                editorView.dispatch(state.tr.removeMark(from, to, textColorMark));
+              } else {
+                // Apply textColor with selected color
+                const mark = textColorMark.create({ color });
+                editorView.dispatch(state.tr.addMark(from, to, mark));
+              }
+
+              editorView.focus();
+              hideTextColorPicker();
+              updateTooltip(editorView);
+            };
+
+            tcPicker.appendChild(colorBtn);
+          });
+
+          textColorContainer.appendChild(tcPicker);
+
+          // Close picker when clicking outside
+          const closeOnClickOutside = (e) => {
+            if (!textColorContainer.contains(e.target)) {
+              hideTextColorPicker();
+              document.removeEventListener('mousedown', closeOnClickOutside);
+            }
+          };
+          setTimeout(() => document.addEventListener('mousedown', closeOnClickOutside), 0);
+        };
+
+        const hideTextColorPicker = () => {
+          if (tcPicker) {
+            tcPicker.remove();
+            tcPicker = null;
+            tcPickerVisible = false;
+            pickerOpen = false;
+          }
+        };
+
+        textColorBtn.onmousedown = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (tcPickerVisible) {
+            hideTextColorPicker();
+          } else {
+            showTextColorPicker();
+          }
+        };
+
+        textColorContainer.appendChild(textColorBtn);
+        tooltip.appendChild(textColorContainer);
+
+        // Clear formatting button
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'bubble-menu-btn bubble-menu-btn-clear';
+        clearBtn.innerHTML = 'T&#x338;'; // T with strikethrough
+        clearBtn.title = 'Clear all formatting';
+        clearBtn.onmousedown = (e) => {
+          e.preventDefault();
+
+          const { $from, empty } = state.selection;
+
+          // If no selection, work on the current block (line)
+          let clearFrom, clearTo;
+          if (empty) {
+            clearFrom = $from.start();
+            clearTo = $from.end();
+          } else {
+            clearFrom = from;
+            clearTo = to;
+          }
+
+          let tr = state.tr;
+
+          // 1. Remove all marks
+          tr = tr.removeMark(clearFrom, clearTo);
+
+          // 2. Convert headings to paragraphs
+          state.doc.nodesBetween(clearFrom, clearTo, (node, pos) => {
+            if (node.type === schema.nodes.heading) {
+              tr = tr.setNodeMarkup(tr.mapping.map(pos), schema.nodes.paragraph);
+            }
+          });
+
+          editorView.dispatch(tr);
+
+          // 3. Lift out of lists (requires fresh state after each lift)
+          let lifted = true;
+          while (lifted) {
+            lifted = liftListItem(schema.nodes.list_item)(editorView.state, editorView.dispatch);
+          }
+
+          editorView.focus();
+          updateTooltip(editorView);
+        };
+        tooltip.appendChild(clearBtn);
+
         // Separator before Ask AI
         if (onAskAI) {
-          const sep2 = document.createElement('div');
-          sep2.className = 'bubble-menu-sep';
-          tooltip.appendChild(sep2);
+          const sep4 = document.createElement('div');
+          sep4.className = 'bubble-menu-sep';
+          tooltip.appendChild(sep4);
 
           const aiBtn = document.createElement('button');
           aiBtn.className = 'bubble-menu-btn bubble-menu-btn-ai';

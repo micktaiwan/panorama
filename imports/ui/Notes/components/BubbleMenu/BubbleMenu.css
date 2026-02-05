@@ -50,3 +50,131 @@
 .bubble-menu-btn-ai:hover {
   background: var(--purple-600);
 }
+
+/* Clear formatting button */
+.bubble-menu-btn-clear {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+/* Highlight color picker */
+.bubble-menu-highlight-container {
+  position: relative;
+}
+
+.bubble-menu-highlight-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.bubble-menu-highlight-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--highlight-yellow);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.bubble-menu-highlight-arrow {
+  font-size: 8px;
+  margin-left: 1px;
+}
+
+.bubble-menu-color-picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--notes-panel);
+  border: 1px solid var(--notes-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(var(--black-rgb), 0.4);
+  z-index: 1001;
+}
+
+.bubble-menu-color-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.15s;
+}
+
+.bubble-menu-color-btn:hover {
+  transform: scale(1.1);
+}
+
+.bubble-menu-color-btn.active {
+  border-color: var(--text);
+}
+
+.bubble-menu-color-btn.color-yellow { background: var(--highlight-yellow); }
+.bubble-menu-color-btn.color-green { background: var(--highlight-green); }
+.bubble-menu-color-btn.color-blue { background: var(--highlight-blue); }
+.bubble-menu-color-btn.color-pink { background: var(--highlight-pink); }
+.bubble-menu-color-btn.color-orange { background: var(--highlight-orange); }
+
+.bubble-menu-color-btn.color-none {
+  background: var(--surface);
+  position: relative;
+}
+
+.bubble-menu-color-btn.color-none::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  background: var(--danger);
+  transform: rotate(-45deg);
+}
+
+/* Text color picker */
+.bubble-menu-textcolor-container {
+  position: relative;
+}
+
+.bubble-menu-textcolor-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.bubble-menu-textcolor-icon {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.bubble-menu-textcolor-arrow {
+  font-size: 8px;
+  margin-left: 1px;
+}
+
+/* Text color picker buttons */
+.bubble-menu-color-btn.textcolor-red { background: var(--text-color-red); }
+.bubble-menu-color-btn.textcolor-green { background: var(--text-color-green); }
+.bubble-menu-color-btn.textcolor-blue { background: var(--text-color-blue); }
+.bubble-menu-color-btn.textcolor-purple { background: var(--text-color-purple); }
+.bubble-menu-color-btn.textcolor-orange { background: var(--text-color-orange); }
+
+.bubble-menu-color-btn.textcolor-none {
+  background: var(--surface);
+  position: relative;
+}
+
+.bubble-menu-color-btn.textcolor-none::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  background: var(--danger);
+  transform: rotate(-45deg);
+}
