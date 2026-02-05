@@ -206,6 +206,11 @@ Meteor.methods({
       createdAt: new Date(),
     });
 
+    // Set codexRunning flag for spinner
+    await ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: { codexRunning: true, updatedAt: new Date() }
+    });
+
     // Execute async (fire-and-forget)
     execCodexCommand(sessionId, prompt, cwd);
     return true;

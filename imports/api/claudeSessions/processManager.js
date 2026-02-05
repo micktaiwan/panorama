@@ -90,7 +90,7 @@ function syncQueueCount(sessionId) {
   const count = messageQueues.get(sessionId)?.length || 0;
   ClaudeSessionsCollection.updateAsync(sessionId, {
     $set: { queuedCount: count, updatedAt: new Date() }
-  });
+  }).catch(err => logError('syncQueueCount failed:', err.message));
 }
 
 async function drainQueue(sessionId) {
@@ -295,6 +295,10 @@ export function execCodexCommand(sessionId, prompt, cwd) {
       codexExitCode: 1,
       createdAt: new Date(),
     });
+    // Clear codexRunning flag
+    ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: { codexRunning: false, updatedAt: new Date() }
+    });
     return;
   }
 
@@ -384,6 +388,11 @@ export function execCodexCommand(sessionId, prompt, cwd) {
       codexExitCode: code,
       codexUsage: usage,
       createdAt: new Date(),
+    });
+
+    // Clear codexRunning flag
+    await ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: { codexRunning: false, updatedAt: new Date() }
     });
   }));
 }
@@ -569,15 +578,16 @@ export async function spawnClaudeProcess(session, message) {
       log('result blocks:', contentBlocks.length, 'cost:', data.cost_usd, 'duration:', data.duration_ms);
 
       if (currentAssistantMsgId) {
-        await ClaudeMessagesCollection.updateAsync(currentAssistantMsgId, {
-          $set: {
-            content: contentBlocks.length > 0 ? contentBlocks : undefined,
-            contentText: contentText || undefined,
+        const msgUpdate = {
             isStreaming: false,
             durationMs: data.duration_ms,
             usage: data.usage,
             costUsd: data.cost_usd,
-          }
+        };
+        if (contentBlocks.length > 0) msgUpdate.content = contentBlocks;
+        if (contentText) msgUpdate.contentText = contentText;
+        await ClaudeMessagesCollection.updateAsync(currentAssistantMsgId, {
+          $set: msgUpdate
         });
         log('updated assistant msg with result stats', currentAssistantMsgId);
       } else if (contentBlocks.length > 0) {
@@ -608,16 +618,15 @@ export async function spawnClaudeProcess(session, message) {
         sessionUpdate.status = 'idle';
         sessionUpdate.unseenCompleted = true;
       }
-      if (data.cost_usd != null) {
-        sessionUpdate.totalCostUsd = (session.totalCostUsd || 0) + data.cost_usd;
-      }
-      if (data.duration_ms != null) {
-        sessionUpdate.totalDurationMs = (session.totalDurationMs || 0) + data.duration_ms;
-      }
       if (data.modelUsage) {
         sessionUpdate.lastModelUsage = data.modelUsage;
       }
-      await ClaudeSessionsCollection.updateAsync(sessionId, { $set: sessionUpdate });
+      const sessionInc = {};
+      if (data.cost_usd != null) sessionInc.totalCostUsd = data.cost_usd;
+      if (data.duration_ms != null) sessionInc.totalDurationMs = data.duration_ms;
+      const modifier = { $set: sessionUpdate };
+      if (Object.keys(sessionInc).length > 0) modifier.$inc = sessionInc;
+      await ClaudeSessionsCollection.updateAsync(sessionId, modifier);
       log('session → idle, stats updated');
       currentAssistantMsgId = null;
       // Remove finished process before draining queue so spawnClaudeProcess
