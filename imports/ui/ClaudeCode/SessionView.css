@@ -228,6 +228,18 @@
   margin-left: 4px;
 }
 
+.ccCodexLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(var(--success-rgb), 0.15);
+  color: var(--success-text);
+  margin-left: 6px;
+}
+
 /* Queued messages stack (above composer) */
 .ccQueuedStack {
   display: flex;

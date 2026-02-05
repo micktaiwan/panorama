@@ -63,6 +63,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
   const queuedMessages = useMemo(() => allMessages.filter(m => m.queued), [allMessages]);
 
   const isRunning = session?.status === 'running';
+  const isCodexRunning = session?.codexRunning;
   const isFrozen = session?.status === 'error';
   const displayModel = (session?.model || session?.activeModel || '').trim() || null;
 
@@ -252,10 +253,11 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     }
   }, [sessionId, flowMessages, localMessages.length, isRunning, scrollToBottom]);
 
-  // Clear local messages when new DB messages arrive
+  // Clear local messages when a new user message is sent (DB count changes from user action)
+  const userMessageCount = useMemo(() => allMessages.filter(m => m.role === 'user').length, [allMessages]);
   useEffect(() => {
     if (localMessages.length > 0) setLocalMessages([]);
-  }, [allMessages.length]);
+  }, [userMessageCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus textarea when session becomes idle or panel becomes active
   useEffect(() => {
@@ -567,9 +569,10 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
           {localMessages.map((msg) => (
             <MessageBubble key={msg._id} message={msg} />
           ))}
-          {isRunning && (
+          {(isRunning || isCodexRunning) && (
             <div className="ccTypingIndicator">
               <span className="ccTypingDot" /><span className="ccTypingDot" /><span className="ccTypingDot" />
+              {isCodexRunning && <span className="ccCodexLabel">codex</span>}
               {session.queuedCount > 0 && (
                 <span className="ccQueuedCount">{session.queuedCount} queued</span>
               )}
