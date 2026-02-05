@@ -134,6 +134,64 @@ export function createFormattingKeymap() {
       }
       return splitListItem(schema.nodes.list_item)(state, dispatch);
     },
+    'Backspace': (state, dispatch) => {
+      const { $from, empty } = state.selection;
+
+      // Only handle when cursor is at start (no selection)
+      if (!empty) return false;
+
+      // Must be at the start of the parent block
+      if ($from.parentOffset !== 0) return false;
+
+      // Check if we're in a list_item
+      let listItemDepth = null;
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type === schema.nodes.list_item) {
+          listItemDepth = d;
+          break;
+        }
+      }
+
+      if (listItemDepth !== null) {
+        // We're in a list_item - check if we're in the first block
+        if ($from.index(listItemDepth) !== 0) return false;
+        // Lift it out
+        return liftListItem(schema.nodes.list_item)(state, dispatch);
+      }
+
+      // Not in a list - check if previous sibling is a list
+      // If we're in an empty paragraph after a list, delete the paragraph
+      // and move cursor to end of the list
+      const parent = $from.node($from.depth - 1);
+      const indexInParent = $from.index($from.depth - 1);
+
+      if (indexInParent > 0) {
+        const prevSibling = parent.child(indexInParent - 1);
+        const isList = prevSibling.type === schema.nodes.bullet_list ||
+                       prevSibling.type === schema.nodes.ordered_list;
+        const currentNode = $from.parent;
+        const isEmptyParagraph = currentNode.type === schema.nodes.paragraph &&
+                                  currentNode.content.size === 0;
+
+        if (isList && isEmptyParagraph && dispatch) {
+          // Delete the empty paragraph and position cursor at end of list
+          const paragraphStart = $from.before($from.depth);
+          const paragraphEnd = $from.after($from.depth);
+
+          // Find the end position of the last item in the list
+          const lastListItem = prevSibling.lastChild;
+          const endOfList = paragraphStart - 1; // Just before the paragraph = end of list
+
+          const tr = state.tr.delete(paragraphStart, paragraphEnd);
+          // Position cursor at the end of the list's last item's content
+          tr.setSelection(TextSelection.create(tr.doc, endOfList - 1));
+          dispatch(tr.scrollIntoView());
+          return true;
+        }
+      }
+
+      return false;
+    },
   });
 }
 
