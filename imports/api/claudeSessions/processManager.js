@@ -13,6 +13,14 @@ try {
   console.warn('[claude-pm] "claude" not found in PATH, spawn will likely fail');
 }
 
+// Resolve codex binary path at startup
+let codexBin = 'codex';
+try {
+  codexBin = execSync('which codex', { encoding: 'utf8' }).trim();
+} catch (_) {
+  console.warn('[claude-pm] "codex" not found in PATH');
+}
+
 // --- File logger ---
 const LOG_FILE = path.join(process.env.HOME || '/tmp', '.panorama-claude.log');
 
@@ -266,6 +274,115 @@ export function execShellCommand(sessionId, command, cwd) {
       contentText: (output || '(no output)') + status,
       shellCommand: command,
       shellExitCode: exitCode,
+      createdAt: new Date(),
+    });
+  }));
+}
+
+export function execCodexCommand(sessionId, prompt, cwd) {
+  const TIMEOUT_MS = 300000; // 5 minutes
+  const MAX_OUTPUT = 100000;
+
+  if (!codexBin || codexBin === 'codex') {
+    // codex not found - insert error message
+    ClaudeMessagesCollection.insertAsync({
+      sessionId,
+      role: 'system',
+      type: 'codex_result',
+      content: [{ type: 'text', text: 'Error: codex CLI not found. Install with: npm install -g @openai/codex' }],
+      contentText: 'Error: codex CLI not found',
+      codexPrompt: prompt,
+      codexExitCode: 1,
+      createdAt: new Date(),
+    });
+    return;
+  }
+
+  log('execCodex:', prompt.slice(0, 100));
+
+  const proc = spawn(codexBin, [
+    'exec',
+    '--json',
+    '--full-auto',
+    '-C', cwd,
+    prompt
+  ], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env },
+  });
+
+  let buffer = '';
+  const items = [];
+  let usage = null;
+
+  proc.stdout.on('data', Meteor.bindEnvironment((chunk) => {
+    buffer += chunk.toString();
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+        if (event.type === 'item.completed') {
+          items.push(event.item);
+        } else if (event.type === 'turn.completed') {
+          usage = event.usage;
+        }
+      } catch (_) {
+        // Ignore non-JSON lines
+      }
+    }
+  }));
+
+  let stderr = '';
+  proc.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  const timeout = setTimeout(() => {
+    log('execCodex timeout, killing');
+    proc.kill('SIGKILL');
+  }, TIMEOUT_MS);
+
+  proc.on('close', Meteor.bindEnvironment(async (code) => {
+    clearTimeout(timeout);
+    log('execCodex closed, code:', code, 'items:', items.length);
+
+    // Build result content
+    const content = [];
+    for (const item of items) {
+      if (item.type === 'command_execution') {
+        let output = item.aggregated_output || '(no output)';
+        if (output.length > MAX_OUTPUT) output = output.slice(0, MAX_OUTPUT) + '\n[truncated]';
+        content.push({
+          type: 'text',
+          text: `\`\`\`bash\n$ ${item.command}\n${output}\`\`\``
+        });
+      } else if (item.type === 'agent_message') {
+        content.push({ type: 'text', text: item.text });
+      }
+    }
+
+    if (content.length === 0) {
+      if (stderr) {
+        content.push({ type: 'text', text: `Error: ${stderr}` });
+      } else {
+        content.push({ type: 'text', text: '(no output from codex)' });
+      }
+    }
+
+    const contentText = content.map(c => c.text).join('\n\n');
+
+    await ClaudeMessagesCollection.insertAsync({
+      sessionId,
+      role: 'system',
+      type: 'codex_result',
+      content,
+      contentText,
+      codexPrompt: prompt,
+      codexExitCode: code,
+      codexUsage: usage,
       createdAt: new Date(),
     });
   }));
