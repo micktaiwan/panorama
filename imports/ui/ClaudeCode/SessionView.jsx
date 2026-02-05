@@ -25,6 +25,7 @@ const COMMANDS = [
   { name: 'stop', description: 'Stop the running process', hasArgs: false },
   { name: 'model', description: 'Change model (e.g. /model claude-sonnet-4-20250514)', hasArgs: true },
   { name: 'cwd', description: 'Change working directory (WARNING: stops active session)', hasArgs: true },
+  { name: 'codex', description: 'Run Codex CLI one-shot (e.g. /codex review changes)', hasArgs: true },
   { name: 'info', description: 'Show Claude version and context usage', hasArgs: false },
   { name: 'help', description: 'Show available commands', hasArgs: false },
 ];
@@ -193,6 +194,16 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
       case 'help': {
         const lines = COMMANDS.map(c => `**/${c.name}** — ${c.description}`).join('\n');
         addLocalMessage(`Available commands:\n\n${lines}`);
+        break;
+      }
+      case 'codex': {
+        if (!args.trim()) {
+          addLocalMessage('Usage: /codex <prompt>');
+          return;
+        }
+        Meteor.call('claudeSessions.execCodex', sessionId, args.trim(), (err) => {
+          if (err) notify({ message: `Codex: ${err.reason || err.message}`, kind: 'error' });
+        });
         break;
       }
     }

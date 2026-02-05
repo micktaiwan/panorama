@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { ClaudeSessionsCollection } from './collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
-import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, dequeueMessage, respondToPermission, execShellCommand, isRunning, syncPermissionMode } from './processManager';
+import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, dequeueMessage, respondToPermission, execShellCommand, execCodexCommand, isRunning, syncPermissionMode } from './processManager';
 
 const TAG = '[claude-methods]';
 
@@ -183,6 +183,31 @@ Meteor.methods({
 
     // Execute async
     execShellCommand(sessionId, command, cwd);
+    return true;
+  },
+
+  async 'claudeSessions.execCodex'(sessionId, prompt) {
+    check(sessionId, String);
+    check(prompt, String);
+
+    const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
+    if (!session) throw new Meteor.Error('not-found', 'Session not found');
+
+    let cwd = session.cwd || process.env.HOME + '/projects';
+    if (cwd.startsWith('~/')) cwd = process.env.HOME + cwd.slice(1);
+
+    // Insert command message immediately
+    await ClaudeMessagesCollection.insertAsync({
+      sessionId,
+      role: 'user',
+      type: 'codex_command',
+      content: [{ type: 'text', text: `/codex ${prompt}` }],
+      contentText: `/codex ${prompt}`,
+      createdAt: new Date(),
+    });
+
+    // Execute async (fire-and-forget)
+    execCodexCommand(sessionId, prompt, cwd);
     return true;
   },
 
