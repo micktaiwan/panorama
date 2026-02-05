@@ -202,3 +202,21 @@
   font-style: italic;
   color: var(--muted);
 }
+
+/* Highlight marks */
+.prosemirror-editor mark {
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.prosemirror-editor mark.highlight-yellow { background: var(--highlight-yellow); }
+.prosemirror-editor mark.highlight-green { background: var(--highlight-green); }
+.prosemirror-editor mark.highlight-blue { background: var(--highlight-blue); }
+.prosemirror-editor mark.highlight-pink { background: var(--highlight-pink); }
+.prosemirror-editor mark.highlight-orange { background: var(--highlight-orange); }
+
+/* Text color marks */
+.prosemirror-editor span.text-color-red { color: var(--text-color-red); }
+.prosemirror-editor span.text-color-green { color: var(--text-color-green); }
+.prosemirror-editor span.text-color-blue { color: var(--text-color-blue); }
+.prosemirror-editor span.text-color-purple { color: var(--text-color-purple); }
+.prosemirror-editor span.text-color-orange { color: var(--text-color-orange); }
