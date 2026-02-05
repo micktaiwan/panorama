@@ -18,6 +18,7 @@ class StdioConnection {
     this.pendingRequests = new Map();
     this.buffer = '';
     this.initialized = false;
+    this._cleanupCalled = false;
   }
 
   /**
@@ -27,6 +28,9 @@ class StdioConnection {
     if (this.process) {
       return; // Already connected
     }
+
+    // Reset cleanup flag for new connection
+    this._cleanupCalled = false;
 
     console.log(`[stdio] Spawning process: ${this.config.command} ${this.config.args.join(' ')}`);
 
@@ -203,20 +207,54 @@ class StdioConnection {
   close() {
     if (this.process) {
       console.log(`[stdio] ${this.serverId} closing connection`);
-      this.process.kill();
-      this.cleanup();
+      this.cleanup();  // Cleanup first (removes listeners)
+      // Process is killed in cleanup()
     }
   }
 
   /**
-   * Cleanup resources
+   * Cleanup resources - removes all listeners and kills process
    */
   cleanup() {
+    // Prevent multiple cleanup calls (exit + error can both fire)
+    if (this._cleanupCalled) return;
+    this._cleanupCalled = true;
+
+    const proc = this.process;
+
     // Reject all pending requests
     for (const [id, pending] of this.pendingRequests.entries()) {
       pending.reject(new Error('Connection closed'));
     }
     this.pendingRequests.clear();
+
+    // Clean up process listeners and streams BEFORE killing
+    if (proc) {
+      // Remove all event listeners to prevent zombie processes
+      proc.stdout?.removeAllListeners();
+      proc.stderr?.removeAllListeners();
+      proc.removeAllListeners();
+
+      // Destroy streams
+      proc.stdin?.destroy();
+      proc.stdout?.destroy();
+      proc.stderr?.destroy();
+
+      // Kill the process if still running
+      if (!proc.killed) {
+        try {
+          proc.kill('SIGTERM');
+          // Force kill after 1 second if still running
+          setTimeout(() => {
+            if (!proc.killed) {
+              proc.kill('SIGKILL');
+            }
+          }, 1000);
+        } catch (e) {
+          // Process may already be dead
+        }
+      }
+    }
 
     this.process = null;
     this.initialized = false;
