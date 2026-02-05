@@ -116,14 +116,25 @@ export async function killProcess(sessionId) {
   }
 
   log('killing process for', sessionId);
-  proc.kill('SIGTERM');
-
-  const forceKillTimer = setTimeout(() => {
-    try { proc.kill('SIGKILL'); } catch (_) {}
-  }, 5000);
-
-  proc.once('exit', () => clearTimeout(forceKillTimer));
   activeProcesses.delete(sessionId);
+
+  // Wait for process to actually exit before returning
+  await new Promise((resolve) => {
+    const forceKillTimer = setTimeout(() => {
+      log('killProcess: SIGTERM timeout, sending SIGKILL for', sessionId);
+      try { proc.kill('SIGKILL'); } catch (_) {}
+      // Give SIGKILL a moment to work, then resolve anyway
+      setTimeout(resolve, 500);
+    }, 5000);
+
+    proc.once('exit', () => {
+      clearTimeout(forceKillTimer);
+      log('killProcess: process exited for', sessionId);
+      resolve();
+    });
+
+    proc.kill('SIGTERM');
+  });
 
   await ClaudeSessionsCollection.updateAsync(sessionId, {
     $set: { status: 'idle', pid: null, updatedAt: new Date() }
