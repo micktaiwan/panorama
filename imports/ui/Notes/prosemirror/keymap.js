@@ -77,9 +77,8 @@ export function createFormattingKeymap() {
       }
       if (depth === null) return false;
       const listItem = $from.node(depth);
-      if (listItem.attrs.checked === null) return false;
       const index = $from.index(depth - 1);
-      if (index === 0) return false;
+      if (index === 0) return true; // First item, can't move up - consume event
       const parentNode = $from.node(depth - 1);
       const prevNode = parentNode.child(index - 1);
       const curNode = listItem;
@@ -105,10 +104,9 @@ export function createFormattingKeymap() {
       }
       if (depth === null) return false;
       const listItem = $from.node(depth);
-      if (listItem.attrs.checked === null) return false;
       const parentNode = $from.node(depth - 1);
       const index = $from.index(depth - 1);
-      if (index >= parentNode.childCount - 1) return false;
+      if (index >= parentNode.childCount - 1) return true; // Last item, can't move down - consume event
       const nextNode = parentNode.child(index + 1);
       const curNode = listItem;
       const itemStart = $from.before(depth);
