@@ -1,0 +1,158 @@
+.ccTeamsSection {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ccTeamsHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ccTeamsHeader:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="light"] .ccTeamsHeader:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.ccTeamsTitle {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.ccTeamsBadge {
+  font-size: 10px;
+  background: rgba(var(--info-rgb), 0.15);
+  color: var(--info);
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.ccTeamsList {
+  padding: 0 0 4px 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ccNoTeams {
+  text-align: center;
+  padding: 8px;
+  font-size: 11px;
+  margin: 0;
+}
+
+.ccTeamItem {
+  padding: 4px 12px;
+}
+
+.ccTeamItemTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.ccTeamName {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ccTeamMeta {
+  font-size: 10px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.ccTeamDetails {
+  margin-left: 20px;
+  margin-top: 4px;
+}
+
+.ccTeamMembers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.ccTeamMember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.ccTeamMemberIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background: rgba(var(--info-rgb), 0.15);
+  color: var(--info);
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ccTeamMemberName {
+  color: var(--text);
+}
+
+.ccTeamMemberType {
+  font-size: 10px;
+}
+
+.ccTeamTasks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ccTeamTask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.ccTeamTaskSubject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  color: var(--text);
+}
+
+.ccTeamTaskActive {
+  font-size: 10px;
+  font-style: italic;
+}
+
+.ccTeamTaskOwner {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+[data-theme="light"] .ccTeamTaskOwner {
+  background: rgba(0, 0, 0, 0.06);
+}

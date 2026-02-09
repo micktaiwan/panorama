@@ -8,6 +8,7 @@ import { navigateTo } from '/imports/ui/router.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { shortenPath } from './useHomeDir.js';
+import { AgentTeams } from './AgentTeams.jsx';
 import './ProjectList.css';
 
 const COLLAPSE_STORAGE_KEY = 'claude-collapsed-projects';
@@ -270,6 +271,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
           );
         })}
       </div>
+      <AgentTeams />
     </div>
   );
 };
