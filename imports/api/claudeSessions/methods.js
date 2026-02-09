@@ -1,8 +1,10 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
+import fs from 'fs';
+import path from 'path';
 import { ClaudeSessionsCollection } from './collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
-import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, dequeueMessage, respondToPermission, execShellCommand, execCodexCommand, isRunning, syncPermissionMode } from './processManager';
+import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, dequeueMessage, respondToPermission, execShellCommand, execCodexCommand, isRunning, syncPermissionMode, execDebate, stopDebate } from './processManager';
 
 const TAG = '[claude-methods]';
 
@@ -22,6 +24,10 @@ Meteor.methods({
       model: doc.model ? String(doc.model).trim() : undefined,
       permissionMode: doc.permissionMode ? String(doc.permissionMode).trim() : undefined,
       appendSystemPrompt: doc.appendSystemPrompt ? String(doc.appendSystemPrompt) : undefined,
+      activeAgent: 'claude',
+      codexModel: doc.codexModel ? String(doc.codexModel).trim() : undefined,
+      codexReasoningEffort: doc.codexReasoningEffort ? String(doc.codexReasoningEffort).trim() : undefined,
+      claudeEffort: doc.claudeEffort ? String(doc.claudeEffort).trim() : undefined,
       claudeSessionId: null,
       status: 'idle',
       lastError: null,
@@ -51,6 +57,10 @@ Meteor.methods({
       model: project.model,
       permissionMode: project.permissionMode,
       appendSystemPrompt: project.appendSystemPrompt,
+      activeAgent: 'claude',
+      codexModel: project.codexModel,
+      codexReasoningEffort: project.codexReasoningEffort,
+      claudeEffort: project.claudeEffort,
       claudeSessionId: null,
       status: 'idle',
       lastError: null,
@@ -71,6 +81,10 @@ Meteor.methods({
     if (typeof set.name === 'string') set.name = set.name.trim();
     if (typeof set.cwd === 'string') set.cwd = set.cwd.trim();
     if (typeof set.model === 'string') set.model = set.model.trim();
+    if (typeof set.codexModel === 'string') set.codexModel = set.codexModel.trim();
+    if (typeof set.codexReasoningEffort === 'string') set.codexReasoningEffort = set.codexReasoningEffort.trim();
+    if (typeof set.claudeEffort === 'string') set.claudeEffort = set.claudeEffort.trim();
+    if (typeof set.activeAgent === 'string') set.activeAgent = set.activeAgent.trim();
     // Propagate cwd change to the project so new sessions inherit it
     if (typeof set.cwd === 'string') {
       const session = await ClaudeSessionsCollection.findOneAsync(sessionId, { fields: { projectId: 1 } });
@@ -97,6 +111,10 @@ Meteor.methods({
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
 
     console.log(TAG, 'sendMessage', sessionId, 'status:', session.status, 'images:', images?.length || 0);
+
+    if (session.debateRunning) {
+      throw new Meteor.Error('busy', 'A debate is running. Stop it with ESC or /stop.');
+    }
 
     // Collect unconsumed shell results to inject as context
     const shellResults = await ClaudeMessagesCollection.find(
@@ -186,9 +204,10 @@ Meteor.methods({
     return true;
   },
 
-  async 'claudeSessions.execCodex'(sessionId, prompt) {
+  async 'claudeSessions.execCodex'(sessionId, prompt, options) {
     check(sessionId, String);
     check(prompt, String);
+    check(options, Match.Maybe(Object));
 
     const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
@@ -196,15 +215,35 @@ Meteor.methods({
     let cwd = session.cwd || process.env.HOME + '/projects';
     if (cwd.startsWith('~/')) cwd = process.env.HOME + cwd.slice(1);
 
+    const isConversational = options?.conversational;
+
     // Insert command message immediately
     await ClaudeMessagesCollection.insertAsync({
       sessionId,
       role: 'user',
-      type: 'codex_command',
-      content: [{ type: 'text', text: `/codex ${prompt}` }],
-      contentText: `/codex ${prompt}`,
+      type: isConversational ? 'user' : 'codex_command',
+      content: [{ type: 'text', text: isConversational ? prompt : `/codex ${prompt}` }],
+      contentText: isConversational ? prompt : `/codex ${prompt}`,
       createdAt: new Date(),
     });
+
+    // Build enriched prompt with conversation context when in conversational mode
+    let enrichedPrompt = prompt;
+    if (isConversational) {
+      const recentMessages = await ClaudeMessagesCollection.find(
+        { sessionId, role: { $in: ['user', 'assistant'] }, type: { $nin: ['codex_command', 'shell_command', 'shell_result'] } },
+        { sort: { createdAt: -1 }, limit: 20 }
+      ).fetchAsync();
+
+      if (recentMessages.length > 1) {
+        const contextLines = recentMessages.reverse().slice(0, -1).map(m => {
+          const role = m.role === 'user' ? 'User' : (m.type === 'codex_result' ? 'Codex' : 'Claude');
+          const text = (m.contentText || '').slice(0, 500);
+          return `[${role}]: ${text}`;
+        });
+        enrichedPrompt = `Here is the conversation context:\n\n${contextLines.join('\n\n')}\n\n---\nNow answer this:\n${prompt}`;
+      }
+    }
 
     // Set codexRunning flag for spinner
     await ClaudeSessionsCollection.updateAsync(sessionId, {
@@ -212,7 +251,66 @@ Meteor.methods({
     });
 
     // Execute async (fire-and-forget)
-    execCodexCommand(sessionId, prompt, cwd);
+    execCodexCommand(sessionId, enrichedPrompt, cwd, {
+      model: session.codexModel,
+      reasoningEffort: session.codexReasoningEffort,
+    });
+    return true;
+  },
+
+  async 'claudeSessions.execDebate'(sessionId, subject) {
+    check(sessionId, String);
+    check(subject, String);
+
+    const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
+    if (!session) throw new Meteor.Error('not-found', 'Session not found');
+    if (session.status === 'running') throw new Meteor.Error('busy', 'Claude is already running');
+    if (session.debateRunning) throw new Meteor.Error('busy', 'A debate is already running');
+    if (session.codexRunning) throw new Meteor.Error('busy', 'Codex is already running');
+
+    let cwd = session.cwd || process.env.HOME + '/projects';
+    if (cwd.startsWith('~/')) cwd = process.env.HOME + cwd.slice(1);
+
+    // Insert command message
+    await ClaudeMessagesCollection.insertAsync({
+      sessionId,
+      role: 'user',
+      type: 'debate_command',
+      content: [{ type: 'text', text: `/debate ${subject}` }],
+      contentText: `/debate ${subject}`,
+      debateSubject: subject,
+      createdAt: new Date(),
+    });
+
+    // Set debate flags
+    await ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: {
+        debateRunning: true,
+        debateRound: 1,
+        debateCurrentAgent: 'codex',
+        debateSubject: subject,
+        updatedAt: new Date(),
+      }
+    });
+
+    // Fire-and-forget the orchestrator
+    execDebate(sessionId, subject, cwd, session);
+    return true;
+  },
+
+  async 'claudeSessions.stopDebate'(sessionId) {
+    check(sessionId, String);
+    stopDebate(sessionId);
+    // Clear flags immediately for UI responsiveness
+    await ClaudeSessionsCollection.updateAsync(sessionId, {
+      $set: {
+        debateRunning: false,
+        debateRound: null,
+        debateCurrentAgent: null,
+        debateSubject: null,
+        updatedAt: new Date(),
+      }
+    });
     return true;
   },
 
@@ -308,6 +406,10 @@ Meteor.methods({
       model: session.model,
       permissionMode: session.permissionMode,
       appendSystemPrompt: session.appendSystemPrompt,
+      activeAgent: session.activeAgent || 'claude',
+      codexModel: session.codexModel,
+      codexReasoningEffort: session.codexReasoningEffort,
+      claudeEffort: session.claudeEffort,
       claudeSessionId: null,
       status: 'idle',
       lastError: null,
@@ -341,5 +443,55 @@ Meteor.methods({
     );
     console.log(TAG, 'cleanupInterrupted:', count, 'session(s) reset to idle');
     return count;
+  },
+
+  async 'claudeTeams.getState'() {
+    const homeDir = process.env.HOME || '';
+    const teamsDir = path.join(homeDir, '.claude', 'teams');
+    const tasksDir = path.join(homeDir, '.claude', 'tasks');
+
+    let teamEntries;
+    try {
+      teamEntries = await fs.promises.readdir(teamsDir, { withFileTypes: true });
+    } catch {
+      return { teams: [] };
+    }
+
+    const teams = [];
+    for (const entry of teamEntries) {
+      if (!entry.isDirectory()) continue;
+      const teamName = entry.name;
+
+      // Read team config
+      let config;
+      try {
+        const raw = await fs.promises.readFile(path.join(teamsDir, teamName, 'config.json'), 'utf8');
+        config = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+
+      // Read tasks for this team
+      const tasks = [];
+      try {
+        const taskFiles = await fs.promises.readdir(path.join(tasksDir, teamName));
+        for (const tf of taskFiles) {
+          if (!tf.endsWith('.json')) continue;
+          try {
+            const raw = await fs.promises.readFile(path.join(tasksDir, teamName, tf), 'utf8');
+            tasks.push(JSON.parse(raw));
+          } catch { /* skip malformed */ }
+        }
+      } catch { /* no tasks dir */ }
+
+      teams.push({
+        name: teamName,
+        members: config.members || [],
+        description: config.description || '',
+        tasks: tasks.sort((a, b) => Number(a.id || 0) - Number(b.id || 0)),
+      });
+    }
+
+    return { teams };
   },
 });

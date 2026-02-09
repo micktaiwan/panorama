@@ -179,6 +179,16 @@ Meteor.startup(async () => {
     }
   }
 
+  // Clear stale debate flags (processes died on restart)
+  const staleDebates = await ClaudeSessionsCollection.updateAsync(
+    { debateRunning: true },
+    { $set: { debateRunning: false, debateRound: null, debateCurrentAgent: null, debateSubject: null } },
+    { multi: true }
+  );
+  if (staleDebates > 0) {
+    console.log(`[startup] Cleared ${staleDebates} stale debate flag(s)`);
+  }
+
   // Migrate orphan Claude sessions (no projectId) into individual projects
   const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
   const orphanSessions = await ClaudeSessionsCollection.find({ projectId: { $exists: false } }).fetchAsync();

@@ -21,8 +21,21 @@ try {
   console.warn('[claude-pm] "codex" not found in PATH');
 }
 
-// --- File logger ---
+// --- File logger (with rotation) ---
 const LOG_FILE = path.join(process.env.HOME || '/tmp', '.panorama-claude.log');
+const LOG_MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+
+// Rotate on startup: keep only the last half when file exceeds max size
+try {
+  const stat = fs.statSync(LOG_FILE);
+  if (stat.size > LOG_MAX_SIZE) {
+    const content = fs.readFileSync(LOG_FILE, 'utf8');
+    const half = content.slice(content.length / 2);
+    const firstNewline = half.indexOf('\n');
+    fs.writeFileSync(LOG_FILE, firstNewline >= 0 ? half.slice(firstNewline + 1) : half);
+    console.log(`[claude-pm] Log rotated: ${(stat.size / 1024 / 1024).toFixed(1)}MB → ${(fs.statSync(LOG_FILE).size / 1024 / 1024).toFixed(1)}MB`);
+  }
+} catch (_) {}
 
 function log(...args) {
   const ts = new Date().toISOString();
@@ -46,6 +59,9 @@ const pendingPermissions = new Map();
 
 // In-memory message queue: sessionId -> [{ msgId, content }, ...]
 const messageQueues = new Map();
+
+// In-memory debate state: sessionId -> { aborted, currentProc }
+const activeDebates = new Map();
 
 export function queueMessage(sessionId, message, msgId) {
   if (!messageQueues.has(sessionId)) messageQueues.set(sessionId, []);
@@ -147,6 +163,10 @@ export async function killProcess(sessionId) {
   await ClaudeSessionsCollection.updateAsync(sessionId, {
     $set: { status: 'idle', pid: null, updatedAt: new Date() }
   });
+
+  // Drain any messages that were queued during the kill (race condition:
+  // sendMessage can queue a message after clearQueue but before status is idle)
+  drainQueue(sessionId);
 }
 
 // Determine if a permission mode auto-allows a given tool
@@ -279,7 +299,7 @@ export function execShellCommand(sessionId, command, cwd) {
   }));
 }
 
-export function execCodexCommand(sessionId, prompt, cwd) {
+export function execCodexCommand(sessionId, prompt, cwd, options = {}) {
   const TIMEOUT_MS = 300000; // 5 minutes
   const MAX_OUTPUT = 100000;
 
@@ -304,13 +324,12 @@ export function execCodexCommand(sessionId, prompt, cwd) {
 
   log('execCodex:', prompt.slice(0, 100));
 
-  const proc = spawn(codexBin, [
-    'exec',
-    '--json',
-    '--full-auto',
-    '-C', cwd,
-    prompt
-  ], {
+  const codexArgs = ['exec', '--json', '--full-auto', '-C', cwd];
+  if (options.model) codexArgs.push('--model', options.model);
+  if (options.reasoningEffort) codexArgs.push('-c', `model_reasoning_effort="${options.reasoningEffort}"`);
+  codexArgs.push(prompt);
+
+  const proc = spawn(codexBin, codexArgs, {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env },
   });
@@ -394,6 +413,19 @@ export function execCodexCommand(sessionId, prompt, cwd) {
     await ClaudeSessionsCollection.updateAsync(sessionId, {
       $set: { codexRunning: false, updatedAt: new Date() }
     });
+
+    // Inject a system message so Claude knows about the Codex exchange
+    if (code === 0 && contentText) {
+      const summary = `[Codex exchange] User asked: "${prompt.slice(0, 200)}"\nCodex responded:\n${contentText.slice(0, 2000)}`;
+      await ClaudeMessagesCollection.insertAsync({
+        sessionId,
+        role: 'system',
+        type: 'codex_context',
+        content: [{ type: 'text', text: summary }],
+        contentText: summary,
+        createdAt: new Date(),
+      });
+    }
   }));
 }
 
@@ -432,9 +464,16 @@ export async function spawnClaudeProcess(session, message) {
   log('args:', args.join(' '));
   log('cwd:', cwd);
 
+  const spawnEnv = { ...process.env, PANORAMA_SESSION: sessionId };
+  if (session.claudeEffort) {
+    const effortToTokens = { low: 8000, medium: 16000, high: 31999, max: 63999 };
+    const tokens = effortToTokens[session.claudeEffort];
+    if (tokens) spawnEnv.MAX_THINKING_TOKENS = String(tokens);
+  }
+
   const proc = spawn(claudeBin, args, {
     cwd,
-    env: { ...process.env, PANORAMA_SESSION: sessionId },
+    env: spawnEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
@@ -702,20 +741,8 @@ export async function spawnClaudeProcess(session, message) {
         return;
       }
 
-      // Save tool results / user context messages
+      // Skip tool results — they clutter the conversation with raw file contents
       if (contentBlocks.length > 0) {
-        const contentText = contentBlocks
-          .filter(b => b.type === 'text')
-          .map(b => b.text)
-          .join('\n');
-        await ClaudeMessagesCollection.insertAsync({
-          sessionId,
-          role: 'user',
-          type: 'tool_result',
-          content: contentBlocks,
-          contentText,
-          createdAt: new Date(),
-        });
         return;
       }
     }
@@ -774,4 +801,360 @@ export async function spawnClaudeProcess(session, message) {
       drainQueue(sessionId);
     }
   }));
+}
+
+// ============================================================
+// Debate: Claude Code vs Codex back-and-forth
+// ============================================================
+
+const DEBATE_MAX_ROUNDS = 5;
+const DEBATE_TIMEOUT_MS = 300000; // 5 min per turn
+const DEBATE_MAX_OUTPUT = 100000;
+
+function parseConsensusTag(text) {
+  if (!text) return null;
+  const lastAgree = text.lastIndexOf('[AGREE]');
+  const lastDisagree = text.lastIndexOf('[DISAGREE]');
+  if (lastAgree === -1 && lastDisagree === -1) return null;
+  return lastAgree > lastDisagree;
+}
+
+function buildCodexPrompt(subject, history, round) {
+  let prompt = `You are Codex (OpenAI) participating in a structured debate with Claude Code (Anthropic) about:\n\n"${subject}"\n\n`;
+  if (history.length > 0) {
+    prompt += 'Previous turns:\n\n';
+    for (const turn of history) {
+      prompt += `--- ${turn.agent.toUpperCase()} (Round ${turn.round}) ---\n${turn.text}\n\n`;
+    }
+    prompt += '---\n\n';
+  }
+  if (round === 1) {
+    prompt += 'You go first. Provide your analysis.';
+  } else {
+    prompt += `It is your turn (Round ${round}). Respond to the points made above.\n\n`;
+    prompt += 'At the end of your response, you MUST include exactly one of these tags on its own line:\n[AGREE] - if you agree with the other agent or believe consensus is reached\n[DISAGREE] - if you disagree and want to continue the debate';
+  }
+  return prompt;
+}
+
+function buildClaudePrompt(subject, history, round) {
+  let prompt = `You are Claude Code (Anthropic) participating in a structured debate with Codex (OpenAI) about:\n\n"${subject}"\n\n`;
+  prompt += 'Previous turns:\n\n';
+  for (const turn of history) {
+    prompt += `--- ${turn.agent.toUpperCase()} (Round ${turn.round}) ---\n${turn.text}\n\n`;
+  }
+  prompt += '---\n\n';
+  prompt += `It is your turn (Round ${round}). Respond to the points made above.\n\n`;
+  prompt += 'At the end of your response, you MUST include exactly one of these tags on its own line:\n[AGREE] - if you agree with the other agent or believe consensus is reached\n[DISAGREE] - if you disagree and want to continue the debate';
+  return prompt;
+}
+
+function runCodexTurn(sessionId, prompt, cwd, options = {}) {
+  return new Promise((resolve, reject) => {
+    if (!codexBin || codexBin === 'codex') {
+      return reject(new Error('codex CLI not found. Install with: npm install -g @openai/codex'));
+    }
+
+    const debate = activeDebates.get(sessionId);
+
+    const codexArgs = ['exec', '--json', '--full-auto', '-C', cwd];
+    if (options.model) codexArgs.push('--model', options.model);
+    if (options.reasoningEffort) codexArgs.push('-c', `model_reasoning_effort="${options.reasoningEffort}"`);
+    codexArgs.push(prompt);
+
+    log('debate codex spawn:', codexBin, codexArgs.slice(0, -1).join(' '), prompt.slice(0, 80));
+    const proc = spawn(codexBin, codexArgs, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env },
+    });
+
+    log('debate codex pid:', proc.pid);
+    if (debate) debate.currentProc = proc;
+
+    let buffer = '';
+    const items = [];
+    let usage = null;
+    let stderr = '';
+
+    proc.stdout.on('data', Meteor.bindEnvironment((chunk) => {
+      const text = chunk.toString();
+      log('debate codex stdout chunk:', text.length, 'chars');
+      buffer += text;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          log('debate codex event:', event.type);
+          if (event.type === 'item.completed') items.push(event.item);
+          else if (event.type === 'turn.completed') usage = event.usage;
+        } catch (_) {}
+      }
+    }));
+
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+      log('debate codex stderr:', chunk.toString().slice(0, 200));
+    });
+
+    const timeout = setTimeout(() => {
+      log('debate codex timeout, killing');
+      try { proc.kill('SIGKILL'); } catch (_) {}
+      reject(new Error('Codex turn timeout'));
+    }, DEBATE_TIMEOUT_MS);
+
+    proc.on('close', Meteor.bindEnvironment((code) => {
+      clearTimeout(timeout);
+      log('debate codex closed, code:', code, 'items:', items.length, 'stderr:', stderr.slice(0, 200));
+      if (debate) debate.currentProc = null;
+
+      // Only keep agent_message items (the summary), not command_execution (file reads etc.)
+      const parts = [];
+      for (const item of items) {
+        if (item.type === 'agent_message' && item.text) {
+          parts.push(item.text);
+        }
+      }
+      if (parts.length === 0) {
+        parts.push(stderr ? `Error: ${stderr}` : '(no output from codex)');
+      }
+      const text = parts.join('\n\n');
+      log('debate codex result text:', text.slice(0, 200));
+      resolve({ text, agreed: parseConsensusTag(text), exitCode: code, usage });
+    }));
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      logError('debate codex spawn error:', err.message);
+      if (debate) debate.currentProc = null;
+      reject(err);
+    });
+  });
+}
+
+function runClaudeTurn(sessionId, prompt, cwd, session) {
+  return new Promise((resolve, reject) => {
+    const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+    if (session.model) args.push('--model', session.model);
+    args.push('--permission-mode', 'plan');
+
+    const debate = activeDebates.get(sessionId);
+
+    log('debate claude spawn:', claudeBin, args.slice(0, 5).join(' '), '...');
+    const proc = spawn(claudeBin, args, {
+      cwd,
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    log('debate claude pid:', proc.pid);
+    // Close stdin immediately — with -p, Claude reads the prompt from args, not stdin
+    proc.stdin.end();
+    if (debate) debate.currentProc = proc;
+
+    let buffer = '';
+    let resultText = '';
+
+    proc.stdout.on('data', Meteor.bindEnvironment((chunk) => {
+      const text = chunk.toString();
+      log('debate claude stdout chunk:', text.length, 'chars');
+      buffer += text;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const data = JSON.parse(line);
+          log('debate claude event:', data.type, data.subtype || '');
+          if (data.type === 'assistant') {
+            const blocks = data.message?.content || [];
+            const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
+            if (text) resultText = text;
+          }
+          if (data.type === 'result' && data.subtype !== 'error' && data.subtype !== 'error_during_execution') {
+            const blocks = data.result?.content || data.content || [];
+            const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
+            if (text) resultText = text;
+          }
+        } catch (_) {}
+      }
+    }));
+
+    let stderr = '';
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+      log('debate claude stderr:', chunk.toString().slice(0, 200));
+    });
+
+    const timeout = setTimeout(() => {
+      try { proc.kill('SIGKILL'); } catch (_) {}
+      reject(new Error('Claude turn timeout'));
+    }, DEBATE_TIMEOUT_MS);
+
+    proc.on('close', Meteor.bindEnvironment((code) => {
+      clearTimeout(timeout);
+      log('debate claude closed, code:', code, 'resultText:', resultText.slice(0, 200));
+      if (debate) debate.currentProc = null;
+
+      // Process remaining buffer
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim());
+          if (data.type === 'assistant') {
+            const blocks = data.message?.content || [];
+            const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
+            if (text) resultText = text;
+          }
+          if (data.type === 'result' && data.subtype !== 'error' && data.subtype !== 'error_during_execution') {
+            const blocks = data.result?.content || data.content || [];
+            const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
+            if (text) resultText = text;
+          }
+        } catch (_) {}
+      }
+
+      if (!resultText && stderr) resultText = `Error: ${stderr}`;
+      if (!resultText) resultText = '(no output from claude)';
+
+      log('debate claude final text:', resultText.slice(0, 200));
+      resolve({ text: resultText, agreed: parseConsensusTag(resultText), exitCode: code });
+    }));
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      logError('debate claude spawn error:', err.message);
+      if (debate) debate.currentProc = null;
+      reject(err);
+    });
+  });
+}
+
+async function clearDebateFlags(sessionId) {
+  await ClaudeSessionsCollection.updateAsync(sessionId, {
+    $set: { debateRunning: false, debateRound: null, debateCurrentAgent: null, debateSubject: null, updatedAt: new Date() }
+  });
+}
+
+async function insertDebateTurn(sessionId, agent, round, text, agreed) {
+  await ClaudeMessagesCollection.insertAsync({
+    sessionId,
+    role: 'system',
+    type: 'debate_turn',
+    content: [{ type: 'text', text }],
+    contentText: text,
+    debateAgent: agent,
+    debateRound: round,
+    debateAgreed: agreed,
+    createdAt: new Date(),
+  });
+}
+
+async function insertDebateSummary(sessionId, rounds, outcome) {
+  const messages = {
+    consensus: `Debate ended: consensus reached after ${rounds} round(s).`,
+    max_rounds: `Debate ended: max ${rounds} rounds reached without full consensus.`,
+    stopped: 'Debate stopped by user.',
+    error: 'Debate ended due to an error.',
+  };
+  await ClaudeMessagesCollection.insertAsync({
+    sessionId,
+    role: 'system',
+    type: 'debate_summary',
+    content: [{ type: 'text', text: messages[outcome] || `Debate ended: ${outcome}` }],
+    contentText: messages[outcome] || `Debate ended: ${outcome}`,
+    debateRounds: rounds,
+    debateOutcome: outcome,
+    createdAt: new Date(),
+  });
+}
+
+export async function execDebate(sessionId, subject, cwd, session) {
+  const debateState = { aborted: false, currentProc: null };
+  activeDebates.set(sessionId, debateState);
+  const history = [];
+
+  log('debate start:', subject.slice(0, 100));
+
+  try {
+    for (let round = 1; round <= DEBATE_MAX_ROUNDS; round++) {
+      if (debateState.aborted) break;
+
+      // --- Codex turn ---
+      await ClaudeSessionsCollection.updateAsync(sessionId, {
+        $set: { debateRound: round, debateCurrentAgent: 'codex', updatedAt: new Date() }
+      });
+
+      const codexPrompt = buildCodexPrompt(subject, history, round);
+      log(`debate round ${round} codex turn`);
+      const codexResult = await runCodexTurn(sessionId, codexPrompt, cwd, {
+        model: session.codexModel,
+        reasoningEffort: session.codexReasoningEffort,
+      });
+
+      if (debateState.aborted) break;
+
+      await insertDebateTurn(sessionId, 'codex', round, codexResult.text, codexResult.agreed);
+      history.push({ agent: 'codex', round, text: codexResult.text });
+
+      if (debateState.aborted) break;
+
+      // --- Claude turn ---
+      await ClaudeSessionsCollection.updateAsync(sessionId, {
+        $set: { debateCurrentAgent: 'claude', updatedAt: new Date() }
+      });
+
+      const claudePrompt = buildClaudePrompt(subject, history, round);
+      log(`debate round ${round} claude turn`);
+      const claudeResult = await runClaudeTurn(sessionId, claudePrompt, cwd, session);
+
+      if (debateState.aborted) break;
+
+      await insertDebateTurn(sessionId, 'claude', round, claudeResult.text, claudeResult.agreed);
+      history.push({ agent: 'claude', round, text: claudeResult.text });
+
+      // Check consensus
+      if (codexResult.agreed && claudeResult.agreed) {
+        log(`debate consensus at round ${round}`);
+        await insertDebateSummary(sessionId, round, 'consensus');
+        return;
+      }
+
+      if (round === DEBATE_MAX_ROUNDS) {
+        log('debate max rounds reached');
+        await insertDebateSummary(sessionId, round, 'max_rounds');
+        return;
+      }
+    }
+
+    // If we broke out of the loop due to abort
+    if (debateState.aborted) {
+      log('debate aborted');
+      const currentRound = history.length > 0 ? history[history.length - 1].round : 0;
+      await insertDebateSummary(sessionId, currentRound, 'stopped');
+    }
+  } catch (err) {
+    logError('debate error:', err.message);
+    const currentRound = history.length > 0 ? history[history.length - 1].round : 0;
+    await insertDebateSummary(sessionId, currentRound, 'error');
+  } finally {
+    activeDebates.delete(sessionId);
+    await clearDebateFlags(sessionId);
+    log('debate cleanup done for', sessionId);
+  }
+}
+
+export function stopDebate(sessionId) {
+  const debate = activeDebates.get(sessionId);
+  if (!debate) return;
+
+  log('stopping debate for', sessionId);
+  debate.aborted = true;
+
+  if (debate.currentProc) {
+    try { debate.currentProc.kill('SIGTERM'); } catch (_) {}
+    setTimeout(() => {
+      try { debate.currentProc?.kill('SIGKILL'); } catch (_) {}
+    }, 3000);
+  }
 }
