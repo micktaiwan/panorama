@@ -240,6 +240,33 @@
   margin-left: 6px;
 }
 
+.ccDebateAgentLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+.ccDebateAgentLabel.ccDebateAgent-codex {
+  background: rgba(var(--success-rgb), 0.15);
+  color: var(--success-text);
+}
+
+.ccDebateAgentLabel.ccDebateAgent-claude {
+  background: rgba(var(--primary-rgb), 0.15);
+  color: var(--primary);
+}
+
+.ccDebateRound {
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 4px;
+  font-weight: 500;
+}
+
 /* Queued messages stack (above composer) */
 .ccQueuedStack {
   display: flex;
@@ -364,6 +391,9 @@
   color: var(--text);
   font-family: inherit;
   line-height: 1.4;
+  min-height: 1.4em;
+  max-height: 500px;
+  overflow-y: auto;
 }
 
 .ccInput:focus {
@@ -404,7 +434,55 @@
   flex: 1;
 }
 
-select.ccPermModeSelect {
+/* Agent toggle (Claude | Codex) */
+.ccAgentToggle {
+  display: flex;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.ccAgentBtn {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ccAgentBtn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.ccAgentBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="light"] .ccAgentBtn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.ccAgentBtn--active {
+  background: rgba(var(--primary-rgb), 0.15);
+  color: var(--primary);
+}
+
+.ccAgentBtn--active.ccAgentBtn--codex {
+  background: rgba(var(--success-rgb), 0.15);
+  color: var(--success-text);
+}
+
+.ccAgentBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+select.ccPermModeSelect,
+select.ccModelSelect,
+select.ccEffortSelect {
   font-size: 11px;
   padding: 0;
   border: none;
@@ -415,7 +493,11 @@ select.ccPermModeSelect {
 }
 
 select.ccPermModeSelect:focus,
-select.ccPermModeSelect:hover {
+select.ccPermModeSelect:hover,
+select.ccModelSelect:focus,
+select.ccModelSelect:hover,
+select.ccEffortSelect:focus,
+select.ccEffortSelect:hover {
   outline: none;
   border: none;
 }

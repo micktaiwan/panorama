@@ -298,10 +298,150 @@ const PermissionActions = ({ sessionId, toolName, toolInput }) => {
   );
 };
 
+const formatInfoDuration = (ms) => {
+  if (!ms) return null;
+  const totalSec = ms / 1000;
+  if (totalSec < 60) return `${totalSec.toFixed(1)}s`;
+  const totalMin = totalSec / 60;
+  if (totalMin < 60) return `${totalMin.toFixed(1)}min`;
+  const h = Math.floor(totalMin / 60);
+  const m = Math.round(totalMin % 60);
+  return m > 0 ? `${h}h${m}min` : `${h}h`;
+};
+
+const InfoCard = ({ data }) => {
+  const {
+    version, model, permissionMode, status, cwd, claudeSessionId,
+    modelUsage, totalCostUsd, totalDurationMs,
+  } = data;
+
+  // Extract first (usually only) model entry from modelUsage
+  const modelEntries = modelUsage ? Object.entries(modelUsage) : [];
+
+  return (
+    <div className="ccInfoCard">
+      <div className="ccInfoHeader">Session Info</div>
+
+      <div className="ccInfoSection">
+        <div className="ccInfoRow">
+          <span className="ccInfoLabel">Version</span>
+          <span className="ccInfoValue">{version || '(unknown)'}</span>
+        </div>
+        <div className="ccInfoRow">
+          <span className="ccInfoLabel">Model</span>
+          <span className="ccInfoValue ccInfoMono">{model || '(default)'}</span>
+        </div>
+        <div className="ccInfoRow">
+          <span className="ccInfoLabel">Permission</span>
+          <span className={`ccInfoBadge ccInfoBadge--${permissionMode || 'default'}`}>{permissionMode || 'default'}</span>
+        </div>
+        <div className="ccInfoRow">
+          <span className="ccInfoLabel">Status</span>
+          <span className={`ccInfoBadge ccInfoBadge--${status}`}>{status}</span>
+        </div>
+        {cwd && (
+          <div className="ccInfoRow">
+            <span className="ccInfoLabel">cwd</span>
+            <span className="ccInfoValue ccInfoMono ccInfoTruncate">{cwd}</span>
+          </div>
+        )}
+        {claudeSessionId && (
+          <div className="ccInfoRow">
+            <span className="ccInfoLabel">Session ID</span>
+            <span className="ccInfoValue ccInfoMono ccInfoTruncate">{claudeSessionId}</span>
+          </div>
+        )}
+      </div>
+
+      {modelEntries.length > 0 ? modelEntries.map(([modelName, m]) => {
+        const inputTokens = m.inputTokens || 0;
+        const cacheRead = m.cacheReadInputTokens || 0;
+        const cacheCreation = m.cacheCreationInputTokens || 0;
+        const outputTokens = m.outputTokens || 0;
+        const contextWindow = m.contextWindow || 0;
+        const maxOutput = m.maxOutputTokens || 0;
+        const totalInput = inputTokens + cacheRead + cacheCreation;
+        const pct = contextWindow > 0 ? (totalInput / contextWindow) * 100 : 0;
+        const barPct = Math.min(pct, 100);
+        const isOver = pct > 100;
+
+        return (
+          <div key={modelName} className="ccInfoSection">
+            <div className="ccInfoSectionTitle">Context</div>
+            {modelEntries.length > 1 && (
+              <div className="ccInfoRow">
+                <span className="ccInfoLabel">Model</span>
+                <span className="ccInfoValue ccInfoMono">{modelName}</span>
+              </div>
+            )}
+            <div className="ccInfoContextBar">
+              <div className="ccInfoBarTrack">
+                <div
+                  className={`ccInfoBarFill ${isOver ? 'ccInfoBarFill--over' : ''}`}
+                  style={{ width: `${barPct}%` }}
+                />
+              </div>
+              <span className={`ccInfoBarLabel ${isOver ? 'ccInfoBarLabel--over' : ''}`}>
+                {totalInput.toLocaleString()} / {contextWindow.toLocaleString()} ({pct.toFixed(1)}%)
+              </span>
+            </div>
+            <div className="ccInfoTokenGrid">
+              <span className="ccInfoTokenLabel">Input tokens</span>
+              <span className="ccInfoTokenValue">{inputTokens.toLocaleString()}</span>
+              <span className="ccInfoTokenLabel">Cache read</span>
+              <span className="ccInfoTokenValue">{cacheRead.toLocaleString()}</span>
+              <span className="ccInfoTokenLabel">Cache creation</span>
+              <span className="ccInfoTokenValue">{cacheCreation.toLocaleString()}</span>
+              <span className="ccInfoTokenLabel">Output tokens</span>
+              <span className="ccInfoTokenValue">{outputTokens.toLocaleString()}</span>
+              {maxOutput > 0 && <>
+                <span className="ccInfoTokenLabel">Max output</span>
+                <span className="ccInfoTokenValue">{maxOutput.toLocaleString()}</span>
+              </>}
+              {m.webSearchRequests > 0 && <>
+                <span className="ccInfoTokenLabel">Web searches</span>
+                <span className="ccInfoTokenValue">{m.webSearchRequests}</span>
+              </>}
+            </div>
+          </div>
+        );
+      }) : (
+        <div className="ccInfoSection">
+          <div className="ccInfoSectionTitle">Context</div>
+          <span className="ccInfoMuted">(send a message first)</span>
+        </div>
+      )}
+
+      <div className="ccInfoSection">
+        <div className="ccInfoSectionTitle">Session</div>
+        <div className="ccInfoRow">
+          <span className="ccInfoLabel">Total cost</span>
+          <span className="ccInfoValue">{totalCostUsd > 0 ? `$${totalCostUsd.toFixed(4)}` : '$0'}</span>
+        </div>
+        {modelEntries.map(([modelName, m]) => m.costUSD > 0 && (
+          <div key={`cost-${modelName}`} className="ccInfoRow">
+            <span className="ccInfoLabel">Last turn cost</span>
+            <span className="ccInfoValue">${m.costUSD.toFixed(4)}</span>
+          </div>
+        ))}
+        <div className="ccInfoRow">
+          <span className="ccInfoLabel">Total time</span>
+          <span className="ccInfoValue">{formatInfoDuration(totalDurationMs) || '0s'}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const MessageBubble = ({ message, onAnswer, sessionId }) => {
   const { role, content, contentText, isStreaming, usage, costUsd, durationMs } = message;
   const isUser = role === 'user';
-  const isSystem = role === 'system' || message.type === 'result';
+  const isInfo = message.localType === 'info';
+  const isDebateTurn = message.type === 'debate_turn';
+  const isDebateSummary = message.type === 'debate_summary';
+  const isCodexResult = message.type === 'codex_result';
+  const isCodexContext = message.type === 'codex_context';
+  const isSystem = (role === 'system' || message.type === 'result') && !isDebateTurn && !isDebateSummary && !isCodexResult && !isCodexContext && !isInfo;
   const isPermission = message.type === 'permission_request';
   const isShell = message.type === 'shell_command' || message.type === 'shell_result';
   const blocks = Array.isArray(content) ? content : [];
@@ -312,20 +452,35 @@ export const MessageBubble = ({ message, onAnswer, sessionId }) => {
     : null;
 
   return (
-    <div className={`ccMessage ${isUser ? 'ccMessageUser' : ''} ${isSystem ? 'ccMessageSystem' : ''} ${isPermission ? 'ccMessagePermission' : ''} ${isShell ? 'ccMessageShell' : ''}`}>
+    <div className={`ccMessage ${isUser ? 'ccMessageUser' : ''} ${isSystem ? 'ccMessageSystem' : ''} ${isInfo ? 'ccMessageInfo' : ''} ${isPermission ? 'ccMessagePermission' : ''} ${isShell ? 'ccMessageShell' : ''} ${isDebateTurn ? `ccMessageDebate ccDebate-${message.debateAgent}` : ''} ${isDebateSummary ? 'ccMessageDebateSummary' : ''} ${isCodexResult ? 'ccMessageCodex' : ''} ${isCodexContext ? 'ccMessageCodexContext' : ''}`}>
+      {isCodexResult && <div className="ccAgentBadge ccAgentBadge--codex">Codex</div>}
       {roleLabel && <div className="ccMessageRole">{roleLabel}</div>}
       <div className="ccMessageBody">
-        {isShell ? (
-          message.type === 'shell_result' && <pre className="ccShellOutput">{contentText}</pre>
-        ) : blocks.length > 0
-          ? blocks.map((block, i) => <ContentBlock key={i} block={block} onAnswer={onAnswer} />)
-          : contentText && (
-            <div
-              className="ccMarkdown"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(contentText) }}
-            />
-          )
-        }
+        {isInfo && message.infoData ? (
+          <InfoCard data={message.infoData} />
+        ) : (
+          <>
+            {isDebateTurn && (
+              <div className="ccDebateMeta">
+                <span className={`ccDebateAgentBadge ccDebateAgent-${message.debateAgent}`}>{message.debateAgent}</span>
+                <span className="ccDebateRoundLabel">Round {message.debateRound}</span>
+                {message.debateAgreed === true && <span className="ccDebateVerdict ccDebateAgree">AGREE</span>}
+                {message.debateAgreed === false && <span className="ccDebateVerdict ccDebateDisagree">DISAGREE</span>}
+              </div>
+            )}
+            {isShell ? (
+              message.type === 'shell_result' && <pre className="ccShellOutput">{contentText}</pre>
+            ) : blocks.length > 0
+              ? blocks.map((block, i) => <ContentBlock key={i} block={block} onAnswer={onAnswer} />)
+              : contentText && (
+                <div
+                  className="ccMarkdown"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(contentText) }}
+                />
+              )
+            }
+          </>
+        )}
         {isPermission && sessionId && !message.autoResponded && <PermissionActions sessionId={sessionId} toolName={message.toolName} toolInput={message.toolInput} />}
         {isPermission && message.autoResponded && <div className="ccPermissionActions"><span className="ccPermissionSent">Auto-allowed ({message.autoRespondedMode})</span></div>}
         {isStreaming && <span className="ccCursor" />}

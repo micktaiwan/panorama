@@ -393,3 +393,286 @@
   50% { opacity: 0; }
 }
 
+/* Debate turns */
+.ccMessageDebate {
+  opacity: 1;
+  padding-left: 10px;
+}
+
+.ccDebate-codex {
+  border-left: 3px solid rgba(var(--success-rgb), 0.6);
+}
+
+.ccDebate-claude {
+  border-left: 3px solid rgba(var(--primary-rgb), 0.6);
+}
+
+.ccDebateMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ccDebateAgentBadge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.ccDebateAgent-codex {
+  background: rgba(var(--success-rgb), 0.15);
+  color: var(--success-text);
+}
+
+.ccDebateAgent-claude {
+  background: rgba(var(--primary-rgb), 0.15);
+  color: var(--primary);
+}
+
+.ccDebateRoundLabel {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.ccDebateVerdict {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.ccDebateAgree {
+  background: rgba(var(--success-rgb), 0.2);
+  color: var(--success-text);
+}
+
+.ccDebateDisagree {
+  background: rgba(var(--warning-rgb), 0.2);
+  color: var(--warning);
+}
+
+/* Debate summary */
+.ccMessageDebateSummary {
+  opacity: 0.8;
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+  font-style: italic;
+}
+
+/* Codex result messages */
+.ccMessageCodex {
+  border-left: 3px solid rgba(var(--success-rgb), 0.6);
+  padding-left: 10px;
+}
+
+/* Codex context (injected summary for Claude) */
+.ccMessageCodexContext {
+  opacity: 0.4;
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* Agent badge on messages */
+.ccAgentBadge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.ccAgentBadge--codex {
+  background: rgba(var(--success-rgb), 0.15);
+  color: var(--success-text);
+}
+
+/* Info card (/info command) */
+.ccMessageInfo {
+  opacity: 1;
+}
+
+.ccInfoCard {
+  border: 1px solid rgba(var(--primary-rgb), 0.2);
+  border-radius: 8px;
+  background: rgba(var(--primary-rgb), 0.04);
+  overflow: hidden;
+}
+
+.ccInfoHeader {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--primary);
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid rgba(var(--primary-rgb), 0.12);
+  background: rgba(var(--primary-rgb), 0.06);
+}
+
+.ccInfoSection {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(var(--primary-rgb), 0.08);
+}
+
+.ccInfoSection:last-child {
+  border-bottom: none;
+}
+
+.ccInfoSectionTitle {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.ccInfoRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.ccInfoLabel {
+  color: var(--muted);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.ccInfoValue {
+  color: var(--text);
+}
+
+.ccInfoMono {
+  font-family: 'SF Mono', Monaco, Menlo, monospace;
+  font-size: 11px;
+}
+
+.ccInfoTruncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.ccInfoMuted {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.ccInfoBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ccInfoBadge--idle {
+  background: rgba(var(--muted-rgb), 0.15);
+  color: var(--muted);
+}
+
+.ccInfoBadge--running {
+  background: rgba(var(--success-rgb), 0.15);
+  color: var(--success-text);
+}
+
+.ccInfoBadge--error {
+  background: rgba(var(--danger-rgb), 0.15);
+  color: var(--danger);
+}
+
+.ccInfoBadge--interrupted {
+  background: rgba(var(--warning-rgb), 0.15);
+  color: var(--warning);
+}
+
+.ccInfoBadge--plan {
+  background: rgba(var(--info-rgb), 0.15);
+  color: var(--info);
+}
+
+.ccInfoBadge--acceptEdits {
+  background: rgba(var(--success-rgb), 0.15);
+  color: var(--success-text);
+}
+
+.ccInfoBadge--dontAsk,
+.ccInfoBadge--bypassPermissions {
+  background: rgba(var(--warning-rgb), 0.15);
+  color: var(--warning);
+}
+
+.ccInfoBadge--default {
+  background: rgba(var(--muted-rgb), 0.15);
+  color: var(--muted);
+}
+
+/* Context bar */
+.ccInfoContextBar {
+  margin: 4px 0 8px;
+}
+
+.ccInfoBarTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(var(--white-rgb), 0.08);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.ccInfoBarFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.ccInfoBarFill--over {
+  background: var(--warning);
+}
+
+.ccInfoBarLabel {
+  font-size: 12px;
+  color: var(--text);
+  font-family: 'SF Mono', Monaco, Menlo, monospace;
+  font-weight: 500;
+}
+
+.ccInfoBarLabel--over {
+  color: var(--warning);
+}
+
+/* Token grid */
+.ccInfoTokenGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  font-size: 11px;
+}
+
+.ccInfoTokenLabel {
+  color: var(--muted);
+}
+
+.ccInfoTokenValue {
+  color: var(--text);
+  font-family: 'SF Mono', Monaco, Menlo, monospace;
+  text-align: right;
+}
+

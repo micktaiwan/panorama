@@ -26,6 +26,7 @@ const COMMANDS = [
   { name: 'model', description: 'Change model (e.g. /model claude-sonnet-4-20250514)', hasArgs: true },
   { name: 'cwd', description: 'Change working directory (WARNING: stops active session)', hasArgs: true },
   { name: 'codex', description: 'Run Codex CLI one-shot (e.g. /codex review changes)', hasArgs: true },
+  { name: 'debate', description: 'Start a debate between Claude and Codex (e.g. /debate should we use TypeScript?)', hasArgs: true },
   { name: 'info', description: 'Show Claude version and context usage', hasArgs: false },
   { name: 'help', description: 'Show available commands', hasArgs: false },
 ];
@@ -64,8 +65,13 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
 
   const isRunning = session?.status === 'running';
   const isCodexRunning = session?.codexRunning;
+  const isDebateRunning = session?.debateRunning;
+  const debateRound = session?.debateRound;
+  const debateCurrentAgent = session?.debateCurrentAgent;
   const isFrozen = session?.status === 'error';
   const displayModel = (session?.model || session?.activeModel || '').trim() || null;
+  const activeAgent = session?.activeAgent || 'claude';
+  const isBusy = isRunning || isCodexRunning || isDebateRunning;
 
   // Auto-clear unseenCompleted when viewing this session
   useEffect(() => {
@@ -125,12 +131,13 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     setCommandIdx(0);
   }, [filteredCommands.length]);
 
-  const addLocalMessage = (text) => {
+  const addLocalMessage = (text, extra) => {
     setLocalMessages(prev => [...prev, {
       _id: `local-${Date.now()}`,
       role: 'system',
       contentText: text,
       isLocal: true,
+      ...extra,
     }]);
   };
 
@@ -144,9 +151,15 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         });
         break;
       case 'stop':
-        Meteor.call('claudeSessions.stop', sessionId, (err) => {
-          if (err) notify({ message: `Stop failed: ${err.reason || err.message}`, kind: 'error' });
-        });
+        if (isDebateRunning) {
+          Meteor.call('claudeSessions.stopDebate', sessionId, (err) => {
+            if (err) notify({ message: `Stop failed: ${err.reason || err.message}`, kind: 'error' });
+          });
+        } else {
+          Meteor.call('claudeSessions.stop', sessionId, (err) => {
+            if (err) notify({ message: `Stop failed: ${err.reason || err.message}`, kind: 'error' });
+          });
+        }
         break;
       case 'model': {
         const model = args.trim();
@@ -172,24 +185,20 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         break;
       }
       case 'info': {
-        const lines = ['**Session Info**\n'];
-        lines.push(`**Claude Code**: ${session.claudeCodeVersion || '(unknown)'}`);
-        lines.push(`**Model**: ${session.activeModel || session.model || '(default)'}`);
-        const usage = session.lastModelUsage;
-        if (usage) {
-          for (const [, m] of Object.entries(usage)) {
-            const used = (m.inputTokens || 0) + (m.cacheReadInputTokens || 0) + (m.cacheCreationInputTokens || 0);
-            const ctxWin = m.contextWindow || 0;
-            const pct = ctxWin > 0 ? ((used / ctxWin) * 100).toFixed(1) : '?';
-            lines.push(`**Context**: ${used.toLocaleString()} / ${ctxWin.toLocaleString()} tokens (${pct}%)`);
-          }
-        } else {
-          lines.push('**Context**: (send a message first)');
-        }
-        if (session.totalCostUsd > 0) {
-          lines.push(`**Total cost**: $${session.totalCostUsd.toFixed(4)}`);
-        }
-        addLocalMessage(lines.join('\n'));
+        addLocalMessage(null, {
+          localType: 'info',
+          infoData: {
+            version: session.claudeCodeVersion,
+            model: session.activeModel || session.model,
+            permissionMode: session.permissionMode,
+            status: session.status,
+            cwd: session.cwd,
+            claudeSessionId: session.claudeSessionId,
+            modelUsage: session.lastModelUsage,
+            totalCostUsd: session.totalCostUsd,
+            totalDurationMs: session.totalDurationMs,
+          },
+        });
         break;
       }
       case 'help': {
@@ -204,6 +213,16 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         }
         Meteor.call('claudeSessions.execCodex', sessionId, args.trim(), (err) => {
           if (err) notify({ message: `Codex: ${err.reason || err.message}`, kind: 'error' });
+        });
+        break;
+      }
+      case 'debate': {
+        if (!args.trim()) {
+          addLocalMessage('Usage: /debate <subject>');
+          return;
+        }
+        Meteor.call('claudeSessions.execDebate', sessionId, args.trim(), (err) => {
+          if (err) notify({ message: `Debate: ${err.reason || err.message}`, kind: 'error' });
         });
         break;
       }
@@ -259,6 +278,14 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     if (localMessages.length > 0) setLocalMessages([]);
   }, [userMessageCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-resize textarea to fit content
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+  }, [input]);
+
   // Focus textarea when session becomes idle or panel becomes active
   useEffect(() => {
     if (isActive && !isRunning) textareaRef.current?.focus();
@@ -266,17 +293,22 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
 
   // Global ESC handler — works even when textarea doesn't have focus
   useEffect(() => {
-    if (!isActive || !isRunning) return;
+    if (!isActive || (!isRunning && !isDebateRunning)) return;
     const handleGlobalEsc = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        addLocalMessage('Interrupted by user (ESC)');
-        Meteor.call('claudeSessions.stop', sessionId);
+        if (isDebateRunning) {
+          addLocalMessage('Debate stopped by user (ESC)');
+          Meteor.call('claudeSessions.stopDebate', sessionId);
+        } else {
+          addLocalMessage('Interrupted by user (ESC)');
+          Meteor.call('claudeSessions.stop', sessionId);
+        }
       }
     };
     document.addEventListener('keydown', handleGlobalEsc);
     return () => document.removeEventListener('keydown', handleGlobalEsc);
-  }, [isActive, isRunning, sessionId]);
+  }, [isActive, isRunning, isDebateRunning, sessionId]);
 
   if (!sessionId) {
     return (
@@ -382,11 +414,20 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
       : null;
     setInput('');
     setAttachedImages([]);
-    sendMessage(text || 'Describe this image.', images);
+
+    if (activeAgent === 'codex') {
+      // Route to Codex with conversation context
+      Meteor.call('claudeSessions.execCodex', sessionId, text || 'Describe this image.', { conversational: true }, (err) => {
+        if (err) notify({ message: `Codex: ${err.reason || err.message}`, kind: 'error' });
+      });
+    } else {
+      sendMessage(text || 'Describe this image.', images);
+    }
   };
 
   const handleStop = () => {
-    Meteor.call('claudeSessions.stop', sessionId, (err) => {
+    const method = isDebateRunning ? 'claudeSessions.stopDebate' : 'claudeSessions.stop';
+    Meteor.call(method, sessionId, (err) => {
       if (err) notify({ message: `Stop failed: ${err.reason || err.message}`, kind: 'error' });
     });
   };
@@ -453,12 +494,6 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
       const current = session.permissionMode || '';
       const next = modes[(modes.indexOf(current) + 1) % modes.length];
       Meteor.call('claudeSessions.update', sessionId, { permissionMode: next });
-      return;
-    }
-    if (e.key === 'Escape' && isRunning) {
-      e.preventDefault();
-      addLocalMessage('Interrupted by user (ESC)');
-      handleStop();
       return;
     }
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -569,10 +604,16 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
           {localMessages.map((msg) => (
             <MessageBubble key={msg._id} message={msg} />
           ))}
-          {(isRunning || isCodexRunning) && (
+          {(isRunning || isCodexRunning || isDebateRunning) && (
             <div className="ccTypingIndicator">
               <span className="ccTypingDot" /><span className="ccTypingDot" /><span className="ccTypingDot" />
-              {isCodexRunning && <span className="ccCodexLabel">codex</span>}
+              {isDebateRunning && (
+                <>
+                  <span className={`ccDebateAgentLabel ccDebateAgent-${debateCurrentAgent}`}>{debateCurrentAgent}</span>
+                  <span className="ccDebateRound">Round {debateRound}/5</span>
+                </>
+              )}
+              {isCodexRunning && !isDebateRunning && <span className="ccCodexLabel">codex</span>}
               {session.queuedCount > 0 && (
                 <span className="ccQueuedCount">{session.queuedCount} queued</span>
               )}
@@ -645,9 +686,9 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={isFrozen ? 'Session ended with error. Start a new session to continue.' : 'Type a message... (Enter to send, !cmd for shell, /help for commands)'}
-          rows={3}
-          disabled={isFrozen}
+          placeholder={isFrozen ? 'Session ended with error. Start a new session to continue.' : isDebateRunning ? 'Debate in progress... Press ESC to stop.' : activeAgent === 'codex' ? 'Ask Codex... (Enter to send)' : 'Type a message... (Enter to send, !cmd for shell, /help for commands)'}
+          rows={1}
+          disabled={isFrozen || isDebateRunning}
         />
         {!isFrozen && isRunning && (
           <div className="ccComposerActions">
@@ -656,22 +697,85 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         )}
       </div>
       <div className="ccStatusBar">
-        <select
-          className={`ccPermModeSelect${session.permissionMode ? ` ccMode-${session.permissionMode}` : ''}`}
-          value={session.permissionMode || ''}
-          onChange={(e) => {
-            const permissionMode = e.target.value || undefined;
-            Meteor.call('claudeSessions.update', sessionId, { permissionMode }, (err) => {
-              if (err) notify({ message: `Update failed: ${err.reason || err.message}`, kind: 'error' });
-            });
-          }}
-        >
-          <option value="">▷ Default</option>
-          <option value="plan">☰ Plan</option>
-          <option value="acceptEdits">✎ Accept Edits</option>
-          <option value="dontAsk">▶ Don&#39;t Ask</option>
-          <option value="bypassPermissions">◆ Bypass</option>
-        </select>
+        <div className="ccAgentToggle">
+          <button
+            className={`ccAgentBtn${activeAgent === 'claude' ? ' ccAgentBtn--active' : ''}`}
+            disabled={isBusy}
+            onClick={() => {
+              Meteor.call('claudeSessions.update', sessionId, { activeAgent: 'claude' });
+            }}
+          >Claude</button>
+          <button
+            className={`ccAgentBtn ccAgentBtn--codex${activeAgent === 'codex' ? ' ccAgentBtn--active' : ''}`}
+            disabled={isBusy}
+            onClick={() => {
+              Meteor.call('claudeSessions.update', sessionId, { activeAgent: 'codex' });
+            }}
+          >Codex</button>
+        </div>
+        {activeAgent === 'claude' ? (
+          <>
+            <select
+              className={`ccPermModeSelect${session.permissionMode ? ` ccMode-${session.permissionMode}` : ''}`}
+              value={session.permissionMode || ''}
+              onChange={(e) => {
+                const permissionMode = e.target.value || undefined;
+                Meteor.call('claudeSessions.update', sessionId, { permissionMode }, (err) => {
+                  if (err) notify({ message: `Update failed: ${err.reason || err.message}`, kind: 'error' });
+                });
+              }}
+            >
+              <option value="">▷ Default</option>
+              <option value="plan">☰ Plan</option>
+              <option value="acceptEdits">✎ Accept Edits</option>
+              <option value="dontAsk">▶ Don&#39;t Ask</option>
+              <option value="bypassPermissions">◆ Bypass</option>
+            </select>
+            <select
+              className="ccEffortSelect"
+              value={session.claudeEffort || ''}
+              onChange={(e) => {
+                Meteor.call('claudeSessions.update', sessionId, { claudeEffort: e.target.value || undefined });
+              }}
+            >
+              <option value="">Effort: default</option>
+              <option value="low">Effort: low</option>
+              <option value="medium">Effort: medium</option>
+              <option value="high">Effort: high</option>
+              <option value="max">Effort: max</option>
+            </select>
+          </>
+        ) : (
+          <>
+            <select
+              className="ccModelSelect"
+              value={session.codexModel || ''}
+              onChange={(e) => {
+                Meteor.call('claudeSessions.update', sessionId, { codexModel: e.target.value || undefined });
+              }}
+            >
+              <option value="">Model: default</option>
+              <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+              <option value="gpt-5.2-codex">gpt-5.2-codex</option>
+              <option value="gpt-5.1-codex-mini">gpt-5.1-codex-mini</option>
+              <option value="gpt-5.1-codex-max">gpt-5.1-codex-max</option>
+            </select>
+            <select
+              className="ccEffortSelect"
+              value={session.codexReasoningEffort || ''}
+              onChange={(e) => {
+                Meteor.call('claudeSessions.update', sessionId, { codexReasoningEffort: e.target.value || undefined });
+              }}
+            >
+              <option value="">Reasoning: default</option>
+              <option value="minimal">Reasoning: minimal</option>
+              <option value="low">Reasoning: low</option>
+              <option value="medium">Reasoning: medium</option>
+              <option value="high">Reasoning: high</option>
+              <option value="xhigh">Reasoning: xhigh</option>
+            </select>
+          </>
+        )}
         {displayModel && (
           <span className="ccModelBadge" title={displayModel}>
             {displayModel.replace(/^claude-/, '').replace(/-\d{8}$/, '')}
