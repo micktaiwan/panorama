@@ -2,6 +2,7 @@ import React from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ClaudeCommandsCollection } from '/imports/api/claudeCommands/collections';
+import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
 import { notify } from '../utils/notify.js';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { CommandForm } from './CommandForm.jsx';
@@ -19,7 +20,14 @@ const BUILTIN_COMMANDS = [
 
 export const PrefsCommands = () => {
   const sub = useSubscribe('claudeCommands');
+  useSubscribe('claudeProjects');
   const commands = useFind(() => ClaudeCommandsCollection.find({}, { sort: { name: 1 } }));
+  const claudeProjects = useFind(() => ClaudeProjectsCollection.find({}, { fields: { name: 1 } }));
+  const projectNameById = React.useMemo(() => {
+    const map = {};
+    claudeProjects.forEach(p => { map[p._id] = p.name; });
+    return map;
+  }, [claudeProjects]);
 
   const [filter, setFilter] = React.useState('all');
   const [editing, setEditing] = React.useState(null);
@@ -34,7 +42,7 @@ export const PrefsCommands = () => {
 
   const handleImport = () => {
     setImporting(true);
-    Meteor.call('claudeCommands.importFromDisk', { global: true }, (err, res) => {
+    Meteor.call('claudeCommands.importFromDisk', { global: true, allProjects: true }, (err, res) => {
       setImporting(false);
       if (err) {
         notify({ message: `Import failed: ${err.reason || err.message}`, kind: 'error' });
@@ -140,7 +148,7 @@ export const PrefsCommands = () => {
               <div className="prefsLabel">
                 <strong>/{cmd.name}</strong>
                 <div className="muted" style={{ fontSize: '12px', marginTop: '2px' }}>
-                  {cmd.scope}
+                  {cmd.scope === 'project' && cmd.projectId ? (projectNameById[cmd.projectId] || cmd.projectId) : cmd.scope}
                   {cmd.source === 'disk' && <span className="ml8" style={{ color: 'var(--text-secondary)' }}>(disk)</span>}
                 </div>
               </div>

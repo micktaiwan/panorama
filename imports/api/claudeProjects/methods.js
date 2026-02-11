@@ -3,6 +3,7 @@ import { check } from 'meteor/check';
 import { ClaudeProjectsCollection } from './collections';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
+import { ClaudeCommandsCollection } from '/imports/api/claudeCommands/collections';
 import { killProcess } from '/imports/api/claudeSessions/processManager';
 
 const TAG = '[claude-projects]';
@@ -72,6 +73,9 @@ Meteor.methods({
 
     // Remove all sessions
     await ClaudeSessionsCollection.removeAsync({ projectId });
+
+    // Remove project commands
+    await ClaudeCommandsCollection.removeAsync({ scope: 'project', projectId });
 
     // Remove the project
     return ClaudeProjectsCollection.removeAsync(projectId);
