@@ -34,6 +34,15 @@
   margin-top: 12px;
 }
 
+.claudeCodeLink {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.claudeCodeLink:hover {
+  text-decoration: underline;
+}
+
 .colorPickerInput {
   vertical-align: middle;
   margin-left: 6px;

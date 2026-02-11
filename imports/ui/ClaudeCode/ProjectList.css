@@ -170,6 +170,39 @@
   white-space: nowrap;
 }
 
+/* Linked Panorama project */
+.ccLinkedProject {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  margin-top: 2px;
+  margin-left: 20px;
+}
+
+.ccLinkedProjectLink {
+  color: var(--accent);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ccLinkedProjectLink:hover {
+  text-decoration: underline;
+}
+
+.ccLinkedProjectSelect {
+  font-size: 10px;
+  padding: 0 2px;
+  background: var(--panel);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  max-width: 100px;
+  cursor: pointer;
+}
+
 /* Session list under project */
 .ccSessionList {
   margin-top: 4px;
