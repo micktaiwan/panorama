@@ -77,9 +77,10 @@ export const ClaudeCodePage = ({ projectId }) => {
   }, [projectId]);
 
   // Subscribe to sessions, notes, and projects
-  useSubscribe('claudeSessions.byProject', projectId || '__none__');
-  useSubscribe('notes.byClaudeProject', projectId || '__none__');
+  const sessionsLoading = useSubscribe('claudeSessions.byProject', projectId || '__none__');
+  const notesLoading = useSubscribe('notes.byClaudeProject', projectId || '__none__');
   useSubscribe('claudeProjects');
+  const subsReady = !sessionsLoading() && !notesLoading();
 
   // Sessions (reactive)
   const sessions = useFind(() =>
@@ -427,7 +428,27 @@ export const ClaudeCodePage = ({ projectId }) => {
         )}
         {projectId && sessions.length === 0 && notes.length === 0 && (
           <div className="ccSessionViewEmpty">
-            <p className="muted">Loading sessions...</p>
+            {!subsReady ? (
+              <p className="muted">Loading sessions...</p>
+            ) : (
+              <>
+                <p className="muted">No sessions yet.</p>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    Meteor.call('claudeSessions.createInProject', projectId, (err, newId) => {
+                      if (err) {
+                        notify({ message: `Create failed: ${err.reason || err.message}`, kind: 'error' });
+                        return;
+                      }
+                      setActivePanel({ type: 'session', id: newId });
+                    });
+                  }}
+                >
+                  New Session
+                </button>
+              </>
+            )}
           </div>
         )}
         {(sessions.length > 0 || notes.length > 0) && (

@@ -143,7 +143,7 @@ export const NotePanel = ({ noteId, claudeProjectId }) => {
           </button>
           <button
             className="btn btn-small btn-danger"
-            onClick={() => setShowDeleteConfirm(true)}
+            onClick={(e) => e.shiftKey ? handleDelete() : setShowDeleteConfirm(true)}
           >
             Delete
           </button>

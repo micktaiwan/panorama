@@ -6,6 +6,7 @@ import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collection
 import { NotesCollection } from '/imports/api/notes/collections';
 import { navigateTo } from '/imports/ui/router.js';
 import { notify } from '/imports/ui/utils/notify.js';
+import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { shortenPath } from './useHomeDir.js';
 import { AgentTeams } from './AgentTeams.jsx';
@@ -37,6 +38,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
   const [newModel, setNewModel] = useState('');
   const [newPermMode, setNewPermMode] = useState('acceptEdits');
   const [collapsedIds, setCollapsedIds] = useState(loadCollapsed);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const toggleCollapse = useCallback((e, projectId) => {
     e.stopPropagation();
@@ -90,12 +92,20 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
     });
   };
 
-  const handleRemove = (e, projectId) => {
-    e.stopPropagation();
+  const removeProject = useCallback((projectId) => {
     Meteor.call('claudeProjects.remove', projectId, (err) => {
       if (err) notify({ message: `Remove failed: ${err.reason || err.message}`, kind: 'error' });
       else if (activeProjectId === projectId) navigateTo({ name: 'claude' });
     });
+  }, [activeProjectId]);
+
+  const handleRemoveClick = (e, projectId) => {
+    e.stopPropagation();
+    if (e.shiftKey) {
+      removeProject(projectId);
+    } else {
+      setDeleteConfirm(projectId);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -185,7 +195,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
                       />
                       <button
                         className="ccProjectItemRemove"
-                        onClick={(e) => handleRemove(e, p._id)}
+                        onClick={(e) => handleRemoveClick(e, p._id)}
                         title="Delete project"
                       >&times;</button>
                     </div>
@@ -272,6 +282,17 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
         })}
       </div>
       <AgentTeams />
+      <Modal
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete project"
+        actions={[
+          <button key="cancel" className="btn" type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button>,
+          <button key="delete" className="btn btn-danger" type="button" onClick={() => { removeProject(deleteConfirm); setDeleteConfirm(null); }}>Delete</button>,
+        ]}
+      >
+        Are you sure you want to delete this project and all its sessions?
+      </Modal>
     </div>
   );
 };

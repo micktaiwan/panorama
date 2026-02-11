@@ -51,8 +51,18 @@ export const NotionReporting = () => {
     setEditingConfig(null);
   };
 
-  const handleDeleteConfig = (integration) => {
-    setConfirmDelete(integration);
+  const handleDeleteConfig = (integration, e) => {
+    if (e?.shiftKey) {
+      Meteor.call('notionIntegrations.remove', integration._id, (err) => {
+        if (err) notify({ message: `Failed to delete: ${err.reason || err.message}`, kind: 'error' });
+        else {
+          notify({ message: 'Integration deleted', kind: 'success' });
+          if (selectedIntegrationId === integration._id) setSelectedIntegrationId(null);
+        }
+      });
+    } else {
+      setConfirmDelete(integration);
+    }
   };
 
   const confirmDeleteConfig = () => {
