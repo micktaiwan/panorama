@@ -71,6 +71,42 @@ function linkClickPlugin() {
   });
 }
 
+// Auto-join adjacent same-type lists (bullet_list or ordered_list).
+// When a user deletes the paragraph between two lists of the same type,
+// ProseMirror keeps them as separate nodes. The markdown serializer would
+// then insert extra newlines between them, creating a phantom blank line
+// that can never be deleted. This plugin merges them automatically.
+function autoJoinAdjacentLists() {
+  return new Plugin({
+    appendTransaction(transactions, oldState, newState) {
+      if (!transactions.some(tr => tr.docChanged)) return null;
+
+      const { doc } = newState;
+      const joins = [];
+      let pos = 0;
+      for (let i = 0; i < doc.childCount; i++) {
+        const child = doc.child(i);
+        if (i > 0) {
+          const prev = doc.child(i - 1);
+          if (prev.type === child.type &&
+              (child.type.name === 'bullet_list' || child.type.name === 'ordered_list')) {
+            joins.push(pos);
+          }
+        }
+        pos += child.nodeSize;
+      }
+
+      if (joins.length === 0) return null;
+
+      const tr = newState.tr;
+      for (let i = joins.length - 1; i >= 0; i--) {
+        tr.join(joins[i]);
+      }
+      return tr.docChanged ? tr : null;
+    },
+  });
+}
+
 // Placeholder plugin: toggles a CSS class on the editor DOM when the doc is empty.
 // The actual placeholder text is rendered via CSS ::before pseudo-element,
 // which avoids widget decorations that interfere with the browser caret.
@@ -105,6 +141,7 @@ export function createPlugins({ onSave, onClose, onAskAI }) {
     history(),
     dropCursor(),
     gapCursor(),
+    autoJoinAdjacentLists(),
     placeholderPlugin(),
     askAiPlugin(),
     bubbleMenuPlugin({ onAskAI }),

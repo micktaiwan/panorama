@@ -221,6 +221,27 @@ const markdownParser = new MarkdownParser(schema, md, {
 const markdownSerializer = new MarkdownSerializer(
   {
     ...defaultMarkdownSerializer.nodes,
+    // Override list serializers: use flushClose(2) instead of the default
+    // flushClose(3) between adjacent same-type lists. The extra newline from
+    // flushClose(3) creates a phantom blank line that the user can never delete
+    // (serialize adds \n\n\n → parser creates ZWS paragraph → user deletes it
+    // → two adjacent lists → serialize adds \n\n\n again — infinite loop).
+    // With flushClose(2), adjacent lists produce \n\n which MarkdownIt merges
+    // into a single list on reload.
+    bullet_list(state, node) {
+      if (state.closed && state.closed.type == node.type) state.flushClose(2);
+      state.renderList(node, '  ', () => (node.attrs.bullet || '*') + ' ');
+    },
+    ordered_list(state, node) {
+      if (state.closed && state.closed.type == node.type) state.flushClose(2);
+      const start = node.attrs.order || 1;
+      const maxW = String(start + node.childCount - 1).length;
+      const space = state.repeat(' ', maxW + 2);
+      state.renderList(node, space, i => {
+        const nStr = String(start + i);
+        return state.repeat(' ', maxW - nStr.length) + nStr + '. ';
+      });
+    },
     paragraph(state, node) {
       if (node.content.size === 0) {
         // Empty paragraph → ZWS marker so blank lines survive round-trip
