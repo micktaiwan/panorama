@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+  </defs>
+  <!-- Losange principal -->
+  <path d="M64 8 L120 64 L64 120 L8 64 Z" fill="url(#g)"/>
+  <!-- Aiguille boussole Nord (claire) -->
+  <path d="M64 24 L72 64 L64 60 L56 64 Z" fill="#fff" opacity="0.95"/>
+  <!-- Aiguille boussole Sud (sombre) -->
+  <path d="M64 104 L72 64 L64 68 L56 64 Z" fill="#312e81" opacity="0.7"/>
+  <!-- Cercle central -->
+  <circle cx="64" cy="64" r="5" fill="#fff"/>
+</svg>
