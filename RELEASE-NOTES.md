@@ -1,5 +1,11 @@
 ## 2026-02-11
 
+### Feature: Favicon losange/boussole
+- Nouveau favicon SVG (losange indigo avec boussole stylisée, dégradé `--primary`)
+- Référencé dans `client/main.html` via `<link rel="icon">`
+- Icône affichée à côté du titre "Panorama" dans le header (`App.jsx`)
+- PR: https://github.com/micktaiwan/panorama/pull/2
+
 ### Feature: Lien bidirectionnel projets Claude ↔ projets Panorama
 - Champ optionnel `linkedProjectId` sur `claudeProjects` pour pointer vers un projet Panorama
 - Sidebar Claude : affiche le nom du projet Panorama lié (cliquable), select pour changer/dissocier
