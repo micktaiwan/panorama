@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Panorama is a **local-first, single-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support.
 
+**Repo owner**: Mickael FM aka Mick (`micktaiwan` on GitHub), frère de David FM aka Dayd (`ddaydd` on GitHub) qui contribue aussi au projet.
+
 **Stack**: Meteor standard structure (imports/api for server, imports/ui for client, server/main.js, client/main.jsx, electron/ for desktop, docs/ for documentation). Commands: see package.json.
 
 ### Database Access
