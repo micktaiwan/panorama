@@ -4,6 +4,7 @@ import { useTracker } from 'meteor/react-meteor-data';
 import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
+import { ProjectsCollection } from '/imports/api/projects/collections';
 import { navigateTo } from '/imports/ui/router.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
@@ -37,6 +38,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
   const [newCwd, setNewCwd] = useState('');
   const [newModel, setNewModel] = useState('');
   const [newPermMode, setNewPermMode] = useState('acceptEdits');
+  const [newLinkedProjectId, setNewLinkedProjectId] = useState('');
   const [collapsedIds, setCollapsedIds] = useState(loadCollapsed);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
@@ -51,14 +53,16 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
     });
   }, []);
 
-  const { projects, allSessions, allNotes } = useTracker(() => {
+  const { projects, allSessions, allNotes, allPanoramaProjects } = useTracker(() => {
     Meteor.subscribe('claudeProjects');
     Meteor.subscribe('claudeSessions');
     Meteor.subscribe('notes');
+    Meteor.subscribe('projects');
     return {
       projects: ClaudeProjectsCollection.find({}, { sort: { updatedAt: -1 } }).fetch(),
       allSessions: ClaudeSessionsCollection.find({}, { fields: { projectId: 1, status: 1, unseenCompleted: 1, name: 1, createdAt: 1 }, sort: { createdAt: 1 } }).fetch(),
       allNotes: NotesCollection.find({ claudeProjectId: { $exists: true, $ne: null } }, { fields: { claudeProjectId: 1, title: 1, createdAt: 1 }, sort: { createdAt: 1 } }).fetch(),
+      allPanoramaProjects: ProjectsCollection.find({}, { fields: { name: 1 }, sort: { name: 1 } }).fetch(),
     };
   });
 
@@ -78,7 +82,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
 
   const handleCreate = () => {
     const name = newName.trim() || 'New Project';
-    Meteor.call('claudeProjects.create', { name, cwd: newCwd, model: newModel, permissionMode: newPermMode || undefined }, (err, id) => {
+    Meteor.call('claudeProjects.create', { name, cwd: newCwd, model: newModel, permissionMode: newPermMode || undefined, linkedProjectId: newLinkedProjectId || undefined }, (err, id) => {
       if (err) {
         notify({ message: `Create failed: ${err.reason || err.message}`, kind: 'error' });
         return;
@@ -88,6 +92,7 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
       setNewCwd('');
       setNewModel('');
       setNewPermMode('acceptEdits');
+      setNewLinkedProjectId('');
       navigateTo({ name: 'claude', projectId: id });
     });
   };
@@ -153,6 +158,15 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
             <option value="dontAsk">Don't Ask</option>
             <option value="bypassPermissions">Bypass Permissions</option>
           </select>
+          <select
+            value={newLinkedProjectId}
+            onChange={(e) => setNewLinkedProjectId(e.target.value)}
+          >
+            <option value="">Linked project: None</option>
+            {allPanoramaProjects.map(pp => (
+              <option key={pp._id} value={pp._id}>{pp.name || '(untitled)'}</option>
+            ))}
+          </select>
           <button className="btn btn-small btn-primary" onClick={handleCreate}>Create</button>
         </div>
       )}
@@ -200,6 +214,39 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
                       >&times;</button>
                     </div>
                     {p.cwd && <span className="ccProjectItemCwd muted">{shortenPath(p.cwd, homeDir)}</span>}
+                    {(() => {
+                      const linked = p.linkedProjectId && allPanoramaProjects.find(pp => pp._id === p.linkedProjectId);
+                      return (
+                        <span className="ccLinkedProject muted">
+                          {linked ? (
+                            <a
+                              href={`#/projects/${linked._id}`}
+                              className="ccLinkedProjectLink"
+                              onClick={(e) => e.stopPropagation()}
+                              title={`Open project: ${linked.name || '(untitled)'}`}
+                            >{linked.name || '(untitled)'}</a>
+                          ) : null}
+                          {p._id === activeProjectId && (
+                            <select
+                              className="ccLinkedProjectSelect"
+                              value={p.linkedProjectId || ''}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const val = e.target.value || null;
+                                Meteor.call('claudeProjects.update', p._id, { linkedProjectId: val }, (err) => {
+                                  if (err) notify({ message: `Link failed: ${err.reason || err.message}`, kind: 'error' });
+                                });
+                              }}
+                            >
+                              <option value="">{linked ? '× Unlink' : 'Link project…'}</option>
+                              {allPanoramaProjects.map(pp => (
+                                <option key={pp._id} value={pp._id}>{pp.name || '(untitled)'}</option>
+                              ))}
+                            </select>
+                          )}
+                        </span>
+                      );
+                    })()}
                     {isExpanded && (sessions.length > 0 || projectNotes.length > 0) && (
                       <div className="ccSessionList">
                         {sessions.map((s) => (

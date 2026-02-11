@@ -22,6 +22,7 @@ import { LinkItem } from '../components/Link/Link.jsx';
 import { FilesCollection } from '../../api/files/collections';
 import { FileItem } from '../components/File/File.jsx';
 import { Tooltip } from '../components/Tooltip/Tooltip.jsx';
+import { ClaudeProjectsCollection } from '../../api/claudeProjects/collections';
 import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { ActivitySummary } from '../components/ActivitySummary/ActivitySummary.jsx';
@@ -33,8 +34,10 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const loadNotes = useSubscribe('notes');
   const loadLinks = useSubscribe('links.byProject', projectId);
   const loadFiles = useSubscribe('files.byProject', projectId);
+  const loadClaudeProjects = useSubscribe('claudeProjects');
 
   const project = useFind(() => ProjectsCollection.find({ _id: projectId }))[0];
+  const linkedClaudeProjects = useFind(() => ClaudeProjectsCollection.find({ linkedProjectId: projectId }, { fields: { name: 1, linkedProjectId: 1 } }));
   const allProjects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1 } }));
   const projectOptions = useMemo(
     () => allProjects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })),
@@ -309,6 +312,21 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
               );
             })()
           }
+          {linkedClaudeProjects.length > 0 && (
+            <>
+              {" | "}
+              {linkedClaudeProjects.map((cp, i) => (
+                <span key={cp._id}>
+                  {i > 0 && ', '}
+                  <a
+                    href={`#/claude/${cp._id}`}
+                    className="claudeCodeLink"
+                    title={`Open Claude project: ${cp.name}`}
+                  >Claude Code: {cp.name}</a>
+                </span>
+              ))}
+            </>
+          )}
         </div>
       </Card>
       {/* Links section */}

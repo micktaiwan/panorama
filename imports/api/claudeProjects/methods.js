@@ -17,6 +17,7 @@ Meteor.methods({
       model: doc.model ? String(doc.model).trim() : undefined,
       permissionMode: doc.permissionMode ? String(doc.permissionMode).trim() : undefined,
       appendSystemPrompt: doc.appendSystemPrompt ? String(doc.appendSystemPrompt) : undefined,
+      linkedProjectId: doc.linkedProjectId ? String(doc.linkedProjectId).trim() : undefined,
       createdAt: now,
       updatedAt: now,
     };
