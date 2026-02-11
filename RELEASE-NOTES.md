@@ -7,6 +7,11 @@
 - Page projet Panorama : lien "Claude Code: <nom>" dans les métadonnées si un projet Claude est lié
 - Fichiers : `methods.js`, `ProjectList.jsx/.css`, `projectDetails.jsx`, `ProjectDetails.css`
 
+### Feature: Import et gestion des commandes projet Claude
+- "Import from disk" importe aussi les commandes depuis `<cwd>/.claude/commands/` de chaque projet Claude
+- Affichage du nom du projet associé (au lieu de "project") dans Préférences → Commands
+- Suppression automatique des commandes projet quand on supprime un projet Claude
+
 ### Fix: Claude Code "Loading sessions..." stuck indefinitely
 - Used `useSubscribe` return value to detect subscription readiness in `ClaudeCodePage.jsx`
 - Shows "No sessions yet." + "New Session" button when subscriptions are ready but no sessions exist
