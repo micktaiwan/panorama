@@ -645,7 +645,7 @@ function App() {
 
   return (
     <div className={`container${widthMode !== 'default' ? ` ${widthMode}` : ''}${focusMode ? ' focusMode' : ''}`}>
-      {!focusMode && <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>Panorama</a></h1>}
+      {!focusMode && <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}><img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />Panorama</a></h1>}
       {!focusMode && favoriteProjects.length > 0 && (
         <div className="favoritesBar">
           <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
