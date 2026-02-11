@@ -21,6 +21,7 @@ export const CommandPopup = ({ commands, activeIdx, onSelect }) => {
             onMouseDown={(e) => { e.preventDefault(); onSelect(cmd); }}
           >
             <span className="ccCommandName">/{cmd.name}</span>
+            {cmd.isCustom && <span className="ccCommandBadge">custom</span>}
             <span className="ccCommandDesc">{cmd.description}</span>
           </li>
         ))}

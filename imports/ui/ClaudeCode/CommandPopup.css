@@ -39,6 +39,15 @@
   white-space: nowrap;
 }
 
+.ccCommandBadge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-secondary, rgba(255,255,255,0.1));
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .ccCommandDesc {
   color: var(--muted);
   font-size: 12px;

@@ -814,7 +814,7 @@ function App() {
       )}
       {route?.name === 'preferences' && (
         <div className="panel">
-          <Preferences />
+          <Preferences tab={route.tab} />
         </div>
       )}
       {route?.name === 'searchQuality' && (

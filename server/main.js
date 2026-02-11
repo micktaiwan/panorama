@@ -146,6 +146,11 @@ import '/imports/api/claudeSessions/methods';
 import '/imports/api/claudeMessages/collections';
 import '/imports/api/claudeMessages/publications';
 
+// Claude Commands (custom slash commands)
+import '/imports/api/claudeCommands/collections';
+import '/imports/api/claudeCommands/publications';
+import '/imports/api/claudeCommands/methods';
+
 Meteor.startup(async () => {
   // Mark any Claude sessions stuck in "running" as interrupted (processes died on restart)
   const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');

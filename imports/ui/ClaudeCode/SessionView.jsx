@@ -3,6 +3,7 @@ import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
+import { ClaudeCommandsCollection } from '/imports/api/claudeCommands/collections';
 import { notify } from '/imports/ui/utils/notify.js';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { MessageBubble, ToolGroupBlock } from './MessageBubble.jsx';
@@ -20,7 +21,7 @@ const formatDuration = (ms) => {
   return m > 0 ? `${h}h${m}min` : `${h}h`;
 };
 
-const COMMANDS = [
+const BUILTIN_COMMANDS = [
   { name: 'clear', description: 'Clear messages and start fresh', hasArgs: false },
   { name: 'stop', description: 'Stop the running process', hasArgs: false },
   { name: 'model', description: 'Change model (e.g. /model claude-sonnet-4-20250514)', hasArgs: true },
@@ -46,11 +47,14 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
 
   useSubscribe('claudeSessions');
   useSubscribe('claudeMessages.bySession', sessionId);
+  useSubscribe('claudeCommands');
 
   const session = useFind(() =>
     ClaudeSessionsCollection.find(sessionId ? { _id: sessionId } : { _id: '__none__' }),
     [sessionId]
   )[0];
+
+  const customCommands = useFind(() => ClaudeCommandsCollection.find({}));
 
   const allMessages = useFind(() =>
     ClaudeMessagesCollection.find(
@@ -113,18 +117,30 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
     return groups;
   }, [flowMessages]);
 
+  // Merge built-in commands with custom commands from DB
+  const projectId = session?.projectId;
+  const allCommands = useMemo(() => {
+    const builtinNames = new Set(BUILTIN_COMMANDS.map(c => c.name));
+    const merged = [...BUILTIN_COMMANDS];
+    for (const cmd of customCommands) {
+      if (builtinNames.has(cmd.name)) continue;
+      if (cmd.scope === 'project' && cmd.projectId !== projectId) continue;
+      merged.push({ ...cmd, isCustom: true });
+    }
+    return merged;
+  }, [customCommands, projectId]);
+
   // Slash command popup
   const showCommands = input.startsWith('/');
   const commandFilter = showCommands ? input.slice(1).split(/\s/)[0].toLowerCase() : '';
   const filteredCommands = useMemo(() => {
     if (!showCommands) return [];
-    // If input has a space after the command name, don't show popup (user is typing args)
     const hasSpace = input.indexOf(' ') > 0;
     const typed = commandFilter;
-    const exact = COMMANDS.find(c => c.name === typed);
+    const exact = allCommands.find(c => c.name === typed);
     if (exact && hasSpace) return [];
-    return COMMANDS.filter(c => c.name.startsWith(typed));
-  }, [showCommands, commandFilter, input]);
+    return allCommands.filter(c => c.name.startsWith(typed));
+  }, [showCommands, commandFilter, input, allCommands]);
 
   // Reset commandIdx when filtered list changes
   useEffect(() => {
@@ -202,7 +218,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         break;
       }
       case 'help': {
-        const lines = COMMANDS.map(c => `**/${c.name}** — ${c.description}`).join('\n');
+        const lines = allCommands.map(c => `**/${c.name}**${c.isCustom ? ' *(custom)*' : ''} — ${c.description || '(no description)'}`).join('\n');
         addLocalMessage(`Available commands:\n\n${lines}`);
         break;
       }
@@ -224,6 +240,15 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
         Meteor.call('claudeSessions.execDebate', sessionId, args.trim(), (err) => {
           if (err) notify({ message: `Debate: ${err.reason || err.message}`, kind: 'error' });
         });
+        break;
+      }
+      default: {
+        const cmd = allCommands.find(c => c.name === cmdName && c.isCustom);
+        if (cmd) {
+          let prompt = cmd.content;
+          if (cmd.hasArgs) prompt = prompt.replace(/\$ARGUMENTS/g, args.trim());
+          sendMessage(prompt);
+        }
         break;
       }
     }
@@ -401,7 +426,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSessio
       const spaceIdx = text.indexOf(' ');
       const cmdName = spaceIdx > 0 ? text.slice(1, spaceIdx) : text.slice(1);
       const args = spaceIdx > 0 ? text.slice(spaceIdx + 1) : '';
-      const cmd = COMMANDS.find(c => c.name === cmdName);
+      const cmd = allCommands.find(c => c.name === cmdName);
       if (cmd) {
         setInput('');
         executeCommand(cmdName, args);
