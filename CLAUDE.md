@@ -10,18 +10,23 @@ Panorama is a **local-first, single-user** project management and notes applicat
 
 ### Database Access
 
-Meteor dev mode runs its own MongoDB instance on **port 4001** (not the system MongoDB). Data is stored in `.meteor/local/db`.
+Meteor dev mode runs its own MongoDB instance (not the system MongoDB). Data is stored in `.meteor/local/db`. The port varies — check with `ss -tlnp | grep mongod` (commonly **3001** or **4001**).
 
 ```bash
-# Connect to the dev database
-mongosh "mongodb://127.0.0.1:4001/meteor"
+# Find the actual MongoDB port
+ss -tlnp | grep mongod
+
+# Connect to the dev database (replace PORT)
+mongosh "mongodb://127.0.0.1:PORT/meteor"
 
 # Example queries
-mongosh --quiet "mongodb://127.0.0.1:4001/meteor" --eval 'db.getCollectionNames()'
-mongosh --quiet "mongodb://127.0.0.1:4001/meteor" --eval 'db.tasks.find({}).limit(5).toArray()'
+mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.getCollectionNames()'
+mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.tasks.find({}).limit(5).toArray()'
 ```
 
 **Do NOT use** `mongosh meteor` or the system MongoDB — those are different databases and will return empty results.
+
+**Important**: When inserting documents directly via `mongosh`, use **string IDs** (not `ObjectId`) for Meteor compatibility. Meteor collections expect string `_id` values.
 
 ## Architecture Overview
 
@@ -86,6 +91,7 @@ The app uses a **proxy pattern** to route AI calls between local and remote prov
 - Use `useSingle(getCursor)` for queries returning one document
 - Use neutral selectors (`{_id: '__none__'}`) when params are absent to maintain stable hook order
 - Example: Query session, then project using `session?.projectId ? {_id: session.projectId} : {_id: '__none__'}`
+- **`useSubscribe` returns isLoading, not isReady**: `const sub = useSubscribe('pubName')` → `sub()` returns `true` while loading. Use `!sub()` for ready check.
 
 ### Configuration System
 

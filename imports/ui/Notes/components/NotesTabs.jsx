@@ -161,9 +161,13 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
     }
   };
 
-  const handleDeleteRequest = (tabId) => {
+  const handleDeleteRequest = (tabId, e) => {
     setContextMenu({ visible: false, x: 0, y: 0, tabId: null });
-    setConfirmDeleteId(tabId);
+    if (e?.shiftKey) {
+      onTabDelete?.(tabId);
+    } else {
+      setConfirmDeleteId(tabId);
+    }
   };
 
   const requestCloseOthers = (tabId) => {
