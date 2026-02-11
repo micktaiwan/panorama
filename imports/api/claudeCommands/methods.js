@@ -60,6 +60,16 @@ Meteor.methods({
       if (cwd.startsWith('~/')) cwd = homeDir + cwd.slice(1);
       dirs.push({ dir: path.default.join(cwd, '.claude', 'commands'), scope: 'project', projectId: options.projectId });
     }
+    // Scan all Claude projects that have a cwd
+    if (options?.allProjects) {
+      const { ClaudeProjectsCollection } = require('/imports/api/claudeProjects/collections');
+      const projects = await ClaudeProjectsCollection.find({ cwd: { $exists: true, $ne: '' } }, { fields: { cwd: 1 } }).fetchAsync();
+      for (const proj of projects) {
+        let cwd = proj.cwd;
+        if (cwd.startsWith('~/')) cwd = homeDir + cwd.slice(1);
+        dirs.push({ dir: path.default.join(cwd, '.claude', 'commands'), scope: 'project', projectId: proj._id });
+      }
+    }
 
     const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
 
