@@ -76,7 +76,9 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
             editorView.focus();
             updateTooltip(editorView);
           } else {
-            promptUrl().then((href) => {
+            const selectedText = state.doc.textBetween(from, to).trim();
+            const defaultUrl = /^https?:\/\/\S+$/.test(selectedText) ? selectedText : '';
+            promptUrl(defaultUrl).then((href) => {
               if (href) {
                 const mark = schema.marks.link.create({ href });
                 const currentState = editorView.state;

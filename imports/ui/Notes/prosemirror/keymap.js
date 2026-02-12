@@ -42,7 +42,9 @@ export function createFormattingKeymap() {
         return true;
       }
       if (view) {
-        promptUrl().then((href) => {
+        const selectedText = state.doc.textBetween(from, to).trim();
+        const defaultUrl = /^https?:\/\/\S+$/.test(selectedText) ? selectedText : '';
+        promptUrl(defaultUrl).then((href) => {
           if (href) {
             const mark = link.create({ href });
             const currentState = view.state;
