@@ -3,6 +3,7 @@ import { check, Match } from 'meteor/check';
 import { NoteSessionsCollection } from './collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
 const sanitizeSessionDoc = (input) => {
@@ -17,8 +18,9 @@ Meteor.methods({
     if (doc.projectId !== undefined) {
       check(doc.projectId, Match.Maybe(String));
     }
+    const userId = requireUserId();
     const sanitized = sanitizeSessionDoc(doc);
-    const _id = await NoteSessionsCollection.insertAsync({ ...sanitized, createdAt: new Date() });
+    const _id = await NoteSessionsCollection.insertAsync({ ...sanitized, userId, createdAt: new Date() });
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'session', id: _id, text: `${sanitized.name || ''} ${sanitized.aiSummary || ''}`.trim(), projectId: sanitized.projectId || null });
@@ -30,8 +32,9 @@ Meteor.methods({
   },
   async 'noteSessions.remove'(sessionId) {
     check(sessionId, String);
-    await NoteLinesCollection.removeAsync({ sessionId });
-    const ses = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
+    const ses = await requireOwnership(NoteSessionsCollection, sessionId);
+    const userId = requireUserId();
+    await NoteLinesCollection.removeAsync({ sessionId, userId });
     const res = await NoteSessionsCollection.removeAsync({ _id: sessionId });
     try { const { deleteBySessionId, deleteDoc } = await import('/imports/api/search/vectorStore.js'); await deleteBySessionId(sessionId); await deleteDoc('session', sessionId); } catch (e) { console.error('[search][noteSessions.remove] delete failed', e); }
     if (ses && ses.projectId) {
@@ -42,7 +45,7 @@ Meteor.methods({
   async 'noteSessions.update'(sessionId, modifier) {
     check(sessionId, String);
     check(modifier, Object);
-    const ses = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
+    const ses = await requireOwnership(NoteSessionsCollection, sessionId);
     const sanitized = sanitizeSessionDoc(modifier);
     const res = await NoteSessionsCollection.updateAsync(sessionId, { $set: { ...sanitized, updatedAt: new Date() } });
     try {
@@ -57,7 +60,7 @@ Meteor.methods({
   },
   async 'noteSessions.clearCoach'(sessionId) {
     check(sessionId, String);
-    const ses = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
+    const ses = await requireOwnership(NoteSessionsCollection, sessionId);
     const res = await NoteSessionsCollection.updateAsync(sessionId, {
       $unset: {
         coachQuestions: 1,
@@ -76,9 +79,10 @@ Meteor.methods({
   },
   async 'noteSessions.resetAll'(sessionId) {
     check(sessionId, String);
-    const ses = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
+    const ses = await requireOwnership(NoteSessionsCollection, sessionId);
+    const userId = requireUserId();
     // Remove all note lines for this session
-    await NoteLinesCollection.removeAsync({ sessionId });
+    await NoteLinesCollection.removeAsync({ sessionId, userId });
     // Clear AI summary and coach data on the session
     const res = await NoteSessionsCollection.updateAsync(sessionId, {
       $unset: {

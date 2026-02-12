@@ -4,9 +4,11 @@
 import { Meteor } from 'meteor/meteor';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { runChatAgent, isClaudeAgentAvailable } from './claudeAgent';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'chat.ask'(payload) {
+    const userId = requireUserId();
     const query = String(payload?.query || '').trim();
     const history = Array.isArray(payload?.history) ? payload.history : [];
 
@@ -17,6 +19,7 @@ Meteor.methods({
     // Check if Claude agent is available
     if (!isClaudeAgentAvailable()) {
       await ChatsCollection.insertAsync({
+        userId,
         role: 'assistant',
         content: 'Clé API Anthropic non configurée. Ajoutez-la dans Préférences → Secrets → Anthropic API Key.',
         error: true,
@@ -33,6 +36,7 @@ Meteor.methods({
 
     // Insert initial status message
     currentStatusId = await ChatsCollection.insertAsync({
+      userId,
       role: 'assistant',
       content: '🤔 Réflexion…',
       isStatus: true,
@@ -81,6 +85,7 @@ Meteor.methods({
 
           // Create new status for potential next iteration
           currentStatusId = await ChatsCollection.insertAsync({
+            userId,
             role: 'assistant',
             content: '🤔 Analyse des résultats…',
             isStatus: true,
@@ -102,6 +107,7 @@ Meteor.methods({
 
       // Persist the final response
       const base = {
+        userId,
         role: 'assistant',
         content: text,
         createdAt: new Date()
@@ -130,6 +136,7 @@ Meteor.methods({
 
       // Insert error message
       await ChatsCollection.insertAsync({
+        userId,
         role: 'assistant',
         content: `Erreur: ${error.message || 'Erreur inconnue'}`,
         error: true,

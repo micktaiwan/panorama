@@ -6,7 +6,6 @@ import { notify } from '../utils/notify.js';
 export const PrefsGeneral = ({ pref }) => {
   const [theme, setTheme] = React.useState('dark');
   const [filesDir, setFilesDir] = React.useState('');
-  const [qdrantUrl, setQdrantUrl] = React.useState('');
   const [devUrlMode, setDevUrlMode] = React.useState(false);
   const [mobileTasksEnabled, setMobileTasksEnabled] = React.useState(() => {
     try {
@@ -38,7 +37,6 @@ export const PrefsGeneral = ({ pref }) => {
     if (!pref) return;
     setTheme(pref.theme || 'dark');
     setFilesDir(pref.filesDir || '');
-    setQdrantUrl(pref.qdrantUrl || '');
     setDevUrlMode(!!pref.devUrlMode);
   }, [pref?._id]);
 
@@ -70,20 +68,6 @@ export const PrefsGeneral = ({ pref }) => {
               onSubmit={(next) => {
                 setFilesDir(next);
                 Meteor.call('appPreferences.update', { filesDir: next }, () => {});
-              }}
-            />
-          </div>
-        </div>
-        <div className="prefsRow">
-          <div className="prefsLabel">Qdrant URL</div>
-          <div className="prefsValue">
-            <InlineEditable
-              value={qdrantUrl}
-              placeholder="(not set)"
-              fullWidth
-              onSubmit={(next) => {
-                setQdrantUrl(next);
-                Meteor.call('appPreferences.update', { qdrantUrl: next }, () => {});
               }}
             />
           </div>

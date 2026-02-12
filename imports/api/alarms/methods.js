@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { AlarmsCollection } from './collections';
 import { computeNextOccurrence } from '/imports/api/_shared/date.js';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth.js';
 
 const RecurrenceType = Match.OneOf('none', 'daily', 'weekly', 'monthly');
 
@@ -9,7 +10,7 @@ Meteor.methods({
   async 'alarms.insert'(doc) {
     check(doc, Object);
     const now = new Date();
-    const userId = this.userId || null;
+    const userId = requireUserId();
     const alarm = {
       title: String((doc.title || 'Alarm')).trim(),
       enabled: doc.enabled !== false,
@@ -32,6 +33,7 @@ Meteor.methods({
   async 'alarms.update'(alarmId, modifier) {
     check(alarmId, String);
     check(modifier, Object);
+    await requireOwnership(AlarmsCollection, alarmId);
     const set = { ...modifier, updatedAt: new Date() };
     if (typeof set.title === 'string') set.title = set.title.trim();
     if (set.nextTriggerAt) set.nextTriggerAt = new Date(set.nextTriggerAt);
@@ -42,6 +44,7 @@ Meteor.methods({
   },
   async 'alarms.remove'(alarmId) {
     check(alarmId, String);
+    await requireOwnership(AlarmsCollection, alarmId);
     const res = await AlarmsCollection.removeAsync(alarmId);
     // Alarms are not indexed in Qdrant - no need to delete from vector store
     return res;
@@ -49,11 +52,13 @@ Meteor.methods({
   async 'alarms.toggleEnabled'(alarmId, enabled) {
     check(alarmId, String);
     check(enabled, Boolean);
+    await requireOwnership(AlarmsCollection, alarmId);
     return AlarmsCollection.updateAsync(alarmId, { $set: { enabled, updatedAt: new Date() } });
   },
   async 'alarms.snooze'(alarmId, minutes) {
     check(alarmId, String);
     check(minutes, Number);
+    await requireOwnership(AlarmsCollection, alarmId);
     const now = new Date();
     const doc = await AlarmsCollection.findOneAsync(alarmId);
     const candidates = [];
@@ -67,6 +72,7 @@ Meteor.methods({
   },
   async 'alarms.dismiss'(alarmId) {
     check(alarmId, String);
+    await requireOwnership(AlarmsCollection, alarmId);
     const doc = await AlarmsCollection.findOneAsync(alarmId);
     const now = new Date();
     if (!doc) return 0;
@@ -96,6 +102,7 @@ Meteor.methods({
   },
   async 'alarms.markFiredIfDue'(alarmId) {
     check(alarmId, String);
+    await requireOwnership(AlarmsCollection, alarmId);
     const now = new Date();
     // Mongo doesn't support two $or at same level mixed with others in our shape; emulate acknowledgedAt null/absent check
     const doc = await AlarmsCollection.findOneAsync(alarmId);

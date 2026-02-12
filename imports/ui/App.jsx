@@ -1024,6 +1024,8 @@ function App() {
           <a href="#/notion-reporting" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'notionReporting' }); }}>Notion</a>
           <span className="dot">·</span>
           <a href="#/width" onClick={(e) => { e.preventDefault(); cycleWidth(); }}>Width: {WIDTH_LABELS[widthMode]}</a>
+          <span className="dot">·</span>
+          <a href="#" onClick={(e) => { e.preventDefault(); Meteor.logout(); }}>Logout</a>
         </span>
       </footer>}
       <ChatWidget />

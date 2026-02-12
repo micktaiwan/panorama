@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { TasksCollection } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth.js';
 
 // Normalize short text fields
 const sanitizeTaskDoc = (input) => {
@@ -24,12 +25,14 @@ const sanitizeTaskDoc = (input) => {
 Meteor.methods({
   async 'tasks.insert'(doc) {
     check(doc, Object);
+    const userId = requireUserId();
     const now = new Date();
     const sanitized = sanitizeTaskDoc(doc);
     // If a project is provided, shift existing open tasks down and insert new task at rank 0
     if (sanitized.projectId) {
       const projectId = String(sanitized.projectId);
       const openSelector = {
+        userId,
         projectId,
         $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ]
       };
@@ -40,12 +43,13 @@ Meteor.methods({
     // Duplicate guard for userLog provenance
     if (doc?.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds) && doc.source.logEntryIds.length > 0) {
       const logIds = doc.source.logEntryIds.map(String);
-      const existing = await TasksCollection.findOneAsync({ 'source.kind': 'userLog', 'source.logEntryIds': { $in: logIds } }, { fields: { _id: 1 } });
+      const existing = await TasksCollection.findOneAsync({ userId, 'source.kind': 'userLog', 'source.logEntryIds': { $in: logIds } }, { fields: { _id: 1 } });
       if (existing) {
         throw new Meteor.Error('duplicate-task', 'A task already exists for at least one of these journal entries');
       }
     }
     const _id = await TasksCollection.insertAsync({
+      userId,
       status: doc.status || 'todo',
       statusChangedAt: now,
       ...sanitized,
@@ -71,7 +75,7 @@ Meteor.methods({
   async 'tasks.update'(taskId, modifier) {
     check(taskId, String);
     check(modifier, Object);
-    const task = await TasksCollection.findOneAsync(taskId);
+    const task = await requireOwnership(TasksCollection, taskId);
     const set = { ...sanitizeTaskDoc(modifier), updatedAt: new Date() };
     const unset = {};
     if (Object.prototype.hasOwnProperty.call(modifier, 'status')) {
@@ -103,7 +107,7 @@ Meteor.methods({
   // Removed legacy setDone/unsetDone methods
   async 'tasks.remove'(taskId) {
     check(taskId, String);
-    const task = await TasksCollection.findOneAsync(taskId);
+    const task = await requireOwnership(TasksCollection, taskId);
     const res = await TasksCollection.removeAsync(taskId);
     try { const { deleteDoc } = await import('/imports/api/search/vectorStore.js'); await deleteDoc('task', taskId); } catch (e) { console.error('[search][tasks.remove] delete failed', e); }
     if (task && task.projectId) {
@@ -113,14 +117,12 @@ Meteor.methods({
   },
   async 'tasks.promoteToTop'(taskId) {
     check(taskId, String);
-    const task = await TasksCollection.findOneAsync(taskId);
-    
-    if (!task) {
-      throw new Meteor.Error('task-not-found', 'Task not found');
-    }
-    
+    const task = await requireOwnership(TasksCollection, taskId);
+
     // Get all open tasks sorted by current priorityRank
+    const userId = task.userId;
     const globalOpenSelector = {
+      userId,
       $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ]
     };
     

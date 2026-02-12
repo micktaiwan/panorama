@@ -12,6 +12,7 @@ import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { getHealthStatus, testProvider } from '/imports/api/_shared/llmProxy';
 import { getAIConfig } from '/imports/api/_shared/config';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 // Constants to replace magic numbers
 const CONSTANTS = {
@@ -185,8 +186,9 @@ const calculateProjectActivity = (project, tasksData, notesData, notesLastByProj
 
 Meteor.methods({
   async 'panorama.getOverview'(filters = {}) {
+    const userId = requireUserId();
     check(filters, Object);
-    
+
     // Validation for periodDays
     const periodDays = Number(filters.periodDays) || CONSTANTS.DEFAULT_PERIOD_DAYS;
     if (periodDays < CONSTANTS.MIN_PERIOD_DAYS || periodDays > CONSTANTS.MAX_PERIOD_DAYS) {
@@ -197,7 +199,7 @@ Meteor.methods({
 
     // Fetch projects
     const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, panoramaUpdatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
-    const projects = await ProjectsCollection.find({}, projFields).fetchAsync();
+    const projects = await ProjectsCollection.find({ userId }, projFields).fetchAsync();
     const projectIds = projects.map(p => p._id);
 
     // Early return if no projects
@@ -207,20 +209,20 @@ Meteor.methods({
 
     // Fetch and process tasks
     const taskFields = { fields: { projectId: 1, status: 1, deadline: 1, updatedAt: 1, title: 1, statusChangedAt: 1, createdAt: 1, priorityRank: 1 } };
-    const allTasks = await TasksCollection.find({ projectId: { $in: projectIds } }, taskFields).fetchAsync();
+    const allTasks = await TasksCollection.find({ userId, projectId: { $in: projectIds } }, taskFields).fetchAsync();
     const tasksByProject = processTasks(allTasks, projectIds, since);
 
     // Fetch and process notes
     const noteFields = { fields: { projectId: 1, createdAt: 1, updatedAt: 1 } };
-    const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, noteFields).fetchAsync();
+    const notesAll = await NotesCollection.find({ userId, projectId: { $in: projectIds } }, noteFields).fetchAsync();
     const notesData = processNotes(notesAll, projectIds, since);
 
     // Fetch counts for notes, links, files, and sessions in parallel
     const countsByProject = new Map();
     const [allLinks, allFiles, allSessions] = await Promise.all([
-      LinksCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync(),
-      import('/imports/api/files/collections').then(m => m.FilesCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()).catch(() => []),
-      NoteSessionsCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()
+      LinksCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync(),
+      import('/imports/api/files/collections').then(m => m.FilesCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()).catch(() => []),
+      NoteSessionsCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()
     ]);
 
     // Initialize counts for all projects
@@ -288,20 +290,23 @@ Meteor.methods({
 
 Meteor.methods({
   async 'panorama.setRank'(projectId, rank) {
+    const userId = requireUserId();
     check(projectId, String);
     const n = Number(rank);
     if (!Number.isFinite(n)) throw new Meteor.Error('invalid-rank', 'rank must be a finite number');
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     // Do not touch updatedAt to avoid polluting last activity with UI reordering
-    await ProjectsCollection.updateAsync(projectId, { $set: { panoramaRank: n, panoramaUpdatedAt: new Date() } });
+    await ProjectsCollection.updateAsync({ _id: projectId, userId }, { $set: { panoramaRank: n, panoramaUpdatedAt: new Date() } });
     return true;
   },
 
   async 'ai.healthcheck'() {
+    const userId = requireUserId();
     return await getHealthStatus();
   },
 
   async 'ai.testProvider'(provider, options = {}) {
+    const userId = requireUserId();
     check(provider, String);
     check(options, Object);
     
@@ -312,57 +317,34 @@ Meteor.methods({
     return await testProvider(provider, options);
   },
 
-  async 'ai.saveRemoteKey'(apiKey) {
-    check(apiKey, String);
-    
-    if (!apiKey.trim()) {
-      throw new Meteor.Error('invalid-key', 'API key cannot be empty');
-    }
-    
-    // Store the key in Meteor.settings (server-side only)
-    if (Meteor.settings) {
-      if (!Meteor.settings.private) {
-        Meteor.settings.private = {};
-      }
-      Meteor.settings.private.OPENAI_API_KEY = apiKey.trim();
-    }
-    
-    // Also update in environment for immediate use
-    process.env.OPENAI_API_KEY = apiKey.trim();
-    
-    return { success: true };
-  },
-
   async 'ai.updatePreferences'(preferences) {
+    const userId = requireUserId();
     check(preferences, Object);
 
-    // Validate AI preferences structure
     const validModes = ['local', 'remote'];
     const validFallbacks = ['none', 'local', 'remote'];
 
     if (preferences.mode && !validModes.includes(preferences.mode)) {
       throw new Meteor.Error('invalid-mode', 'Mode must be local or remote');
     }
-    
     if (preferences.fallback && !validFallbacks.includes(preferences.fallback)) {
       throw new Meteor.Error('invalid-fallback', 'Fallback must be none, local, or remote');
     }
-    
-    // Update preferences
-    const existing = await AppPreferencesCollection.findOneAsync({});
+
+    const existing = await AppPreferencesCollection.findOneAsync({ userId });
     if (existing) {
       await AppPreferencesCollection.updateAsync(existing._id, {
-        $set: { ai: { ...existing.ai, ...preferences } }
+        $set: { ai: { ...existing.ai, ...preferences }, updatedAt: new Date() }
       });
     } else {
-      await AppPreferencesCollection.insertAsync({ ai: preferences });
+      await AppPreferencesCollection.insertAsync({ userId, ai: preferences, createdAt: new Date(), updatedAt: new Date() });
     }
-    
     return { success: true };
   },
 
 
   async 'ai.listOllamaModels'() {
+    const userId = requireUserId();
     const config = getAIConfig();
     const host = config.local.host;
     
@@ -395,7 +377,8 @@ Meteor.methods({
   },
 
   async 'panorama.countAllTokens'() {
-    
+    const userId = requireUserId();
+
     // Define collections and their text fields
     const collections = [
       { 
@@ -461,7 +444,7 @@ Meteor.methods({
     
     for (const { name, collection, fields, description } of collections) {
       try {
-        const items = await collection.find({}).fetchAsync();
+        const items = await collection.find({ userId }).fetchAsync();
         let collectionTokens = 0;
         let collectionCharacters = 0;
         let itemsWithContent = 0;

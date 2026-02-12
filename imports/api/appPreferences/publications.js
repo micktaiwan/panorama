@@ -2,7 +2,8 @@ import { Meteor } from 'meteor/meteor';
 import { AppPreferencesCollection } from './collections';
 
 Meteor.publish('appPreferences', function () {
-  return AppPreferencesCollection.find({}, { limit: 1 });
+  if (!this.userId) return this.ready();
+  return AppPreferencesCollection.find({ userId: this.userId }, { limit: 1 });
 });
 
 

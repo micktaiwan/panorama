@@ -3,6 +3,7 @@ import { check } from 'meteor/check';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 const windowKeyToMs = (key) => {
   const k = String(key || '').toLowerCase();
@@ -15,6 +16,7 @@ const windowKeyToMs = (key) => {
 
 Meteor.methods({
   async 'reporting.recentActivity'(windowKey, projFilters) {
+    const userId = requireUserId();
     check(windowKey, String);
     if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
     const k = String(windowKey || '').toLowerCase();
@@ -32,9 +34,9 @@ Meteor.methods({
     const includeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === 1).map(([k]) => k));
     const excludeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === -1).map(([k]) => k));
 
-    const projectSelector = { createdAt: { $gte: since } };
-    const taskSelector = { status: 'done', statusChangedAt: { $gte: since } };
-    const noteSelector = { createdAt: { $gte: since } };
+    const projectSelector = { userId, createdAt: { $gte: since } };
+    const taskSelector = { userId, status: 'done', statusChangedAt: { $gte: since } };
+    const noteSelector = { userId, createdAt: { $gte: since } };
     if (excludeIds.size > 0 || includeIds.size > 0) {
       const idCond = includeIds.size > 0 ? { $in: Array.from(includeIds) } : { $nin: Array.from(excludeIds) };
       // For projects: filter by _id

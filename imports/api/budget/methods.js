@@ -3,6 +3,7 @@ import { getPennylaneConfig } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import { fetch } from 'meteor/fetch';
 import { BudgetLinesCollection, VendorsCacheCollection, VendorsIgnoreCollection } from './collections';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth.js';
 
 const toCents = (v) => {
   const num = Number(v);
@@ -117,6 +118,7 @@ Meteor.methods({
       lines: [Object],
     });
 
+    const userId = requireUserId();
     const importBatch = `batch_${Date.now()}`;
     const now = new Date();
 
@@ -145,6 +147,7 @@ Meteor.methods({
         importFile: payload.importFile,
         importedAt: now,
         dedupeHash: '',
+        userId,
         createdAt: now,
         updatedAt: now,
       };
@@ -152,7 +155,7 @@ Meteor.methods({
       if (doc.vendor) {
         let cls = vendorClassCache.get(doc.vendor);
         if (cls === undefined) {
-          const prev = await BudgetLinesCollection.findOneAsync({ vendor: doc.vendor }, { fields: { department: 1, team: 1 } });
+          const prev = await BudgetLinesCollection.findOneAsync({ vendor: doc.vendor, userId }, { fields: { department: 1, team: 1 } });
           cls = prev ? { department: prev.department, team: prev.team } : null;
           vendorClassCache.set(doc.vendor, cls);
         }
@@ -186,7 +189,7 @@ Meteor.methods({
     let importedCount = 0;
     let skippedExisting = 0;
     for (const doc of unique) {
-      const exists = await BudgetLinesCollection.findOneAsync({ dedupeHash: doc.dedupeHash });
+      const exists = await BudgetLinesCollection.findOneAsync({ dedupeHash: doc.dedupeHash, userId });
       if (exists) { skippedExisting += 1; continue; }
       await BudgetLinesCollection.insertAsync(doc);
       importedCount += 1;
@@ -202,6 +205,8 @@ Meteor.methods({
   async 'budget.setDepartment'(lineId, department) {
     check(lineId, String);
     check(department, String);
+    await requireOwnership(BudgetLinesCollection, lineId);
+    const userId = requireUserId();
     const allowed = ['tech', 'parked', 'product', 'other'];
     const dep = allowed.includes(department) ? department : 'tech';
     const now = new Date();
@@ -219,6 +224,7 @@ Meteor.methods({
       if (base) {
         const selector = {
           _id: { $ne: lineId },
+          userId,
           department: { $ne: 'parked' }
         };
         const vendor = (base.vendor || '').trim();
@@ -231,6 +237,7 @@ Meteor.methods({
       if (base) {
         const selector = {
           _id: { $ne: lineId },
+          userId,
           department: { $ne: 'parked' }
         };
         const vendor = (base.vendor || '').trim();
@@ -243,6 +250,7 @@ Meteor.methods({
       if (base) {
         const selector = {
           _id: { $ne: lineId },
+          userId,
           department: { $ne: 'parked' }
         };
         const vendor = (base.vendor || '').trim();
@@ -255,6 +263,7 @@ Meteor.methods({
       if (base) {
         const selector = {
           _id: { $ne: lineId },
+          userId,
           department: { $ne: 'parked' }
         };
         const vendor = (base.vendor || '').trim();
@@ -266,18 +275,22 @@ Meteor.methods({
     return { ok: 1, bulkUpdated: bulkCount };
   },
   async 'budget.resetAll'() {
-    // Danger: deletes all budget lines
-    const res = await BudgetLinesCollection.rawCollection().deleteMany({});
+    // Danger: deletes all budget lines for this user
+    const userId = requireUserId();
+    const res = await BudgetLinesCollection.rawCollection().deleteMany({ userId });
     return { ok: 1, deleted: (res?.deletedCount ?? 0) };
   },
   async 'budget.removeLine'(lineId) {
     check(lineId, String);
+    await requireOwnership(BudgetLinesCollection, lineId);
     const res = await BudgetLinesCollection.removeAsync({ _id: lineId });
     return { ok: 1, deleted: res };
   },
   async 'budget.setTeam'(lineId, team) {
     check(lineId, String);
     check(team, String);
+    await requireOwnership(BudgetLinesCollection, lineId);
+    const userId = requireUserId();
     const allowed = ['lemapp', 'sre', 'data', 'pony', 'cto'];
     const t = allowed.includes(team.toLowerCase()) ? team.toLowerCase() : undefined;
     if (!t) throw new Meteor.Error('invalid-team', 'Unknown team');
@@ -291,6 +304,7 @@ Meteor.methods({
     if (!base) return { ok: 1, bulkUpdated: 0 };
     const selector = {
       _id: { $ne: lineId },
+      userId,
       department: { $ne: 'parked' }
     };
     const vendor = (base.vendor || '').trim();
@@ -300,6 +314,7 @@ Meteor.methods({
     return { ok: 1, bulkUpdated: bulkCount };
   },
   async 'budget.testPennylaneApi'() {
+    requireUserId();
     const cfg = getPennylaneConfig();
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '');
@@ -368,6 +383,7 @@ Meteor.methods({
     }
   },
   async 'budget.fetchPennylaneSupplierInvoices'(cursor, perPage, filters) {
+    requireUserId();
     const cfg = getPennylaneConfig();
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '/');
@@ -482,6 +498,7 @@ Meteor.methods({
     }
   },
   async 'budget.ensureVendors'(supplierIds) {
+    requireUserId();
     if (!Array.isArray(supplierIds)) throw new Meteor.Error('invalid-args', 'supplierIds must be an array');
     const cfg = getPennylaneConfig();
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
@@ -521,11 +538,13 @@ Meteor.methods({
     return results;
   },
   async 'budget.checkDuplicate'(line) {
+    requireUserId();
     if (!line || (typeof line !== 'object')) throw new Meteor.Error('invalid-args', 'line must be an object');
     return await checkDuplicateCore(line);
   }
   ,
   async 'budget.ignoreVendor'(payload) {
+    const userId = requireUserId();
     const kind = payload && payload.type ? String(payload.type) : (payload && payload.supplierId ? 'supplier' : 'label');
     const doc = {
       type: kind,
@@ -533,6 +552,7 @@ Meteor.methods({
       vendorName: payload && payload.vendorName ? String(payload.vendorName) : undefined,
       vendorNameLower: payload && payload.vendorName ? String(payload.vendorName).trim().toLowerCase() : undefined,
       publicFileUrl: payload && payload.publicFileUrl ? String(payload.publicFileUrl) : undefined,
+      userId,
       createdAt: new Date()
     };
     if (!doc.supplierId && !doc.vendorNameLower && !doc.publicFileUrl) {
@@ -542,12 +562,14 @@ Meteor.methods({
     return { ok: 1 };
   },
   async 'budget.fetchVendorsIgnore'() {
-    const rows = await VendorsIgnoreCollection.find({}).fetchAsync();
+    const userId = requireUserId();
+    const rows = await VendorsIgnoreCollection.find({ userId }).fetchAsync();
     return { items: rows };
   },
   async 'budget.setNotes'(lineId, notes) {
     check(lineId, String);
     check(notes, String);
+    await requireOwnership(BudgetLinesCollection, lineId);
     const now = new Date();
     const trimmedNotes = notes.trim();
     await BudgetLinesCollection.updateAsync({ _id: lineId }, { 
@@ -563,6 +585,7 @@ Meteor.methods({
 // Last updates (changelog-based) fetch
 Meteor.methods({
   async 'budget.fetchPennylaneLastUpdates'(startDate, perPage) {
+    requireUserId();
     const cfg = (Meteor.settings && Meteor.settings.pennylane) || {};
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '/');

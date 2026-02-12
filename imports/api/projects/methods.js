@@ -5,6 +5,7 @@ import { TasksCollection } from '/imports/api/tasks/collections';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth.js';
 
 // Normalize short text fields
 const sanitizeProjectDoc = (input) => {
@@ -37,7 +38,7 @@ Meteor.methods({
     if (doc.name !== undefined) check(doc.name, String);
     if (doc.status !== undefined) check(doc.status, String);
     const sanitized = sanitizeProjectDoc(doc);
-    const _id = await ProjectsCollection.insertAsync({ ...sanitized, createdAt: new Date(), updatedAt: new Date() });
+    const _id = await ProjectsCollection.insertAsync({ ...sanitized, userId: requireUserId(), createdAt: new Date(), updatedAt: new Date() });
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'project', id: _id, text: `${sanitized.name || ''} ${sanitized.description || ''}`.trim(), projectId: _id });
@@ -47,6 +48,7 @@ Meteor.methods({
   async 'projects.update'(projectId, modifier) {
     check(projectId, String);
     check(modifier, Object);
+    await requireOwnership(ProjectsCollection, projectId);
     const sanitized = sanitizeProjectDoc(modifier);
     if (Object.prototype.hasOwnProperty.call(modifier, 'panoramaStatus')) {
       const allowed = new Set(['red','orange','green', null, '']);
@@ -64,6 +66,7 @@ Meteor.methods({
   },
   async 'projects.remove'(projectId) {
     check(projectId, String);
+    await requireOwnership(ProjectsCollection, projectId);
     // Remove tasks
     await TasksCollection.removeAsync({ projectId });
     // Remove notes directly attached to the project (if any model uses this)

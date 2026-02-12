@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { NotesCollection } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
 const sanitizeNoteDoc = (input) => {
@@ -14,8 +15,9 @@ const sanitizeNoteDoc = (input) => {
 Meteor.methods({
   async 'notes.insert'(doc) {
     check(doc, Object);
+    const userId = requireUserId();
     const sanitized = sanitizeNoteDoc(doc);
-    const _id = await NotesCollection.insertAsync({ ...sanitized, createdAt: new Date() });
+    const _id = await NotesCollection.insertAsync({ ...sanitized, userId, createdAt: new Date() });
     try {
       const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       await upsertDocChunks({ kind: 'note', id: _id, text: `${sanitized.title || ''} ${sanitized.content || ''}`.trim(), projectId: sanitized.projectId || null, minChars: 800, maxChars: 1200, overlap: 150 });
@@ -28,7 +30,7 @@ Meteor.methods({
   async 'notes.update'(noteId, modifier) {
     check(noteId, String);
     check(modifier, Object);
-    const note = await NotesCollection.findOneAsync(noteId);
+    const note = await requireOwnership(NotesCollection, noteId);
     const sanitized = sanitizeNoteDoc(modifier);
 
     // Check if content has actually changed
@@ -62,7 +64,7 @@ Meteor.methods({
   },
   async 'notes.remove'(noteId) {
     check(noteId, String);
-    const note = await NotesCollection.findOneAsync(noteId);
+    const note = await requireOwnership(NotesCollection, noteId);
     const res = await NotesCollection.removeAsync(noteId);
     try { const { deleteByDocId } = await import('/imports/api/search/vectorStore.js'); await deleteByDocId('note', noteId); } catch (e) { console.error('[search][notes.remove] delete failed', e); }
     if (note?.projectId) {
@@ -72,20 +74,18 @@ Meteor.methods({
   },
   async 'notes.duplicate'(noteId) {
     check(noteId, String);
-    const originalNote = await NotesCollection.findOneAsync(noteId);
-    if (!originalNote) {
-      throw new Meteor.Error('not-found', 'Note not found');
-    }
-    
+    const originalNote = await requireOwnership(NotesCollection, noteId);
+    const userId = requireUserId();
+
     const duplicatedDoc = {
       title: originalNote.title ? `${originalNote.title} (copy)` : 'Untitled (copy)',
       content: originalNote.content || '',
       projectId: originalNote.projectId || null,
       ...(originalNote.claudeProjectId ? { claudeProjectId: originalNote.claudeProjectId } : {}),
     };
-    
+
     const sanitized = sanitizeNoteDoc(duplicatedDoc);
-    const _id = await NotesCollection.insertAsync({ ...sanitized, createdAt: new Date() });
+    const _id = await NotesCollection.insertAsync({ ...sanitized, userId, createdAt: new Date() });
     
     try {
       const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');

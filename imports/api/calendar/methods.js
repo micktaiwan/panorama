@@ -2,12 +2,14 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { CalendarEventsCollection } from './collections';
 import { getGoogleCalendarClient, getAuthUrl, exchangeCodeForTokens } from './googleCalendarClient';
+import { requireUserId } from '/imports/api/_shared/auth.js';
 
 const isNonEmptyString = Match.Where((x) => typeof x === 'string' && x.trim().length > 0);
 
 Meteor.methods({
   async 'calendar.setIcsUrl'(icsUrl) {
     check(icsUrl, isNonEmptyString);
+    requireUserId();
     const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
     const now = new Date();
     // Normalize common Google Calendar embed URL to ICS URL automatically
@@ -33,6 +35,7 @@ Meteor.methods({
     return pref._id;
   },
   async 'calendar.syncFromIcs'() {
+    const userId = requireUserId();
     const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
     const pref = await AppPreferencesCollection.findOneAsync({}, { fields: { calendarIcsUrl: 1 } });
     const url = pref?.calendarIcsUrl || '';
@@ -89,24 +92,25 @@ Meteor.methods({
         updatedAt: now,
         source: 'ics',
       };
-      const existing = await CalendarEventsCollection.findOneAsync({ uid });
+      const existing = await CalendarEventsCollection.findOneAsync({ uid, userId });
       if (existing) {
         await CalendarEventsCollection.updateAsync(existing._id, { $set: doc });
         upserts.push(existing._id);
       } else {
-        const _id = await CalendarEventsCollection.insertAsync({ ...doc, createdAt: now });
+        const _id = await CalendarEventsCollection.insertAsync({ ...doc, userId, createdAt: now });
         upserts.push(_id);
       }
     }
     // optional cleanup: keep only recent/future events
     const cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    await CalendarEventsCollection.removeAsync({ end: { $exists: true, $lt: cutoff } });
+    await CalendarEventsCollection.removeAsync({ userId, end: { $exists: true, $lt: cutoff } });
     return { ok: true, upserts: upserts.length };
   },
 
   async 'calendar.google.getAuthUrl'() {
+    const userId = requireUserId();
     try {
-      const url = getAuthUrl();
+      const url = getAuthUrl(userId);
       return { url };
     } catch (e) {
       console.error('[calendar.google.getAuthUrl] Failed', e);
@@ -116,6 +120,7 @@ Meteor.methods({
 
   async 'calendar.google.saveTokens'(code) {
     check(code, isNonEmptyString);
+    requireUserId();
     try {
       const tokens = await exchangeCodeForTokens(code);
       const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
@@ -151,6 +156,7 @@ Meteor.methods({
 
   async 'calendar.google.sync'(calendarIds) {
     check(calendarIds, Match.Maybe([String]));
+    const userId = requireUserId();
 
     try {
       const { calendar } = getGoogleCalendarClient();
@@ -172,6 +178,7 @@ Meteor.methods({
       // First, remove events from calendars we're not syncing
       const calendarIdsSet = new Set(calendarsToSync);
       const removedOthers = await CalendarEventsCollection.removeAsync({
+        userId,
         source: 'google',
         calendarId: { $exists: true, $nin: calendarsToSync }
       });
@@ -246,11 +253,11 @@ Meteor.methods({
               updated: event.updated ? new Date(event.updated) : undefined
             };
 
-            const existing = await CalendarEventsCollection.findOneAsync({ uid });
+            const existing = await CalendarEventsCollection.findOneAsync({ uid, userId });
             if (existing) {
               await CalendarEventsCollection.updateAsync(existing._id, { $set: doc });
             } else {
-              await CalendarEventsCollection.insertAsync({ ...doc, createdAt: now });
+              await CalendarEventsCollection.insertAsync({ ...doc, userId, createdAt: now });
             }
             totalUpserts++;
 
@@ -266,22 +273,24 @@ Meteor.methods({
 
       // Cleanup: remove past events AND future events beyond our sync window
       const removedPast = await CalendarEventsCollection.removeAsync({
+        userId,
         source: 'google',
         end: { $exists: true, $lt: todayMidnight }
       });
       const removedFuture = await CalendarEventsCollection.removeAsync({
+        userId,
         source: 'google',
         start: { $exists: true, $gt: timeMax }
       });
       console.log(`[calendar.google.sync] Cleaned up ${removedPast} past events and ${removedFuture} far-future events`);
 
       // Count total events in database after cleanup
-      const totalEventsInDb = await CalendarEventsCollection.find({ source: 'google' }).countAsync();
+      const totalEventsInDb = await CalendarEventsCollection.find({ userId, source: 'google' }).countAsync();
       console.log(`[calendar.google.sync] Total Google events in database: ${totalEventsInDb}`);
 
       // Update last sync time
       const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
-      const pref = await AppPreferencesCollection.findOneAsync({});
+      const pref = await AppPreferencesCollection.findOneAsync({ userId });
       if (pref) {
         await AppPreferencesCollection.updateAsync(pref._id, {
           $set: {
@@ -299,6 +308,7 @@ Meteor.methods({
   },
 
   async 'calendar.google.listCalendars'() {
+    requireUserId();
     try {
       const { calendar } = getGoogleCalendarClient();
       const response = await calendar.calendarList.list();
@@ -327,6 +337,7 @@ Meteor.methods({
       end: String,   // ISO 8601 string
       calendarId: Match.Maybe(String)
     });
+    requireUserId();
 
     try {
       const { calendar } = getGoogleCalendarClient();
@@ -369,6 +380,7 @@ Meteor.methods({
   async 'calendar.google.deleteEvent'(eventId, calendarIdParam) {
     check(eventId, isNonEmptyString);
     check(calendarIdParam, Match.Maybe(String));
+    const userId = requireUserId();
 
     try {
       const { calendar } = getGoogleCalendarClient();
@@ -382,7 +394,7 @@ Meteor.methods({
       console.log('[calendar.google.deleteEvent] Deleted event:', eventId);
 
       // Remove from local DB
-      await CalendarEventsCollection.removeAsync({ uid: eventId });
+      await CalendarEventsCollection.removeAsync({ uid: eventId, userId });
 
       // Sync to update local DB
       await Meteor.callAsync('calendar.google.sync');

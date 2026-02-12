@@ -2,11 +2,12 @@ import { Meteor } from 'meteor/meteor';
 import { NotionIntegrationsCollection } from './collections.js';
 
 /**
- * Publish all Notion integrations
- * Single-user app, no user filtering needed
+ * Publish Notion integrations for the current user
  */
 Meteor.publish('notionIntegrations', function() {
-  return NotionIntegrationsCollection.find({}, {
+  if (!this.userId) return this.ready();
+
+  return NotionIntegrationsCollection.find({ userId: this.userId }, {
     sort: { createdAt: -1 }
   });
 });

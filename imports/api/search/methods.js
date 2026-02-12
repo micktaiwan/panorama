@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { getQdrantUrl } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import { getQdrantClient, COLLECTION, VECTOR_SIZE, DISTANCE, embedText, makePreview, toPointId, splitIntoChunks, deleteByKind } from './vectorStore';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 // primitives are imported from './vectorStore'
 
@@ -274,6 +275,7 @@ const runIndexJob = async (jobId) => {
 
 Meteor.methods({
   async 'search.instant'(query, opts = {}) {
+    const userId = requireUserId();
     check(query, String);
   const kinds = Array.isArray(opts?.kinds) && opts.kinds.length > 0
     ? opts.kinds.map(String)
@@ -293,7 +295,7 @@ Meteor.methods({
     if (want.has('project')) {
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
       const proj = await ProjectsCollection.find(
-        { $or: [{ name: re }, { description: re }] },
+        { userId, $or: [{ name: re }, { description: re }] },
         { fields: { name: 1, description: 1 }, limit: limitPerKind }
       ).fetchAsync();
       for (const p of proj) {
@@ -314,7 +316,7 @@ Meteor.methods({
     if (want.has('task')) {
       const { TasksCollection } = await import('/imports/api/tasks/collections');
       taskRows = await TasksCollection.find(
-        { title: re },
+        { userId, title: re },
         { fields: { title: 1, projectId: 1, status: 1 }, limit: limitPerKind }
       ).fetchAsync();
       taskRows.forEach(t => { if (t.projectId) taskProjectIds.add(String(t.projectId)); });
@@ -326,7 +328,7 @@ Meteor.methods({
     if (want.has('note')) {
       const { NotesCollection } = await import('/imports/api/notes/collections');
       noteRows = await NotesCollection.find(
-        { $or: [{ title: re }, { content: re }] },
+        { userId, $or: [{ title: re }, { content: re }] },
         { fields: { title: 1, content: 1, projectId: 1 }, limit: limitPerKind }
       ).fetchAsync();
       noteRows.forEach(n => { if (n.projectId) noteProjectIds.add(String(n.projectId)); });
@@ -379,7 +381,7 @@ Meteor.methods({
     if (want.has('email')) {
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
       const emailRows = await GmailMessagesCollection.find(
-        { $or: [{ from: re }, { to: re }, { subject: re }, { snippet: re }, { body: re }] },
+        { userId, $or: [{ from: re }, { to: re }, { subject: re }, { snippet: re }, { body: re }] },
         { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1, gmailDate: 1 }, limit: limitPerKind, sort: { gmailDate: -1 } }
       ).fetchAsync();
       
@@ -403,6 +405,7 @@ Meteor.methods({
     return results;
   },
   async 'qdrant.health'() {
+    const userId = requireUserId();
     const url = getQdrantUrl();
     if (!url) {
       return { url: null, collection: COLLECTION(), exists: false, disabled: true };
@@ -443,6 +446,7 @@ Meteor.methods({
     return out;
   },
   async 'qdrant.lastIndexedRaw'(opts = {}) {
+    const userId = requireUserId();
     const url = getQdrantUrl();
     if (!url) {
       return { disabled: true, items: [] };
@@ -476,11 +480,13 @@ Meteor.methods({
     return { disabled: false, items };
   },
   async 'qdrant.indexAll'() { // legacy synchronous path
+    const userId = requireUserId();
     const jobId = String(Date.now());
     await runIndexJob(jobId);
     return indexJobs.get(jobId);
   },
   async 'qdrant.indexStart'() {
+    const userId = requireUserId();
     const jobId = String(Date.now());
     // Precompute docs to know total count quickly
     const docs = await collectDocs();
@@ -522,6 +528,7 @@ Meteor.methods({
     return { jobId, total: docs.length };
   },
   async 'qdrant.indexKindStart'(kind) {
+    const userId = requireUserId();
     check(kind, String);
     const allowed = new Set(['project', 'task', 'note', 'session', 'line', 'alarm', 'link', 'userlog', 'email']);
     if (!allowed.has(kind)) {
@@ -590,11 +597,13 @@ Meteor.methods({
     return { jobId, total: docs.length };
   },
   async 'qdrant.indexStatus'(jobId) {
+    const userId = requireUserId();
     const st = indexJobs.get(String(jobId));
     return st || { total: 0, processed: 0, upserts: 0, errors: 0, done: true, cancelled: false };
   },
 
   async 'qdrant.cancelIndex'(jobId) {
+    const userId = requireUserId();
     check(jobId, String);
     const controller = jobCancellation.get(jobId);
     if (controller) {
@@ -611,6 +620,7 @@ Meteor.methods({
     return { cancelled: false, reason: 'Job not found or already finished' };
   },
   async 'qdrant.indexKind'(kind) {
+    const userId = requireUserId();
     check(kind, String);
     const allowed = new Set(['project', 'task', 'note', 'session', 'line', 'alarm', 'link', 'userlog', 'email']);
     if (!allowed.has(kind)) {
@@ -672,6 +682,7 @@ Meteor.methods({
     return { processed };
   },
   async 'panorama.search'(query, opts = {}) {
+    const userId = requireUserId();
     check(query, String);
     const url = getQdrantUrl();
     if (!url) {
@@ -811,6 +822,7 @@ Meteor.methods({
     return { results: deduped, cachedVector: !!cached, cacheSize: vectorCache.size };
   },
   async 'qdrant.qualityTest'(opts = {}) {
+    const userId = requireUserId();
     const limit = Math.max(1, Math.min(50, Number(opts?.limit) || 10));
     const verbose = !!opts?.verbose;
 
@@ -850,6 +862,7 @@ Meteor.methods({
     };
   },
   async 'qdrant.diagnoseIndexing'() {
+    const userId = requireUserId();
     console.log('[qdrant.diagnoseIndexing] Running indexing diagnosis...');
     const { diagnoseIndexing } = await import('./diagnoseIndexing');
     const diagnosis = await diagnoseIndexing();
@@ -857,6 +870,7 @@ Meteor.methods({
     return diagnosis;
   },
   async 'qdrant.autoFix'(opts = {}) {
+    const userId = requireUserId();
     check(opts, Object);
     const dryRun = !!opts.dryRun;
     const sampleSize = opts.sampleSize === 0 ? 0 : Math.max(5, Math.min(1000, Number(opts?.sampleSize) || 100));

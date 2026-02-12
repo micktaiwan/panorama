@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { LinksCollection } from './collections';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth.js';
 
 const ensureHttpUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
@@ -18,6 +19,7 @@ const normalize = (doc) => {
 
 Meteor.methods({
   async 'links.insert'(doc) {
+    const userId = requireUserId();
     check(doc, {
       projectId: Match.Maybe(String),
       name: String,
@@ -27,6 +29,7 @@ Meteor.methods({
     const clean = normalize(doc);
     const _id = await LinksCollection.insertAsync({
       ...clean,
+      userId,
       clicksCount: 0,
       lastClickedAt: null,
       createdAt: now,
@@ -43,6 +46,7 @@ Meteor.methods({
   async 'links.update'(linkId, modifier) {
     check(linkId, String);
     check(modifier, Object);
+    await requireOwnership(LinksCollection, linkId);
     const clean = normalize(modifier);
     const res = await LinksCollection.updateAsync(linkId, { $set: { ...clean, updatedAt: new Date() } });
     // Live search upsert
@@ -56,6 +60,7 @@ Meteor.methods({
   },
   async 'links.remove'(linkId) {
     check(linkId, String);
+    await requireOwnership(LinksCollection, linkId);
     const res = await LinksCollection.removeAsync(linkId);
     try {
       const { deleteDoc } = await import('/imports/api/search/vectorStore.js');
@@ -65,14 +70,15 @@ Meteor.methods({
   },
   async 'links.registerClick'(linkId) {
     check(linkId, String);
+    await requireOwnership(LinksCollection, linkId);
     return LinksCollection.updateAsync(linkId, { $inc: { clicksCount: 1 }, $set: { lastClickedAt: new Date(), updatedAt: new Date() } });
   },
   async 'links.getUrl'(linkId, opts = {}) {
     check(linkId, String);
-    const registerClick = !!(opts && opts.registerClick);
-    const l = await LinksCollection.findOneAsync({ _id: linkId }, { fields: { url: 1 } });
-    if (!l || !l.url) throw new Meteor.Error('not-found', 'Link not found');
+    const l = await requireOwnership(LinksCollection, linkId);
+    if (!l.url) throw new Meteor.Error('not-found', 'Link URL not found');
     const url = ensureHttpUrl(l.url);
+    const registerClick = !!(opts && opts.registerClick);
     if (registerClick) {
       await LinksCollection.updateAsync(linkId, { $inc: { clicksCount: 1 }, $set: { lastClickedAt: new Date(), updatedAt: new Date() } });
     }

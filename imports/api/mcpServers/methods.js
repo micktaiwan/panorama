@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { MCPServersCollection } from './collections.js';
 import { MCPClient } from '/imports/api/mcp/MCPClient.js';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth';
 
 /**
  * Meteor methods for MCP Servers management
@@ -25,6 +26,8 @@ Meteor.methods({
       headers: Match.Optional(Object)
     });
 
+    const userId = requireUserId();
+
     // Validate type
     if (!['stdio', 'http'].includes(config.type)) {
       throw new Meteor.Error('invalid-type', 'Type must be "stdio" or "http"');
@@ -44,14 +47,15 @@ Meteor.methods({
       }
     }
 
-    // Check if name already exists
-    const existing = await MCPServersCollection.findOneAsync({ name: config.name });
+    // Check if name already exists for this user
+    const existing = await MCPServersCollection.findOneAsync({ name: config.name, userId });
     if (existing) {
       throw new Meteor.Error('duplicate-name', 'A server with this name already exists');
     }
 
     const now = new Date();
     const serverDoc = {
+      userId,
       name: config.name.trim(),
       type: config.type,
       enabled: config.enabled !== false,
@@ -89,18 +93,16 @@ Meteor.methods({
       headers: Match.Optional(Object)
     });
 
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    const server = await requireOwnership(MCPServersCollection, serverId);
 
     const updateDoc = {};
 
     if (updates.name !== undefined) {
       const trimmedName = updates.name.trim();
-      // Check if name is taken by another server
+      // Check if name is taken by another server for this user
       const existing = await MCPServersCollection.findOneAsync({
         name: trimmedName,
+        userId: server.userId,
         _id: { $ne: serverId }
       });
       if (existing) {
@@ -133,10 +135,7 @@ Meteor.methods({
   async 'mcpServers.remove'(serverId) {
     check(serverId, String);
 
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    await requireOwnership(MCPServersCollection, serverId);
 
     await MCPServersCollection.removeAsync({ _id: serverId });
     return true;
@@ -149,10 +148,7 @@ Meteor.methods({
   async 'mcpServers.testConnection'(serverId) {
     check(serverId, String);
 
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    const server = await requireOwnership(MCPServersCollection, serverId);
 
     const timeout = 10000; // 10s for testing
 
@@ -207,10 +203,7 @@ Meteor.methods({
     check(toolName, String);
     check(args, Match.Optional(Object));
 
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    const server = await requireOwnership(MCPServersCollection, serverId);
 
     if (!server.enabled) {
       throw new Meteor.Error('disabled', 'This server is disabled');
@@ -255,6 +248,7 @@ Meteor.methods({
    * Reads claude_desktop_config.json and imports server configurations
    */
   async 'mcpServers.syncFromClaudeDesktop'() {
+    const userId = requireUserId();
     const fs = await import('fs/promises');
     const os = await import('os');
     const path = await import('path');
@@ -303,8 +297,8 @@ Meteor.methods({
     // Import each server
     for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
       try {
-        // Check if server already exists
-        const existing = await MCPServersCollection.findOneAsync({ name: serverName });
+        // Check if server already exists for this user
+        const existing = await MCPServersCollection.findOneAsync({ name: serverName, userId });
         if (existing) {
           results.skipped.push({
             name: serverName,
@@ -320,6 +314,7 @@ Meteor.methods({
           // stdio type
           type = 'stdio';
           serverDoc = {
+            userId,
             name: serverName,
             type: 'stdio',
             command: serverConfig.command,
@@ -332,6 +327,7 @@ Meteor.methods({
           // http type
           type = 'http';
           serverDoc = {
+            userId,
             name: serverName,
             type: 'http',
             url: serverConfig.url,
