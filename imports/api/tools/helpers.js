@@ -219,7 +219,7 @@ export const FIELD_ALLOWLIST = {
   links: ['_id', 'projectId', 'name', 'url', 'createdAt', 'updatedAt'],
   people: ['_id', 'name', 'createdAt', 'updatedAt', 'role', 'teamId', 'email'],
   teams: ['_id', 'name', 'createdAt', 'updatedAt'],
-  files: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt', 'storedFileName', 'size', 'mimeType'],
+  files: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt', 'storedFileName', 'size', 'mimeType', 'type', 'extension', 'path'],
   alarms: ['_id', 'title', 'enabled', 'when', 'createdAt', 'updatedAt', 'recurrence', 'snoozedUntilAt', 'nextTriggerAt'],
   userLogs: ['_id', 'content', 'createdAt'],
   emails: ['_id', 'id', 'threadId', 'from', 'to', 'subject', 'snippet', 'body', 'gmailDate', 'labelIds', 'createdAt'],
