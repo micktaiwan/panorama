@@ -1,3 +1,16 @@
+## 2026-02-12
+
+### Feature: Import d'archives NDJSON.gz
+- Nouveau bouton d'import dans la modale "Export / Import" (anciennement "Export data")
+- Upload POST vers `/upload-import` avec auth via header `X-Auth-Token`
+- Traitement streaming : gunzip → readline NDJSON → bulkWrite upsert par batchs de 100
+- userId réassigné au user courant sur chaque doc importé
+- Idempotent : ré-importer met à jour sans créer de doublons (upsert par `_id`)
+- Progression en temps réel (polling DDP toutes les 800ms) avec stats finales (inserted/updated/skipped/errors/collections)
+- Guard de concurrence : 1 seul import simultané par user
+- Limite 50 MB
+- Fichiers : `imports/api/import/server.js` (nouveau), `server/main.js`, `imports/ui/App.jsx`
+
 ## 2026-02-11
 
 ### Feature: Favicon losange/boussole
