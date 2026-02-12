@@ -1,5 +1,5 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { toggleMark, setBlockType } from 'prosemirror-commands';
+import { toggleMark, setBlockType, lift } from 'prosemirror-commands';
 import { wrapInList, liftListItem } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
 import { promptUrl } from './promptUrl.js';
@@ -76,7 +76,9 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
             editorView.focus();
             updateTooltip(editorView);
           } else {
-            promptUrl().then((href) => {
+            const selectedText = state.doc.textBetween(from, to).trim();
+            const defaultUrl = /^https?:\/\/\S+$/.test(selectedText) ? selectedText : '';
+            promptUrl(defaultUrl).then((href) => {
               if (href) {
                 const mark = schema.marks.link.create({ href });
                 const currentState = editorView.state;
@@ -426,9 +428,9 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
           // 1. Remove all marks
           tr = tr.removeMark(clearFrom, clearTo);
 
-          // 2. Convert headings to paragraphs
+          // 2. Convert headings and code blocks to paragraphs
           state.doc.nodesBetween(clearFrom, clearTo, (node, pos) => {
-            if (node.type === schema.nodes.heading) {
+            if (node.type === schema.nodes.heading || node.type === schema.nodes.code_block) {
               tr = tr.setNodeMarkup(tr.mapping.map(pos), schema.nodes.paragraph);
             }
           });
@@ -439,6 +441,12 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
           let lifted = true;
           while (lifted) {
             lifted = liftListItem(schema.nodes.list_item)(editorView.state, editorView.dispatch);
+          }
+
+          // 4. Lift out of blockquotes
+          let liftedBq = true;
+          while (liftedBq) {
+            liftedBq = lift(editorView.state, editorView.dispatch);
           }
 
           editorView.focus();
