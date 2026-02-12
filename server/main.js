@@ -100,6 +100,7 @@ import '/imports/api/reporting/methods';
 import '/imports/api/reporting/ai';
 import '/imports/api/export/methods';
 import '/imports/api/export/server';
+import '/imports/api/import/server';
 
 // System & Utilities
 import '/imports/api/appPreferences/collections';
@@ -157,6 +158,7 @@ import '/imports/api/_shared/rateLimiter';
 
 // Migrations
 import '/server/migrations/addUserId';
+import '/server/migrations/migrateFilesToOstrio';
 
 Meteor.startup(async () => {
   // Audit: log login/logout events
@@ -245,9 +247,8 @@ Meteor.startup(async () => {
   }
 
   // Place server-side initialization here as your app grows.
-  const scriptSrc = Meteor.isDevelopment
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline'";
+  // unsafe-eval required by ostrio:files (web worker for chunked uploads)
+  const scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
   const csp = [
     "default-src 'self'",

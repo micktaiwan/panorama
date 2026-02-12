@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
+import { Accounts } from 'meteor/accounts-base';
 import { Dashboard } from '/imports/ui/Dashboard/Dashboard.jsx';
 import { Help } from '/imports/ui/Help/Help.jsx';
 import { ProjectDetails } from '/imports/ui/ProjectDetails/projectDetails.jsx';
@@ -91,6 +92,10 @@ function App() {
   const [activeAlarmId, setActiveAlarmId] = useState(null);
   // Provider will register notify handler; nothing to do here
   const [exportOpen, setExportOpen] = useState(false);
+  const [importStatus, setImportStatus] = useState(null); // null | 'uploading' | 'processing' | 'done' | 'error'
+  const [importProgress, setImportProgress] = useState(null);
+  const [importStats, setImportStats] = useState(null);
+  const [importError, setImportError] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cmdDefaultTab, setCmdDefaultTab] = useState(0);
   const [cmdDefaultProjectId, setCmdDefaultProjectId] = useState('');
@@ -637,7 +642,7 @@ function App() {
   // Redirect to onboarding if not configured
   useEffect(() => {
     if (subPrefs()) return; // not ready
-    const needsOnboarding = !appPrefs || !appPrefs.onboardedAt || !appPrefs.filesDir;
+    const needsOnboarding = !appPrefs || !appPrefs.onboardedAt;
     if (needsOnboarding && route?.name !== 'onboarding') {
       navigateTo({ name: 'onboarding' });
     }
@@ -907,17 +912,17 @@ function App() {
       </Modal>
       <Modal
         open={exportOpen}
-        onClose={() => setExportOpen(false)}
-        title="Export data"
+        onClose={() => { setExportOpen(false); if (importStatus === 'done' || importStatus === 'error') { setImportStatus(null); setImportProgress(null); setImportStats(null); setImportError(null); } }}
+        title="Export / Import"
         actions={[
-          <button key="close" className="btn" onClick={() => setExportOpen(false)}>Close</button>
+          <button key="close" className="btn" onClick={() => { setExportOpen(false); if (importStatus === 'done' || importStatus === 'error') { setImportStatus(null); setImportProgress(null); setImportStats(null); setImportError(null); } }}>Close</button>
         ]}
       >
         <div className="exportModalBody">
           <p>Select an export format:</p>
           <ul>
-            <li><strong>Export JSON</strong> 📄: for small databases; single JSON generated in memory and downloaded through DDP.</li>
-            <li><strong>Export Archive</strong> 📦: for large databases; server generates a compressed NDJSON archive and you download it via HTTP.</li>
+            <li><strong>Export JSON</strong>: for small databases; single JSON generated in memory and downloaded through DDP.</li>
+            <li><strong>Export Archive</strong>: for large databases; server generates a compressed NDJSON archive and you download it via HTTP.</li>
           </ul>
           <div className="exportModalButtons">
             <button className="btn" onClick={() => {
@@ -940,7 +945,7 @@ function App() {
                 }
               });
             }}>
-              📄 Export JSON
+              Export JSON
             </button>
             <button className="btn" onClick={() => {
               const handleStatus = (jobId) => {
@@ -967,9 +972,93 @@ function App() {
                 handleStatus(res.jobId);
               });
             }}>
-              📦 Export Archive
+              Export Archive
             </button>
           </div>
+          <hr style={{ margin: '16px 0', borderColor: 'var(--border, #333)' }} />
+          <h4 style={{ margin: '0 0 8px' }}>Import Archive</h4>
+          <p className="muted" style={{ marginBottom: 8 }}>Restore a <code>.ndjson.gz</code> archive exported from Panorama. All documents will be assigned to your current account.</p>
+          {importStatus === 'uploading' && <p>Uploading...</p>}
+          {importStatus === 'processing' && (
+            <p>Processing... {importProgress?.lines ? `(${importProgress.lines} lines)` : ''}</p>
+          )}
+          {importStatus === 'done' && importStats && (
+            <div style={{ background: 'var(--bg-secondary, #1a1a2e)', padding: 10, borderRadius: 6, marginBottom: 8 }}>
+              <p style={{ margin: 0 }}>Import complete:</p>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+                <li>Inserted: {importStats.inserted}</li>
+                <li>Updated: {importStats.updated}</li>
+                {importStats.skipped > 0 && <li>Skipped: {importStats.skipped}</li>}
+                {importStats.errors > 0 && <li>Errors: {importStats.errors}</li>}
+                <li>Collections: {importStats.collections?.join(', ') || 'none'}</li>
+              </ul>
+            </div>
+          )}
+          {importStatus === 'error' && (
+            <p style={{ color: 'var(--danger, #e74c3c)' }}>Import failed: {importError || 'Unknown error'}</p>
+          )}
+          <input
+            type="file"
+            accept=".gz"
+            disabled={importStatus === 'uploading' || importStatus === 'processing'}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              e.target.value = '';
+
+              setImportStatus('uploading');
+              setImportProgress(null);
+              setImportStats(null);
+              setImportError(null);
+
+              try {
+                const token = Accounts._storedLoginToken();
+                if (!token) throw new Error('Not logged in');
+
+                const resp = await fetch('/upload-import', {
+                  method: 'POST',
+                  body: file,
+                  headers: { 'X-Auth-Token': token },
+                });
+
+                if (!resp.ok) {
+                  const body = await resp.json().catch(() => ({}));
+                  throw new Error(body.error || `HTTP ${resp.status}`);
+                }
+
+                const { jobId } = await resp.json();
+                setImportStatus('processing');
+
+                // Poll for progress
+                const poll = () => {
+                  Meteor.call('app.importArchiveStatus', jobId, (err, st) => {
+                    if (err || !st || !st.exists) {
+                      setImportStatus('error');
+                      setImportError(err?.reason || 'Job not found');
+                      return;
+                    }
+                    if (st.error) {
+                      setImportStatus('error');
+                      setImportError(st.error.message || 'Unknown error');
+                      return;
+                    }
+                    setImportProgress(st.progress);
+                    setImportStats(st.stats);
+                    if (st.ready) {
+                      setImportStatus('done');
+                      notify({ message: `Import complete: ${st.stats?.inserted || 0} inserted, ${st.stats?.updated || 0} updated`, kind: 'success' });
+                    } else {
+                      setTimeout(poll, 800);
+                    }
+                  });
+                };
+                poll();
+              } catch (err) {
+                setImportStatus('error');
+                setImportError(err.message || 'Upload failed');
+              }
+            }}
+          />
         </div>
       </Modal>
       <CommandPalette
