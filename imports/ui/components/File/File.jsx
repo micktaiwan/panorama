@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { Files } from '/imports/api/files/collections';
 import './File.css';
 
 export const FileItem = ({ file, startEditing = false, hoverActions = false }) => {
@@ -10,7 +11,7 @@ export const FileItem = ({ file, startEditing = false, hoverActions = false }) =
   const [isEditing, setIsEditing] = React.useState(!!startEditing);
   if (!file) return null;
   const nameVal = file.name && file.name.trim() ? file.name.trim() : '';
-  const href = file.storedFileName ? `/files/${encodeURIComponent(file.storedFileName)}` : '#';
+  const href = file._id ? Files.link(file) : '#';
   const label = nameVal || file.originalName || '(file)';
   return (
     <>

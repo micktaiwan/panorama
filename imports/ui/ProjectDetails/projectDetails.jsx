@@ -19,7 +19,7 @@ import { TaskRow } from '../components/TaskRow/TaskRow.jsx';
 import { createNewLink } from '../utils/links.js';
 import { LinksCollection } from '../../api/links/collections';
 import { LinkItem } from '../components/Link/Link.jsx';
-import { FilesCollection } from '../../api/files/collections';
+import { Files, FilesCollection } from '../../api/files/collections';
 import { FileItem } from '../components/File/File.jsx';
 import { Tooltip } from '../components/Tooltip/Tooltip.jsx';
 import { ClaudeProjectsCollection } from '../../api/claudeProjects/collections';
@@ -364,13 +364,13 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
             <input type="file" style={{ display: 'none' }} onChange={(e) => {
               const file = e.target.files && e.target.files[0];
               if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () => {
-                const base64 = String(reader.result || '').split(',').pop() || '';
-                const name = file.name.replace(/\.[^.]+$/, '');
-                Meteor.call('files.insert', { projectId, name, originalName: file.name, contentBase64: base64, mimeType: file.type }, () => {});
-              };
-              reader.readAsDataURL(file);
+              Files.insert({
+                file,
+                meta: { projectId, name: file.name.replace(/\.[^.]+$/, '') },
+                chunkSize: 'dynamic',
+              }, false).on('end', (err) => {
+                if (err) console.error('Upload failed', err);
+              }).start();
               e.target.value = '';
             }} />
           </label>
