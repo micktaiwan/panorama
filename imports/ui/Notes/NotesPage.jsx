@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTracker } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { NotesCollection } from '/imports/api/notes/collections';
@@ -10,6 +10,7 @@ import { NotesList } from './components/NotesList.jsx';
 import { NotesTabs } from './components/NotesTabs.jsx';
 import { NoteEditor } from './components/NoteEditor.jsx';
 import { DiskFileEditor } from '/imports/ui/components/DiskFileEditor/DiskFileEditor.jsx';
+import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import './NotesPage.css';
 
 // Constants
@@ -318,6 +319,40 @@ export const NotesPage = () => {
     }
     return set;
   }, [openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), Object.keys(noteContents).length, notesById, fileBaselines]);
+
+  // Navigation guard: warn before leaving with unsaved notes
+  const [pendingNavHash, setPendingNavHash] = useState(null);
+  const skipNavGuardRef = useRef(false);
+  const dirtyCountRef = useRef(0);
+  dirtyCountRef.current = dirtySet.size;
+
+  useEffect(() => {
+    const onHashChange = () => {
+      if (skipNavGuardRef.current) {
+        skipNavGuardRef.current = false;
+        return;
+      }
+      if (dirtyCountRef.current > 0 && !window.location.hash.startsWith('#/notes')) {
+        const newHash = window.location.hash;
+        setPendingNavHash(newHash);
+        skipNavGuardRef.current = true;
+        window.location.hash = '#/notes';
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (dirtyCountRef.current > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
 
   // Open a note in a new tab
   const openNote = (note, shouldFocus = false) => {
@@ -768,6 +803,22 @@ export const NotesPage = () => {
         )}
       </div>
 
+      <Modal
+        open={!!pendingNavHash}
+        onClose={() => setPendingNavHash(null)}
+        title="Unsaved changes"
+        icon={false}
+        actions={[
+          <button key="stay" className="btn btn-primary" onClick={() => setPendingNavHash(null)}>Stay</button>,
+          <button key="leave" className="btn" onClick={() => {
+            skipNavGuardRef.current = true;
+            window.location.hash = pendingNavHash;
+            setPendingNavHash(null);
+          }}>Leave without saving</button>,
+        ]}
+      >
+        <p>You have unsaved notes. Leave without saving?</p>
+      </Modal>
     </div>
   );
 };
