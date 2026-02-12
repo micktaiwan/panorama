@@ -645,7 +645,14 @@ function App() {
 
   return (
     <div className={`container${widthMode !== 'default' ? ` ${widthMode}` : ''}${focusMode ? ' focusMode' : ''}`}>
-      {!focusMode && <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>Panorama</a></h1>}
+      {!focusMode && (
+        <header className="appHeader">
+          <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>Panorama</a></h1>
+          <nav className="headerNav">
+            <a href="#/claude" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'claude' }); }}>Claude Code</a>
+          </nav>
+        </header>
+      )}
       {!focusMode && favoriteProjects.length > 0 && (
         <div className="favoritesBar">
           <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
