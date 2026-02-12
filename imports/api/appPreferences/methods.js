@@ -1,55 +1,40 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { AppPreferencesCollection } from './collections';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 const normalizePath = (p) => String(p || '').trim();
 
 Meteor.methods({
   async 'appPreferences.ensure'() {
-    const doc = await AppPreferencesCollection.findOneAsync({});
+    const userId = requireUserId();
+    const doc = await AppPreferencesCollection.findOneAsync({ userId });
     if (doc) return doc._id;
     const now = new Date();
     return AppPreferencesCollection.insertAsync({
+      userId,
       createdAt: now,
       updatedAt: now,
       filesDir: null,
       onboardedAt: null,
       devUrlMode: false,
-      openaiApiKey: null,
-      anthropicApiKey: null,
-      perplexityApiKey: null,
-      pennylaneBaseUrl: null,
-      pennylaneToken: null,
-      qdrantUrl: null,
+      theme: 'dark',
       settingsVersion: 1
     });
   },
   async 'appPreferences.update'(modifier) {
     check(modifier, Object);
+    const userId = requireUserId();
     const set = { updatedAt: new Date() };
+    // User-level preferences only — API keys are now in Meteor.settings / env vars
     if (typeof modifier.filesDir === 'string') set.filesDir = normalizePath(modifier.filesDir) || null;
     if (modifier.onboardedAt === true) set.onboardedAt = new Date();
     if (typeof modifier.devUrlMode === 'boolean') set.devUrlMode = modifier.devUrlMode;
-    if (typeof modifier.openaiApiKey === 'string') set.openaiApiKey = modifier.openaiApiKey.trim() || null;
-    if (typeof modifier.anthropicApiKey === 'string') set.anthropicApiKey = modifier.anthropicApiKey.trim() || null;
-    if (typeof modifier.perplexityApiKey === 'string') set.perplexityApiKey = modifier.perplexityApiKey.trim() || null;
-    if (typeof modifier.pennylaneBaseUrl === 'string') set.pennylaneBaseUrl = modifier.pennylaneBaseUrl.trim() || null;
-    if (typeof modifier.pennylaneToken === 'string') set.pennylaneToken = modifier.pennylaneToken.trim() || null;
-    if (typeof modifier.qdrantUrl === 'string') set.qdrantUrl = modifier.qdrantUrl.trim() || null;
-    if (modifier.slack != null && typeof modifier.slack === 'object') {
-      const s = modifier.slack;
-      const slack = {};
-      if (typeof s.enabled === 'boolean') slack.enabled = s.enabled;
-      if (typeof s.botToken === 'string') slack.botToken = s.botToken.trim() || null;
-      if (typeof s.appToken === 'string') slack.appToken = s.appToken.trim() || null;
-      if (typeof s.allowedUserId === 'string') slack.allowedUserId = s.allowedUserId.trim() || null;
-      set.slack = slack;
-    }
     if (modifier.theme === 'dark' || modifier.theme === 'light') set.theme = modifier.theme;
     if (Number.isFinite(modifier.settingsVersion)) set.settingsVersion = modifier.settingsVersion;
-    const doc = await AppPreferencesCollection.findOneAsync({});
+    const doc = await AppPreferencesCollection.findOneAsync({ userId });
     if (!doc) {
-      await AppPreferencesCollection.insertAsync({ ...set, createdAt: new Date() });
+      await AppPreferencesCollection.insertAsync({ ...set, userId, createdAt: new Date() });
       return true;
     }
     await AppPreferencesCollection.updateAsync(doc._id, { $set: set });

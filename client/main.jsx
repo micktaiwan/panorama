@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Meteor } from 'meteor/meteor';
+import { useTracker } from 'meteor/react-meteor-data';
 import '/imports/ui/utils/globalErrors.js';
 
 // Apply cached theme before React renders to prevent flash
@@ -8,6 +9,18 @@ const cachedTheme = localStorage.getItem('panorama-theme');
 if (cachedTheme === 'light') {
   document.documentElement.setAttribute('data-theme', 'light');
 }
+
+// Auth wrapper: shows Login when not logged in, App when logged in
+const AuthGate = ({ App, Login }) => {
+  const { user, loggingIn } = useTracker(() => ({
+    user: Meteor.user(),
+    loggingIn: Meteor.loggingIn(),
+  }));
+
+  if (loggingIn) return <div className="loginPage"><p style={{ color: 'var(--muted)' }}>Loading...</p></div>;
+  if (!user) return <Login />;
+  return <App />;
+};
 
 Meteor.startup(() => {
   const container = document.getElementById('react-target');
@@ -39,7 +52,10 @@ Meteor.startup(() => {
     }
   }
 
-  import('/imports/ui/App.jsx').then(({ default: App }) => {
-    root.render(<App />);
+  Promise.all([
+    import('/imports/ui/App.jsx'),
+    import('/imports/ui/Login/Login.jsx'),
+  ]).then(([{ default: App }, { Login }]) => {
+    root.render(<AuthGate App={App} Login={Login} />);
   });
 });

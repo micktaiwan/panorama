@@ -1,4 +1,5 @@
 import { Meteor } from 'meteor/meteor';
+import { Accounts } from 'meteor/accounts-base';
 import { WebApp } from 'meteor/webapp';
 
 // Core Meteor modules
@@ -151,7 +152,25 @@ import '/imports/api/claudeCommands/collections';
 import '/imports/api/claudeCommands/publications';
 import '/imports/api/claudeCommands/methods';
 
+// Security
+import '/imports/api/_shared/rateLimiter';
+
+// Migrations
+import '/server/migrations/addUserId';
+
 Meteor.startup(async () => {
+  // Audit: log login/logout events
+  const { auditLog } = await import('/imports/api/_shared/audit');
+  Accounts.onLogin(({ user }) => {
+    auditLog('user.login', { userId: user._id, email: user.emails?.[0]?.address });
+  });
+  Accounts.onLoginFailure(({ error }) => {
+    auditLog('user.loginFailure', { reason: error?.reason || error?.message });
+  });
+  Accounts.onLogout(({ user }) => {
+    auditLog('user.logout', { userId: user?._id });
+  });
+
   // Mark any Claude sessions stuck in "running" as interrupted (processes died on restart)
   const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
   const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
@@ -217,35 +236,12 @@ Meteor.startup(async () => {
     console.log(`[startup] Migration complete: ${orphanSessions.length} project(s) created`);
   }
 
-  // Ensure AI mode defaults to 'remote' on first launch
+  // AI preferences are now per-user; defaults are set when a user's prefs doc is first created.
+  // Migrate any legacy global (userId-less) prefs docs by assigning them to auto mode.
   const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
-  const prefs = await AppPreferencesCollection.findOneAsync({});
-
-  if (!prefs || !prefs.ai || !prefs.ai.mode) {
-    console.log('[startup] No AI preferences found, initializing with remote mode');
-    await AppPreferencesCollection.upsertAsync(
-      {},
-      {
-        $set: {
-          'ai.mode': 'remote',
-          'ai.fallback': 'none'
-        }
-      }
-    );
-  } else if (prefs.ai.mode === 'auto') {
-    // Legacy 'auto' mode no longer supported - force to remote
-    console.log(`[startup] AI mode is 'auto' (deprecated), switching to 'remote'`);
-    await AppPreferencesCollection.updateAsync(
-      {},
-      {
-        $set: {
-          'ai.mode': 'remote',
-          'ai.fallback': 'none'
-        }
-      }
-    );
-  } else {
-    console.log(`[startup] AI mode: '${prefs.ai.mode}'`);
+  const legacyPrefs = await AppPreferencesCollection.find({ userId: { $exists: false } }).fetchAsync();
+  if (legacyPrefs.length > 0) {
+    console.log(`[startup] Found ${legacyPrefs.length} legacy appPreferences doc(s) without userId (will be claimed by first user to log in)`);
   }
 
   // Place server-side initialization here as your app grows.
@@ -293,26 +289,30 @@ Meteor.startup(async () => {
       const { exchangeCodeForTokens } = await import('/imports/api/calendar/googleCalendarClient.js');
       const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections.js');
 
+      const oauthUserId = url.searchParams.get('state') || null;
       const tokens = await exchangeCodeForTokens(code);
       const now = new Date();
-      const pref = await AppPreferencesCollection.findOneAsync({});
 
-      if (!pref) {
-        await AppPreferencesCollection.insertAsync({
-          createdAt: now,
-          updatedAt: now,
-          googleCalendar: {
-            refreshToken: tokens.refresh_token,
-            lastSyncAt: null
-          }
-        });
+      if (oauthUserId) {
+        const pref = await AppPreferencesCollection.findOneAsync({ userId: oauthUserId });
+        if (pref) {
+          await AppPreferencesCollection.updateAsync(pref._id, {
+            $set: { 'googleCalendar.refreshToken': tokens.refresh_token, updatedAt: now }
+          });
+        } else {
+          await AppPreferencesCollection.insertAsync({
+            userId: oauthUserId, createdAt: now, updatedAt: now,
+            googleCalendar: { refreshToken: tokens.refresh_token, lastSyncAt: null }
+          });
+        }
       } else {
-        await AppPreferencesCollection.updateAsync(pref._id, {
-          $set: {
-            'googleCalendar.refreshToken': tokens.refresh_token,
-            updatedAt: now
-          }
-        });
+        console.warn('[OAuth] No userId in state param — storing token on first prefs doc found');
+        const pref = await AppPreferencesCollection.findOneAsync({});
+        if (pref) {
+          await AppPreferencesCollection.updateAsync(pref._id, {
+            $set: { 'googleCalendar.refreshToken': tokens.refresh_token, updatedAt: now }
+          });
+        }
       }
 
       res.writeHead(200, { 'Content-Type': 'text/html' });

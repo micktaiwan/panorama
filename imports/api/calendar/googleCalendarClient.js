@@ -36,7 +36,7 @@ export const getGoogleCalendarClient = () => {
   return { calendar, auth: oauth2Client };
 };
 
-export const getAuthUrl = () => {
+export const getAuthUrl = (userId) => {
   const config = getGoogleCalendarConfig();
 
   if (!config.clientId || !config.clientSecret) {
@@ -54,7 +54,8 @@ export const getAuthUrl = () => {
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    prompt: 'consent'
+    prompt: 'consent',
+    state: userId || ''
   });
 
   return url;

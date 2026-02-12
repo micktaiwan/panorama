@@ -3,6 +3,7 @@ import { check, Match } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { DEFAULT_CLEAN_PROMPT } from '/imports/api/notes/cleanPrompt';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 // Helper function to update note index and project timestamp
 const updateNoteIndex = async (noteId) => {
@@ -23,6 +24,7 @@ const updateNoteIndex = async (noteId) => {
 
 Meteor.methods({
   async 'ai.cleanNote'(noteId, customPrompt = null) {
+    requireUserId();
     check(noteId, String);
     check(customPrompt, Match.Maybe(String));
 
@@ -64,6 +66,7 @@ Meteor.methods({
   },
 
   async 'ai.summarizeNote'(noteId) {
+    requireUserId();
     check(noteId, String);
 
     const { NotesCollection } = await import('/imports/api/notes/collections');

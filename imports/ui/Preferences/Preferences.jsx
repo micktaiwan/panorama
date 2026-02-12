@@ -56,7 +56,7 @@ export const Preferences = ({ tab }) => {
       </nav>
       <div className="prefsContent">
         {activeTab === 'general' && <PrefsGeneral pref={pref} />}
-        {activeTab === 'secrets' && <PrefsSecrets pref={pref} />}
+        {activeTab === 'secrets' && <PrefsSecrets />}
         {activeTab === 'ai' && <PrefsAI pref={pref} />}
         {activeTab === 'qdrant' && <PrefsQdrant pref={pref} />}
         {activeTab === 'commands' && <PrefsCommands />}

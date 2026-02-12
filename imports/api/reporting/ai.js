@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { check } from 'meteor/check';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 const windowKeyToMs = (key) => {
   const k = String(key || '').toLowerCase();
@@ -14,6 +15,7 @@ const windowKeyToMs = (key) => {
 
 Meteor.methods({
   async 'reporting.aiSummarizeWindow'(windowKey, projFilters, userPrompt, options) {
+    requireUserId();
     check(windowKey, String);
     if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
     if (userPrompt !== undefined && typeof userPrompt !== 'string') throw new Meteor.Error('invalid-arg', 'userPrompt must be a string');

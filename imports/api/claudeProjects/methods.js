@@ -5,14 +5,17 @@ import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collection
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
 import { ClaudeCommandsCollection } from '/imports/api/claudeCommands/collections';
 import { killProcess } from '/imports/api/claudeSessions/processManager';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth';
 
 const TAG = '[claude-projects]';
 
 Meteor.methods({
   async 'claudeProjects.create'(doc) {
     check(doc, Object);
+    const userId = requireUserId();
     const now = new Date();
     const project = {
+      userId,
       name: String(doc.name || 'New Project').trim(),
       cwd: doc.cwd ? String(doc.cwd).trim() : undefined,
       model: doc.model ? String(doc.model).trim() : undefined,
@@ -27,6 +30,7 @@ Meteor.methods({
 
     // Create first session automatically
     await ClaudeSessionsCollection.insertAsync({
+      userId,
       projectId,
       name: 'Session 1',
       cwd: project.cwd,
@@ -48,6 +52,7 @@ Meteor.methods({
   async 'claudeProjects.update'(projectId, modifier) {
     check(projectId, String);
     check(modifier, Object);
+    await requireOwnership(ClaudeProjectsCollection, projectId);
     const set = { ...modifier, updatedAt: new Date() };
     if (typeof set.name === 'string') set.name = set.name.trim();
     if (typeof set.cwd === 'string') set.cwd = set.cwd.trim();
@@ -57,6 +62,7 @@ Meteor.methods({
 
   async 'claudeProjects.remove'(projectId) {
     check(projectId, String);
+    await requireOwnership(ClaudeProjectsCollection, projectId);
     console.log(TAG, 'remove', projectId);
 
     // Kill all running processes for sessions in this project

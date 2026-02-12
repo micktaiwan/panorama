@@ -3,9 +3,11 @@ import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine } from '/imports/api/_shared/aiCore';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'ai.textToTasksAnalyze'(inputText) {
+    requireUserId();
     check(inputText, String);
 
 

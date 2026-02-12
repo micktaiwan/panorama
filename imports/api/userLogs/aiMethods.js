@@ -3,9 +3,11 @@ import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine, formatAnchors, buildEntriesBlock, buildProjectsBlock } from '/imports/api/_shared/aiCore';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'ai.cleanUserLog'(logId) {
+    requireUserId();
     check(logId, String);
 
     const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
@@ -43,6 +45,7 @@ Meteor.methods({
   },
 
   async 'userLogs.summarizeWindow'(windowKey, hours, options) {
+    requireUserId();
     check(windowKey, String);
     const n = Number(hours);
     let promptOverride = '';

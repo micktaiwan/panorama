@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 /**
  * Clean AI response by removing Markdown code blocks (```json...```)
@@ -17,6 +18,7 @@ function cleanJsonResponse(text) {
 
 Meteor.methods({
   async 'ai.project.improvementQuestions'(projectId) {
+    requireUserId();
     check(projectId, String);
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     const project = await ProjectsCollection.findOneAsync({ _id: projectId });
@@ -71,6 +73,7 @@ Meteor.methods({
   },
 
   async 'ai.project.applyImprovement'(projectId, payload) {
+    requireUserId();
     check(projectId, String);
     check(payload, Object);
     const answers = Array.isArray(payload.answers) ? payload.answers.map(a => String(a || '')) : [];
@@ -150,7 +153,7 @@ Meteor.methods({
     const bullets = (tasks || []).filter(t => t && t.title).map(t => `- ${t.title}${t.notes ? ` — ${t.notes}` : ''}`).join('\n');
     if (bullets) {
       const content = `Task suggestions to kickstart the project:\n\n${bullets}`;
-      await NotesCollection.insertAsync({ projectId, title: 'AI tasks suggestions', content, kind: 'aiSummary', createdAt: new Date(), updatedAt: new Date() });
+      await NotesCollection.insertAsync({ projectId, title: 'AI tasks suggestions', content, kind: 'aiSummary', userId: requireUserId(), createdAt: new Date(), updatedAt: new Date() });
     }
 
     return { appendedDescription: appended, tasksCount: Array.isArray(tasks) ? tasks.length : 0 };

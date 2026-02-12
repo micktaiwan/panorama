@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { NotionTicketsCollection } from './collections.js';
+import { requireUserId } from '/imports/api/_shared/auth.js';
 
 /**
  * Meteor methods for Notion Tickets
@@ -25,10 +26,12 @@ Meteor.methods({
       url: Match.Optional(String)
     });
 
+    const userId = requireUserId();
     const now = new Date();
 
     // Prepare document
     const doc = {
+      userId,
       integrationId,
       notionId: ticket.notionId,
       id: ticket.id || null,
@@ -43,9 +46,9 @@ Meteor.methods({
       updatedAt: now
     };
 
-    // Upsert (update if exists, insert if new)
+    // Upsert (update if exists, insert if new) - scoped to current user
     const result = await NotionTicketsCollection.updateAsync(
-      { integrationId, notionId: ticket.notionId },
+      { integrationId, notionId: ticket.notionId, userId },
       {
         $set: doc,
         $setOnInsert: { createdAt: now }
@@ -64,12 +67,14 @@ Meteor.methods({
     check(integrationId, String);
     check(tickets, Array);
 
+    const userId = requireUserId();
     const now = new Date();
     let insertedCount = 0;
     let updatedCount = 0;
 
     for (const ticket of tickets) {
       const doc = {
+        userId,
         integrationId,
         notionId: ticket.notionId,
         id: ticket.id || null,
@@ -85,7 +90,7 @@ Meteor.methods({
       };
 
       const result = await NotionTicketsCollection.updateAsync(
-        { integrationId, notionId: ticket.notionId },
+        { integrationId, notionId: ticket.notionId, userId },
         {
           $set: doc,
           $setOnInsert: { createdAt: now }
@@ -109,7 +114,8 @@ Meteor.methods({
   async 'notionTickets.clearByIntegration'(integrationId) {
     check(integrationId, String);
 
-    const result = await NotionTicketsCollection.removeAsync({ integrationId });
+    const userId = requireUserId();
+    const result = await NotionTicketsCollection.removeAsync({ integrationId, userId });
     return { deletedCount: result };
   },
 
@@ -119,7 +125,8 @@ Meteor.methods({
   async 'notionTickets.countByIntegration'(integrationId) {
     check(integrationId, String);
 
-    const count = await NotionTicketsCollection.countDocuments({ integrationId });
+    const userId = requireUserId();
+    const count = await NotionTicketsCollection.countDocuments({ integrationId, userId });
     return count;
   },
 
@@ -130,10 +137,12 @@ Meteor.methods({
   async 'notionTickets.deleteOld'(daysOld = 30) {
     check(daysOld, Number);
 
+    const userId = requireUserId();
     const threshold = new Date();
     threshold.setDate(threshold.getDate() - daysOld);
 
     const result = await NotionTicketsCollection.removeAsync({
+      userId,
       syncedAt: { $lt: threshold }
     });
 

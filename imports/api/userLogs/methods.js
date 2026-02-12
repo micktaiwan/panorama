@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { UserLogsCollection } from './collections';
 import { toOneLine } from '/imports/api/_shared/strings';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth';
 
 const sanitizeLog = (input) => {
   const out = { ...input };
@@ -12,6 +13,7 @@ const sanitizeLog = (input) => {
 Meteor.methods({
   async 'userLogs.insert'(doc) {
     check(doc, Object);
+    const userId = requireUserId();
     const now = new Date();
     const sanitized = sanitizeLog(doc);
     const content = String(sanitized.content || '').trim();
@@ -19,6 +21,7 @@ Meteor.methods({
       throw new Meteor.Error('invalid-content', 'Entry content is required');
     }
     const _id = await UserLogsCollection.insertAsync({
+      userId,
       content,
       createdAt: now
     });
@@ -34,6 +37,7 @@ Meteor.methods({
   async 'userLogs.update'(logId, modifier) {
     check(logId, String);
     check(modifier, Object);
+    await requireOwnership(UserLogsCollection, logId);
     const set = { ...sanitizeLog(modifier), updatedAt: new Date() };
     const res = await UserLogsCollection.updateAsync(logId, { $set: set });
     // Re-index updated content
@@ -48,6 +52,7 @@ Meteor.methods({
   },
   async 'userLogs.remove'(logId) {
     check(logId, String);
+    await requireOwnership(UserLogsCollection, logId);
     const res = await UserLogsCollection.removeAsync(logId);
     try {
       const { deleteDoc } = await import('/imports/api/search/vectorStore.js');
@@ -58,8 +63,9 @@ Meteor.methods({
     return res;
   },
   async 'userLogs.clear'() {
-    const ids = await UserLogsCollection.find({}, { fields: { _id: 1 } }).fetchAsync();
-    const res = await UserLogsCollection.removeAsync({});
+    const userId = requireUserId();
+    const ids = await UserLogsCollection.find({ userId }, { fields: { _id: 1 } }).fetchAsync();
+    const res = await UserLogsCollection.removeAsync({ userId });
     // Best-effort bulk cleanup of vectors
     try {
       const { deleteDoc } = await import('/imports/api/search/vectorStore.js');

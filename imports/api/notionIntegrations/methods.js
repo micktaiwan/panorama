@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { NotionIntegrationsCollection } from './collections.js';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth.js';
 
 /**
  * CRUD methods for Notion Integrations
@@ -21,8 +22,11 @@ Meteor.methods({
       enabled: Match.Optional(Boolean)
     });
 
+    const userId = requireUserId();
+
     const now = new Date();
     const integration = {
+      userId,
       name: (doc.name || '').trim(),
       databaseId: (doc.databaseId || '').trim(),
       description: doc.description?.trim() || '',
@@ -60,10 +64,7 @@ Meteor.methods({
       enabled: Match.Optional(Boolean)
     });
 
-    const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
-    if (!integration) {
-      throw new Meteor.Error('not-found', 'Integration not found');
-    }
+    await requireOwnership(NotionIntegrationsCollection, integrationId);
 
     const updateDoc = {};
     if (updates.name !== undefined) updateDoc.name = updates.name.trim();
@@ -84,10 +85,7 @@ Meteor.methods({
   async 'notionIntegrations.remove'(integrationId) {
     check(integrationId, String);
 
-    const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
-    if (!integration) {
-      throw new Meteor.Error('not-found', 'Integration not found');
-    }
+    await requireOwnership(NotionIntegrationsCollection, integrationId);
 
     await NotionIntegrationsCollection.removeAsync({ _id: integrationId });
     return true;
@@ -100,10 +98,7 @@ Meteor.methods({
   async 'notionIntegrations.syncAll'(integrationId) {
     check(integrationId, String);
 
-    const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
-    if (!integration) {
-      throw new Meteor.Error('not-found', 'Integration not found');
-    }
+    const integration = await requireOwnership(NotionIntegrationsCollection, integrationId);
 
     if (!integration.enabled) {
       throw new Meteor.Error('disabled', 'This integration is disabled');
@@ -246,10 +241,7 @@ Meteor.methods({
   async 'notionIntegrations.cancelSync'(integrationId) {
     check(integrationId, String);
 
-    const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
-    if (!integration) {
-      throw new Meteor.Error('not-found', 'Integration not found');
-    }
+    const integration = await requireOwnership(NotionIntegrationsCollection, integrationId);
 
     if (!integration.syncInProgress) {
       throw new Meteor.Error('no-sync-in-progress', 'No sync is currently in progress');
@@ -272,10 +264,7 @@ Meteor.methods({
     check(integrationId, String);
     check(startCursor, Match.Maybe(String));
 
-    const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
-    if (!integration) {
-      throw new Meteor.Error('not-found', 'Integration not found');
-    }
+    const integration = await requireOwnership(NotionIntegrationsCollection, integrationId);
 
     if (!integration.enabled) {
       throw new Meteor.Error('disabled', 'This integration is disabled');

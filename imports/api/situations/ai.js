@@ -8,6 +8,7 @@ import { SituationSummariesCollection } from '/imports/api/situationSummaries/co
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildKnownPeopleCatalog, buildRosterForQuestions, buildRosterForSummary, buildPriorBlock, buildNotesByActorBlock, logOpenAiPayload } from '/imports/api/situations/promptHelpers';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 const callOpenAi = async (system, user) => {
   try {
@@ -30,6 +31,7 @@ const callOpenAi = async (system, user) => {
 
 Meteor.methods({
   async 'situations.extractActors'(situationId, situationDescription) {
+    requireUserId();
     check(situationId, String);
     const desc = String(situationDescription || '').trim();
     // Build a compact known-people catalog to guide matching (include ids)
@@ -124,6 +126,7 @@ Meteor.methods({
     return true;
   },
   async 'situations.generateQuestions'(situationId, situationDescription) {
+    requireUserId();
     check(situationId, String);
     const desc = String(situationDescription || '').trim();
     const actors = await SituationActorsCollection.find({ situationId }, { fields: { name: 1, role: 1, situationRole: 1, personId: 1 } }).fetchAsync();
@@ -244,6 +247,7 @@ Meteor.methods({
   },
 
   async 'situations.generateSummary'(situationId, situationDescription, notesMarkdown) {
+    requireUserId();
     check(situationId, String);
     const desc = String(situationDescription || '').trim();
     const notes = String(notesMarkdown || '').trim();

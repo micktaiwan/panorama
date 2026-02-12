@@ -5,6 +5,7 @@ import { toOneLine } from '/imports/api/_shared/aiCore';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { requireUserId } from '/imports/api/_shared/auth';
 
 const buildPrompt = ({ project, lines: noteLines }) => {
   const head = [
@@ -48,6 +49,7 @@ const buildCoachPrompt = ({ project }) => {
 
 Meteor.methods({
   async 'ai.summarizeSession'(sessionId) {
+    requireUserId();
     check(sessionId, String);
 
     const session = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
@@ -110,6 +112,7 @@ Meteor.methods({
   },
 
   async 'ai.coachQuestions'(sessionId) {
+    requireUserId();
     check(sessionId, String);
 
     const session = await NoteSessionsCollection.findOneAsync({ _id: sessionId });

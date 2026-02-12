@@ -1,17 +1,20 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { ClaudeCommandsCollection } from './collections';
+import { requireUserId, requireOwnership } from '/imports/api/_shared/auth';
 
 const VALID_SCOPES = ['global', 'project'];
 
 Meteor.methods({
   async 'claudeCommands.create'(doc) {
     check(doc, Object);
+    const userId = requireUserId();
     const now = new Date();
     const name = String(doc.name || '').trim().toLowerCase().replace(/\s+/g, '-');
     if (!name) throw new Meteor.Error('invalid', 'Name is required');
     const content = String(doc.content || '');
     const command = {
+      userId,
       name,
       description: String(doc.description || '').trim(),
       content,
@@ -29,6 +32,7 @@ Meteor.methods({
   async 'claudeCommands.update'(commandId, modifier) {
     check(commandId, String);
     check(modifier, Object);
+    await requireOwnership(ClaudeCommandsCollection, commandId);
     const set = { ...modifier, updatedAt: new Date() };
     if (typeof set.name === 'string') set.name = set.name.trim().toLowerCase().replace(/\s+/g, '-');
     if (typeof set.content === 'string') set.hasArgs = set.content.includes('$ARGUMENTS');
@@ -38,11 +42,13 @@ Meteor.methods({
 
   async 'claudeCommands.remove'(commandId) {
     check(commandId, String);
+    await requireOwnership(ClaudeCommandsCollection, commandId);
     return ClaudeCommandsCollection.removeAsync(commandId);
   },
 
   async 'claudeCommands.importFromDisk'(options) {
     check(options, Match.Maybe(Object));
+    const userId = requireUserId();
     const fs = await import('fs/promises');
     const path = await import('path');
 
@@ -105,7 +111,7 @@ Meteor.methods({
           }
 
           // Upsert: if same name+scope exists, update; otherwise insert
-          const query = { name, scope };
+          const query = { name, scope, userId };
           if (scope === 'project' && projectId) query.projectId = projectId;
 
           const existing = await ClaudeCommandsCollection.findOneAsync(query);
@@ -123,6 +129,7 @@ Meteor.methods({
             });
           } else {
             await ClaudeCommandsCollection.insertAsync({
+              userId,
               name,
               description,
               content,
