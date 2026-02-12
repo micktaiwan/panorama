@@ -8,31 +8,20 @@ import { navigateTo } from '/imports/ui/router.js';
 export const Onboarding = () => {
   const sub = useSubscribe('appPreferences');
   const pref = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
-  const [filesDir, setFilesDir] = React.useState('');
   const ready = !sub();
-  React.useEffect(() => { if (pref && typeof pref.filesDir === 'string') setFilesDir(pref.filesDir); }, [pref && pref._id]);
   if (!ready) return <div>Loading…</div>;
   const save = () => {
-    Meteor.call('appPreferences.update', { filesDir, onboardedAt: true }, () => {
-      navigateTo({ name: 'preferences' });
+    Meteor.call('appPreferences.update', { onboardedAt: true }, () => {
+      navigateTo({ name: 'home' });
     });
   };
   return (
     <div>
       <h2>Welcome to Panorama</h2>
-      <p>Choose where to store uploaded files on this machine:</p>
-      <div>
-        <input value={filesDir || ''} onChange={(e) => setFilesDir(e.target.value)} placeholder="/path/to/filesDir" className="onbInput" />
-      </div>
-      <p className="onbNote">
-        Qdrant (vector database) is required for semantic search. By default, Panorama expects a local instance at
-        {' '}<code>http://localhost:6333</code>. You can change the Qdrant URL later in Preferences.
-      </p>
+      <p>You're all set. File storage and search are configured automatically.</p>
       <div className="onbActions">
-        <button className="btn btn-primary" disabled={!filesDir} onClick={save}>Continue</button>
+        <button className="btn btn-primary" onClick={save}>Get started</button>
       </div>
     </div>
   );
 };
-
-
