@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="48" fill="#1a1a2e" stroke="#e94560" stroke-width="2"/>
+  <circle cx="50" cy="50" r="3" fill="#e94560"/>
+  <!-- N -->
+  <text x="50" y="22" text-anchor="middle" fill="#e94560" font-size="12" font-weight="bold" font-family="sans-serif">N</text>
+  <!-- S -->
+  <text x="50" y="86" text-anchor="middle" fill="#0f3460" font-size="12" font-weight="bold" font-family="sans-serif">S</text>
+  <!-- E -->
+  <text x="86" y="54" text-anchor="middle" fill="#0f3460" font-size="12" font-weight="bold" font-family="sans-serif">E</text>
+  <!-- W -->
+  <text x="14" y="54" text-anchor="middle" fill="#0f3460" font-size="12" font-weight="bold" font-family="sans-serif">O</text>
+  <!-- Compass needle north (red) -->
+  <polygon points="50,12 44,50 56,50" fill="#e94560"/>
+  <!-- Compass needle south (blue) -->
+  <polygon points="50,88 44,50 56,50" fill="#0f3460"/>
+</svg>

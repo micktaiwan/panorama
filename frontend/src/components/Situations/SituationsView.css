@@ -1,0 +1,30 @@
+.situations-container { display: flex; gap: 1rem; padding: 1rem; height: calc(100vh - 80px); }
+.situations-sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; }
+.sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.sidebar-header h3 { margin: 0; }
+.sit-form { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }
+.sit-form input, .sit-form textarea { padding: 0.4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; }
+.sit-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem; }
+.sit-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.sit-item.active { border-color: var(--accent); background: rgba(59, 130, 246, 0.08); }
+.sit-item:hover { background: var(--bg-primary); }
+.sit-title { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-tiny { padding: 0.1rem 0.3rem; font-size: 0.7rem; border: none; border-radius: 4px; cursor: pointer; background: transparent; color: var(--text-secondary); }
+.btn-tiny.btn-danger:hover { background: #ef4444; color: white; }
+.situations-detail { flex: 1; overflow-y: auto; }
+.situations-detail h2 { margin: 0 0 0.5rem; }
+.sit-desc { color: var(--text-secondary); margin: 0 0 1rem; }
+.detail-section { margin-bottom: 1.5rem; }
+.detail-section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.section-header h3 { margin: 0; }
+.actors-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+.actor-chip { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; font-size: 0.85rem; }
+.actor-role { color: var(--text-secondary); font-size: 0.75rem; }
+.add-actor-form, .add-note-form { display: flex; gap: 0.5rem; align-items: flex-start; }
+.add-actor-form input { flex: 1; padding: 0.4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); }
+.add-note-form textarea { flex: 1; padding: 0.4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); resize: vertical; }
+.notes-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem; }
+.note-item, .summary-item { padding: 0.5rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; }
+.note-item p, .summary-item p { margin: 0 0 0.25rem; }
+.note-date { color: var(--text-secondary); font-size: 0.75rem; }

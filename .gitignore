@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+backend/dist/
+
+# Tauri build cache
+frontend/src-tauri/target/
+
+# Vite cache
+frontend/.vite/
+
+# Environment files
+.env
+.env.local
+.env.production
+frontend/.env.production
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Image cache
+image_cache/
+
+# Old Panorama (already in main branch)
+panorama/
+
+# Organizer (separate project)
+organizer/
+
+# Misc
+*.swp
+*.swo
+*~

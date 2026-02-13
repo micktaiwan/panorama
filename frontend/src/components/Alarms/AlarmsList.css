@@ -1,0 +1,21 @@
+.alarms-container { padding: 1rem; }
+.alarms-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.alarms-toolbar h2 { margin: 0; }
+.alarms-form { display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.alarms-form input, .alarms-form select { padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); }
+.alarms-section { margin-bottom: 1.5rem; }
+.alarms-section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--text-secondary); }
+.alarm-card { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; }
+.alarm-card.due { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); animation: pulse 2s infinite; }
+.alarm-card.inactive { opacity: 0.6; }
+.alarm-info { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.alarm-time { color: var(--text-secondary); font-size: 0.85rem; }
+.alarm-recurrence { background: var(--accent); color: white; padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.7rem; }
+.alarm-snooze { color: #f59e0b; font-size: 0.8rem; }
+.alarm-actions { display: flex; gap: 0.35rem; flex-shrink: 0; flex-wrap: wrap; }
+.badge-done { background: #22c55e; color: white; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}

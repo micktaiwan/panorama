@@ -1,0 +1,117 @@
+.data-transfer {
+  padding: 1.5rem;
+  max-width: 800px;
+}
+
+.data-transfer h2 {
+  margin-bottom: 1.5rem;
+}
+
+.transfer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.transfer-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.transfer-card h3 {
+  margin: 0 0 0.5rem;
+}
+
+.transfer-card p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.import-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.import-controls input[type="file"] {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.transfer-card button {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.transfer-card button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.transfer-card button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.transfer-error {
+  background: var(--error-bg);
+  color: var(--error);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.transfer-result {
+  background: var(--success-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.transfer-result h3 {
+  margin: 0 0 0.75rem;
+  color: var(--success);
+}
+
+.result-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.result-stats div {
+  text-align: center;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.result-details h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.result-details ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  columns: 2;
+}
+
+.result-details li {
+  font-size: 0.85rem;
+  padding: 0.15rem 0;
+  color: var(--text);
+}

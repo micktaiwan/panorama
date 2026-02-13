@@ -1,0 +1,63 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:event:allow-listen",
+    "core:window:default",
+    "core:window:allow-set-title",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-scale-factor",
+    "core:window:allow-available-monitors",
+    "core:window:allow-current-monitor",
+    "core:webview:default",
+    "core:webview:allow-internal-toggle-devtools",
+    "opener:default",
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "dialog:allow-save",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$DOWNLOAD/**" }]
+    },
+    "store:default",
+    "notification:default",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
+    "notification:allow-notify",
+    "notification:allow-show",
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "exec-sh",
+          "cmd": "sh",
+          "args": ["-c", { "validator": ".*" }],
+          "sidecar": false
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "exec-sh",
+          "cmd": "sh",
+          "args": ["-c", { "validator": ".*" }],
+          "sidecar": false
+        }
+      ]
+    },
+    "shell:allow-kill"
+  ]
+}

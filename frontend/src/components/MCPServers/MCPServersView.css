@@ -1,0 +1,146 @@
+.mcp-container {
+  padding: 1rem;
+  max-width: 900px;
+}
+
+.mcp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.mcp-header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.mcp-form {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.mcp-form .form-row {
+  margin-bottom: 0.75rem;
+}
+
+.mcp-form .form-row label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.mcp-form .form-row input,
+.mcp-form .form-row select,
+.mcp-form .form-row textarea {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: monospace;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.mcp-form .form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcp-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.mcp-card.disabled {
+  opacity: 0.5;
+}
+
+.mcp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mcp-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-type-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.mcp-type-badge.http {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.mcp-type-badge.stdio {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.mcp-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mcp-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mcp-detail {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.mcp-connected {
+  color: var(--color-accent);
+}
+
+.mcp-error {
+  color: #ef4444;
+}
+
+.mcp-test-result {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-family: monospace;
+}
+
+.mcp-test-result.success {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.mcp-test-result.error {
+  background: #fef2f2;
+  color: #ef4444;
+}

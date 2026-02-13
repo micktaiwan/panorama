@@ -1,0 +1,31 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: panoramix-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - panoramix-mongo-data:/data/db
+    networks:
+      - panoramix-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: panoramix-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - panoramix-qdrant-data:/qdrant/storage
+    networks:
+      - panoramix-network
+
+volumes:
+  panoramix-mongo-data:
+  panoramix-qdrant-data:
+
+networks:
+  panoramix-network:
+    driver: bridge

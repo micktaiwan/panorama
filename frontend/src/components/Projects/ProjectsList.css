@@ -1,0 +1,604 @@
+.projects-list {
+  padding: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.projects-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.projects-header h2 {
+  margin: 0;
+  color: var(--text);
+}
+
+.projects-loading {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.create-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.create-form input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.create-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.create-form button {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.create-form button[type="submit"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.project-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.project-card.clickable {
+  cursor: pointer;
+}
+
+.project-card.clickable:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.project-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.project-card-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+  flex: 1;
+}
+
+.fav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-secondary);
+  padding: 0;
+}
+
+.fav-btn.active {
+  color: var(--warning);
+}
+
+.project-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.project-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.project-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ─── Project Detail ─── */
+
+.project-detail {
+  padding: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.btn-back {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 0;
+  margin-bottom: 16px;
+}
+
+.btn-back:hover {
+  text-decoration: underline;
+}
+
+.project-detail-header {
+  margin-bottom: 24px;
+}
+
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detail-title-row h2 {
+  margin: 0;
+  color: var(--text);
+}
+
+.btn-edit {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.btn-edit:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.detail-desc {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.project-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-name-input {
+  font-size: 18px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.edit-desc-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.edit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.edit-row select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* ─── Sections ─── */
+
+.project-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.project-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+  flex: 1;
+}
+
+.btn-add {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 3px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.btn-add:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.section-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ─── Inline create form ─── */
+
+.inline-create-form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.inline-create-form input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.inline-create-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ─── Task items ─── */
+
+.task-item-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.task-item-row:hover {
+  background: var(--bg);
+}
+
+.task-item-row.done {
+  color: var(--text-secondary);
+}
+
+.task-item-row.done .task-title {
+  text-decoration: line-through;
+}
+
+.task-status-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.task-status-btn:hover {
+  color: var(--accent);
+}
+
+.task-flag-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 2px;
+  color: var(--border);
+  min-width: 16px;
+  line-height: 1;
+}
+
+.task-flag-btn.active.urgent {
+  color: var(--error);
+}
+
+.task-flag-btn.active.important {
+  color: var(--warning);
+}
+
+.task-flag-btn:hover {
+  color: var(--text);
+}
+
+.task-title {
+  flex: 1;
+  cursor: default;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-edit-input {
+  flex: 1;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.task-deadline-input {
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  width: 110px;
+  cursor: pointer;
+}
+
+.task-deadline-input:hover,
+.task-deadline-input:focus {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.task-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 16px;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.task-item-row:hover .task-delete-btn {
+  opacity: 1;
+}
+
+.task-delete-btn:hover {
+  color: var(--error);
+}
+
+/* ─── Done toggle ─── */
+
+.done-section {
+  margin-top: 8px;
+}
+
+.btn-toggle-done {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.btn-toggle-done:hover {
+  color: var(--text);
+}
+
+/* ─── Item actions (links, notes, files) ─── */
+
+.item-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.related-item:hover .item-actions,
+.link-item-row:hover .item-actions,
+.note-item-row:hover .item-actions,
+.file-item-row:hover .item-actions {
+  opacity: 1;
+}
+
+.btn-sm {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+.btn-sm:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-sm.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.btn-sm.danger:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* ─── Link edit ─── */
+
+.link-edit-row {
+  display: flex;
+  gap: 6px;
+  padding: 4px 6px;
+  align-items: center;
+}
+
+.link-edit-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.link-edit-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ─── Note edit ─── */
+
+.note-edit-form {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  margin-bottom: 8px;
+}
+
+.note-edit-title {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.note-edit-content {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  resize: vertical;
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.note-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ─── Generic related items ─── */
+
+.related-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.related-item:hover {
+  background: var(--bg);
+}
+
+.related-title {
+  flex: 1;
+}
+
+.related-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.related-link {
+  color: var(--accent);
+  text-decoration: none;
+  flex: 1;
+}
+
+.related-link:hover {
+  text-decoration: underline;
+}
+
+/* ─── Claude project link ─── */
+
+.claude-project-icon {
+  font-size: 16px;
+  color: var(--accent);
+}

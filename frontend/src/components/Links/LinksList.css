@@ -1,0 +1,13 @@
+.links-container { padding: 1rem; }
+.links-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.links-toolbar h2 { margin: 0; }
+.links-form { display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.links-form input { padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); }
+.links-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.link-card { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; }
+.link-info { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; cursor: pointer; flex: 1; }
+.link-info:hover .link-name { text-decoration: underline; }
+.link-name { color: var(--accent); }
+.link-url { color: var(--text-secondary); font-size: 0.8rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-clicks { color: var(--text-secondary); font-size: 0.75rem; }
+.link-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }

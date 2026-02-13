@@ -1,0 +1,215 @@
+.cc-message {
+  padding: 8px 16px;
+  animation: cc-fadeIn 0.15s ease-out;
+}
+
+@keyframes cc-fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cc-msg-user {
+  background: var(--bg);
+  border-left: 3px solid var(--accent);
+  margin: 4px 0;
+}
+
+.cc-msg-permission {
+  background: rgba(255, 193, 7, 0.08);
+  border-left: 3px solid #ffc107;
+  margin: 4px 0;
+}
+
+.cc-msg-shell {
+  margin: 2px 0;
+}
+
+.cc-msg-error {
+  background: rgba(244, 67, 54, 0.08);
+  border-left: 3px solid #f44336;
+  margin: 4px 0;
+}
+
+.cc-msg-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.cc-msg-body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Markdown */
+.cc-markdown {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.cc-markdown p { margin: 0 0 8px; }
+.cc-markdown p:last-child { margin-bottom: 0; }
+.cc-markdown pre {
+  background: var(--bg);
+  padding: 8px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 13px;
+  margin: 8px 0;
+}
+.cc-markdown code {
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+.cc-markdown pre code {
+  background: none;
+  padding: 0;
+}
+.cc-markdown ul, .cc-markdown ol { padding-left: 20px; margin: 4px 0; }
+.cc-markdown h1, .cc-markdown h2, .cc-markdown h3 { margin: 12px 0 4px; }
+.cc-markdown h1 { font-size: 18px; }
+.cc-markdown h2 { font-size: 16px; }
+.cc-markdown h3 { font-size: 15px; }
+.cc-markdown a { color: var(--accent); }
+.cc-markdown blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0;
+}
+
+/* Tool use/result */
+.cc-tool-use, .cc-tool-result {
+  margin: 2px 0;
+}
+
+.cc-tool-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.cc-tool-toggle:hover { color: var(--text); }
+
+.cc-tool-icon { font-size: 12px; }
+.cc-tool-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-tool-chevron { font-size: 10px; flex-shrink: 0; }
+
+.cc-tool-input {
+  background: var(--bg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 2px 0 4px 18px;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Tool group */
+.cc-tool-group {
+  margin: 2px 16px;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+
+.cc-tool-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.cc-tool-group-header:hover { color: var(--text); }
+
+.cc-tool-group-names {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cc-tool-group-details {
+  padding: 4px 0 4px 4px;
+}
+
+/* Image */
+.cc-image-block {
+  max-width: 400px;
+  max-height: 300px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin: 4px 0;
+}
+
+/* Permission actions */
+.cc-perm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.cc-perm-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.cc-perm-btn:hover { background: var(--bg); border-color: var(--accent); }
+.cc-perm-deny { color: #f44336; }
+.cc-perm-deny:hover { border-color: #f44336; }
+
+.cc-perm-sent {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Shell */
+.cc-shell-output {
+  background: var(--bg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* Streaming cursor */
+.cc-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background: var(--accent);
+  animation: cc-blink 0.8s infinite;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+}
+
+@keyframes cc-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

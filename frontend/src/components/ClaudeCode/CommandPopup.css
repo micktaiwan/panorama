@@ -1,0 +1,36 @@
+.cc-cmd-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.cc-cmd-item {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.cc-cmd-item:hover, .cc-cmd-active {
+  background: var(--bg);
+}
+
+.cc-cmd-name {
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 80px;
+}
+
+.cc-cmd-desc {
+  color: var(--text-secondary);
+  flex: 1;
+}

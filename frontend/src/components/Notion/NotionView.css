@@ -1,0 +1,159 @@
+.notion-container {
+  padding: 1rem;
+}
+
+.notion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.notion-header h2 {
+  margin: 0;
+}
+
+.notion-form {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.notion-form .form-row {
+  margin-bottom: 0.75rem;
+}
+
+.notion-form .form-row label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.notion-form .form-row input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  box-sizing: border-box;
+}
+
+.notion-layout {
+  display: flex;
+  gap: 1rem;
+  min-height: 400px;
+}
+
+.notion-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notion-int-item {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--color-bg-secondary);
+}
+
+.notion-int-item:hover {
+  border-color: var(--color-accent);
+}
+
+.notion-int-item.active {
+  border-color: var(--color-accent);
+  background: var(--color-bg-tertiary, var(--color-bg-secondary));
+}
+
+.notion-int-item strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.notion-syncing {
+  font-size: 0.75rem;
+  color: var(--color-accent);
+  animation: pulse 1s infinite;
+}
+
+.notion-last-sync {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.notion-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.notion-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.notion-detail-header h3 {
+  margin: 0;
+}
+
+.notion-detail-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.notion-sync-status {
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  background: var(--color-bg-secondary);
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.notion-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.notion-table th {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.notion-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notion-table a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.notion-table a:hover {
+  text-decoration: underline;
+}
+
+.ticket-id {
+  font-family: monospace;
+  color: var(--color-text-secondary);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

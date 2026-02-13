@@ -1,0 +1,82 @@
+# Panoramix — Production Docker Compose
+# Se connecte au réseau server_organizer-network existant (MongoDB + Qdrant partagés)
+# Le proxy mup-nginx-proxy gère SSL via VIRTUAL_HOST / LETSENCRYPT_HOST
+#
+# Usage:
+#   sudo docker compose -f docker-compose.prod.yml up -d --build
+#
+# Prérequis: Organizer doit tourner (organizer-mongodb, organizer-qdrant)
+
+services:
+  api:
+    build: ./backend
+    container_name: panoramix-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - MONGODB_URI=mongodb://organizer-mongodb:27017/panoramix
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - QDRANT_URL=http://organizer-qdrant:6333
+      - LOG_DIR=/app/logs
+      # AI
+      - AI_MODE=${AI_MODE:-remote}
+      - OLLAMA_HOST=${OLLAMA_HOST:-}
+      - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      # Integrations
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+    volumes:
+      - panoramix_uploads:/app/public/uploads
+      - panoramix_logs:/app/logs
+    networks:
+      - server_organizer-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # Frontend + reverse proxy interne (API + SPA)
+  web:
+    image: nginx:alpine
+    container_name: panoramix-web
+    restart: unless-stopped
+    environment:
+      - VIRTUAL_HOST=panorama.mickaelfm.me
+      - LETSENCRYPT_HOST=panorama.mickaelfm.me
+      - LETSENCRYPT_EMAIL=faivred@gmail.com
+      - VIRTUAL_PORT=80
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx/panoramix.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - server_organizer-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  server_organizer-network:
+    external: true
+
+volumes:
+  panoramix_uploads:
+  panoramix_logs:

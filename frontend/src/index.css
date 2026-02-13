@@ -1,0 +1,102 @@
+/* CSS Variables — Theming */
+:root,
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --panel: #ffffff;
+  --border: #e0e0e4;
+  --text: #1d1d1f;
+  --text-secondary: #86868b;
+  --accent: #0071e3;
+  --accent-bg: rgba(0, 113, 227, 0.08);
+  --error: #e53935;
+  --error-bg: rgba(229, 57, 53, 0.08);
+  --success: #2e7d32;
+  --success-bg: rgba(46, 125, 50, 0.08);
+  --warning: #f57c00;
+  --warning-bg: rgba(245, 124, 0, 0.08);
+}
+
+[data-theme="dark"] {
+  --bg: #1a1a1e;
+  --panel: #2c2c30;
+  --border: #3a3a3e;
+  --text: #f5f5f7;
+  --text-secondary: #98989d;
+  --accent: #4da3ff;
+  --accent-bg: rgba(77, 163, 255, 0.12);
+  --error: #ff6b6b;
+  --error-bg: rgba(255, 107, 107, 0.12);
+  --success: #66bb6a;
+  --success-bg: rgba(102, 187, 106, 0.12);
+  --warning: #ffa726;
+  --warning-bg: rgba(255, 167, 38, 0.12);
+}
+
+/* Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Shared utility classes */
+.scrollArea {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.create-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.create-form input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.create-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.create-form button {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.create-form button[type="submit"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-style: italic;
+}

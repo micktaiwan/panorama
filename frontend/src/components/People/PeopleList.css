@@ -1,0 +1,22 @@
+.people-container { padding: 1rem; }
+.people-toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+.people-search { flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+.people-toolbar select { padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+.people-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; }
+.people-form { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.people-form .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.people-form input, .people-form select { flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); }
+.people-form textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); resize: vertical; margin-bottom: 0.5rem; box-sizing: border-box; }
+.people-form label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; white-space: nowrap; }
+.form-actions { display: flex; gap: 0.5rem; }
+.people-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.person-card { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; }
+.person-card.left { opacity: 0.6; }
+.person-info { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.person-role { color: var(--text-secondary); font-size: 0.85rem; }
+.person-team { background: var(--accent); color: white; padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.75rem; }
+.person-email { color: var(--text-secondary); font-size: 0.85rem; }
+.badge { padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; }
+.badge-left { background: #f87171; color: white; }
+.badge-contact { background: #60a5fa; color: white; }
+.person-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
