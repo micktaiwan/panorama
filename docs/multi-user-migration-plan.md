@@ -56,9 +56,9 @@ Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et une version
 
 | Ressource | Valeur |
 |---|---|
-| RAM | 1.9 GB (pas de swap) |
-| CPU | 1 vCPU (Intel Haswell) |
-| Disque | 20 GB (12 utilisés, 8 libres) |
+| RAM | 4 GB (upgrade fevrier 2026, etait 1.9 GB) + swap 2 GB |
+| CPU | 2 vCPU (upgrade fevrier 2026, etait 1) |
+| Disque | 40 GB (upgrade fevrier 2026, etait 20 GB). Swap: 2 GB (`/swapfile`) |
 
 **Services Docker en place** :
 
@@ -89,7 +89,7 @@ Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et une version
 - **Fichiers sur le disque du VPS** : pas de S3, le VPS OVH sert de stockage
 - **Qdrant sur le VPS** : deja en place, recherche semantique accessible depuis tous les clients
 - **App Android** : prevue plus tard, pas couverte par ce plan
-- **RAM limitee** : 1.9 GB total, pas de swap. Le budget memoire est serre — Meteor consomme 200-400 MB en production
+- **RAM** : 4 GB (upgrade fevrier 2026), confortable pour Meteor + services existants
 
 ### Architecture cible
 
@@ -706,7 +706,7 @@ MUP gere le redemarrage automatique du container Meteor (Docker restart policy).
 
 #### 5.8 Sizing VPS et budget memoire
 
-**Specs VPS** : 1.9 GB RAM, 1 vCPU, 20 GB disque (8 GB libres). Pas de swap.
+**Specs VPS** : 4 GB RAM, 2 vCPU, 40 GB disque. Upgrade de fevrier 2026 (etait 1.9 GB / 1 vCPU / 20 GB).
 
 **Estimation memoire apres deploiement** :
 
@@ -719,15 +719,9 @@ MUP gere le redemarrage automatique du container Meteor (Docker restart policy).
 | `mup-nginx-proxy` | ~58 MB | Existant, inchange |
 | `mup-nginx-proxy-letsencrypt` | ~20 MB | Existant, inchange |
 | **Panorama Meteor** | **~250-400 MB** | **Nouveau** — remplace panoramix-api (61 MB) + panoramix-web (3 MB) |
-| **Total estime** | **~630-780 MB** | Reste ~1.1-1.2 GB pour l'OS et le cache |
+| **Total estime** | **~630-780 MB** | Reste ~3.2 GB pour l'OS et le cache — confortable |
 
-**Budget serre mais faisable.** Pour limiter la consommation Meteor :
-- `NODE_OPTIONS=--max-old-space-size=256` dans les env vars MUP
-- Monitorer avec `docker stats` apres deploiement
-
-**Si la RAM devient insuffisante** :
-- Upgrader le VPS OVH (passer a 4 GB = marge confortable)
-- Activer du swap (2 GB) comme filet de securite temporaire
+Avec 4 GB de RAM, le budget memoire n'est plus une contrainte.
 
 #### 5.9 Fallback : deploiement manuel (si MUP ne convient pas)
 
@@ -926,7 +920,7 @@ Les phases 1 et 2 peuvent etre developpees et testees entierement en local avant
 | **Tunnel SSH instable** | Perte de connexion DB si le tunnel tombe | `autossh` avec reconnexion automatique, ou service launchd permanent |
 | **Signup ouvert : abus** | Comptes spam, surcharge | Rate limiting, validation email, monitoring |
 | **Dual driver Meteor 3** | `MongoInternals.RemoteCollectionDriver` pas documente officiellement dans Meteor 3 | Tester tot. Alternative : `MONGO_URL` pointe directement vers le remote, pas de dual driver (plus simple mais pas de collections locales) |
-| **RAM VPS insuffisante** | Meteor consomme 200-400 MB sur un VPS a 1.9 GB deja charge | `NODE_OPTIONS=--max-old-space-size=256`, monitorer avec `docker stats`. Upgrader vers 4 GB si necessaire |
+| **RAM VPS** | ~~Risque resolu~~ — VPS upgrade a 4 GB (fevrier 2026), budget memoire confortable | Monitorer avec `docker stats` apres deploiement |
 | **Replica set sur MongoDB partage** | Activer le replica set sur `organizer-mongodb` impacte aussi Organizer | Tester que Organizer (Mongoose) fonctionne correctement apres activation. Normalement transparent |
 
 ## Future : projets partages
