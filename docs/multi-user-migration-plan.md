@@ -1,6 +1,6 @@
 # Plan de migration multi-user
 
-Derniere mise a jour : 2026-02-14. Decisions prises le 2026-02-14.
+Derniere mise a jour : 2026-02-15. Decisions prises le 2026-02-14.
 
 ## Contexte
 
@@ -200,63 +200,29 @@ Les collections locales peuvent migrer en remote au cas par cas quand le besoin 
 
 ## Phases de migration
 
-### Phase 1 — Authentification
+### Phase 1 — Authentification ✅ DONE (2026-02-15)
 
 **Objectif** : systeme de login fonctionnel, prerequis pour tout le reste.
 
-#### 1.1 Installer les packages Meteor accounts
+**Statut** : implemente et teste en local. Branche `feature/multi-user-auth`.
 
-```bash
-meteor add accounts-base accounts-password
-```
+#### Ce qui a ete fait
 
-Optionnel (plus tard) : `accounts-google` pour OAuth.
-
-#### 1.2 Creer l'UI d'authentification
-
-- Page de login (email/password)
-- Page de signup ouverte (email/password) — tout le monde peut creer un compte
-- Bouton logout dans la navbar
-- Composants dans `imports/ui/Auth/Login.jsx`, `imports/ui/Auth/Signup.jsx`
-- Routes : `#/login`, `#/signup`
-
-#### 1.3 Securiser le signup ouvert
-
-- Validation email (envoi d'un email de confirmation avant activation)
-- Rate limiting sur la creation de compte (`ddp-rate-limiter`)
-- Longueur minimale du mot de passe
-
-#### 1.4 Configurer l'envoi d'emails
-
-**Prerequis pour la validation email et le password reset.** Aucun service d'envoi d'email n'est configure actuellement.
-
-- **Service SMTP : Resend** (compte existant)
-- Configurer `EMAIL_URL` dans les variables d'environnement Meteor :
-  ```
-  EMAIL_URL=smtp://resend:re_YOUR_API_KEY@smtp.resend.com:465
-  ```
-- Verifier que le domaine d'expedition est configure dans Resend (DNS SPF/DKIM)
-- Templates d'emails : confirmation de compte, reset de mot de passe
-- Adresse d'expedition (ex: `noreply@panorama.example.com`)
-
-#### 1.5 Password reset
-
-Flow "mot de passe oublie" — necessaire des qu'on a un signup ouvert :
-
-- Route `#/forgot-password` : formulaire email → `Accounts.forgotPassword()`
-- Route `#/reset-password/:token` : formulaire nouveau mot de passe → `Accounts.resetPassword()`
-- Composants dans `imports/ui/Auth/ForgotPassword.jsx`, `imports/ui/Auth/ResetPassword.jsx`
-- Depend de la configuration SMTP (1.4)
-
-#### 1.6 Proteger l'application
-
-- Wrapper l'App principale : si pas authentifie → redirect vers `#/login`
-- Guard sur les routes : les pages ne sont accessibles qu'authentifie
+- **Packages installes** : `accounts-base`, `accounts-password`, `ddp-rate-limiter`
+- **Config serveur** (`server/accounts.js`) : `Accounts.config({ passwordMinLength: 8 })`, `Accounts.validateNewUser()`, email templates (verification + reset password avec URLs hash-based), rate limiting (createUser 5/10s, login 10/10s, forgotPassword 3/60s)
+- **Import** dans `server/main.js`
+- **Composant AuthGate** (`imports/ui/Auth/AuthGate.jsx`) : wrappe `<App/>`, redirige vers la page login si pas authentifie
+- **Pages auth** dans `imports/ui/Auth/` : `Login.jsx`, `Signup.jsx`, `ForgotPassword.jsx`, `ResetPassword.jsx`, `VerifyEmail.jsx` + CSS partage dans `AuthGate.css`
+- **Routes** ajoutees dans `imports/ui/router.js` : `#/login`, `#/signup`, `#/forgot-password`, `#/reset-password/:token`, `#/verify-email/:token`
+- **Logout** : bouton dans le header de `App.jsx` (email du user + bouton logout)
 - **Auth partout** : pas de bypass en local, Mick s'authentifie comme tout le monde
 
-#### 1.7 Creer les premiers users
+#### Ce qui reste a faire (non-bloquant pour la suite)
 
-- Mick et David creent leur compte via le signup ouvert
+- **Configurer `EMAIL_URL`** (Resend SMTP) pour l'envoi reel d'emails — sans ca, les emails sont imprimes dans la console serveur Meteor (suffisant pour le dev)
+- **Configurer DNS SPF/DKIM** sur le domaine d'expedition dans Resend
+- **Verification email non bloquante** : le signup ne bloque pas le login si l'email n'est pas verifie. Peut etre durci plus tard avec `Accounts.validateLoginAttempt()`
+- Optionnel : `accounts-google` pour OAuth (plus tard)
 - Optionnel : role admin pour Mick (gestion des users, si besoin plus tard)
 
 ---
@@ -450,7 +416,7 @@ L'instance locale de Mick accede a MongoDB via tunnel SSH (MongoDB bind localhos
 
 ```bash
 # Le tunnel forward le port local 27018 vers le MongoDB du VPS (localhost:27017)
-autossh -M 0 -f -N -L 27018:localhost:27017 user@51.210.150.25
+autossh -M 0 -f -N -L 27018:localhost:27017 ubuntu@51.210.150.25
 ```
 
 Integration dans le workflow de dev :
@@ -598,7 +564,7 @@ module.exports = {
   servers: {
     one: {
       host: '51.210.150.25',
-      username: 'root',  // ou user avec sudo
+      username: 'ubuntu',
       pem: '~/.ssh/id_rsa'
     }
   },
@@ -730,7 +696,7 @@ Si MUP pose des problemes de compatibilite avec Meteor 3, deploiement manuel :
 ```bash
 # Sur le Mac
 meteor build --server-only ../output
-scp ../output/panorama.tar.gz user@51.210.150.25:/var/www/panorama/
+scp ../output/panorama.tar.gz ubuntu@51.210.150.25:/var/www/panorama/
 
 # Sur le VPS (via SSH)
 cd /var/www/panorama
