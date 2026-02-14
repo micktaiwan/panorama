@@ -93,9 +93,13 @@ L'application est **integralement single-user** :
 
 ## Split des collections : remote vs local
 
-### Collections REMOTE (partagees, sur le VPS)
+### Principe directeur
 
-Toutes les donnees metier que les users doivent voir depuis n'importe quel client.
+Panorama a ete concu comme un projet personnel avec beaucoup de features specifiques a Mick (situations analyzer, budget, gmail, notion, claude code, etc.). Pour le deploiement en ligne, seul le **coeur metier** est expose : gestion de projets, taches, notes et liens. Les autres features restent locales et migrent en remote uniquement quand un vrai use case le justifie.
+
+Question cle : "Si David ou son client Andrea utilise l'app en ligne, qu'est-ce qu'ils utilisent ?" → projets, taches, notes, liens. C'est tout pour le MVP.
+
+### Collections REMOTE (coeur metier, sur le VPS)
 
 | Collection | userId requis | Notes |
 |---|---|---|
@@ -103,31 +107,36 @@ Toutes les donnees metier que les users doivent voir depuis n'importe quel clien
 | `tasks` | oui | Via `projectId` → projet du user |
 | `notes` | oui | |
 | `noteSessions` | oui | |
-| `noteLines` | non (via sessionId) | Herite du userId via la session |
+| `noteLines` | oui (denormalise) | userId copie depuis la session |
 | `links` | oui | |
-| `alarms` | oui | Le champ `userId` existe deja (toujours null) |
-| `people` | oui | Chaque user a son annuaire |
-| `teams` | oui | |
-| `situations` | oui | |
-| `situation_actors` | non (via situationId) | Herite du userId via la situation |
-| `situation_notes` | non (via situationId) | |
-| `situation_questions` | non (via situationId) | |
-| `situation_summaries` | non (via situationId) | |
-| `budgetLines` | oui | |
-| `vendorsCache` | oui | |
-| `vendorsIgnore` | oui | |
-| `calendarEvents` | oui | |
-| `chats` | oui | Historique chat AI par user |
-| `userLogs` | oui | Journal personnel |
 | `files` | oui | Metadata. Fichiers physiques sur disque VPS |
-| `gmailMessages` | oui | Emails caches par user |
+| `userPreferences` | oui (nouvelle) | Theme, cle API, config AI — par user |
 
 ### Collections LOCAL ONLY (restent dans .meteor/local/db)
 
-Specifiques a l'instance locale de Mick, n'ont pas de sens en remote.
+Features personnelles de Mick ou specifiques a l'instance locale.
 
 | Collection | Raison |
 |---|---|
+| `people` | Annuaire personnel |
+| `teams` | Gestion d'equipe personnelle |
+| `alarms` | Alarmes locales (BroadcastChannel, setTimeout) |
+| `situations` | Feature perso (analyzer) |
+| `situation_actors` | |
+| `situation_notes` | |
+| `situation_questions` | |
+| `situation_summaries` | |
+| `budgetLines` | Feature perso (imports Pennylane) |
+| `vendorsCache` | |
+| `vendorsIgnore` | |
+| `calendarEvents` | Feature perso |
+| `chats` | Historique chat AI |
+| `userLogs` | Journal personnel |
+| `gmailMessages` | Feature perso (integration Gmail) |
+| `gmailTokens` | Tokens OAuth sensibles |
+| `emailActionLogs` | Logs d'actions email |
+| `notionIntegrations` | Feature perso (integration Notion) |
+| `notionTickets` | |
 | `claudeSessions` | Claude Code = shell local |
 | `claudeMessages` | |
 | `claudeCommands` | |
@@ -135,16 +144,11 @@ Specifiques a l'instance locale de Mick, n'ont pas de sens en remote.
 | `mcpServers` | Config MCP locale |
 | `toolCallLogs` | Debug local |
 | `errors` | Debug local |
+| `appPreferences` | Config d'instance (filesDir, qdrantUrl) |
 
-### Collections A DECIDER
+### Migration progressive
 
-| Collection | Question |
-|---|---|
-| `appPreferences` | **DECIDE** : reste local (config d'instance : `filesDir`, `qdrantUrl`). Les prefs user migrent vers une nouvelle collection `userPreferences` (remote). |
-| `gmailTokens` | Tokens OAuth sensibles — stocker cote serveur remote avec chiffrement, ou garder local ? |
-| `emailActionLogs` | Logs d'actions email — remote si on veut le suivi multi-device, local sinon |
-| `notionIntegrations` | Depend de si l'integration Notion est par user ou par instance |
-| `notionTickets` | Idem |
+Les collections locales peuvent migrer en remote au cas par cas quand le besoin se presente (ex: David veut les alarmes, un client veut voir les fichiers). Le fait d'avoir userId sur les collections remote des le depart rend cette evolution simple.
 
 ---
 
@@ -242,19 +246,17 @@ Meteor.publish('projects', function () {
 });
 ```
 
-Pour les collections qui heritent du userId via un parent (noteLines via session, situation_actors via situation), deux approches :
-- **Jointure cote publication** : publier les sous-documents dont le parent appartient au user
-- **Denormaliser le userId** : ajouter userId directement sur les sous-documents (plus simple pour les queries)
-
-Recommandation : **denormaliser**. Ajouter userId sur noteLines, situation_actors, etc. C'est plus simple et plus performant que des jointures reactives.
+Pour `noteLines` qui herite du userId via la session : **denormaliser**. Ajouter userId directement sur noteLines (plus simple et performant que des jointures reactives).
 
 #### 2.3 Collections impactees
 
-Les 22 collections remote listees ci-dessus. Pour chacune :
+Les 8 collections remote : `projects`, `tasks`, `notes`, `noteSessions`, `noteLines`, `links`, `files`, `userPreferences`. Pour chacune :
 1. Ajouter `userId` a l'insert
 2. Filtrer par `userId` dans le find des publications
 3. Verifier `userId` dans update/remove
 4. Ajouter un index MongoDB sur `{ userId: 1 }` (ou compound `{ userId: 1, projectId: 1 }` etc.)
+
+C'est un chantier beaucoup plus leger que les 22 collections initialement prevues.
 
 #### 2.4 AppPreferences : scinder en deux collections
 
@@ -356,9 +358,10 @@ Sans oplog, Meteor fait du polling (moins reactif mais fonctionnel).
 async 'app.importArchive'({ ndjsonContent, targetUserId }) {
   // Pour chaque ligne du NDJSON :
   // 1. Parser { collection, doc } ou { collection, type: 'begin'/'end' }
-  // 2. Ajouter userId: targetUserId au doc
-  // 3. Inserer dans la collection correspondante (via le remote driver)
-  // 4. Gerer les conflits d'_id (skip ou overwrite)
+  // 2. Filtrer : ne migrer que les collections remote (projects, tasks, notes, noteSessions, noteLines, links, files)
+  // 3. Ajouter userId: targetUserId au doc
+  // 4. Inserer dans la collection correspondante (via le remote driver)
+  // 5. Gerer les conflits d'_id (skip ou overwrite)
 }
 ```
 
@@ -441,7 +444,7 @@ export const isRemoteInstance = () =>
   Meteor.settings?.public?.isRemote === true;
 ```
 
-Usage : masquer les features local-only dans l'UI remote (Claude Code, MCP, fichiers locaux).
+Usage : masquer les features local-only dans l'UI remote. Sur l'instance remote, les users ne voient que le coeur metier (projets, taches, notes, liens, fichiers). Les features perso (Claude Code, MCP, situations, budget, calendrier, gmail, notion, alarms, chat AI, userLogs) sont masquees.
 
 #### 5.4 Securite
 
