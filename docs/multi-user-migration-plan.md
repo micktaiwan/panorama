@@ -1,6 +1,6 @@
 # Plan de migration multi-user
 
-Derniere mise a jour : 2026-02-14.
+Derniere mise a jour : 2026-02-14. Decisions prises le 2026-02-14.
 
 ## Contexte
 
@@ -140,7 +140,7 @@ Specifiques a l'instance locale de Mick, n'ont pas de sens en remote.
 
 | Collection | Question |
 |---|---|
-| `appPreferences` | Aujourd'hui : 1 document global avec `filesDir`, `openaiApiKey`, `qdrantUrl`, `theme`, `ai: { mode, embeddingModel, chatModel, ... }`. Scinder en : preferences d'instance (local : `filesDir`, chemins) + preferences user (remote : `theme`, config AI, cles API) |
+| `appPreferences` | **DECIDE** : reste local (config d'instance : `filesDir`, `qdrantUrl`). Les prefs user migrent vers une nouvelle collection `userPreferences` (remote). |
 | `gmailTokens` | Tokens OAuth sensibles — stocker cote serveur remote avec chiffrement, ou garder local ? |
 | `emailActionLogs` | Logs d'actions email — remote si on veut le suivi multi-device, local sinon |
 | `notionIntegrations` | Depend de si l'integration Notion est par user ou par instance |
@@ -165,21 +165,27 @@ Optionnel (plus tard) : `accounts-google` pour OAuth.
 #### 1.2 Creer l'UI d'authentification
 
 - Page de login (email/password)
-- Page de signup (si on veut que les users s'inscrivent, ou bien creation manuelle par admin)
+- Page de signup ouverte (email/password) — tout le monde peut creer un compte
 - Bouton logout dans la navbar
 - Composants dans `imports/ui/Auth/Login.jsx`, `imports/ui/Auth/Signup.jsx`
-- Route : `#/login`
+- Routes : `#/login`, `#/signup`
 
-#### 1.3 Proteger l'application
+#### 1.3 Securiser le signup ouvert
+
+- Validation email (envoi d'un email de confirmation avant activation)
+- Rate limiting sur la creation de compte (`ddp-rate-limiter`)
+- Longueur minimale du mot de passe
+
+#### 1.4 Proteger l'application
 
 - Wrapper l'App principale : si pas authentifie → redirect vers `#/login`
 - Guard sur les routes : les pages ne sont accessibles qu'authentifie
-- Decision : l'instance locale de Mick bypass-t-elle l'auth ? (pratique mais risque si la DB remote est exposee)
+- **Auth partout** : pas de bypass en local, Mick s'authentifie comme tout le monde
 
-#### 1.4 Creer les premiers users
+#### 1.5 Creer les premiers users
 
-- Script ou methode admin pour creer les comptes (Mick, David)
-- Pas de signup public dans un premier temps — creation manuelle
+- Mick et David creent leur compte via le signup ouvert
+- Optionnel : role admin pour Mick (gestion des users, si besoin plus tard)
 
 ---
 
@@ -250,10 +256,21 @@ Les 22 collections remote listees ci-dessus. Pour chacune :
 3. Verifier `userId` dans update/remove
 4. Ajouter un index MongoDB sur `{ userId: 1 }` (ou compound `{ userId: 1, projectId: 1 }` etc.)
 
-#### 2.4 AppPreferences : scinder en deux
+#### 2.4 AppPreferences : scinder en deux collections
 
-- **Preferences d'instance** (local) : `filesDir`, chemins locaux, config MCP → reste dans la collection locale `appPreferences`
-- **Preferences user** (remote) : `theme`, config AI (mode, modeles, cles API), preferences d'affichage → nouvelle collection `userPreferences` avec `userId`, ou stocker dans le profil Meteor user (`Meteor.users.profile`)
+Nouvelle collection **`userPreferences`** (remote, avec userId) :
+- `theme`, `openaiApiKey`, `ai: { mode, embeddingModel, chatModel, ... }`
+- Preferences d'affichage, raccourcis, etc.
+- Un document par user
+
+Collection **`appPreferences`** existante (local, sans userId) :
+- `filesDir`, `qdrantUrl`, chemins locaux, config MCP
+- Config specifique a l'instance/machine
+
+Refactoring de `imports/api/_shared/config.js` :
+- `getConfig()` merge les deux sources : userPreferences du user connecte + appPreferences de l'instance en fallback
+- Creer `imports/api/userPreferences/collections.js`, `methods.js`, `publications.js`
+- Migrer l'UI Preferences pour lire/ecrire dans la bonne collection selon le champ
 
 ---
 
@@ -294,18 +311,32 @@ Les collections local-only ne changent pas (pas de `driverOptions`).
 
 | Environnement | MONGO_URL | REMOTE_MONGO_URL |
 |---|---|---|
-| Local (Mick) | `mongodb://localhost:3001/meteor` (defaut Meteor) | `mongodb://vps:27017/panorama` |
+| Local (Mick) | `mongodb://localhost:3001/meteor` (defaut Meteor) | `mongodb://localhost:27018/panorama` (via tunnel SSH) |
 | Remote (VPS) | `mongodb://localhost:27017/panorama` | non defini (tout est local au VPS) |
 | Dev/Test | defaut Meteor | non defini (tout local) |
 
 Quand `REMOTE_MONGO_URL` n'est pas defini, `remoteDriver` est `null` et toutes les collections utilisent la DB locale. Cela preserve la compatibilite dev/test.
 
-#### 3.4 Oplog tailing
+#### 3.4 Tunnel SSH automatique
 
-Pour la reactivite Meteor sur la DB remote, configurer `REMOTE_MONGO_OPLOG_URL` :
+L'instance locale de Mick accede a MongoDB via tunnel SSH (MongoDB bind localhost sur le VPS, port jamais expose sur internet).
+
+```bash
+# Le tunnel forward le port local 27018 vers le MongoDB du VPS (localhost:27017)
+autossh -M 0 -f -N -L 27018:localhost:27017 user@51.210.150.25
+```
+
+Integration dans le workflow de dev :
+- Script `start-local.sh` qui demarre le tunnel puis lance Meteor
+- Ou `autossh` en service launchd (macOS) pour un tunnel permanent
+- Port local 27018 (pour ne pas conflicte avec un MongoDB local eventuel)
+
+#### 3.5 Oplog tailing
+
+Pour la reactivite Meteor sur la DB remote, configurer `REMOTE_MONGO_OPLOG_URL` (aussi via le tunnel SSH) :
 
 ```
-REMOTE_MONGO_OPLOG_URL=mongodb://vps:27017/local
+REMOTE_MONGO_OPLOG_URL=mongodb://localhost:27018/local
 ```
 
 Sans oplog, Meteor fait du polling (moins reactif mais fonctionnel).
@@ -492,16 +523,16 @@ Apres la migration des donnees, reindexer tous les documents avec le userId dans
 
 ---
 
-## Decisions a prendre avant de commencer
+## Decisions prises
 
-| # | Question | Options | Impact |
+| # | Question | Decision | Details |
 |---|---|---|---|
-| 1 | **Auth bypass en local ?** | (a) Mick s'authentifie aussi en local, (b) bypass auto si `PANORAMA_MODE=local` | Securite vs confort. Si la DB remote est exposee, le bypass est un risque |
-| 2 | **Signup public ?** | (a) Pas de signup, creation manuelle des users, (b) signup ouvert, (c) signup par invitation | Determine l'UI a construire |
-| 3 | **MongoDB : instance partagee ou dediee ?** | (a) Reutiliser une instance MongoDB existante sur le VPS, (b) container Docker dedie | Simplicite vs isolation |
-| 4 | **Tunnel SSH pour la DB ?** | (a) L'instance locale de Mick accede a MongoDB via tunnel SSH, (b) MongoDB expose sur un port avec auth | Securite. Le tunnel est plus sur |
-| 5 | **Denormaliser userId sur les sous-collections ?** | (a) Oui (noteLines, situation_actors, etc.), (b) Non (jointures reactives) | (a) est plus simple et performant, (b) est plus normalise |
-| 6 | **AppPreferences : comment scinder ?** | (a) `userPreferences` collection separee, (b) `Meteor.users.profile`, (c) garder `appPreferences` et ajouter userId | Determine le refactoring de la config |
+| 1 | **Auth bypass en local ?** | **Auth partout** | Mick s'authentifie aussi en local. Coherent, securise, et teste le flow d'auth en continu. |
+| 2 | **Signup public ?** | **Signup ouvert** | N'importe qui peut creer un compte. Implique : validation email, rate limiting (`ddp-rate-limiter`), protection anti-abus. |
+| 3 | **MongoDB : instance partagee ou dediee ?** | **Container Docker dedie** | MongoDB dans un container isole pour Panorama. Meilleure isolation, backups et migrations simplifies. |
+| 4 | **Acces DB depuis le Mac ?** | **Tunnel SSH** | MongoDB bind localhost sur le VPS (port ferme). L'instance locale accede via tunnel SSH. Le tunnel est auto-demarre avec Meteor local (via `autossh` ou script de lancement). |
+| 5 | **Denormaliser userId ?** | **Oui** | userId ajoute directement sur noteLines, situation_actors, situation_notes, situation_questions, situation_summaries. Plus simple et performant que les jointures reactives. |
+| 6 | **AppPreferences : comment scinder ?** | **Nouvelle collection `userPreferences`** | Separation nette : `appPreferences` garde la config d'instance (filesDir, qdrantUrl), `userPreferences` stocke les prefs par user (theme, cle API, config AI). |
 
 ## Ordre d'execution recommande
 
@@ -536,7 +567,8 @@ Les phases 1 et 2 peuvent etre developpees et testees entierement en local avant
 | **Perte de connexion internet** | L'instance locale ne peut plus lire/ecrire les collections remote | Minimongo client cache les donnees en lecture. Accepter la limitation ou prevoir un mode degrade |
 | **Volume de donnees a migrer** | 8 mois de donnees, potentiellement volumineux | L'export NDJSON gzip est deja optimise. Tester sur un sous-ensemble d'abord |
 | **Regression sur les features existantes** | L'ajout de userId partout peut casser des queries | Tester chaque collection incrementalement. Garder la DB locale comme backup |
-| **Securite MongoDB exposee** | Si le port est ouvert sur internet | Tunnel SSH ou bind localhost + auth MongoDB |
+| **Tunnel SSH instable** | Perte de connexion DB si le tunnel tombe | `autossh` avec reconnexion automatique, ou service launchd permanent |
+| **Signup ouvert : abus** | Comptes spam, surcharge | Rate limiting, validation email, monitoring |
 | **Dual driver Meteor 3** | `MongoInternals.RemoteCollectionDriver` pas documente officiellement dans Meteor 3 | Tester tot. Alternative : `MONGO_URL` pointe directement vers le remote, pas de dual driver (plus simple mais pas de collections locales) |
 
 ## Future : projets partages
