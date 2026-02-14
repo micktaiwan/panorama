@@ -4,7 +4,19 @@ Derniere mise a jour : 2026-02-14. Decisions prises le 2026-02-14.
 
 ## Contexte
 
-Panorama est une application locale single-user depuis 8 mois. L'objectif est de la rendre accessible en ligne pour que plusieurs utilisateurs (Mick, David, et d'autres) puissent acceder aux projets, tasks, et notes depuis un navigateur ou une app Android.
+### Pourquoi cette migration
+
+Panorama est un projet personnel de Mick, construit en local depuis 8 mois. Au fil du temps, beaucoup de features tres personnelles ont ete ajoutees (situations analyzer, budget Pennylane, integration Gmail/Notion, Claude Code, etc.). Aujourd'hui, David (frere de Mick, contributeur au projet) et potentiellement d'autres personnes (Andrea, clients) veulent pouvoir utiliser Panorama depuis un navigateur ou un telephone.
+
+L'objectif n'est pas de tout mettre en ligne. Seul le coeur metier (projets, taches, notes, liens, fichiers) sera accessible en remote. Toutes les features personnelles restent en local — il faudra lancer Panorama en local pour y acceder. Les collections migrent en remote au cas par cas, uniquement quand un vrai besoin le justifie.
+
+### Parties prenantes
+
+- **Mick** (micktaiwan) — auteur du projet, CTO lempire. Decide de l'architecture et des priorites. Utilise Panorama en local avec toutes les features.
+- **David** (ddaydd) — frere de Mick, contributeur. Utilisera la version en ligne avec le coeur metier.
+- **Autres utilisateurs** (Andrea, etc.) — acces en ligne au coeur metier uniquement.
+
+### Etat des lieux technique (fevrier 2026)
 
 ### Etat des lieux (fevrier 2026)
 
