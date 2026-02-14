@@ -86,6 +86,7 @@ function App() {
   useAlarmScheduler();
   // Play a short beep at app startup
   useEffect(() => { playBeep(0.4); }, []);
+  const user = useTracker(() => Meteor.user(), []);
   const ready = useTracker(() => Meteor.subscribe('alarms.mine').ready(), []);
   const alarms = useTracker(() => AlarmsCollection.find({}, { sort: { nextTriggerAt: 1 } }).fetch(), [ready]);
   const [activeAlarmId, setActiveAlarmId] = useState(null);
@@ -645,7 +646,18 @@ function App() {
 
   return (
     <div className={`container${widthMode !== 'default' ? ` ${widthMode}` : ''}${focusMode ? ' focusMode' : ''}`}>
-      {!focusMode && <h1><a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}><img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />Panorama</a></h1>}
+      {!focusMode && (
+        <h1 className="appHeader">
+          <a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>
+            <img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />
+            Panorama
+          </a>
+          <span className="headerUser">
+            <span className="headerEmail">{user?.emails?.[0]?.address}</span>
+            <button className="btn-link headerLogout" onClick={() => Meteor.logout()}>Logout</button>
+          </span>
+        </h1>
+      )}
       {!focusMode && favoriteProjects.length > 0 && (
         <div className="favoritesBar">
           <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>

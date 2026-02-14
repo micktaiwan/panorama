@@ -1,6 +1,9 @@
 import { Meteor } from 'meteor/meteor';
 import { WebApp } from 'meteor/webapp';
 
+// Accounts configuration (auth, rate limiting, email templates)
+import '/server/accounts';
+
 // Core Meteor modules
 // (already imported above)
 

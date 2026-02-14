@@ -39,7 +39,14 @@ Meteor.startup(() => {
     }
   }
 
-  import('/imports/ui/App.jsx').then(({ default: App }) => {
-    root.render(<App />);
+  Promise.all([
+    import('/imports/ui/Auth/AuthGate.jsx'),
+    import('/imports/ui/App.jsx'),
+  ]).then(([{ AuthGate }, { default: App }]) => {
+    root.render(
+      <AuthGate>
+        <App />
+      </AuthGate>
+    );
   });
 });

@@ -3,6 +3,12 @@ export const parseHashRoute = () => {
   const path = hash.replace(/^#/, '');
   const parts = path.split('/').filter(Boolean);
   if (parts.length === 0) return { name: 'home' };
+  // Auth routes
+  if (parts[0] === 'login') return { name: 'login' };
+  if (parts[0] === 'signup') return { name: 'signup' };
+  if (parts[0] === 'forgot-password') return { name: 'forgotPassword' };
+  if (parts[0] === 'reset-password' && parts[1]) return { name: 'resetPassword', token: parts[1] };
+  if (parts[0] === 'verify-email' && parts[1]) return { name: 'verifyEmail', token: parts[1] };
   if (parts[0] === 'dashboard') return { name: 'dashboard' };
   if (parts[0] === 'help') return { name: 'help' };
   if (parts[0] === 'alarms') return { name: 'alarms' };
@@ -38,6 +44,22 @@ export const navigateTo = (route) => {
   switch (route.name) {
     case 'home':
       window.location.hash = '#/';
+      break;
+    // Auth routes
+    case 'login':
+      window.location.hash = '#/login';
+      break;
+    case 'signup':
+      window.location.hash = '#/signup';
+      break;
+    case 'forgotPassword':
+      window.location.hash = '#/forgot-password';
+      break;
+    case 'resetPassword':
+      window.location.hash = `#/reset-password/${route.token}`;
+      break;
+    case 'verifyEmail':
+      window.location.hash = `#/verify-email/${route.token}`;
       break;
     case 'project':
       window.location.hash = `#/projects/${route.projectId}`;
