@@ -2,6 +2,7 @@
 # Backup Panorama MongoDB (local) to OVH server
 # Works whether Meteor is running or not
 set -uo pipefail
+export PATH="/opt/homebrew/bin:$PATH"
 
 notify() {
   osascript -e "display notification \"$1\" with title \"Panorama Backup\""
