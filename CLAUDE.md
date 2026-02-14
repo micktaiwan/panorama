@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**NEVER modify code, files, or documents without explicit user confirmation. Always ask before making any change.**
+
 ## Project Overview
 
 Panorama is a **local-first, single-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support.
