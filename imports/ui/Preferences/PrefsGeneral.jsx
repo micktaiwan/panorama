@@ -8,31 +8,6 @@ export const PrefsGeneral = ({ pref, userPref }) => {
   const [filesDir, setFilesDir] = React.useState('');
   const [qdrantUrl, setQdrantUrl] = React.useState('');
   const [devUrlMode, setDevUrlMode] = React.useState(false);
-  const [mobileTasksEnabled, setMobileTasksEnabled] = React.useState(() => {
-    try {
-      const raw = window.localStorage.getItem('panorama.mobileTasksEnabled');
-      return raw == null ? true : String(raw) === 'true';
-    } catch {
-      return true;
-    }
-  });
-  const [lanIp, setLanIp] = React.useState('');
-
-  React.useEffect(() => {
-    Meteor.call('mobileTasksRoute.getStatus', (err, res) => {
-      if (err) return;
-      const sv = !!(res?.enabled);
-      setMobileTasksEnabled(sv);
-      try { window.localStorage.setItem('panorama.mobileTasksEnabled', String(sv)); } catch {}
-    });
-  }, []);
-
-  React.useEffect(() => {
-    Meteor.call('mobileTasksRoute.getLanIps', (err, res) => {
-      if (err) { setLanIp(''); return; }
-      setLanIp(Array.isArray(res?.ips) && res.ips.length > 0 ? res.ips[0] : '');
-    });
-  }, []);
 
   React.useEffect(() => {
     if (!pref) return;
@@ -90,24 +65,6 @@ export const PrefsGeneral = ({ pref, userPref }) => {
                 Meteor.call('appPreferences.update', { qdrantUrl: next }, () => {});
               }}
             />
-          </div>
-        </div>
-        <div className="prefsRow">
-          <div className="prefsLabel">Mobile tasks page (LAN)</div>
-          <div className="prefsValue">
-            <InlineEditable
-              as="select"
-              value={mobileTasksEnabled ? 'enabled' : 'disabled'}
-              options={[{ value: 'enabled', label: 'Enabled' }, { value: 'disabled', label: 'Disabled' }]}
-              onSubmit={(next) => {
-                const v = next === 'enabled';
-                setMobileTasksEnabled(v);
-                try { window.localStorage.setItem('panorama.mobileTasksEnabled', String(v)); } catch {}
-                Meteor.call('mobileTasksRoute.setEnabled', v, () => {});
-                notify({ message: `Mobile tasks page ${v ? 'enabled' : 'disabled'}`, kind: 'success' });
-              }}
-            />
-            {lanIp ? <span className="ml8" style={{ color: 'var(--muted)' }}>{`http://${lanIp}:3000`}</span> : null}
           </div>
         </div>
         <div className="prefsRow">

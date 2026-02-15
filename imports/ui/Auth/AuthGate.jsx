@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Accounts } from 'meteor/accounts-base';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
 import { parseHashRoute, navigateTo } from '/imports/ui/router.js';
@@ -25,6 +26,19 @@ export const AuthGate = ({ children }) => {
     userId: Meteor.userId(),
     loggingIn: Meteor.loggingIn(),
   }));
+
+  // Sync login token to a cookie so HTTP routes (/files/, /download-export/) can authenticate
+  useEffect(() => {
+    if (userId) {
+      const token = Accounts._storedLoginToken();
+      if (token) {
+        const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = `meteor_login_token=${encodeURIComponent(token)}; path=/; SameSite=Lax${secure}`;
+      }
+    } else {
+      document.cookie = 'meteor_login_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
+  }, [userId]);
 
   // If logged in and on an auth route, redirect to home
   if (userId && AUTH_ROUTES.has(route?.name)) {
