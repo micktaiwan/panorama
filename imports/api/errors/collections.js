@@ -1,5 +1,8 @@
 import { Mongo } from 'meteor/mongo';
+import { localDriver } from '/imports/api/_shared/localDriver';
 
-export const ErrorsCollection = new Mongo.Collection('errors');
+const driverOptions = localDriver ? { _driver: localDriver } : {};
+
+export const ErrorsCollection = new Mongo.Collection('errors', driverOptions);
 
 

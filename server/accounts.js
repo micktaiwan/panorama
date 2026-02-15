@@ -4,9 +4,7 @@ import { DDPRateLimiter } from 'meteor/ddp-rate-limiter';
 
 // --- Password & signup config ---
 
-Accounts.config({
-  passwordMinLength: 8,
-});
+// Password min length is validated client-side in Signup.jsx (Meteor 3 does not support passwordMinLength in Accounts.config)
 
 Accounts.validateNewUser((user) => {
   if (!user.emails?.[0]?.address) {
