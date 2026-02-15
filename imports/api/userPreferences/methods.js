@@ -10,19 +10,37 @@ Meteor.methods({
    */
   async 'userPreferences.ensure'() {
     ensureLoggedIn(this.userId);
-    const doc = await UserPreferencesCollection.findOneAsync({ userId: this.userId });
-    if (doc) return doc._id;
-    const now = new Date();
-    return UserPreferencesCollection.insertAsync({
-      userId: this.userId,
-      theme: null,
-      openaiApiKey: null,
-      anthropicApiKey: null,
-      perplexityApiKey: null,
-      ai: null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    let doc = await UserPreferencesCollection.findOneAsync({ userId: this.userId });
+    if (!doc) {
+      const now = new Date();
+      const id = await UserPreferencesCollection.insertAsync({
+        userId: this.userId,
+        theme: null,
+        openaiApiKey: null,
+        anthropicApiKey: null,
+        perplexityApiKey: null,
+        ai: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      doc = await UserPreferencesCollection.findOneAsync(id);
+    }
+
+    // One-time migration: copy API keys from appPreferences
+    if (!doc._keysBackfilled) {
+      const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
+      const appPref = await AppPreferencesCollection.findOneAsync({});
+      const $set = { _keysBackfilled: true, updatedAt: new Date() };
+      if (appPref) {
+        for (const k of ['openaiApiKey', 'anthropicApiKey', 'perplexityApiKey']) {
+          if (!doc[k] && appPref[k]) $set[k] = appPref[k];
+        }
+        if (!doc.ai && appPref.ai) $set.ai = appPref.ai;
+      }
+      await UserPreferencesCollection.updateAsync(doc._id, { $set });
+    }
+
+    return doc._id;
   },
 
   /**

@@ -270,7 +270,8 @@ Points d'attention traites :
 
 **Etape 5 — Collection `userPreferences`** :
 - Fichiers crees : `imports/api/userPreferences/collections.js`, `methods.js`, `publications.js`
-- Methodes : `userPreferences.ensure` (upsert initial), `userPreferences.update` (mise a jour partielle)
+- Methodes : `userPreferences.ensure` (upsert initial + migration one-time), `userPreferences.update` (mise a jour partielle)
+- `ensure` inclut une migration one-time (flag `_keysBackfilled`) : copie `openaiApiKey`, `anthropicApiKey`, `perplexityApiKey` et `ai` depuis `appPreferences` si les champs sont `null` dans `userPreferences`. Evite la perte de donnees lors du split appPreferences → userPreferences. Le flag empeche la re-migration si un user efface volontairement une cle.
 - Publication filtree par `this.userId`, index unique `{ userId: 1 }`
 
 Split des preferences :
@@ -284,10 +285,11 @@ Refactoring `config.js` :
 
 UI refactoring :
 - `Preferences.jsx` : subscribe a `userPreferences`, passe `userPref` prop aux sous-composants
-- `PrefsGeneral.jsx` : theme lit/ecrit dans userPreferences
-- `PrefsSecrets.jsx` : API keys (openai, anthropic, perplexity) lisent/ecrivent dans userPreferences
-- `PrefsAI.jsx` : config AI lit/ecrit dans userPreferences via `userPreferences.update`
+- `PrefsGeneral.jsx` : theme lit/ecrit dans userPreferences. useEffect depend de `[userPref?._id, userPref?.theme]`
+- `PrefsSecrets.jsx` : API keys (openai, anthropic, perplexity) lisent/ecrivent dans userPreferences. Placeholders uniformes `"(not set)"`. useEffect depend de `[userPref?._id, ...keyFields]`
+- `PrefsAI.jsx` : config AI lit/ecrit dans userPreferences via `userPreferences.update`. useEffect depend de `[userPref?._id, JSON.stringify(userPref?.ai)]`
 - `App.jsx` : theme sync lit depuis userPreferences
+- **Important** : les useEffect des composants Prefs ne doivent **pas** dependre uniquement de `userPref?._id` — sinon les mises a jour server-side (migration, sync) ne se refletent pas dans l'UI
 
 **Etape 6 — Indexes MongoDB** :
 

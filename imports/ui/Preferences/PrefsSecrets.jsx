@@ -41,7 +41,7 @@ export const PrefsSecrets = ({ pref, userPref }) => {
     setOpenaiApiKey(userPref.openaiApiKey || '');
     setAnthropicApiKey(userPref.anthropicApiKey || '');
     setPerplexityApiKey(userPref.perplexityApiKey || '');
-  }, [userPref?._id]);
+  }, [userPref?._id, userPref?.openaiApiKey, userPref?.anthropicApiKey, userPref?.perplexityApiKey]);
 
   return (
     <>
@@ -66,7 +66,7 @@ export const PrefsSecrets = ({ pref, userPref }) => {
           <div className="prefsValue">
             <InlineEditable
               value={anthropicApiKey}
-              placeholder="sk-ant-..."
+              placeholder="(not set)"
               fullWidth
               onSubmit={(next) => {
                 setAnthropicApiKey(next);
