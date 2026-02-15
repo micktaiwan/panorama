@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { PeopleCollection } from './collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 const normalize = (s) => {
   const base = String(s || '').trim();
@@ -9,6 +10,7 @@ const normalize = (s) => {
 
 Meteor.methods({
   async 'people.insert'(fields) {
+    ensureLocalOnly();
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const name = String(fields.name || '').trim();
     if (!name) throw new Meteor.Error('invalid-arg', 'name is required');
@@ -33,6 +35,7 @@ Meteor.methods({
   },
   async 'people.update'(id, fields) {
     check(id, String);
+    ensureLocalOnly();
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const updates = {};
     const unset = {};
@@ -67,6 +70,7 @@ Meteor.methods({
   },
   async 'people.remove'(id) {
     check(id, String);
+    ensureLocalOnly();
     await PeopleCollection.removeAsync({ _id: id });
   }
 });
@@ -76,6 +80,7 @@ Meteor.methods({
 Meteor.methods({
   async 'people.importGoogleWorkspace'(records) {
     check(records, Array);
+    ensureLocalOnly();
     const now = new Date();
 
     // Count total before import

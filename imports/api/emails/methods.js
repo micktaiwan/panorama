@@ -5,6 +5,7 @@ import { GmailTokensCollection, GmailMessagesCollection, EmailActionLogsCollecti
 import { chatComplete } from '/imports/api/_shared/llmProxy.js';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections.js';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 // OAuth2 configuration
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'];
@@ -84,6 +85,7 @@ const logApiCall = (method, endpoint, details = '') => {
 
 Meteor.methods({
   'gmail.getAuthUrl'() {
+    ensureLocalOnly();
     logApiCall('GET', '/auth/url', 'Generate OAuth URL');
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -93,6 +95,7 @@ Meteor.methods({
   },
 
   async 'gmail.exchangeCode'(code) {
+    ensureLocalOnly();
     logApiCall('POST', '/auth/token', 'Exchange code for tokens');
     
     try {
@@ -134,6 +137,7 @@ Meteor.methods({
   },
 
   async 'gmail.getTokens'() {
+    ensureLocalOnly();
     logApiCall('GET', '/tokens', 'Get stored tokens from DB');
     const tokenDoc = await GmailTokensCollection.findOneAsync({});
     if (!tokenDoc) {
@@ -143,6 +147,7 @@ Meteor.methods({
   },
 
   async 'gmail.listMessages'(query = '', maxResults = 20) {
+    ensureLocalOnly();
     logApiCall('GET', '/messages/list', `Query: "${query}", MaxResults: ${maxResults}`);
 
     await ensureValidTokens();
@@ -397,6 +402,7 @@ Meteor.methods({
   },
 
   async 'gmail.getMessage'(messageId) {
+    ensureLocalOnly();
     logApiCall('GET', `/messages/${messageId}`, 'Get message from DB or API');
     
     // First try to get from database
@@ -464,6 +470,7 @@ Meteor.methods({
   },
 
   async 'gmail.archiveMessage'(messageId) {
+    ensureLocalOnly();
     logApiCall('POST', `/messages/${messageId}/modify`, 'Archive message');
     
     await ensureValidTokens();
@@ -508,6 +515,7 @@ Meteor.methods({
   },
 
   async 'gmail.addLabel'(messageId, labelId) {
+    ensureLocalOnly();
     logApiCall('POST', `/messages/${messageId}/modify`, `Add label: ${labelId}`);
 
     await ensureValidTokens();
@@ -538,6 +546,7 @@ Meteor.methods({
   },
 
   async 'gmail.removeLabel'(messageId, labelId) {
+    ensureLocalOnly();
     logApiCall('POST', `/messages/${messageId}/modify`, `Remove label: ${labelId}`);
 
     await ensureValidTokens();
@@ -566,6 +575,7 @@ Meteor.methods({
   },
 
   async 'gmail.listLabels'() {
+    ensureLocalOnly();
     logApiCall('GET', '/labels', 'List all labels');
 
     await ensureValidTokens();
@@ -582,6 +592,7 @@ Meteor.methods({
   },
 
   async 'gmail.createLabel'(labelName) {
+    ensureLocalOnly();
     logApiCall('POST', '/labels', `Create label: ${labelName}`);
 
     if (!labelName || typeof labelName !== 'string' || labelName.trim().length === 0) {
@@ -649,6 +660,7 @@ Meteor.methods({
 
   // Method to get API call statistics
   'gmail.getApiStats'() {
+    ensureLocalOnly();
     return {
       totalApiCalls: apiCallCount,
       timestamp: new Date().toISOString()
@@ -657,6 +669,7 @@ Meteor.methods({
 
   // Method to get email statistics via RPC
   async 'gmail.getEmailStats'() {
+    ensureLocalOnly();
     logApiCall('GET', '/email-stats', 'Get email statistics');
     
     try {
@@ -690,6 +703,7 @@ Meteor.methods({
 
   // Method to get all messages in a thread via RPC
   async 'gmail.getThreadMessages'(threadId) {
+    ensureLocalOnly();
     logApiCall('GET', `/thread/${threadId}`, 'Get thread messages');
     
     try {
@@ -709,6 +723,7 @@ Meteor.methods({
   },
 
   async 'gmail.cleanupDuplicates'() {
+    ensureLocalOnly();
     logApiCall('POST', '/cleanup-duplicates', 'Clean up duplicate messages');
     
     try {
@@ -760,6 +775,7 @@ Meteor.methods({
 
 
   async 'gmail.analyzeThread'(threadData) {
+    ensureLocalOnly();
     logApiCall('POST', '/analyze-thread', 'Analyze email thread with AI based on preferences');
     
     // Import the LLM proxy function
@@ -821,6 +837,7 @@ ${fullThreadText}`;
   },
 
   async 'gmail.syncLabels'(maxMessages = 50) {
+    ensureLocalOnly();
     logApiCall('POST', '/sync-labels', `Sync labels for up to ${maxMessages} messages`);
     
     await ensureValidTokens();
@@ -1174,10 +1191,12 @@ Body preview: ${emailContext.bodyPreview}`;
 
 Meteor.methods({
   async 'emails.suggestCta'(emailId) {
+    ensureLocalOnly();
     return await suggestCtaInternal(emailId);
   },
 
   async 'emails.moveToTrash'(emailId) {
+    ensureLocalOnly();
     console.log('[MOVE TO TRASH] Starting deletion for emailId:', emailId);
     // Try to find by Gmail ID first, then by MongoDB _id
     let email = await GmailMessagesCollection.findOneAsync({ id: emailId });
@@ -1229,6 +1248,7 @@ Meteor.methods({
   },
 
   async 'emails.archive'(emailId) {
+    ensureLocalOnly();
     const email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
     if (!email) {
       throw new Meteor.Error('email-not-found', 'Email not found');
@@ -1272,6 +1292,7 @@ Meteor.methods({
   },
 
   async 'emails.markReply'(emailId) {
+    ensureLocalOnly();
     const email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
     if (!email) {
       throw new Meteor.Error('email-not-found', 'Email not found');
@@ -1301,6 +1322,7 @@ Meteor.methods({
   },
 
   async 'emails.getCtaStats'() {
+    ensureLocalOnly();
     try {
       console.log('[emails.getCtaStats] Loading CTA statistics');
 
@@ -1364,6 +1386,7 @@ Meteor.methods({
 
   // ✅ Méthode pour EmailsPage : Résoudre le problème des threads avec emails archivés
   async 'emails.getEmailsPageThreads'() {
+    ensureLocalOnly();
     logApiCall('GET', '/emails-page-threads', 'Get threads for EmailsPage with complete context');
     
     try {
@@ -1466,6 +1489,7 @@ Meteor.methods({
 
   // ✅ Méthode pour InboxZero : Garder la méthode existante
   async 'emails.getInboxZeroThreads'() {
+    ensureLocalOnly();
     logApiCall('GET', '/inbox-zero-threads', 'Get threads for InboxZero with complete context');
     
     try {
@@ -1562,6 +1586,7 @@ Meteor.methods({
   },
 
   async 'emails.archiveLocally'(messageId) {
+    ensureLocalOnly();
     // Try to find by Gmail ID first, then by MongoDB _id
     let email = await GmailMessagesCollection.findOneAsync({ id: messageId });
     if (!email) {
@@ -1595,6 +1620,7 @@ Meteor.methods({
   },
 
   async 'emails.clearCache'() {
+    ensureLocalOnly();
     logApiCall('POST', '/clear-cache', 'Clear all emails from local cache');
 
     try {

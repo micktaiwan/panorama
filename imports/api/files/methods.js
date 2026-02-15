@@ -7,6 +7,7 @@ import { WebApp } from 'meteor/webapp';
 import { Random } from 'meteor/random';
 import { FilesCollection } from './collections';
 import { AppPreferencesCollection } from '../appPreferences/collections';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 // The order of preference for determining the storage directory is:
 // 1. User-defined directory from AppPreferencesCollection
@@ -32,6 +33,7 @@ Meteor.methods({
     check(originalName, String);
     check(contentBase64, String);
     check(mimeType, Match.Maybe(String));
+    ensureLoggedIn(this.userId);
     const cleanName = sanitizeName(name);
     if (!cleanName) throw new Meteor.Error('invalid-name', 'File name is required');
     const storageDir = await getStorageDir();
@@ -43,6 +45,7 @@ Meteor.methods({
     await fs.promises.writeFile(filePath, buffer);
     const now = new Date();
     const _id = await FilesCollection.insertAsync({
+      userId: this.userId,
       projectId: projectId || '__none__',
       name: cleanName,
       originalName: originalName || null,
@@ -59,6 +62,8 @@ Meteor.methods({
   async 'files.update'(fileId, modifier) {
     check(fileId, String);
     check(modifier, Object);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(FilesCollection, fileId, this.userId);
     const updates = {};
     if (typeof modifier.name === 'string') updates.name = sanitizeName(modifier.name);
     if (typeof modifier.projectId === 'string') updates.projectId = modifier.projectId || '__none__';
@@ -68,7 +73,8 @@ Meteor.methods({
   },
   async 'files.remove'(fileId) {
     check(fileId, String);
-    const f = await FilesCollection.findOneAsync({ _id: fileId });
+    ensureLoggedIn(this.userId);
+    const f = await ensureOwner(FilesCollection, fileId, this.userId);
     if (f?.storedFileName) {
       try {
         const storageDir = await getStorageDir();
@@ -83,6 +89,8 @@ Meteor.methods({
   },
   async 'files.registerClick'(fileId) {
     check(fileId, String);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(FilesCollection, fileId, this.userId);
     await FilesCollection.updateAsync(fileId, { $set: { lastClickedAt: new Date() }, $inc: { clicksCount: 1 } });
     return true;
   }

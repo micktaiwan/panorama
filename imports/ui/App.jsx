@@ -35,6 +35,7 @@ import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
 import { SearchQuality } from '/imports/ui/Preferences/SearchQuality/SearchQuality.jsx';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import { UserPreferencesCollection } from '/imports/api/userPreferences/collections';
 import ChatWidget from '/imports/ui/components/ChatWidget/ChatWidget.jsx';
 import { CalendarPage } from '/imports/ui/Calendar/CalendarPage.jsx';
 import { PanoramaPage } from '/imports/ui/Panorama/PanoramaPage.jsx';
@@ -132,7 +133,9 @@ function App() {
 
   // Preferences
   const subPrefs = useSubscribe('appPreferences');
+  const subUserPrefs = useSubscribe('userPreferences');
   const appPrefs = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
+  const userPrefs = useFind(() => UserPreferencesCollection.find({}, { limit: 1 }))[0];
 
   // Claude Code: subscribe to unseen sessions + projects for notifications
   useSubscribe('claudeSessions.unseen');
@@ -163,14 +166,14 @@ function App() {
 
   // Sync theme preference to document + localStorage
   useEffect(() => {
-    const theme = appPrefs?.theme || 'dark';
+    const theme = userPrefs?.theme || 'dark';
     if (theme === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
     } else {
       document.documentElement.removeAttribute('data-theme');
     }
     localStorage.setItem('panorama-theme', theme);
-  }, [appPrefs?.theme]);
+  }, [userPrefs?.theme]);
 
   const suppressModalFor = (alarmId, ms = 3000) => {
     if (!alarmId) return;

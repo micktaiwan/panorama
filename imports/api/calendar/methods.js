@@ -2,12 +2,14 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { CalendarEventsCollection } from './collections';
 import { getGoogleCalendarClient, getAuthUrl, exchangeCodeForTokens } from './googleCalendarClient';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 const isNonEmptyString = Match.Where((x) => typeof x === 'string' && x.trim().length > 0);
 
 Meteor.methods({
   async 'calendar.setIcsUrl'(icsUrl) {
     check(icsUrl, isNonEmptyString);
+    ensureLocalOnly();
     const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
     const now = new Date();
     // Normalize common Google Calendar embed URL to ICS URL automatically
@@ -33,6 +35,7 @@ Meteor.methods({
     return pref._id;
   },
   async 'calendar.syncFromIcs'() {
+    ensureLocalOnly();
     const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
     const pref = await AppPreferencesCollection.findOneAsync({}, { fields: { calendarIcsUrl: 1 } });
     const url = pref?.calendarIcsUrl || '';
@@ -105,6 +108,7 @@ Meteor.methods({
   },
 
   async 'calendar.google.getAuthUrl'() {
+    ensureLocalOnly();
     try {
       const url = getAuthUrl();
       return { url };
@@ -116,6 +120,7 @@ Meteor.methods({
 
   async 'calendar.google.saveTokens'(code) {
     check(code, isNonEmptyString);
+    ensureLocalOnly();
     try {
       const tokens = await exchangeCodeForTokens(code);
       const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections');
@@ -151,6 +156,7 @@ Meteor.methods({
 
   async 'calendar.google.sync'(calendarIds) {
     check(calendarIds, Match.Maybe([String]));
+    ensureLocalOnly();
 
     try {
       const { calendar } = getGoogleCalendarClient();
@@ -299,6 +305,7 @@ Meteor.methods({
   },
 
   async 'calendar.google.listCalendars'() {
+    ensureLocalOnly();
     try {
       const { calendar } = getGoogleCalendarClient();
       const response = await calendar.calendarList.list();
@@ -327,6 +334,7 @@ Meteor.methods({
       end: String,   // ISO 8601 string
       calendarId: Match.Maybe(String)
     });
+    ensureLocalOnly();
 
     try {
       const { calendar } = getGoogleCalendarClient();
@@ -369,6 +377,7 @@ Meteor.methods({
   async 'calendar.google.deleteEvent'(eventId, calendarIdParam) {
     check(eventId, isNonEmptyString);
     check(calendarIdParam, Match.Maybe(String));
+    ensureLocalOnly();
 
     try {
       const { calendar } = getGoogleCalendarClient();

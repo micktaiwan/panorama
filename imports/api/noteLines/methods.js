@@ -1,13 +1,15 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { NoteLinesCollection } from './collections';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'noteLines.insert'(doc) {
     check(doc, Object);
+    ensureLoggedIn(this.userId);
     check(doc.sessionId, String);
     check(doc.content, String);
-    const _id = await NoteLinesCollection.insertAsync({ ...doc, createdAt: new Date() });
+    const _id = await NoteLinesCollection.insertAsync({ ...doc, userId: this.userId, createdAt: new Date() });
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'line', id: _id, text: doc.content || '', sessionId: doc.sessionId || null });
@@ -20,6 +22,8 @@ Meteor.methods({
   async 'noteLines.update'(lineId, modifier) {
     check(lineId, String);
     check(modifier, Object);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(NoteLinesCollection, lineId, this.userId);
     const res = await NoteLinesCollection.updateAsync(lineId, { $set: { ...modifier } });
     try {
       const next = await NoteLinesCollection.findOneAsync(lineId, { fields: { content: 1, sessionId: 1 } });
@@ -30,6 +34,8 @@ Meteor.methods({
   },
   async 'noteLines.remove'(lineId) {
     check(lineId, String);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(NoteLinesCollection, lineId, this.userId);
     const res = await NoteLinesCollection.removeAsync(lineId);
     try { const { deleteDoc } = await import('/imports/api/search/vectorStore.js'); await deleteDoc('line', lineId); }
     catch (e) { console.error('[search][noteLines.remove] delete failed', e); throw new Meteor.Error('search-delete-failed', 'Line deleted, but search index cleanup failed.', { lineId }); }

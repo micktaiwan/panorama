@@ -3,7 +3,7 @@ import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import { notify } from '../utils/notify.js';
 
-export const PrefsGeneral = ({ pref }) => {
+export const PrefsGeneral = ({ pref, userPref }) => {
   const [theme, setTheme] = React.useState('dark');
   const [filesDir, setFilesDir] = React.useState('');
   const [qdrantUrl, setQdrantUrl] = React.useState('');
@@ -36,11 +36,15 @@ export const PrefsGeneral = ({ pref }) => {
 
   React.useEffect(() => {
     if (!pref) return;
-    setTheme(pref.theme || 'dark');
     setFilesDir(pref.filesDir || '');
     setQdrantUrl(pref.qdrantUrl || '');
     setDevUrlMode(!!pref.devUrlMode);
   }, [pref?._id]);
+
+  React.useEffect(() => {
+    if (!userPref) return;
+    setTheme(userPref.theme || 'dark');
+  }, [userPref?._id]);
 
   return (
     <>
@@ -55,7 +59,7 @@ export const PrefsGeneral = ({ pref }) => {
               options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]}
               onSubmit={(next) => {
                 setTheme(next);
-                Meteor.call('appPreferences.update', { theme: next }, () => {});
+                Meteor.call('userPreferences.update', { theme: next }, () => {});
               }}
             />
           </div>

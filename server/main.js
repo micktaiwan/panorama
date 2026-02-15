@@ -107,6 +107,9 @@ import '/imports/api/export/server';
 import '/imports/api/appPreferences/collections';
 import '/imports/api/appPreferences/publications';
 import '/imports/api/appPreferences/methods';
+import '/imports/api/userPreferences/collections';
+import '/imports/api/userPreferences/publications';
+import '/imports/api/userPreferences/methods';
 import '/imports/api/panorama/methods';
 import '/imports/api/cron/jobs';
 
@@ -250,6 +253,26 @@ Meteor.startup(async () => {
   } else {
     console.log(`[startup] AI mode: '${prefs.ai.mode}'`);
   }
+
+  // --- Multi-user indexes (userId partitioning) ---
+  const { ProjectsCollection } = await import('/imports/api/projects/collections');
+  const { TasksCollection } = await import('/imports/api/tasks/collections');
+  const { NotesCollection } = await import('/imports/api/notes/collections');
+  const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
+  const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
+  const { LinksCollection } = await import('/imports/api/links/collections');
+  const { FilesCollection } = await import('/imports/api/files/collections');
+  const { UserPreferencesCollection } = await import('/imports/api/userPreferences/collections');
+
+  ProjectsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  TasksCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
+  TasksCollection.rawCollection().createIndex({ userId: 1, done: 1 }).catch(() => {});
+  NotesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
+  NoteSessionsCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
+  NoteLinesCollection.rawCollection().createIndex({ userId: 1, sessionId: 1 }).catch(() => {});
+  LinksCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
+  FilesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
+  UserPreferencesCollection.rawCollection().createIndex({ userId: 1 }, { unique: true }).catch(() => {});
 
   // Place server-side initialization here as your app grows.
   const scriptSrc = Meteor.isDevelopment

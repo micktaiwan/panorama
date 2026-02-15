@@ -5,9 +5,11 @@ import { SituationActorsCollection } from '/imports/api/situationActors/collecti
 import { SituationNotesCollection } from '/imports/api/situationNotes/collections';
 import { SituationQuestionsCollection } from '/imports/api/situationQuestions/collections';
 import { SituationSummariesCollection } from '/imports/api/situationSummaries/collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'situations.insert'(fields) {
+    ensureLocalOnly();
     if (fields && typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const title = String(fields?.title || 'New Situation').trim();
     const description = String(fields?.description || '').trim();
@@ -17,6 +19,7 @@ Meteor.methods({
   },
   async 'situations.update'(id, fields) {
     check(id, String);
+    ensureLocalOnly();
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const updates = {};
     if ('title' in fields) updates.title = String(fields.title || '').trim();
@@ -26,6 +29,7 @@ Meteor.methods({
   },
   async 'situations.remove'(id) {
     check(id, String);
+    ensureLocalOnly();
     // Cascade: remove dependents first, then the situation
     await SituationNotesCollection.removeAsync({ situationId: id });
     await SituationQuestionsCollection.removeAsync({ situationId: id });

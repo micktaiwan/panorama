@@ -5,6 +5,7 @@ import { TasksCollection } from '/imports/api/tasks/collections';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
 const sanitizeProjectDoc = (input) => {
@@ -34,10 +35,11 @@ const sanitizeProjectDoc = (input) => {
 Meteor.methods({
   async 'projects.insert'(doc) {
     check(doc, Object);
+    ensureLoggedIn(this.userId);
     if (doc.name !== undefined) check(doc.name, String);
     if (doc.status !== undefined) check(doc.status, String);
     const sanitized = sanitizeProjectDoc(doc);
-    const _id = await ProjectsCollection.insertAsync({ ...sanitized, createdAt: new Date(), updatedAt: new Date() });
+    const _id = await ProjectsCollection.insertAsync({ ...sanitized, userId: this.userId, createdAt: new Date(), updatedAt: new Date() });
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'project', id: _id, text: `${sanitized.name || ''} ${sanitized.description || ''}`.trim(), projectId: _id });
@@ -47,6 +49,8 @@ Meteor.methods({
   async 'projects.update'(projectId, modifier) {
     check(projectId, String);
     check(modifier, Object);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(ProjectsCollection, projectId, this.userId);
     const sanitized = sanitizeProjectDoc(modifier);
     if (Object.prototype.hasOwnProperty.call(modifier, 'panoramaStatus')) {
       const allowed = new Set(['red','orange','green', null, '']);
@@ -64,16 +68,18 @@ Meteor.methods({
   },
   async 'projects.remove'(projectId) {
     check(projectId, String);
-    // Remove tasks
-    await TasksCollection.removeAsync({ projectId });
-    // Remove notes directly attached to the project (if any model uses this)
-    await NotesCollection.removeAsync({ projectId });
-    // Remove note sessions and their lines
-    const sessions = await NoteSessionsCollection.find({ projectId }).fetchAsync();
+    ensureLoggedIn(this.userId);
+    await ensureOwner(ProjectsCollection, projectId, this.userId);
+    // Remove tasks (scoped to userId)
+    await TasksCollection.removeAsync({ projectId, userId: this.userId });
+    // Remove notes directly attached to the project (scoped to userId)
+    await NotesCollection.removeAsync({ projectId, userId: this.userId });
+    // Remove note sessions and their lines (scoped to userId)
+    const sessions = await NoteSessionsCollection.find({ projectId, userId: this.userId }).fetchAsync();
     const sessionIds = sessions.map(s => s._id);
     if (sessionIds.length > 0) {
-      await NoteLinesCollection.removeAsync({ sessionId: { $in: sessionIds } });
-      await NoteSessionsCollection.removeAsync({ _id: { $in: sessionIds } });
+      await NoteLinesCollection.removeAsync({ sessionId: { $in: sessionIds }, userId: this.userId });
+      await NoteSessionsCollection.removeAsync({ _id: { $in: sessionIds }, userId: this.userId });
     }
     // Finally remove the project
     const res = await ProjectsCollection.removeAsync(projectId);

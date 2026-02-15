@@ -5,16 +5,19 @@ import path from 'path';
 import { ClaudeSessionsCollection } from './collections';
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
 import { spawnClaudeProcess, killProcess, queueMessage, clearQueue, dequeueMessage, respondToPermission, execShellCommand, execCodexCommand, isRunning, syncPermissionMode, execDebate, stopDebate } from './processManager';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 const TAG = '[claude-methods]';
 
 Meteor.methods({
   'system.getHomeDir'() {
+    ensureLocalOnly();
     return process.env.HOME || '';
   },
 
   async 'claudeSessions.create'(doc) {
     check(doc, Object);
+    ensureLocalOnly();
     console.log(TAG, 'create', doc.name);
     const now = new Date();
     const session = {
@@ -43,6 +46,7 @@ Meteor.methods({
   async 'claudeSessions.createInProject'(projectId, options = {}) {
     check(projectId, String);
     check(options, Match.Optional(Object));
+    ensureLocalOnly();
     const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
     const project = await ClaudeProjectsCollection.findOneAsync(projectId);
     if (!project) throw new Meteor.Error('not-found', 'Project not found');
@@ -77,6 +81,7 @@ Meteor.methods({
   async 'claudeSessions.update'(sessionId, modifier) {
     check(sessionId, String);
     check(modifier, Object);
+    ensureLocalOnly();
     const set = { ...modifier, updatedAt: new Date() };
     if (typeof set.name === 'string') set.name = set.name.trim();
     if (typeof set.cwd === 'string') set.cwd = set.cwd.trim();
@@ -107,6 +112,7 @@ Meteor.methods({
     check(sessionId, String);
     check(message, String);
     check(images, Match.Maybe([{ data: String, mediaType: String }]));
+    ensureLocalOnly();
     const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
 
@@ -184,6 +190,7 @@ Meteor.methods({
   async 'claudeSessions.execShell'(sessionId, command) {
     check(sessionId, String);
     check(command, String);
+    ensureLocalOnly();
     const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
     let cwd = session.cwd || process.env.HOME + '/projects';
@@ -208,6 +215,7 @@ Meteor.methods({
     check(sessionId, String);
     check(prompt, String);
     check(options, Match.Maybe(Object));
+    ensureLocalOnly();
 
     const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
@@ -261,6 +269,7 @@ Meteor.methods({
   async 'claudeSessions.execDebate'(sessionId, subject) {
     check(sessionId, String);
     check(subject, String);
+    ensureLocalOnly();
 
     const session = await ClaudeSessionsCollection.findOneAsync(sessionId);
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
@@ -300,6 +309,7 @@ Meteor.methods({
 
   async 'claudeSessions.stopDebate'(sessionId) {
     check(sessionId, String);
+    ensureLocalOnly();
     stopDebate(sessionId);
     // Clear flags immediately for UI responsiveness
     await ClaudeSessionsCollection.updateAsync(sessionId, {
@@ -316,12 +326,14 @@ Meteor.methods({
 
   async 'claudeSessions.stop'(sessionId) {
     check(sessionId, String);
+    ensureLocalOnly();
     await killProcess(sessionId);
     return true;
   },
 
   async 'claudeSessions.remove'(sessionId) {
     check(sessionId, String);
+    ensureLocalOnly();
     await killProcess(sessionId);
     await ClaudeMessagesCollection.removeAsync({ sessionId });
     return ClaudeSessionsCollection.removeAsync(sessionId);
@@ -331,11 +343,13 @@ Meteor.methods({
     check(sessionId, String);
     check(behavior, Match.OneOf('allow', 'allowAll', 'deny'));
     check(updatedToolInput, Match.Maybe(Object));
+    ensureLocalOnly();
     respondToPermission(sessionId, behavior, updatedToolInput);
   },
 
   async 'claudeSessions.clearMessages'(sessionId) {
     check(sessionId, String);
+    ensureLocalOnly();
     await clearQueue(sessionId);
     await ClaudeMessagesCollection.removeAsync({ sessionId });
     return ClaudeSessionsCollection.updateAsync(sessionId, {
@@ -354,6 +368,7 @@ Meteor.methods({
   async 'claudeSessions.dequeueMessage'(sessionId, msgId) {
     check(sessionId, String);
     check(msgId, String);
+    ensureLocalOnly();
     const removed = await dequeueMessage(sessionId, msgId);
     if (removed) {
       await ClaudeMessagesCollection.removeAsync(msgId);
@@ -364,6 +379,7 @@ Meteor.methods({
   async 'claudeSessions.changeCwd'(sessionId, newCwd) {
     check(sessionId, String);
     check(newCwd, String);
+    ensureLocalOnly();
     newCwd = newCwd.trim();
     if (!newCwd) throw new Meteor.Error('invalid', 'CWD cannot be empty');
 
@@ -426,16 +442,19 @@ Meteor.methods({
 
   async 'claudeSessions.markSeen'(sessionId) {
     check(sessionId, String);
+    ensureLocalOnly();
     return ClaudeSessionsCollection.updateAsync(sessionId, {
       $set: { unseenCompleted: false, updatedAt: new Date() }
     });
   },
 
   async 'claudeSessions.countInterrupted'() {
+    ensureLocalOnly();
     return ClaudeSessionsCollection.find({ status: 'interrupted' }).countAsync();
   },
 
   async 'claudeSessions.cleanupInterrupted'() {
+    ensureLocalOnly();
     const count = await ClaudeSessionsCollection.updateAsync(
       { status: 'interrupted' },
       { $set: { status: 'idle', pid: null, updatedAt: new Date() } },
@@ -446,6 +465,7 @@ Meteor.methods({
   },
 
   async 'claudeTeams.getState'() {
+    ensureLocalOnly();
     const homeDir = process.env.HOME || '';
     const teamsDir = path.join(homeDir, '.claude', 'teams');
     const tasksDir = path.join(homeDir, '.claude', 'tasks');

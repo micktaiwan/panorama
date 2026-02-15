@@ -4,9 +4,11 @@
 import { Meteor } from 'meteor/meteor';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { runChatAgent, isClaudeAgentAvailable } from './claudeAgent';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'chat.ask'(payload) {
+    ensureLocalOnly();
     const query = String(payload?.query || '').trim();
     const history = Array.isArray(payload?.history) ? payload.history : [];
 

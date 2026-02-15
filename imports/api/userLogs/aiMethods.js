@@ -3,10 +3,12 @@ import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine, formatAnchors, buildEntriesBlock, buildProjectsBlock } from '/imports/api/_shared/aiCore';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'ai.cleanUserLog'(logId) {
     check(logId, String);
+    ensureLocalOnly();
 
     const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
     const entry = await UserLogsCollection.findOneAsync({ _id: logId });
@@ -44,6 +46,7 @@ Meteor.methods({
 
   async 'userLogs.summarizeWindow'(windowKey, hours, options) {
     check(windowKey, String);
+    ensureLocalOnly();
     const n = Number(hours);
     let promptOverride = '';
     if (typeof options === 'string') {

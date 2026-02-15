@@ -3,7 +3,7 @@ import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import { notify } from '../utils/notify.js';
 
-export const PrefsAI = ({ pref }) => {
+export const PrefsAI = ({ pref, userPref }) => {
   const [aiMode, setAiMode] = React.useState('remote');
   const [aiFallback, setAiFallback] = React.useState('none');
   const [aiTimeoutMs, setAiTimeoutMs] = React.useState(30000);
@@ -23,18 +23,22 @@ export const PrefsAI = ({ pref }) => {
   const [loadingModels, setLoadingModels] = React.useState(false);
 
   React.useEffect(() => {
+    if (!userPref) return;
+    setAiMode(userPref.ai?.mode || 'remote');
+    setAiFallback(userPref.ai?.fallback || 'none');
+    setAiTimeoutMs(userPref.ai?.timeoutMs || 30000);
+    setAiMaxTokens(userPref.ai?.maxTokens || 4000);
+    setAiTemperature(userPref.ai?.temperature || 0.7);
+    setAiLocalHost(userPref.ai?.local?.host || 'http://127.0.0.1:11434');
+    setAiLocalChatModel(userPref.ai?.local?.chatModel || 'llama3.1:latest');
+    setAiLocalEmbeddingModel(userPref.ai?.local?.embeddingModel || 'nomic-embed-text:latest');
+    setAiRemoteProvider(userPref.ai?.remote?.provider || 'openai');
+    setAiRemoteChatModel(userPref.ai?.remote?.chatModel || 'gpt-4o-mini');
+    setAiRemoteEmbeddingModel(userPref.ai?.remote?.embeddingModel || 'text-embedding-3-small');
+  }, [userPref?._id]);
+
+  React.useEffect(() => {
     if (!pref) return;
-    setAiMode(pref.ai?.mode || 'remote');
-    setAiFallback(pref.ai?.fallback || 'none');
-    setAiTimeoutMs(pref.ai?.timeoutMs || 30000);
-    setAiMaxTokens(pref.ai?.maxTokens || 4000);
-    setAiTemperature(pref.ai?.temperature || 0.7);
-    setAiLocalHost(pref.ai?.local?.host || 'http://127.0.0.1:11434');
-    setAiLocalChatModel(pref.ai?.local?.chatModel || 'llama3.1:latest');
-    setAiLocalEmbeddingModel(pref.ai?.local?.embeddingModel || 'nomic-embed-text:latest');
-    setAiRemoteProvider(pref.ai?.remote?.provider || 'openai');
-    setAiRemoteChatModel(pref.ai?.remote?.chatModel || 'gpt-4o-mini');
-    setAiRemoteEmbeddingModel(pref.ai?.remote?.embeddingModel || 'text-embedding-3-small');
     if (pref.cta) {
       setCtaEnabled(pref.cta.enabled !== false);
       setCtaModel(pref.cta.model || 'local');
@@ -52,7 +56,7 @@ export const PrefsAI = ({ pref }) => {
   }), [aiMode, aiFallback, aiTimeoutMs, aiMaxTokens, aiTemperature, aiLocalHost, aiLocalChatModel, aiLocalEmbeddingModel, aiRemoteProvider, aiRemoteChatModel, aiRemoteEmbeddingModel]);
 
   const saveAIPreferences = React.useCallback((showNotification = true) => {
-    Meteor.call('ai.updatePreferences', generateAIPreferences(), (err) => {
+    Meteor.call('userPreferences.update', { ai: generateAIPreferences() }, (err) => {
       if (err) {
         if (showNotification) notify({ message: `Failed to save AI preferences: ${err.reason || err.message}`, kind: 'error' });
         else console.error('Auto-save failed:', err);
@@ -68,24 +72,24 @@ export const PrefsAI = ({ pref }) => {
   }, [saveAIPreferences]);
 
   React.useEffect(() => {
-    if (aiMode && pref && aiMode !== pref.ai?.mode) debouncedAutoSave();
-  }, [aiMode, debouncedAutoSave, pref]);
+    if (aiMode && userPref && aiMode !== userPref.ai?.mode) debouncedAutoSave();
+  }, [aiMode, debouncedAutoSave, userPref]);
 
   React.useEffect(() => {
-    if (aiLocalEmbeddingModel && pref && aiLocalEmbeddingModel !== pref.ai?.local?.embeddingModel) debouncedAutoSave();
-  }, [aiLocalEmbeddingModel, debouncedAutoSave, pref]);
+    if (aiLocalEmbeddingModel && userPref && aiLocalEmbeddingModel !== userPref.ai?.local?.embeddingModel) debouncedAutoSave();
+  }, [aiLocalEmbeddingModel, debouncedAutoSave, userPref]);
 
   React.useEffect(() => {
-    if (aiTimeoutMs && pref && aiTimeoutMs !== pref.ai?.timeoutMs) debouncedAutoSave();
-  }, [aiTimeoutMs, debouncedAutoSave, pref]);
+    if (aiTimeoutMs && userPref && aiTimeoutMs !== userPref.ai?.timeoutMs) debouncedAutoSave();
+  }, [aiTimeoutMs, debouncedAutoSave, userPref]);
 
   React.useEffect(() => {
-    if (aiMaxTokens && pref && aiMaxTokens !== pref.ai?.maxTokens) debouncedAutoSave();
-  }, [aiMaxTokens, debouncedAutoSave, pref]);
+    if (aiMaxTokens && userPref && aiMaxTokens !== userPref.ai?.maxTokens) debouncedAutoSave();
+  }, [aiMaxTokens, debouncedAutoSave, userPref]);
 
   React.useEffect(() => {
-    if (aiTemperature !== undefined && pref && aiTemperature !== pref.ai?.temperature) debouncedAutoSave();
-  }, [aiTemperature, debouncedAutoSave, pref]);
+    if (aiTemperature !== undefined && userPref && aiTemperature !== userPref.ai?.temperature) debouncedAutoSave();
+  }, [aiTemperature, debouncedAutoSave, userPref]);
 
   const checkAIHealth = React.useCallback(() => {
     Meteor.call('ai.healthcheck', (err, result) => {

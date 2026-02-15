@@ -12,6 +12,7 @@ import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { getHealthStatus, testProvider } from '/imports/api/_shared/llmProxy';
 import { getAIConfig } from '/imports/api/_shared/config';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 // Constants to replace magic numbers
 const CONSTANTS = {
@@ -186,18 +187,20 @@ const calculateProjectActivity = (project, tasksData, notesData, notesLastByProj
 Meteor.methods({
   async 'panorama.getOverview'(filters = {}) {
     check(filters, Object);
-    
+    ensureLoggedIn(this.userId);
+
     // Validation for periodDays
     const periodDays = Number(filters.periodDays) || CONSTANTS.DEFAULT_PERIOD_DAYS;
     if (periodDays < CONSTANTS.MIN_PERIOD_DAYS || periodDays > CONSTANTS.MAX_PERIOD_DAYS) {
       throw new Meteor.Error('invalid-period', `periodDays must be between ${CONSTANTS.MIN_PERIOD_DAYS} and ${CONSTANTS.MAX_PERIOD_DAYS}`);
     }
-    
-    const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
 
-    // Fetch projects
+    const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
+    const userId = this.userId;
+
+    // Fetch projects (scoped to user)
     const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, panoramaUpdatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
-    const projects = await ProjectsCollection.find({}, projFields).fetchAsync();
+    const projects = await ProjectsCollection.find({ userId }, projFields).fetchAsync();
     const projectIds = projects.map(p => p._id);
 
     // Early return if no projects
@@ -205,22 +208,22 @@ Meteor.methods({
       return [];
     }
 
-    // Fetch and process tasks
+    // Fetch and process tasks (userId already implied by projectIds, but filter for safety)
     const taskFields = { fields: { projectId: 1, status: 1, deadline: 1, updatedAt: 1, title: 1, statusChangedAt: 1, createdAt: 1, priorityRank: 1 } };
-    const allTasks = await TasksCollection.find({ projectId: { $in: projectIds } }, taskFields).fetchAsync();
+    const allTasks = await TasksCollection.find({ userId, projectId: { $in: projectIds } }, taskFields).fetchAsync();
     const tasksByProject = processTasks(allTasks, projectIds, since);
 
     // Fetch and process notes
     const noteFields = { fields: { projectId: 1, createdAt: 1, updatedAt: 1 } };
-    const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, noteFields).fetchAsync();
+    const notesAll = await NotesCollection.find({ userId, projectId: { $in: projectIds } }, noteFields).fetchAsync();
     const notesData = processNotes(notesAll, projectIds, since);
 
     // Fetch counts for notes, links, files, and sessions in parallel
     const countsByProject = new Map();
     const [allLinks, allFiles, allSessions] = await Promise.all([
-      LinksCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync(),
-      import('/imports/api/files/collections').then(m => m.FilesCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()).catch(() => []),
-      NoteSessionsCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()
+      LinksCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync(),
+      import('/imports/api/files/collections').then(m => m.FilesCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()).catch(() => []),
+      NoteSessionsCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()
     ]);
 
     // Initialize counts for all projects
@@ -289,9 +292,12 @@ Meteor.methods({
 Meteor.methods({
   async 'panorama.setRank'(projectId, rank) {
     check(projectId, String);
+    ensureLoggedIn(this.userId);
     const n = Number(rank);
     if (!Number.isFinite(n)) throw new Meteor.Error('invalid-rank', 'rank must be a finite number');
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    const { ensureOwner } = await import('/imports/api/_shared/auth');
+    await ensureOwner(ProjectsCollection, projectId, this.userId);
     // Do not touch updatedAt to avoid polluting last activity with UI reordering
     await ProjectsCollection.updateAsync(projectId, { $set: { panoramaRank: n, panoramaUpdatedAt: new Date() } });
     return true;
@@ -395,73 +401,79 @@ Meteor.methods({
   },
 
   async 'panorama.countAllTokens'() {
-    
+    ensureLoggedIn(this.userId);
+    const userId = this.userId;
+
+    // Remote collections: filter by userId. Local-only: no filter.
+    const REMOTE_NAMES = ['Projects', 'Tasks', 'Notes', 'NoteSessions', 'NoteLines', 'Links'];
+
     // Define collections and their text fields
     const collections = [
-      { 
-        name: 'Projects', 
-        collection: ProjectsCollection, 
+      {
+        name: 'Projects',
+        collection: ProjectsCollection,
         fields: ['name', 'description'],
         description: 'Projects with name and description'
       },
-      { 
-        name: 'Tasks', 
-        collection: TasksCollection, 
+      {
+        name: 'Tasks',
+        collection: TasksCollection,
         fields: ['title', 'notes'],
         description: 'Tasks with title and notes'
       },
-      { 
-        name: 'Notes', 
-        collection: NotesCollection, 
+      {
+        name: 'Notes',
+        collection: NotesCollection,
         fields: ['title', 'content'],
         description: 'Notes with title and content'
       },
-      { 
-        name: 'NoteSessions', 
-        collection: NoteSessionsCollection, 
+      {
+        name: 'NoteSessions',
+        collection: NoteSessionsCollection,
         fields: ['name', 'aiSummary'],
         description: 'Note sessions with name and AI summary'
       },
-      { 
-        name: 'NoteLines', 
-        collection: NoteLinesCollection, 
+      {
+        name: 'NoteLines',
+        collection: NoteLinesCollection,
         fields: ['content'],
         description: 'Note lines with content'
       },
-      { 
-        name: 'Links', 
-        collection: LinksCollection, 
+      {
+        name: 'Links',
+        collection: LinksCollection,
         fields: ['name', 'url'],
         description: 'Links with name and URL'
       },
-      { 
-        name: 'UserLogs', 
-        collection: UserLogsCollection, 
+      {
+        name: 'UserLogs',
+        collection: UserLogsCollection,
         fields: ['content'],
         description: 'User logs with content'
       },
-      { 
-        name: 'GmailMessages', 
-        collection: GmailMessagesCollection, 
+      {
+        name: 'GmailMessages',
+        collection: GmailMessagesCollection,
         fields: ['from', 'to', 'subject', 'snippet', 'body'],
         description: 'Gmail messages with metadata and content'
       },
-      { 
-        name: 'Alarms', 
-        collection: AlarmsCollection, 
+      {
+        name: 'Alarms',
+        collection: AlarmsCollection,
         fields: ['title'],
         description: 'Alarms with title'
       }
     ];
-    
+
     const results = {};
     let totalTokens = 0;
     let totalItems = 0;
     let totalCharacters = 0;
-    
+
     for (const { name, collection, fields, description } of collections) {
       try {
-        const items = await collection.find({}).fetchAsync();
+        const selector = REMOTE_NAMES.includes(name) ? { userId } : {};
+        const items = await collection.find(selector).fetchAsync();
         let collectionTokens = 0;
         let collectionCharacters = 0;
         let itemsWithContent = 0;

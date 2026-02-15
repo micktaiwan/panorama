@@ -1,12 +1,14 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { ClaudeCommandsCollection } from './collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 const VALID_SCOPES = ['global', 'project'];
 
 Meteor.methods({
   async 'claudeCommands.create'(doc) {
     check(doc, Object);
+    ensureLocalOnly();
     const now = new Date();
     const name = String(doc.name || '').trim().toLowerCase().replace(/\s+/g, '-');
     if (!name) throw new Meteor.Error('invalid', 'Name is required');
@@ -29,6 +31,7 @@ Meteor.methods({
   async 'claudeCommands.update'(commandId, modifier) {
     check(commandId, String);
     check(modifier, Object);
+    ensureLocalOnly();
     const set = { ...modifier, updatedAt: new Date() };
     if (typeof set.name === 'string') set.name = set.name.trim().toLowerCase().replace(/\s+/g, '-');
     if (typeof set.content === 'string') set.hasArgs = set.content.includes('$ARGUMENTS');
@@ -38,11 +41,13 @@ Meteor.methods({
 
   async 'claudeCommands.remove'(commandId) {
     check(commandId, String);
+    ensureLocalOnly();
     return ClaudeCommandsCollection.removeAsync(commandId);
   },
 
   async 'claudeCommands.importFromDisk'(options) {
     check(options, Match.Maybe(Object));
+    ensureLocalOnly();
     const fs = await import('fs/promises');
     const path = await import('path');
 

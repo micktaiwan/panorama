@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { getQdrantUrl } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 import { getQdrantClient, COLLECTION, VECTOR_SIZE, DISTANCE, embedText, makePreview, toPointId, splitIntoChunks, deleteByKind } from './vectorStore';
 
 // primitives are imported from './vectorStore'
@@ -275,6 +276,8 @@ const runIndexJob = async (jobId) => {
 Meteor.methods({
   async 'search.instant'(query, opts = {}) {
     check(query, String);
+    ensureLoggedIn(this.userId);
+    const userId = this.userId;
   const kinds = Array.isArray(opts?.kinds) && opts.kinds.length > 0
     ? opts.kinds.map(String)
     : ['project', 'task', 'note', 'email'];
@@ -293,7 +296,7 @@ Meteor.methods({
     if (want.has('project')) {
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
       const proj = await ProjectsCollection.find(
-        { $or: [{ name: re }, { description: re }] },
+        { userId, $or: [{ name: re }, { description: re }] },
         { fields: { name: 1, description: 1 }, limit: limitPerKind }
       ).fetchAsync();
       for (const p of proj) {
@@ -314,7 +317,7 @@ Meteor.methods({
     if (want.has('task')) {
       const { TasksCollection } = await import('/imports/api/tasks/collections');
       taskRows = await TasksCollection.find(
-        { title: re },
+        { userId, title: re },
         { fields: { title: 1, projectId: 1, status: 1 }, limit: limitPerKind }
       ).fetchAsync();
       taskRows.forEach(t => { if (t.projectId) taskProjectIds.add(String(t.projectId)); });
@@ -326,7 +329,7 @@ Meteor.methods({
     if (want.has('note')) {
       const { NotesCollection } = await import('/imports/api/notes/collections');
       noteRows = await NotesCollection.find(
-        { $or: [{ title: re }, { content: re }] },
+        { userId, $or: [{ title: re }, { content: re }] },
         { fields: { title: 1, content: 1, projectId: 1 }, limit: limitPerKind }
       ).fetchAsync();
       noteRows.forEach(n => { if (n.projectId) noteProjectIds.add(String(n.projectId)); });
@@ -338,7 +341,7 @@ Meteor.methods({
     if (allProjIds.size > 0) {
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
       const list = await ProjectsCollection.find(
-        { _id: { $in: Array.from(allProjIds) } },
+        { userId, _id: { $in: Array.from(allProjIds) } },
         { fields: { name: 1 } }
       ).fetchAsync();
       for (const p of list) projectNameById.set(String(p._id), p.name || null);

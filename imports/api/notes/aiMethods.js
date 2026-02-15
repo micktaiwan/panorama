@@ -3,6 +3,7 @@ import { check, Match } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { DEFAULT_CLEAN_PROMPT } from '/imports/api/notes/cleanPrompt';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 // Helper function to update note index and project timestamp
 const updateNoteIndex = async (noteId) => {
@@ -25,9 +26,10 @@ Meteor.methods({
   async 'ai.cleanNote'(noteId, customPrompt = null) {
     check(noteId, String);
     check(customPrompt, Match.Maybe(String));
+    ensureLoggedIn(this.userId);
 
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const note = await NotesCollection.findOneAsync({ _id: noteId });
+    const note = await NotesCollection.findOneAsync({ _id: noteId, userId: this.userId });
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
 
     const original = typeof note.content === 'string' ? note.content : '';
@@ -65,9 +67,10 @@ Meteor.methods({
 
   async 'ai.summarizeNote'(noteId) {
     check(noteId, String);
+    ensureLoggedIn(this.userId);
 
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const note = await NotesCollection.findOneAsync({ _id: noteId });
+    const note = await NotesCollection.findOneAsync({ _id: noteId, userId: this.userId });
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
 
     const original = typeof note.content === 'string' ? note.content : '';

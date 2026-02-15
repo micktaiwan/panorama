@@ -5,6 +5,7 @@ import { toOneLine } from '/imports/api/_shared/aiCore';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 const buildPrompt = ({ project, lines: noteLines }) => {
   const head = [
@@ -49,13 +50,14 @@ const buildCoachPrompt = ({ project }) => {
 Meteor.methods({
   async 'ai.summarizeSession'(sessionId) {
     check(sessionId, String);
+    ensureLoggedIn(this.userId);
 
-    const session = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
+    const session = await NoteSessionsCollection.findOneAsync({ _id: sessionId, userId: this.userId });
     if (!session) {
       throw new Meteor.Error('not-found', 'Session not found');
     }
 
-    const lines = await NoteLinesCollection.find({ sessionId }).fetchAsync();
+    const lines = await NoteLinesCollection.find({ sessionId, userId: this.userId }).fetchAsync();
     if (!lines || lines.length === 0) {
       throw new Meteor.Error('no-lines', 'Cannot summarize an empty session. Add some note lines first.');
     }
@@ -111,11 +113,12 @@ Meteor.methods({
 
   async 'ai.coachQuestions'(sessionId) {
     check(sessionId, String);
+    ensureLoggedIn(this.userId);
 
-    const session = await NoteSessionsCollection.findOneAsync({ _id: sessionId });
+    const session = await NoteSessionsCollection.findOneAsync({ _id: sessionId, userId: this.userId });
     if (!session) throw new Meteor.Error('not-found', 'Session not found');
 
-    const lines = await NoteLinesCollection.find({ sessionId }).fetchAsync();
+    const lines = await NoteLinesCollection.find({ sessionId, userId: this.userId }).fetchAsync();
     const project = session.projectId ? await import('/imports/api/projects/collections').then(m => m.ProjectsCollection.findOneAsync({ _id: session.projectId })) : null;
 
     const prompt = buildCoachPrompt({ project, lines });

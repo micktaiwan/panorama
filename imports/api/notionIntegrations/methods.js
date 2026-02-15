@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { NotionIntegrationsCollection } from './collections.js';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 /**
  * CRUD methods for Notion Integrations
@@ -20,6 +21,7 @@ Meteor.methods({
       pageSize: Match.Optional(Number),
       enabled: Match.Optional(Boolean)
     });
+    ensureLocalOnly();
 
     const now = new Date();
     const integration = {
@@ -59,6 +61,7 @@ Meteor.methods({
       pageSize: Match.Optional(Number),
       enabled: Match.Optional(Boolean)
     });
+    ensureLocalOnly();
 
     const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
     if (!integration) {
@@ -83,6 +86,7 @@ Meteor.methods({
    */
   async 'notionIntegrations.remove'(integrationId) {
     check(integrationId, String);
+    ensureLocalOnly();
 
     const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
     if (!integration) {
@@ -99,6 +103,7 @@ Meteor.methods({
    */
   async 'notionIntegrations.syncAll'(integrationId) {
     check(integrationId, String);
+    ensureLocalOnly();
 
     const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
     if (!integration) {
@@ -245,6 +250,7 @@ Meteor.methods({
    */
   async 'notionIntegrations.cancelSync'(integrationId) {
     check(integrationId, String);
+    ensureLocalOnly();
 
     const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
     if (!integration) {
@@ -271,6 +277,7 @@ Meteor.methods({
   async 'notionIntegrations.fetchTicketsPage'(integrationId, startCursor = null) {
     check(integrationId, String);
     check(startCursor, Match.Maybe(String));
+    ensureLocalOnly();
 
     const integration = await NotionIntegrationsCollection.findOneAsync({ _id: integrationId });
     if (!integration) {
