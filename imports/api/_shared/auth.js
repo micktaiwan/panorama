@@ -23,17 +23,3 @@ export const ensureOwner = async (collection, docId, userId) => {
   return doc;
 };
 
-/**
- * Returns true when running in remote (multi-user) mode.
- */
-export const isRemoteInstance = () => process.env.PANORAMA_MODE === 'remote';
-
-/**
- * Throw 'local-only' if the instance is running in remote mode.
- * Guard for methods that must not be called on a shared server.
- */
-export const ensureLocalOnly = () => {
-  if (isRemoteInstance()) {
-    throw new Meteor.Error('local-only', 'This operation is only available in local mode');
-  }
-};

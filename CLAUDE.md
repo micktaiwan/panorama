@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Panorama is a **local-first, multi-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support. Authentication (Phase 1) and multi-tenancy with userId on all shared collections (Phase 2) are implemented.
+Panorama is a **multi-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support. Authentication and multi-tenancy with `userId` on **all collections** are implemented.
 
 **Repo owner**: Mickael FM aka Mick (`micktaiwan` on GitHub), frère de David FM aka Dayd (`ddaydd` on GitHub) qui contribue aussi au projet.
 
@@ -14,18 +14,14 @@ Panorama is a **local-first, multi-user** project management and notes applicati
 
 ### Database Access
 
-The app uses **two MongoDB connections** in local dev mode:
-
-- **Remote MongoDB** (shared collections): `MONGO_URL` points to the VPS via TLS + auth (`panorama.mickaelfm.me:27018`). Credentials in `~/.env.secrets` (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`). Connection string: `mongodb://USER:PASS@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin&directConnection=true`
-- **Local MongoDB** (local-only collections): Meteor's built-in MongoDB on port `METEOR_PORT + 1` (e.g., port **4001** when app runs on 4000). Data in `.meteor/local/db`.
+In local dev mode (Mick's Mac), `MONGO_URL` points to the VPS via TLS + auth (`panorama.mickaelfm.me:27018`). Credentials in `~/.env.secrets` (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`). When `MONGO_URL` is set, Meteor does **not** start its internal MongoDB — all collections use the remote database.
 
 ```bash
-# Connect to remote DB (shared collections)
-mongosh "mongodb://$PANORAMA_MONGO_USER:$PANORAMA_MONGO_PASS@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin&directConnection=true"
-
-# Connect to local DB (local-only collections)
-mongosh "mongodb://127.0.0.1:4001/meteor"
+# Connect to the database (all collections)
+mongosh "mongodb://$PANORAMA_MONGO_USER:$PANORAMA_MONGO_PASS@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin"
 ```
+
+In dev/test mode (no `MONGO_URL` set), Meteor starts its own MongoDB on port `METEOR_PORT + 1`. All collections are local.
 
 **Do NOT use** `mongosh meteor` or the system MongoDB — those are different databases and will return empty results.
 
@@ -36,9 +32,8 @@ mongosh "mongodb://127.0.0.1:4001/meteor"
 ### Data Layer (Meteor Collections)
 
 - Server methods are **async** and use `insertAsync`, `updateAsync`, `removeAsync`, `findOneAsync`, `countAsync`
-- **Remote collections** (projects, tasks, notes, noteSessions, noteLines, links, files, userPreferences) have `userId` field, publications filter by `this.userId`, methods use `ensureLoggedIn` + `ensureOwner`. Use the default MongoDB driver (`MONGO_URL`)
-- **Local-only collections** (situations, budget, calendar, chats, userLogs, emails, claude*, mcpServers, alarms, people, teams, errors, notionIntegrations, notionTickets, appPreferences, toolCallLogs) use `ensureLocalOnly()` guard and `localDriver` (`LOCAL_MONGO_URL`) via `imports/api/_shared/localDriver.js`. Without `LOCAL_MONGO_URL`, they use the default driver (dev/test compat)
-- **Auth helpers** in `imports/api/_shared/auth.js`: `ensureLoggedIn(userId)`, `ensureOwner(collection, docId, userId)`, `ensureLocalOnly()`
+- **All collections** have `userId` field, publications filter by `this.userId`, methods use `ensureLoggedIn` + `ensureOwner`. Exception: `appPreferences` is a global singleton (no userId)
+- **Auth helpers** in `imports/api/_shared/auth.js`: `ensureLoggedIn(userId)`, `ensureOwner(collection, docId, userId)`
 - Client uses `useTracker`, `useFind`, and custom hooks like `useSingle()` for reactive queries
 - Collections: see imports/api/* (projects, tasks, notes, noteSessions, noteLines, situations, people, teams, budget, calendar, alarms, files, links, chats, userLogs, emails, appPreferences, userPreferences, errors)
 
@@ -144,9 +139,8 @@ Config helpers in `imports/api/_shared/config.js`:
 - Copy guidelines: concise, action-led
 
 ### Security Policy
-- **Multi-user app**: authentication required (Phase 1), userId isolation on all shared data (Phase 2)
-- **Remote collections**: `ensureLoggedIn` + `ensureOwner` on all methods, publications filter by `userId`
-- **Local-only collections**: `ensureLocalOnly()` guard prevents remote access
+- **Multi-user app**: authentication required, userId isolation on **all** collections
+- **All collections** (except appPreferences): `ensureLoggedIn` + `ensureOwner` on methods, publications filter by `userId`
 - **MCP tools**: use `localUserId` from `appPreferences` for server-to-server calls (no DDP session)
 - **LLM responses**: no validation/sanitization (trust AI providers)
 - **API keys**: store in User Preferences or env vars, no format validation
@@ -180,8 +174,7 @@ Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` 
 3. Create `imports/api/resourceName/publications.js` (expose data to client)
 4. Import all three in `server/main.js`
 5. If searchable: register in `vectorStore.js` and call `upsertDoc`/`deleteDoc` in methods
-6. **If remote (shared) collection**: add `userId` to inserts, `ensureLoggedIn` + `ensureOwner` to update/remove, filter publications by `userId`, add MongoDB index `{ userId: 1 }` in `server/main.js` startup
-7. **If local-only collection**: add `ensureLocalOnly()` at the top of each method, and pass `localDriver` to the collection constructor (see `imports/api/_shared/localDriver.js`)
+6. Add `userId` to inserts, `ensureLoggedIn` + `ensureOwner` to update/remove, filter publications by `userId`, add MongoDB index `{ userId: 1 }` in `server/main.js` startup
 
 ### When Adding AI Features
 - Use `chatComplete()` or `embed()` from `llmProxy.js`

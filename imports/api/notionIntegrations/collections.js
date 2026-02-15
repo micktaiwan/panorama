@@ -1,9 +1,6 @@
 import { Mongo } from 'meteor/mongo';
-import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = localDriver ? { _driver: localDriver } : {};
-
-export const NotionIntegrationsCollection = new Mongo.Collection('notionIntegrations', driverOptions);
+export const NotionIntegrationsCollection = new Mongo.Collection('notionIntegrations');
 
 /**
  * Schema for Notion Integration configurations

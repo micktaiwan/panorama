@@ -1,9 +1,6 @@
 import { Mongo } from 'meteor/mongo';
-import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = localDriver ? { _driver: localDriver } : {};
-
-export const MCPServersCollection = new Mongo.Collection('mcpServers', driverOptions);
+export const MCPServersCollection = new Mongo.Collection('mcpServers');
 
 /**
  * Schema for MCP Server configurations

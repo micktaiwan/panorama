@@ -5,14 +5,14 @@ import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collection
 import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collections';
 import { ClaudeCommandsCollection } from '/imports/api/claudeCommands/collections';
 import { killProcess } from '/imports/api/claudeSessions/processManager';
-import { ensureLocalOnly } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 const TAG = '[claude-projects]';
 
 Meteor.methods({
   async 'claudeProjects.create'(doc) {
     check(doc, Object);
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
     const now = new Date();
     const project = {
       name: String(doc.name || 'New Project').trim(),
@@ -21,6 +21,7 @@ Meteor.methods({
       permissionMode: doc.permissionMode ? String(doc.permissionMode).trim() : undefined,
       appendSystemPrompt: doc.appendSystemPrompt ? String(doc.appendSystemPrompt) : undefined,
       linkedProjectId: doc.linkedProjectId ? String(doc.linkedProjectId).trim() : undefined,
+      userId: this.userId,
       createdAt: now,
       updatedAt: now,
     };
@@ -40,6 +41,7 @@ Meteor.methods({
       lastError: null,
       totalCostUsd: 0,
       totalDurationMs: 0,
+      userId: this.userId,
       createdAt: now,
       updatedAt: now,
     });
@@ -50,7 +52,8 @@ Meteor.methods({
   async 'claudeProjects.update'(projectId, modifier) {
     check(projectId, String);
     check(modifier, Object);
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
+    await ensureOwner(ClaudeProjectsCollection, projectId, this.userId);
     const set = { ...modifier, updatedAt: new Date() };
     if (typeof set.name === 'string') set.name = set.name.trim();
     if (typeof set.cwd === 'string') set.cwd = set.cwd.trim();
@@ -60,11 +63,12 @@ Meteor.methods({
 
   async 'claudeProjects.remove'(projectId) {
     check(projectId, String);
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
+    await ensureOwner(ClaudeProjectsCollection, projectId, this.userId);
     console.log(TAG, 'remove', projectId);
 
     // Kill all running processes for sessions in this project
-    const sessions = await ClaudeSessionsCollection.find({ projectId }).fetchAsync();
+    const sessions = await ClaudeSessionsCollection.find({ projectId, userId: this.userId }).fetchAsync();
     for (const s of sessions) {
       await killProcess(s._id);
     }
@@ -72,14 +76,14 @@ Meteor.methods({
     // Remove all messages for all sessions in this project
     const sessionIds = sessions.map(s => s._id);
     if (sessionIds.length > 0) {
-      await ClaudeMessagesCollection.removeAsync({ sessionId: { $in: sessionIds } });
+      await ClaudeMessagesCollection.removeAsync({ sessionId: { $in: sessionIds }, userId: this.userId });
     }
 
     // Remove all sessions
-    await ClaudeSessionsCollection.removeAsync({ projectId });
+    await ClaudeSessionsCollection.removeAsync({ projectId, userId: this.userId });
 
     // Remove project commands
-    await ClaudeCommandsCollection.removeAsync({ scope: 'project', projectId });
+    await ClaudeCommandsCollection.removeAsync({ scope: 'project', projectId, userId: this.userId });
 
     // Remove the project
     return ClaudeProjectsCollection.removeAsync(projectId);

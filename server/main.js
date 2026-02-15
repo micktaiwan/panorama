@@ -1,6 +1,36 @@
 import { Meteor } from 'meteor/meteor';
 import { WebApp } from 'meteor/webapp';
 
+// --- Transient MongoDB error handler ---
+// When the Mac sleeps, TCP connections to the remote MongoDB die.
+// On wake, the driver throws PoolClearedOnNetworkError / MongoNetworkTimeoutError
+// as unhandled rejections, which crash Node.js before the driver can reconnect.
+const TRANSIENT_MONGO_ERRORS = new Set([
+  'PoolClearedOnNetworkError',
+  'MongoNetworkTimeoutError',
+  'MongoNetworkError',
+  'MongoServerSelectionError',
+]);
+
+function isTransientMongoError(err) {
+  if (!err) return false;
+  const name = err.constructor?.name || err.name || '';
+  if (TRANSIENT_MONGO_ERRORS.has(name)) return true;
+  // Also check the cause chain (PoolClearedOnNetworkError wraps MongoNetworkTimeoutError)
+  if (err.cause && isTransientMongoError(err.cause)) return true;
+  return false;
+}
+
+process.on('unhandledRejection', (reason) => {
+  if (isTransientMongoError(reason)) {
+    console.warn(`[mongo] Transient network error (${reason.constructor?.name}), driver will reconnect: ${reason.message}`);
+    return;
+  }
+  // Let Node.js handle non-transient rejections normally
+  console.error('[unhandledRejection]', reason);
+  process.exit(1);
+});
+
 // Accounts configuration (auth, rate limiting, email templates)
 import '/server/accounts';
 
@@ -274,10 +304,98 @@ Meteor.startup(async () => {
   FilesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   UserPreferencesCollection.rawCollection().createIndex({ userId: 1 }, { unique: true }).catch(() => {});
 
+  // Previously local-only collections - now userId-partitioned
+  const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+  const { TeamsCollection } = await import('/imports/api/teams/collections');
+  const { PeopleCollection } = await import('/imports/api/people/collections');
+  const { SituationsCollection } = await import('/imports/api/situations/collections');
+  const { SituationActorsCollection } = await import('/imports/api/situationActors/collections');
+  const { SituationNotesCollection } = await import('/imports/api/situationNotes/collections');
+  const { SituationQuestionsCollection } = await import('/imports/api/situationQuestions/collections');
+  const { SituationSummariesCollection } = await import('/imports/api/situationSummaries/collections');
+  const { BudgetLinesCollection, VendorsCacheCollection, VendorsIgnoreCollection } = await import('/imports/api/budget/collections');
+  const { ChatsCollection } = await import('/imports/api/chats/collections');
+  const { ErrorsCollection } = await import('/imports/api/errors/collections');
+  const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
+  const { CalendarEventsCollection } = await import('/imports/api/calendar/collections');
+  const { GmailTokensCollection, GmailMessagesCollection, EmailActionLogsCollection } = await import('/imports/api/emails/collections');
+  const { MCPServersCollection } = await import('/imports/api/mcpServers/collections');
+  const { NotionIntegrationsCollection } = await import('/imports/api/notionIntegrations/collections');
+  const { NotionTicketsCollection } = await import('/imports/api/notionTickets/collections');
+  const { ClaudeCommandsCollection } = await import('/imports/api/claudeCommands/collections');
+
+  AlarmsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  TeamsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  PeopleCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  SituationsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  SituationActorsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  SituationNotesCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  SituationQuestionsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  SituationSummariesCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  BudgetLinesCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  VendorsCacheCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  VendorsIgnoreCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  ChatsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  ErrorsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  UserLogsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  CalendarEventsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  GmailTokensCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  GmailMessagesCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  EmailActionLogsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  MCPServersCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  NotionIntegrationsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  NotionTicketsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  ClaudeSessionsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  ClaudeMessagesCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  ClaudeProjectsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  ClaudeCommandsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+
+  // --- Backfill userId on previously local-only collections ---
+  // One-time migration: adds userId to documents that don't have one yet.
+  // Uses localUserId from appPreferences as the owner for existing data.
+  if (prefs && !prefs._userIdBackfilledLocal) {
+    const backfillUserId = prefs.localUserId;
+    if (backfillUserId) {
+      console.log(`[startup] Backfilling userId="${backfillUserId}" on previously local-only collections...`);
+      const backfillCollections = [
+        AlarmsCollection, TeamsCollection, PeopleCollection,
+        SituationsCollection, SituationActorsCollection, SituationNotesCollection,
+        SituationQuestionsCollection, SituationSummariesCollection,
+        BudgetLinesCollection, VendorsCacheCollection, VendorsIgnoreCollection,
+        ChatsCollection, ErrorsCollection, UserLogsCollection, CalendarEventsCollection,
+        GmailTokensCollection, GmailMessagesCollection, EmailActionLogsCollection,
+        MCPServersCollection, NotionIntegrationsCollection, NotionTicketsCollection,
+        ClaudeSessionsCollection, ClaudeMessagesCollection, ClaudeProjectsCollection,
+        ClaudeCommandsCollection,
+      ];
+      let totalBackfilled = 0;
+      for (const col of backfillCollections) {
+        try {
+          const result = await col.rawCollection().updateMany(
+            { userId: { $exists: false } },
+            { $set: { userId: backfillUserId } }
+          );
+          if (result.modifiedCount > 0) {
+            console.log(`  ${col._name}: ${result.modifiedCount} docs backfilled`);
+            totalBackfilled += result.modifiedCount;
+          }
+        } catch (e) {
+          console.error(`  ${col._name}: backfill failed`, e.message);
+        }
+      }
+      // Also backfill errors with userId: null → leave them (server-generated errors should stay userId: null)
+      console.log(`[startup] Backfill complete: ${totalBackfilled} documents updated`);
+      await AppPreferencesCollection.updateAsync(prefs._id, {
+        $set: { _userIdBackfilledLocal: true, updatedAt: new Date() }
+      });
+    } else {
+      console.log('[startup] Skipping userId backfill: localUserId not set in appPreferences');
+    }
+  }
+
   // Place server-side initialization here as your app grows.
-  const scriptSrc = Meteor.isDevelopment
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline'";
+  // unsafe-eval required by Meteor's runtime (EJSON, DDP, dynamic imports)
+  const scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
   const csp = [
     "default-src 'self'",
@@ -302,6 +420,7 @@ Meteor.startup(async () => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
+    const stateRaw = url.searchParams.get('state');
 
     if (error) {
       res.writeHead(400, { 'Content-Type': 'text/html' });
@@ -315,37 +434,78 @@ Meteor.startup(async () => {
       return;
     }
 
+    // Extract userId from OAuth state parameter
+    let userId = null;
+    if (stateRaw) {
+      try {
+        const stateObj = JSON.parse(stateRaw);
+        userId = stateObj.userId || null;
+      } catch (_e) {
+        console.warn('[OAuth callback] Failed to parse state parameter:', stateRaw);
+      }
+    }
+
     try {
       const { exchangeCodeForTokens } = await import('/imports/api/calendar/googleCalendarClient.js');
-      const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections.js');
-
       const tokens = await exchangeCodeForTokens(code);
       const now = new Date();
-      const pref = await AppPreferencesCollection.findOneAsync({});
 
-      if (!pref) {
-        await AppPreferencesCollection.insertAsync({
-          createdAt: now,
-          updatedAt: now,
-          googleCalendar: {
-            refreshToken: tokens.refresh_token,
-            lastSyncAt: null
-          }
-        });
+      if (userId) {
+        // Save to userPreferences for the specific user
+        const { UserPreferencesCollection } = await import('/imports/api/userPreferences/collections.js');
+        const userPref = await UserPreferencesCollection.findOneAsync({ userId });
+
+        const googleCalendar = {
+          ...(userPref?.googleCalendar || {}),
+          refreshToken: tokens.refresh_token,
+          lastSyncAt: null
+        };
+
+        if (!userPref) {
+          await UserPreferencesCollection.insertAsync({
+            userId,
+            createdAt: now,
+            updatedAt: now,
+            googleCalendar
+          });
+        } else {
+          await UserPreferencesCollection.updateAsync(userPref._id, {
+            $set: {
+              googleCalendar,
+              updatedAt: now
+            }
+          });
+        }
       } else {
-        await AppPreferencesCollection.updateAsync(pref._id, {
-          $set: {
-            'googleCalendar.refreshToken': tokens.refresh_token,
-            updatedAt: now
-          }
-        });
+        // Fallback: no userId in state, save to appPreferences (legacy behavior)
+        console.warn('[OAuth callback] No userId in state, saving to appPreferences as fallback');
+        const { AppPreferencesCollection } = await import('/imports/api/appPreferences/collections.js');
+        const pref = await AppPreferencesCollection.findOneAsync({});
+
+        if (!pref) {
+          await AppPreferencesCollection.insertAsync({
+            createdAt: now,
+            updatedAt: now,
+            googleCalendar: {
+              refreshToken: tokens.refresh_token,
+              lastSyncAt: null
+            }
+          });
+        } else {
+          await AppPreferencesCollection.updateAsync(pref._id, {
+            $set: {
+              'googleCalendar.refreshToken': tokens.refresh_token,
+              updatedAt: now
+            }
+          });
+        }
       }
 
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`
         <html>
           <body>
-            <h1>✓ Connected to Google Calendar</h1>
+            <h1>Connected to Google Calendar</h1>
             <p>You can close this window and return to Panorama.</p>
             <script>
               setTimeout(() => window.close(), 2000);

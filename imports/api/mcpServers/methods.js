@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { MCPServersCollection } from './collections.js';
 import { MCPClient } from '/imports/api/mcp/MCPClient.js';
-import { ensureLocalOnly } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 /**
  * Meteor methods for MCP Servers management
@@ -25,7 +25,7 @@ Meteor.methods({
       url: Match.Optional(String),
       headers: Match.Optional(Object)
     });
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
 
     // Validate type
     if (!['stdio', 'http'].includes(config.type)) {
@@ -46,8 +46,8 @@ Meteor.methods({
       }
     }
 
-    // Check if name already exists
-    const existing = await MCPServersCollection.findOneAsync({ name: config.name });
+    // Check if name already exists for this user
+    const existing = await MCPServersCollection.findOneAsync({ name: config.name, userId: this.userId });
     if (existing) {
       throw new Meteor.Error('duplicate-name', 'A server with this name already exists');
     }
@@ -57,6 +57,7 @@ Meteor.methods({
       name: config.name.trim(),
       type: config.type,
       enabled: config.enabled !== false,
+      userId: this.userId,
       createdAt: now
     };
 
@@ -90,20 +91,17 @@ Meteor.methods({
       url: Match.Optional(String),
       headers: Match.Optional(Object)
     });
-    ensureLocalOnly();
-
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    ensureLoggedIn(this.userId);
+    await ensureOwner(MCPServersCollection, serverId, this.userId);
 
     const updateDoc = {};
 
     if (updates.name !== undefined) {
       const trimmedName = updates.name.trim();
-      // Check if name is taken by another server
+      // Check if name is taken by another server for this user
       const existing = await MCPServersCollection.findOneAsync({
         name: trimmedName,
+        userId: this.userId,
         _id: { $ne: serverId }
       });
       if (existing) {
@@ -135,12 +133,8 @@ Meteor.methods({
    */
   async 'mcpServers.remove'(serverId) {
     check(serverId, String);
-    ensureLocalOnly();
-
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    ensureLoggedIn(this.userId);
+    await ensureOwner(MCPServersCollection, serverId, this.userId);
 
     await MCPServersCollection.removeAsync({ _id: serverId });
     return true;
@@ -152,12 +146,8 @@ Meteor.methods({
    */
   async 'mcpServers.testConnection'(serverId) {
     check(serverId, String);
-    ensureLocalOnly();
-
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    ensureLoggedIn(this.userId);
+    const server = await ensureOwner(MCPServersCollection, serverId, this.userId);
 
     const timeout = 10000; // 10s for testing
 
@@ -211,12 +201,8 @@ Meteor.methods({
     check(serverId, String);
     check(toolName, String);
     check(args, Match.Optional(Object));
-    ensureLocalOnly();
-
-    const server = await MCPServersCollection.findOneAsync({ _id: serverId });
-    if (!server) {
-      throw new Meteor.Error('not-found', 'Server not found');
-    }
+    ensureLoggedIn(this.userId);
+    const server = await ensureOwner(MCPServersCollection, serverId, this.userId);
 
     if (!server.enabled) {
       throw new Meteor.Error('disabled', 'This server is disabled');
@@ -261,7 +247,7 @@ Meteor.methods({
    * Reads claude_desktop_config.json and imports server configurations
    */
   async 'mcpServers.syncFromClaudeDesktop'() {
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
     const fs = await import('fs/promises');
     const os = await import('os');
     const path = await import('path');
@@ -311,7 +297,7 @@ Meteor.methods({
     for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
       try {
         // Check if server already exists
-        const existing = await MCPServersCollection.findOneAsync({ name: serverName });
+        const existing = await MCPServersCollection.findOneAsync({ name: serverName, userId: this.userId });
         if (existing) {
           results.skipped.push({
             name: serverName,
@@ -333,6 +319,7 @@ Meteor.methods({
             args: serverConfig.args || [],
             env: serverConfig.env || {},
             enabled: true,
+            userId: this.userId,
             createdAt: new Date()
           };
         } else if (serverConfig.url) {
@@ -344,6 +331,7 @@ Meteor.methods({
             url: serverConfig.url,
             headers: serverConfig.headers || {},
             enabled: true,
+            userId: this.userId,
             createdAt: new Date()
           };
         } else {

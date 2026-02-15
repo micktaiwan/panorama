@@ -641,7 +641,7 @@ function App() {
   // Redirect to onboarding if not configured
   useEffect(() => {
     if (subPrefs()) return; // not ready
-    const needsOnboarding = !appPrefs || !appPrefs.onboardedAt || !appPrefs.filesDir;
+    const needsOnboarding = !appPrefs?.onboardedAt;
     if (needsOnboarding && route?.name !== 'onboarding') {
       navigateTo({ name: 'onboarding' });
     }

@@ -1,10 +1,7 @@
 import { Mongo } from 'meteor/mongo';
 import { Meteor } from 'meteor/meteor';
-import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = localDriver ? { _driver: localDriver } : {};
-
-export const SituationActorsCollection = new Mongo.Collection('situation_actors', driverOptions);
+export const SituationActorsCollection = new Mongo.Collection('situation_actors');
 
 
 if (Meteor.isServer) {

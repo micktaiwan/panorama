@@ -257,7 +257,7 @@ export function respondToPermission(sessionId, behavior, updatedToolInput) {
   }
 }
 
-export function execShellCommand(sessionId, command, cwd) {
+export function execShellCommand(sessionId, command, cwd, userId) {
   const TIMEOUT_MS = 30000;
   const MAX_OUTPUT = 50000;
 
@@ -294,12 +294,13 @@ export function execShellCommand(sessionId, command, cwd) {
       contentText: (output || '(no output)') + status,
       shellCommand: command,
       shellExitCode: exitCode,
+      userId,
       createdAt: new Date(),
     });
   }));
 }
 
-export function execCodexCommand(sessionId, prompt, cwd, options = {}) {
+export function execCodexCommand(sessionId, prompt, cwd, options = {}, userId) {
   const TIMEOUT_MS = 300000; // 5 minutes
   const MAX_OUTPUT = 100000;
 
@@ -313,6 +314,7 @@ export function execCodexCommand(sessionId, prompt, cwd, options = {}) {
       contentText: 'Error: codex CLI not found',
       codexPrompt: prompt,
       codexExitCode: 1,
+      userId,
       createdAt: new Date(),
     });
     // Clear codexRunning flag
@@ -406,6 +408,7 @@ export function execCodexCommand(sessionId, prompt, cwd, options = {}) {
       codexPrompt: prompt,
       codexExitCode: code,
       codexUsage: usage,
+      userId,
       createdAt: new Date(),
     });
 
@@ -423,6 +426,7 @@ export function execCodexCommand(sessionId, prompt, cwd, options = {}) {
         type: 'codex_context',
         content: [{ type: 'text', text: summary }],
         contentText: summary,
+        userId,
         createdAt: new Date(),
       });
     }
@@ -431,6 +435,7 @@ export function execCodexCommand(sessionId, prompt, cwd, options = {}) {
 
 export async function spawnClaudeProcess(session, message) {
   const sessionId = session._id;
+  const userId = session.userId;
   log('--- spawnClaudeProcess ---');
   const messagePreview = typeof message === 'string' ? message.slice(0, 100) : `[${message.length} content blocks]`;
   log('sessionId:', sessionId, 'message:', messagePreview);
@@ -555,6 +560,7 @@ export async function spawnClaudeProcess(session, message) {
         claudeSessionId: data.session_id,
         model: data.message?.model,
         isStreaming: false,
+        userId,
         createdAt: new Date(),
       };
 
@@ -583,6 +589,7 @@ export async function spawnClaudeProcess(session, message) {
           type: 'error',
           content: [{ type: 'text', text: errText }],
           contentText: errText,
+          userId,
           createdAt: new Date(),
         });
 
@@ -642,6 +649,7 @@ export async function spawnClaudeProcess(session, message) {
           usage: data.usage,
           costUsd: data.cost_usd,
           isStreaming: false,
+          userId,
           createdAt: new Date(),
         });
         log('inserted result msg', id);
@@ -715,6 +723,7 @@ export async function spawnClaudeProcess(session, message) {
         contentText: text,
         toolName,
         toolInput,
+        userId,
         createdAt: new Date(),
       });
       return;
@@ -736,6 +745,7 @@ export async function spawnClaudeProcess(session, message) {
           type: 'permission_request',
           content: [{ type: 'text', text }],
           contentText: text,
+          userId,
           createdAt: new Date(),
         });
         return;
@@ -1036,7 +1046,7 @@ async function clearDebateFlags(sessionId) {
   });
 }
 
-async function insertDebateTurn(sessionId, agent, round, text, agreed) {
+async function insertDebateTurn(sessionId, agent, round, text, agreed, userId) {
   await ClaudeMessagesCollection.insertAsync({
     sessionId,
     role: 'system',
@@ -1046,11 +1056,12 @@ async function insertDebateTurn(sessionId, agent, round, text, agreed) {
     debateAgent: agent,
     debateRound: round,
     debateAgreed: agreed,
+    userId,
     createdAt: new Date(),
   });
 }
 
-async function insertDebateSummary(sessionId, rounds, outcome) {
+async function insertDebateSummary(sessionId, rounds, outcome, userId) {
   const messages = {
     consensus: `Debate ended: consensus reached after ${rounds} round(s).`,
     max_rounds: `Debate ended: max ${rounds} rounds reached without full consensus.`,
@@ -1065,6 +1076,7 @@ async function insertDebateSummary(sessionId, rounds, outcome) {
     contentText: messages[outcome] || `Debate ended: ${outcome}`,
     debateRounds: rounds,
     debateOutcome: outcome,
+    userId,
     createdAt: new Date(),
   });
 }
@@ -1073,6 +1085,7 @@ export async function execDebate(sessionId, subject, cwd, session) {
   const debateState = { aborted: false, currentProc: null };
   activeDebates.set(sessionId, debateState);
   const history = [];
+  const userId = session.userId;
 
   log('debate start:', subject.slice(0, 100));
 
@@ -1094,7 +1107,7 @@ export async function execDebate(sessionId, subject, cwd, session) {
 
       if (debateState.aborted) break;
 
-      await insertDebateTurn(sessionId, 'codex', round, codexResult.text, codexResult.agreed);
+      await insertDebateTurn(sessionId, 'codex', round, codexResult.text, codexResult.agreed, userId);
       history.push({ agent: 'codex', round, text: codexResult.text });
 
       if (debateState.aborted) break;
@@ -1110,19 +1123,19 @@ export async function execDebate(sessionId, subject, cwd, session) {
 
       if (debateState.aborted) break;
 
-      await insertDebateTurn(sessionId, 'claude', round, claudeResult.text, claudeResult.agreed);
+      await insertDebateTurn(sessionId, 'claude', round, claudeResult.text, claudeResult.agreed, userId);
       history.push({ agent: 'claude', round, text: claudeResult.text });
 
       // Check consensus
       if (codexResult.agreed && claudeResult.agreed) {
         log(`debate consensus at round ${round}`);
-        await insertDebateSummary(sessionId, round, 'consensus');
+        await insertDebateSummary(sessionId, round, 'consensus', userId);
         return;
       }
 
       if (round === DEBATE_MAX_ROUNDS) {
         log('debate max rounds reached');
-        await insertDebateSummary(sessionId, round, 'max_rounds');
+        await insertDebateSummary(sessionId, round, 'max_rounds', userId);
         return;
       }
     }
@@ -1131,12 +1144,12 @@ export async function execDebate(sessionId, subject, cwd, session) {
     if (debateState.aborted) {
       log('debate aborted');
       const currentRound = history.length > 0 ? history[history.length - 1].round : 0;
-      await insertDebateSummary(sessionId, currentRound, 'stopped');
+      await insertDebateSummary(sessionId, currentRound, 'stopped', userId);
     }
   } catch (err) {
     logError('debate error:', err.message);
     const currentRound = history.length > 0 ? history[history.length - 1].round : 0;
-    await insertDebateSummary(sessionId, currentRound, 'error');
+    await insertDebateSummary(sessionId, currentRound, 'error', userId);
   } finally {
     activeDebates.delete(sessionId);
     await clearDebateFlags(sessionId);

@@ -5,6 +5,8 @@ import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { GmailMessagesCollection } from '/imports/api/emails/collections';
 import { suggestCtaInternal } from '/imports/api/emails/methods';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { getLocalUserId } from '/imports/api/_shared/config';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 let cronJobsStarted = false;
 const jobLocks = new Map();
@@ -25,9 +27,11 @@ function scheduleNoOverlap(name, expression, timezone, task) {
 
 async function urgentTasksReporting() {
   console.log('[cron] Starting urgent tasks reporting...');
-  
+  const cronUserId = getLocalUserId();
+
   try {
     const urgentTasks = await TasksCollection.find({
+      userId: cronUserId,
       isUrgent: true,
       $or: [
         { status: { $exists: false } },
@@ -98,7 +102,7 @@ ${JSON.stringify(tasksContext, null, 2)}`;
         nextTriggerAt: now,
         recurrence: { type: 'none' },
         done: false,
-        userId: null,
+        userId: cronUserId,
         createdAt: now,
         updatedAt: now
       };
@@ -127,10 +131,12 @@ ${JSON.stringify(tasksContext, null, 2)}`;
 
 async function prepareEmailCtaMorningBatch() {
   console.log('[cron] Starting morning email batch analysis (5 emails max)...');
+  const cronUserId = getLocalUserId();
 
   try {
     // Find up to 5 unread emails in inbox that haven't been prepared
     const candidateEmails = await GmailMessagesCollection.find({
+      userId: cronUserId,
       labelIds: { $all: ['INBOX', 'UNREAD'] },
       ctaPrepared: { $ne: true }
     }, {
@@ -150,7 +156,7 @@ async function prepareEmailCtaMorningBatch() {
         nextTriggerAt: now,
         recurrence: { type: 'none' },
         done: false,
-        userId: null,
+        userId: cronUserId,
         createdAt: now,
         updatedAt: now
       });
@@ -204,7 +210,7 @@ async function prepareEmailCtaMorningBatch() {
       nextTriggerAt: now,
       recurrence: { type: 'none' },
       done: false,
-      userId: null,
+      userId: cronUserId,
       createdAt: now,
       updatedAt: now
     });
@@ -224,7 +230,7 @@ async function prepareEmailCtaMorningBatch() {
         nextTriggerAt: now,
         recurrence: { type: 'none' },
         done: false,
-        userId: null,
+        userId: cronUserId,
         createdAt: now,
         updatedAt: now
       });
@@ -258,12 +264,14 @@ function registerJobs() {
 
 Meteor.methods({
   async 'cron.testUrgentTasksReporting'() {
+    ensureLoggedIn(this.userId);
     console.log('[cron] Manual trigger of urgent tasks reporting...');
     await urgentTasksReporting();
     return { success: true, message: 'Urgent tasks reporting executed manually' };
   },
 
   async 'cron.testMorningEmailBatch'() {
+    ensureLoggedIn(this.userId);
     console.log('[cron] Manual trigger of morning email batch...');
     await prepareEmailCtaMorningBatch();
     return { success: true, message: 'Morning email batch executed manually' };

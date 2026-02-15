@@ -86,22 +86,23 @@ const startArchiveJob = async (jobId, userId) => {
   await writeCollectionNdjson(gzip, 'noteLines', NoteLinesCollection, userFilter);
   await writeCollectionNdjson(gzip, 'links', LinksCollection, userFilter);
   await writeCollectionNdjson(gzip, 'files', FilesCollection, userFilter);
-  // Local-only collections: export all
-  await writeCollectionNdjson(gzip, 'alarms', AlarmsCollection);
-  await writeCollectionNdjson(gzip, 'teams', TeamsCollection);
-  await writeCollectionNdjson(gzip, 'people', PeopleCollection);
-  await writeCollectionNdjson(gzip, 'situations', SituationsCollection);
-  await writeCollectionNdjson(gzip, 'situationActors', SituationActorsCollection);
-  await writeCollectionNdjson(gzip, 'situationNotes', SituationNotesCollection);
-  await writeCollectionNdjson(gzip, 'situationQuestions', SituationQuestionsCollection);
-  await writeCollectionNdjson(gzip, 'situationSummaries', SituationSummariesCollection);
-  await writeCollectionNdjson(gzip, 'budgetLines', BudgetLinesCollection);
+  // Previously local-only collections: now filter by userId
+  await writeCollectionNdjson(gzip, 'alarms', AlarmsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'teams', TeamsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'people', PeopleCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situations', SituationsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationActors', SituationActorsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationNotes', SituationNotesCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationQuestions', SituationQuestionsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationSummaries', SituationSummariesCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'budgetLines', BudgetLinesCollection, userFilter);
+  // appPreferences is a global singleton - no userId filter
   await writeCollectionNdjson(gzip, 'appPreferences', AppPreferencesCollection);
-  await writeCollectionNdjson(gzip, 'chats', ChatsCollection);
-  await writeCollectionNdjson(gzip, 'errors', ErrorsCollection);
-  await writeCollectionNdjson(gzip, 'userLogs', UserLogsCollection);
-  await writeCollectionNdjson(gzip, 'vendorsCache', VendorsCacheCollection);
-  await writeCollectionNdjson(gzip, 'vendorsIgnore', VendorsIgnoreCollection);
+  await writeCollectionNdjson(gzip, 'chats', ChatsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'errors', ErrorsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'userLogs', UserLogsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'vendorsCache', VendorsCacheCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'vendorsIgnore', VendorsIgnoreCollection, userFilter);
 
   gzip.end();
   await new Promise((resolve, reject) => {

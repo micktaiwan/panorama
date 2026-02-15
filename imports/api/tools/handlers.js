@@ -98,7 +98,7 @@ const fetchPreview = async (kind, rawId) => {
     }
     case 'alarm': {
       const { AlarmsCollection } = await import('/imports/api/alarms/collections');
-      const a = await AlarmsCollection.findOneAsync({ _id: id }, { fields: { title: 1 } });
+      const a = await AlarmsCollection.findOneAsync({ _id: id, userId }, { fields: { title: 1 } });
       return { title: a?.title || '(alarm)', text: a?.title || '' };
     }
     case 'link': {
@@ -390,13 +390,13 @@ export const TOOL_HANDLERS = {
     const select = Array.isArray(args?.select) ? args.select.filter(f => FIELD_ALLOWLIST[collection]?.includes(f)) : [];
     const sort = args?.sort || {};
 
-    // Remote collections that need userId filtering
-    const REMOTE_COLLECTIONS = ['tasks', 'projects', 'notes', 'noteSessions', 'noteLines', 'links', 'files'];
-    const isRemote = REMOTE_COLLECTIONS.includes(collection);
+    // Global collections that do NOT need userId filtering
+    const GLOBAL_COLLECTIONS = ['appPreferences'];
 
     try {
       const selector = compileWhere(collection, where);
-      if (isRemote) {
+      // If not a global collection, add userId filter
+      if (!GLOBAL_COLLECTIONS.includes(collection)) {
         selector.userId = getMCPUserId();
       }
       let cursor;
@@ -652,7 +652,7 @@ export const TOOL_HANDLERS = {
     const { PeopleCollection } = await import('/imports/api/people/collections');
 
     // Default filters: active employees only
-    const selector = {};
+    const selector = { userId: getMCPUserId() };
     if (args?.teamId) selector.teamId = String(args.teamId).trim();
     if (!args?.includeLeft) selector.left = { $ne: true };
     if (!args?.includeContacts) selector.contactOnly = { $ne: true };
@@ -692,7 +692,7 @@ export const TOOL_HANDLERS = {
   },
   async tool_teamsList(args, memory) {
     const { TeamsCollection } = await import('/imports/api/teams/collections');
-    const teams = await TeamsCollection.find({}, { fields: { name: 1 } }).fetchAsync();
+    const teams = await TeamsCollection.find({ userId: getMCPUserId() }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (teams || []).map(t => ({ id: t._id, name: clampText(t.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.teams = mapped; }
     return buildSuccessResponse({ teams: mapped, total: mapped.length }, 'tool_teamsList');
@@ -709,7 +709,7 @@ export const TOOL_HANDLERS = {
   async tool_alarmsList(args, memory) {
     const { AlarmsCollection } = await import('/imports/api/alarms/collections');
     const enabled = (typeof args?.enabled === 'boolean') ? args.enabled : undefined;
-    const sel = (typeof enabled === 'boolean') ? { enabled } : {};
+    const sel = (typeof enabled === 'boolean') ? { enabled, userId: getMCPUserId() } : { userId: getMCPUserId() };
     const alarms = await AlarmsCollection.find(sel, { fields: { title: 1 } }).fetchAsync();
     const mapped = (alarms || []).map(a => ({ id: a._id, title: clampText(a.title || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.alarms = mapped; }
@@ -743,7 +743,8 @@ export const TOOL_HANDLERS = {
       doc.recurrence = args.recurrence;
     }
 
-    const alarmId = await Meteor.callAsync('alarms.insert', doc);
+    const userId = getMCPUserId();
+    const alarmId = await callMethodAs('alarms.insert', userId, doc);
 
     const result = { alarmId, title, nextTriggerAt };
     if (memory) {
@@ -1126,7 +1127,7 @@ export const TOOL_HANDLERS = {
   async tool_userLogsFilter(args, memory) {
     const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
 
-    const selector = {};
+    const selector = { userId: getMCPUserId() };
 
     // Filter by lastDays if provided
     const hasDateFilter = args?.lastDays && Number(args.lastDays) > 0;
@@ -1232,7 +1233,7 @@ export const TOOL_HANDLERS = {
 
         // Fetch full email data from MongoDB
         emails = await GmailMessagesCollection.find(
-          { id: { $in: emailIds } },
+          { id: { $in: emailIds }, userId: getMCPUserId() },
           { fields: { id: 1, from: 1, subject: 1, snippet: 1, gmailDate: 1, labelIds: 1 } }
         ).fetchAsync();
 
@@ -1382,6 +1383,9 @@ export const TOOL_HANDLERS = {
         selector = { $and: conditions };
       }
 
+      // Scope by userId
+      selector.userId = getMCPUserId();
+
       emails = await GmailMessagesCollection.find(selector, {
         fields: { id: 1, from: 1, subject: 1, snippet: 1, gmailDate: 1, labelIds: 1 },
         sort: { gmailDate: -1 },
@@ -1417,6 +1421,7 @@ export const TOOL_HANDLERS = {
 
     const includeThread = !!args?.includeThread;
     const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+    const mcpUserId = getMCPUserId();
 
     const emails = [];
 
@@ -1424,9 +1429,9 @@ export const TOOL_HANDLERS = {
       const id = String(emailId).trim();
 
       // Try to find by Gmail ID first, then by MongoDB _id
-      let email = await GmailMessagesCollection.findOneAsync({ id });
+      let email = await GmailMessagesCollection.findOneAsync({ id, userId: mcpUserId });
       if (!email) {
-        email = await GmailMessagesCollection.findOneAsync({ _id: id });
+        email = await GmailMessagesCollection.findOneAsync({ _id: id, userId: mcpUserId });
       }
 
       if (!email) {
@@ -1511,11 +1516,12 @@ export const TOOL_HANDLERS = {
     try {
       // messageId might be MongoDB _id or Gmail id - need to resolve to Gmail id
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const mcpUserId = getMCPUserId();
       let gmailMessageId = messageId;
 
       // If it looks like a MongoDB ObjectId (24 hex chars), look it up
       if (/^[0-9a-f]{24}$/i.test(messageId)) {
-        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId });
+        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId, userId: mcpUserId });
         if (!email?.id) {
           throw new Error(`Email not found with _id: ${messageId}`);
         }
@@ -1552,11 +1558,12 @@ export const TOOL_HANDLERS = {
     try {
       // messageId might be MongoDB _id or Gmail id - need to resolve to Gmail id
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const mcpUserId = getMCPUserId();
       let gmailMessageId = messageId;
 
       // If it looks like a MongoDB ObjectId (24 hex chars), look it up
       if (/^[0-9a-f]{24}$/i.test(messageId)) {
-        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId });
+        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId, userId: mcpUserId });
         if (!email?.id) {
           throw new Error(`Email not found with _id: ${messageId}`);
         }
@@ -1628,9 +1635,10 @@ export const TOOL_HANDLERS = {
       const dryRun = args?.dryRun === true; // Default: false
 
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const mcpUserId = getMCPUserId();
 
-      // Get all emails from cache
-      const allEmails = await GmailMessagesCollection.find({}).fetchAsync();
+      // Get all emails from cache for this user
+      const allEmails = await GmailMessagesCollection.find({ userId: mcpUserId }).fetchAsync();
       const totalCount = allEmails.length;
 
       // Calculate cutoff date for recent emails
@@ -1783,6 +1791,7 @@ export const TOOL_HANDLERS = {
       }
 
       const { MCPServersCollection } = await import('/imports/api/mcpServers/collections');
+      const mcpUserId = getMCPUserId();
 
       const results = {
         imported: [],
@@ -1793,8 +1802,8 @@ export const TOOL_HANDLERS = {
       // Import each server
       for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
         try {
-          // Check if server already exists
-          const existing = await MCPServersCollection.findOneAsync({ name: serverName });
+          // Check if server already exists for this user
+          const existing = await MCPServersCollection.findOneAsync({ name: serverName, userId: mcpUserId });
           if (existing) {
             results.skipped.push({
               name: serverName,
@@ -1816,6 +1825,7 @@ export const TOOL_HANDLERS = {
               args: serverConfig.args || [],
               env: serverConfig.env || {},
               enabled: true,
+              userId: mcpUserId,
               createdAt: new Date()
             };
           } else if (serverConfig.url) {
@@ -1827,6 +1837,7 @@ export const TOOL_HANDLERS = {
               url: serverConfig.url,
               headers: serverConfig.headers || {},
               enabled: true,
+              userId: mcpUserId,
               createdAt: new Date()
             };
           } else {
@@ -1883,7 +1894,7 @@ export const TOOL_HANDLERS = {
 
   async tool_claudeProjectsList(args, memory) {
     const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
-    const projects = await ClaudeProjectsCollection.find({}, {
+    const projects = await ClaudeProjectsCollection.find({ userId: getMCPUserId() }, {
       fields: { name: 1, cwd: 1, model: 1, permissionMode: 1, createdAt: 1, updatedAt: 1 },
       sort: { updatedAt: -1 }
     }).fetchAsync();
@@ -1907,8 +1918,9 @@ export const TOOL_HANDLERS = {
       });
     }
     // Validate that the Claude project exists
+    const mcpUserId = getMCPUserId();
     const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
-    const project = await ClaudeProjectsCollection.findOneAsync({ _id: projectId }, { fields: { _id: 1 } });
+    const project = await ClaudeProjectsCollection.findOneAsync({ _id: projectId, userId: mcpUserId }, { fields: { _id: 1 } });
     if (!project) {
       return buildErrorResponse(`Claude project not found: "${projectId}"`, 'tool_claudeSessionsByProject', {
         code: 'NOT_FOUND',
@@ -1916,7 +1928,7 @@ export const TOOL_HANDLERS = {
       });
     }
     const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
-    const sessions = await ClaudeSessionsCollection.find({ projectId }, {
+    const sessions = await ClaudeSessionsCollection.find({ projectId, userId: mcpUserId }, {
       fields: { name: 1, projectId: 1, status: 1, totalCostUsd: 1, totalDurationMs: 1, claudeCodeVersion: 1, activeModel: 1, createdAt: 1, updatedAt: 1 },
       sort: { createdAt: -1 }
     }).fetchAsync();
@@ -1943,8 +1955,9 @@ export const TOOL_HANDLERS = {
         suggestion: 'Use tool_claudeSessionsByProject to find the correct session ID.'
       });
     }
+    const mcpUserId = getMCPUserId();
     const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
-    const session = await ClaudeSessionsCollection.findOneAsync({ _id: sessionId }, {
+    const session = await ClaudeSessionsCollection.findOneAsync({ _id: sessionId, userId: mcpUserId }, {
       fields: { name: 1, projectId: 1, status: 1, totalCostUsd: 1, totalDurationMs: 1, claudeCodeVersion: 1, activeModel: 1, createdAt: 1, updatedAt: 1 }
     });
     if (!session) {
@@ -1954,7 +1967,7 @@ export const TOOL_HANDLERS = {
       });
     }
     const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
-    const messages = await ClaudeMessagesCollection.find({ sessionId }, {
+    const messages = await ClaudeMessagesCollection.find({ sessionId, userId: mcpUserId }, {
       fields: { role: 1, type: 1, costUsd: 1, durationMs: 1 }
     }).fetchAsync();
 
@@ -2004,7 +2017,7 @@ export const TOOL_HANDLERS = {
     }
     const limit = Math.min(200, Math.max(1, Number(args?.limit) || 50));
     const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
-    const messages = await ClaudeMessagesCollection.find({ sessionId }, {
+    const messages = await ClaudeMessagesCollection.find({ sessionId, userId: getMCPUserId() }, {
       fields: { role: 1, type: 1, contentText: 1, toolName: 1, costUsd: 1, durationMs: 1, model: 1, createdAt: 1 },
       sort: { createdAt: 1 },
       limit
@@ -2036,7 +2049,7 @@ export const TOOL_HANDLERS = {
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = { $regex: escaped, $options: 'i' };
     const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
-    const messages = await ClaudeMessagesCollection.find({ contentText: regex }, {
+    const messages = await ClaudeMessagesCollection.find({ contentText: regex, userId: getMCPUserId() }, {
       fields: { sessionId: 1, role: 1, type: 1, contentText: 1, createdAt: 1 },
       sort: { createdAt: -1 },
       limit
@@ -2065,7 +2078,7 @@ export const TOOL_HANDLERS = {
     const sortOrder = args?.sortOrder === 'asc' ? 1 : -1;
 
     // 2. Build selector
-    const selector = status ? { status } : {};
+    const selector = status ? { status, userId: getMCPUserId() } : { userId: getMCPUserId() };
 
     // 3. Query sessions
     const sessions = await ClaudeSessionsCollection.find(selector, {

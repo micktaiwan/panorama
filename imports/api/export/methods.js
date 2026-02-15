@@ -11,8 +11,8 @@ Meteor.methods({
     const notes = await (await import('/imports/api/notes/collections')).NotesCollection.find(userFilter).fetchAsync();
     const sessions = await (await import('/imports/api/noteSessions/collections')).NoteSessionsCollection.find(userFilter).fetchAsync();
     const lines = await (await import('/imports/api/noteLines/collections')).NoteLinesCollection.find(userFilter).fetchAsync();
-    // Alarms are local-only, export all
-    const alarms = await (await import('/imports/api/alarms/collections')).AlarmsCollection.find({}).fetchAsync();
+    // Alarms now also filtered by userId
+    const alarms = await (await import('/imports/api/alarms/collections')).AlarmsCollection.find(userFilter).fetchAsync();
     return { projects, tasks, notes, sessions, lines, alarms, exportedAt: new Date() };
   }
 });

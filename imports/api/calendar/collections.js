@@ -1,10 +1,7 @@
 import { Mongo } from 'meteor/mongo';
 import { Meteor } from 'meteor/meteor';
-import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = localDriver ? { _driver: localDriver } : {};
-
-export const CalendarEventsCollection = new Mongo.Collection('calendarEvents', driverOptions);
+export const CalendarEventsCollection = new Mongo.Collection('calendarEvents');
 
 if (Meteor.isServer) {
   // Support upcoming-window queries and sorting by start
