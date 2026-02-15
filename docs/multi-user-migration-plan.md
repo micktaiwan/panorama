@@ -43,7 +43,9 @@ L'application est **integralement single-user** :
 | Config / preferences | `imports/api/appPreferences/` et `imports/api/_shared/config.js` |
 | Vector store (Qdrant) | `imports/api/search/vectorStore.js` |
 | Route fichiers (upload) | `imports/api/files/methods.js` |
-| Route fichiers (download HTTP) | `imports/api/files/methods.js` (WebApp.connectHandlers, sans auth) |
+| Route fichiers (download HTTP) | `imports/api/files/methods.js` (WebApp.connectHandlers, auth cookie + ownership) |
+| Routes fichiers internes (VPS) | `imports/api/files/internalRoutes.js` (`/api/files/*`, auth API key) |
+| Client fichiers distant | `imports/api/files/remoteFileClient.js` (HTTP vers VPS) |
 | LLM proxy | `imports/api/_shared/llmProxy.js` |
 | Point d'entree serveur | `server/main.js` |
 | Point d'entree client | `client/main.jsx` |
