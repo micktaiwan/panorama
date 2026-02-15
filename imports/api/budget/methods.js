@@ -58,19 +58,20 @@ const buildDedupeHash = (line) => {
 };
 
 // Shared duplicate check core used by multiple methods
-const checkDuplicateCore = async (line) => {
+const checkDuplicateCore = async (line, userId) => {
   const dateIso = normalizeDate(line.date);
   const vendor = String(line.vendor || '').trim();
   const amountCents = toCents(line.amountTtc ?? line.amount);
   const probe = { date: dateIso || '', vendor, amountCents };
   const dedupeHash = buildDedupeHash(probe);
-  const byHash = await BudgetLinesCollection.findOneAsync({ dedupeHash });
+  const userFilter = userId ? { userId } : {};
+  const byHash = await BudgetLinesCollection.findOneAsync({ dedupeHash, ...userFilter });
 
   // Fallback 1: invoice number exact match when available
   let byInvoice = null;
   const invoiceNumber = (line && line.invoiceNumber) ? String(line.invoiceNumber).trim() : '';
   if (!byHash && invoiceNumber) {
-    byInvoice = await BudgetLinesCollection.findOneAsync({ invoiceNumber });
+    byInvoice = await BudgetLinesCollection.findOneAsync({ invoiceNumber, ...userFilter });
   }
 
   // Fallback 2: relaxed vendor (case-insensitive, trimmed) AND amount only
@@ -78,7 +79,7 @@ const checkDuplicateCore = async (line) => {
   if (!byHash && !byInvoice && vendor && Number.isFinite(amountCents)) {
     const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const rx = new RegExp(`^\\s*${escapeRegex(vendor)}\\s*$`, 'i');
-    const cursor = BudgetLinesCollection.find({ vendor: rx, amountCents }, { fields: { _id: 1, date: 1, vendor: 1, invoiceNumber: 1 }, limit: 5 });
+    const cursor = BudgetLinesCollection.find({ vendor: rx, amountCents, ...userFilter }, { fields: { _id: 1, date: 1, vendor: 1, invoiceNumber: 1 }, limit: 5 });
     candidates = cursor.fetch();
   }
 
@@ -95,7 +96,7 @@ const checkDuplicateCore = async (line) => {
     const fromIso = toIso(fromD);
     const toIsoStr = toIso(toD);
     const raw = await BudgetLinesCollection.rawCollection().aggregate([
-      { $match: { vendor, date: { $gte: fromIso, $lte: toIsoStr } } },
+      { $match: { vendor, date: { $gte: fromIso, $lte: toIsoStr }, ...userFilter } },
       { $group: { _id: null, total: { $sum: '$amountCents' }, ids: { $addToSet: '$_id' }, count: { $sum: 1 } } }
     ]).toArray();
     if (raw && raw.length > 0) {
@@ -155,7 +156,7 @@ Meteor.methods({
       if (doc.vendor) {
         let cls = vendorClassCache.get(doc.vendor);
         if (cls === undefined) {
-          const prev = await BudgetLinesCollection.findOneAsync({ vendor: doc.vendor }, { fields: { department: 1, team: 1 } });
+          const prev = await BudgetLinesCollection.findOneAsync({ vendor: doc.vendor, userId: this.userId }, { fields: { department: 1, team: 1 } });
           cls = prev ? { department: prev.department, team: prev.team } : null;
           vendorClassCache.set(doc.vendor, cls);
         }
@@ -189,7 +190,7 @@ Meteor.methods({
     let importedCount = 0;
     let skippedExisting = 0;
     for (const doc of unique) {
-      const exists = await BudgetLinesCollection.findOneAsync({ dedupeHash: doc.dedupeHash });
+      const exists = await BudgetLinesCollection.findOneAsync({ dedupeHash: doc.dedupeHash, userId: this.userId });
       if (exists) { skippedExisting += 1; continue; }
       await BudgetLinesCollection.insertAsync(doc);
       importedCount += 1;
@@ -536,7 +537,7 @@ Meteor.methods({
   async 'budget.checkDuplicate'(line) {
     ensureLoggedIn(this.userId);
     if (!line || (typeof line !== 'object')) throw new Meteor.Error('invalid-args', 'line must be an object');
-    return await checkDuplicateCore(line);
+    return await checkDuplicateCore(line, this.userId);
   }
   ,
   async 'budget.ignoreVendor'(payload) {
