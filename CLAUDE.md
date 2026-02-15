@@ -37,8 +37,8 @@ mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.tasks.find({}).limi
 ### Data Layer (Meteor Collections)
 
 - Server methods are **async** and use `insertAsync`, `updateAsync`, `removeAsync`, `findOneAsync`, `countAsync`
-- **Remote collections** (projects, tasks, notes, noteSessions, noteLines, links, files, userPreferences) have `userId` field, publications filter by `this.userId`, methods use `ensureLoggedIn` + `ensureOwner`
-- **Local-only collections** (situations, budget, calendar, chats, userLogs, emails, claude*, mcpServers, alarms, people, teams, errors, notionIntegrations, notionTickets, appPreferences) use `ensureLocalOnly()` guard
+- **Remote collections** (projects, tasks, notes, noteSessions, noteLines, links, files, userPreferences) have `userId` field, publications filter by `this.userId`, methods use `ensureLoggedIn` + `ensureOwner`. Use the default MongoDB driver (`MONGO_URL`)
+- **Local-only collections** (situations, budget, calendar, chats, userLogs, emails, claude*, mcpServers, alarms, people, teams, errors, notionIntegrations, notionTickets, appPreferences, toolCallLogs) use `ensureLocalOnly()` guard and `localDriver` (`LOCAL_MONGO_URL`) via `imports/api/_shared/localDriver.js`. Without `LOCAL_MONGO_URL`, they use the default driver (dev/test compat)
 - **Auth helpers** in `imports/api/_shared/auth.js`: `ensureLoggedIn(userId)`, `ensureOwner(collection, docId, userId)`, `ensureLocalOnly()`
 - Client uses `useTracker`, `useFind`, and custom hooks like `useSingle()` for reactive queries
 - Collections: see imports/api/* (projects, tasks, notes, noteSessions, noteLines, situations, people, teams, budget, calendar, alarms, files, links, chats, userLogs, emails, appPreferences, userPreferences, errors)
@@ -182,7 +182,7 @@ Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` 
 4. Import all three in `server/main.js`
 5. If searchable: register in `vectorStore.js` and call `upsertDoc`/`deleteDoc` in methods
 6. **If remote (shared) collection**: add `userId` to inserts, `ensureLoggedIn` + `ensureOwner` to update/remove, filter publications by `userId`, add MongoDB index `{ userId: 1 }` in `server/main.js` startup
-7. **If local-only collection**: add `ensureLocalOnly()` at the top of each method
+7. **If local-only collection**: add `ensureLocalOnly()` at the top of each method, and pass `localDriver` to the collection constructor (see `imports/api/_shared/localDriver.js`)
 
 ### When Adding AI Features
 - Use `chatComplete()` or `embed()` from `llmProxy.js`
