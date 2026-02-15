@@ -900,6 +900,22 @@ Les phases 1 et 2 peuvent etre developpees et testees entierement en local avant
 | **RAM VPS** | ~~Risque resolu~~ — VPS upgrade a 4 GB (fevrier 2026), budget memoire confortable | Monitorer avec `docker stats` apres deploiement |
 | **Replica set sur MongoDB partage** | Activer le replica set sur `organizer-mongodb` impacte aussi Organizer | Tester que Organizer (Mongoose) fonctionne correctement apres activation. Normalement transparent |
 
+## Future : rotation des logs
+
+Les collections de logs locales n'ont pas de mecanisme de purge automatique (sauf `toolCallLogs` qui a un TTL index de 30 jours). A mettre en place :
+
+| Collection | Volume actuel | Action |
+|---|---|---|
+| `errors` | ~9500 docs/8 mois (purges le 2026-02-15) | Ajouter TTL index ou purge periodique |
+| `toolCallLogs` | TTL 30 jours deja en place | OK |
+| `claudeMessages` | Croissant | Evaluer si purge necessaire |
+| `userLogs` | Faible | Pas urgent |
+
+Options :
+- **TTL index MongoDB** : `{ createdAt: 1 }, { expireAfterSeconds: N }` — automatique, zero maintenance
+- **Meteor method** : `errors.removeOld` existe deja, a appeler via cron ou startup
+- **Script bash** : purge via `mongosh` dans un cron
+
 ## Future : projets partages
 
 Non couvert par ce plan. Quand le besoin arrivera, les options sont :
