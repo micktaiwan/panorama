@@ -30,15 +30,6 @@ Meteor.startup(() => {
   }
 
   // Normal app loading
-  // Sync local toggle for mobile tasks route (LAN) to server on startup
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const raw = window.localStorage.getItem('panorama.mobileTasksEnabled');
-    if (raw != null) {
-      const enabled = String(raw) === 'true';
-      Meteor.call('mobileTasksRoute.setEnabled', enabled, () => {});
-    }
-  }
-
   Promise.all([
     import('/imports/ui/Auth/AuthGate.jsx'),
     import('/imports/ui/App.jsx'),

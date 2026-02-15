@@ -96,18 +96,23 @@ Meteor.methods({
   }
 });
 
-// HTTP route to serve stored files
+// HTTP route to serve stored files (authenticated)
 WebApp.connectHandlers.use(async (req, res, next) => {
   if (!req.url.startsWith('/files/')) return next();
+  const { resolveUserId } = await import('/imports/api/_shared/httpAuth');
+  const userId = await resolveUserId(req);
+  if (!userId) { res.statusCode = 401; res.end('Unauthorized'); return; }
   const name = decodeURIComponent(req.url.replace('/files/', '').split('?')[0]);
   if (!name) { res.statusCode = 400; res.end('Bad request'); return; }
+  const fileDoc = await FilesCollection.findOneAsync({ storedFileName: name, userId });
+  if (!fileDoc) { res.statusCode = 404; res.end('Not found'); return; }
   const storageDir = await getStorageDir();
   const p = path.join(storageDir, name);
   if (!fs.existsSync(p)) { res.statusCode = 404; res.end('Not found'); return; }
   try {
     const stat = fs.statSync(p);
     res.setHeader('Content-Length', String(stat.size));
-    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Type', fileDoc.mimeType || 'application/octet-stream');
     fs.createReadStream(p).pipe(res);
   } catch (e) {
     console.error('file serve failed', e);
