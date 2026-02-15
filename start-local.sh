@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # start-local.sh — Lance Panorama en mode local
 #
-# MongoDB remote : panorama.mickaelfm.me:27018 (TLS + auth)
-# Qdrant remote  : localhost:16333 → VPS:6333 (tunnel SSH)
-# MongoDB local  : localhost:4001  → .meteor/local/db (collections local-only)
+# MongoDB : panorama.mickaelfm.me:27018 (TLS + auth, toutes les collections)
+# Qdrant  : localhost:16333 → VPS:6333 (tunnel SSH)
 
 VPS_HOST="${PANORAMA_VPS_HOST:?Définir PANORAMA_VPS_HOST (ex: export PANORAMA_VPS_HOST=ubuntu@your-vps-ip)}"
 MONGO_USER="${PANORAMA_MONGO_USER:?Définir PANORAMA_MONGO_USER dans ~/.env.secrets}"
@@ -27,7 +26,7 @@ fi
 
 # Vérifier la connexion MongoDB TLS
 echo "→ Vérification MongoDB (TLS)..."
-if mongosh --quiet "mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?tls=true&authSource=admin&directConnection=true" --eval "db.runCommand({ping:1}).ok" 2>/dev/null | grep -q 1; then
+if mongosh --quiet "mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?tls=true&authSource=admin" --eval "db.runCommand({ping:1}).ok" 2>/dev/null | grep -q 1; then
   echo "✓ MongoDB accessible"
 else
   echo "✗ MongoDB non accessible sur ${MONGO_HOST}"
@@ -35,18 +34,18 @@ else
 fi
 
 # Lancer Meteor
-LOCAL_MONGO_PORT=$((METEOR_PORT + 1))
-MONGO_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?tls=true&authSource=admin&directConnection=true"
-MONGO_OPLOG_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/local?tls=true&authSource=admin&directConnection=true"
+# serverSelectionTimeoutMS=60000 : laisse 60s au driver pour retrouver le serveur après un sleep/wake
+# heartbeatFrequencyMS=10000 : sonde le serveur toutes les 10s (réduit les faux positifs au réveil)
+MONGO_OPTS="tls=true&authSource=admin&serverSelectionTimeoutMS=60000&heartbeatFrequencyMS=10000"
+MONGO_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?${MONGO_OPTS}"
+MONGO_OPLOG_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/local?${MONGO_OPTS}"
 
-echo "→ Lancement Meteor (port $METEOR_PORT)..."
-echo "  MONGO_URL        = mongodb://${MONGO_USER}:***@${MONGO_HOST}/panorama?tls=true&authSource=admin&directConnection=true"
-echo "  MONGO_OPLOG_URL  = mongodb://${MONGO_USER}:***@${MONGO_HOST}/local?tls=true&authSource=admin&directConnection=true"
-echo "  LOCAL_MONGO_URL  = mongodb://localhost:${LOCAL_MONGO_PORT}/meteor"
-echo "  QDRANT_URL       = http://localhost:${QDRANT_TUNNEL_PORT}"
+export MONGO_URL MONGO_OPLOG_URL
+export QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}"
 
-MONGO_URL="$MONGO_URL" \
-MONGO_OPLOG_URL="$MONGO_OPLOG_URL" \
-LOCAL_MONGO_URL="mongodb://localhost:${LOCAL_MONGO_PORT}/meteor" \
-QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}" \
-meteor run --port $METEOR_PORT --settings settings.json
+echo "→ Lancement Meteor + Electron (port $METEOR_PORT)..."
+echo "  MONGO_URL        = mongodb://${MONGO_USER}:***@${MONGO_HOST}/panorama?${MONGO_OPTS}"
+echo "  MONGO_OPLOG_URL  = mongodb://${MONGO_USER}:***@${MONGO_HOST}/local?${MONGO_OPTS}"
+echo "  QDRANT_URL       = $QDRANT_URL"
+
+npm run dev:desktop:4000

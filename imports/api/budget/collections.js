@@ -1,11 +1,8 @@
 import { Mongo } from 'meteor/mongo';
-import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = localDriver ? { _driver: localDriver } : {};
-
-export const BudgetLinesCollection = new Mongo.Collection('budgetLines', driverOptions);
-export const VendorsCacheCollection = new Mongo.Collection('vendorsCache', driverOptions);
-export const VendorsIgnoreCollection = new Mongo.Collection('vendorsIgnore', driverOptions);
+export const BudgetLinesCollection = new Mongo.Collection('budgetLines');
+export const VendorsCacheCollection = new Mongo.Collection('vendorsCache');
+export const VendorsIgnoreCollection = new Mongo.Collection('vendorsIgnore');
 
 if (Meteor.isServer) {
   BudgetLinesCollection.rawCollection().createIndex({ date: 1, category: 1, vendor: 1 });

@@ -1,23 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { navigateTo } from '/imports/ui/router.js';
+
+// Module-level: survives component remounts caused by AuthGate re-renders
+let lastLoginError = '';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setErrorState] = useState(lastLoginError);
   const [loading, setLoading] = useState(false);
+
+  const setError = (msg) => {
+    lastLoginError = msg;
+    setErrorState(msg);
+  };
+
+  useEffect(() => {
+    // Pick up any error from a previous mount
+    if (lastLoginError) setErrorState(lastLoginError);
+    return () => { /* keep lastLoginError for next mount */ };
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError('Server not responding. Check your connection.');
+    }, 10000);
     Meteor.loginWithPassword(email.trim(), password, (err) => {
+      clearTimeout(timeout);
       setLoading(false);
       if (err) {
-        setError(err.reason || err.message || 'Login failed');
+        console.error('Login error:', err);
+        setError(err.reason || err.message || String(err) || 'Login failed');
         return;
       }
+      lastLoginError = '';
       navigateTo({ name: 'home' });
     });
   };

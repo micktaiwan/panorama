@@ -1,9 +1,6 @@
 import { Mongo } from 'meteor/mongo';
-import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = localDriver ? { _driver: localDriver } : {};
-
-export const AppPreferencesCollection = new Mongo.Collection('appPreferences', driverOptions);
+export const AppPreferencesCollection = new Mongo.Collection('appPreferences');
 
 // Schema for AI preferences
 export const AI_PREFERENCES_SCHEMA = {

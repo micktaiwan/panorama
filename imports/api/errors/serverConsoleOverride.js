@@ -27,7 +27,7 @@ if (Meteor.isServer) {
     }
 
     ErrorsCollection
-      .insertAsync({ kind: 'server', message: String(message).slice(0, 2000), context, createdAt: new Date() })
+      .insertAsync({ kind: 'server', message: String(message).slice(0, 2000), context, userId: null, createdAt: new Date() })
       .catch((persistErr) => {
         // Report persistence failure through the original console to avoid recursion
         originalError('[consoleOverride] error persistence failed:', persistErr);

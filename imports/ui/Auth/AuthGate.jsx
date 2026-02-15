@@ -10,6 +10,7 @@ import { VerifyEmail } from './VerifyEmail.jsx';
 import './AuthGate.css';
 
 const AUTH_ROUTES = new Set(['login', 'signup', 'forgotPassword', 'resetPassword', 'verifyEmail']);
+const SHOWS_LOGIN_FORM = new Set(['login', 'signup', 'forgotPassword', 'resetPassword', 'verifyEmail', 'home']);
 
 export const AuthGate = ({ children }) => {
   const [route, setRoute] = useState(parseHashRoute());
@@ -36,8 +37,8 @@ export const AuthGate = ({ children }) => {
     return children;
   }
 
-  // If logging in (DDP reconnecting, auto-login from stored token), show loading
-  if (loggingIn) {
+  // If auto-logging in from stored token (not from a form submit), show loading
+  if (loggingIn && !SHOWS_LOGIN_FORM.has(route?.name)) {
     return (
       <div className="authGate">
         <div className="authLoading">Loading...</div>

@@ -130,6 +130,68 @@ export const getAIConfigAsync = async (userId) => {
   };
 };
 
+export const getPennylaneConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = {
+    baseUrl: userPref?.pennylaneBaseUrl?.trim() || null,
+    token: userPref?.pennylaneToken?.trim() || null,
+  };
+  if (fromUser.baseUrl && fromUser.token) return fromUser;
+  return getPennylaneConfig(); // fallback to instance-level
+};
+
+export const getSlackConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  if (userPref?.slack) {
+    return {
+      enabled: userPref.slack.enabled ?? false,
+      botToken: userPref.slack.botToken?.trim() || null,
+      appToken: userPref.slack.appToken?.trim() || null,
+      allowedUserId: userPref.slack.allowedUserId?.trim() || null,
+    };
+  }
+  return getSlackConfig(); // fallback to instance-level
+};
+
+export const getGoogleCalendarConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  if (userPref?.googleCalendar) {
+    const gc = userPref.googleCalendar;
+    return {
+      clientId: gc.clientId?.trim() || null,
+      clientSecret: gc.clientSecret?.trim() || null,
+      refreshToken: gc.refreshToken?.trim() || null,
+      redirectUri: gc.redirectUri?.trim() || null,
+    };
+  }
+  return getGoogleCalendarConfig(); // fallback to instance-level
+};
+
+export const getCtaConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  if (userPref?.cta) {
+    return {
+      enabled: userPref.cta.enabled ?? false,
+      model: userPref.cta.model || null,
+    };
+  }
+  // fallback to appPreferences
+  const pref = getPrefs();
+  return {
+    enabled: pref?.cta?.enabled ?? false,
+    model: pref?.cta?.model || null,
+  };
+};
+
+export const getCalendarIcsUrlAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = userPref?.calendarIcsUrl?.trim() || null;
+  if (fromUser) return fromUser;
+  // fallback to appPreferences
+  const pref = getPrefs();
+  return pref?.calendarIcsUrl?.trim() || null;
+};
+
 /**
  * Read localUserId from appPreferences (for MCP server context).
  */

@@ -1,14 +1,14 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { ClaudeCommandsCollection } from './collections';
-import { ensureLocalOnly } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 const VALID_SCOPES = ['global', 'project'];
 
 Meteor.methods({
   async 'claudeCommands.create'(doc) {
     check(doc, Object);
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
     const now = new Date();
     const name = String(doc.name || '').trim().toLowerCase().replace(/\s+/g, '-');
     if (!name) throw new Meteor.Error('invalid', 'Name is required');
@@ -22,6 +22,7 @@ Meteor.methods({
       hasArgs: content.includes('$ARGUMENTS'),
       source: doc.source || 'manual',
       sourceFile: doc.sourceFile || undefined,
+      userId: this.userId,
       createdAt: now,
       updatedAt: now,
     };
@@ -31,7 +32,8 @@ Meteor.methods({
   async 'claudeCommands.update'(commandId, modifier) {
     check(commandId, String);
     check(modifier, Object);
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
+    await ensureOwner(ClaudeCommandsCollection, commandId, this.userId);
     const set = { ...modifier, updatedAt: new Date() };
     if (typeof set.name === 'string') set.name = set.name.trim().toLowerCase().replace(/\s+/g, '-');
     if (typeof set.content === 'string') set.hasArgs = set.content.includes('$ARGUMENTS');
@@ -41,13 +43,14 @@ Meteor.methods({
 
   async 'claudeCommands.remove'(commandId) {
     check(commandId, String);
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
+    await ensureOwner(ClaudeCommandsCollection, commandId, this.userId);
     return ClaudeCommandsCollection.removeAsync(commandId);
   },
 
   async 'claudeCommands.importFromDisk'(options) {
     check(options, Match.Maybe(Object));
-    ensureLocalOnly();
+    ensureLoggedIn(this.userId);
     const fs = await import('fs/promises');
     const path = await import('path');
 
@@ -109,8 +112,8 @@ Meteor.methods({
             }
           }
 
-          // Upsert: if same name+scope exists, update; otherwise insert
-          const query = { name, scope };
+          // Upsert: if same name+scope exists for this user, update; otherwise insert
+          const query = { name, scope, userId: this.userId };
           if (scope === 'project' && projectId) query.projectId = projectId;
 
           const existing = await ClaudeCommandsCollection.findOneAsync(query);
@@ -136,6 +139,7 @@ Meteor.methods({
               hasArgs: content.includes('$ARGUMENTS'),
               source: 'disk',
               sourceFile: filePath,
+              userId: this.userId,
               createdAt: now,
               updatedAt: now,
             });

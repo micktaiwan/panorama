@@ -38,12 +38,12 @@ export const PrefsAI = ({ pref, userPref }) => {
   }, [userPref?._id, JSON.stringify(userPref?.ai)]);
 
   React.useEffect(() => {
-    if (!pref) return;
-    if (pref.cta) {
-      setCtaEnabled(pref.cta.enabled !== false);
-      setCtaModel(pref.cta.model || 'local');
+    if (!userPref) return;
+    if (userPref.cta) {
+      setCtaEnabled(userPref.cta.enabled !== false);
+      setCtaModel(userPref.cta.model || 'local');
     }
-  }, [pref?._id]);
+  }, [userPref?._id, JSON.stringify(userPref?.cta)]);
 
   const generateAIPreferences = React.useCallback(() => ({
     mode: aiMode,
@@ -282,7 +282,7 @@ export const PrefsAI = ({ pref, userPref }) => {
               onSubmit={(next) => {
                 const enabled = next === 'true';
                 setCtaEnabled(enabled);
-                Meteor.call('appPreferences.update', { cta: { enabled } }, () => {});
+                Meteor.call('userPreferences.update', { cta: { enabled, model: ctaModel } }, () => {});
               }}
             />
           </div>
@@ -300,7 +300,7 @@ export const PrefsAI = ({ pref, userPref }) => {
                 ]}
                 onSubmit={(next) => {
                   setCtaModel(next);
-                  Meteor.call('appPreferences.update', { cta: { model: next } }, () => {});
+                  Meteor.call('userPreferences.update', { cta: { enabled: ctaEnabled, model: next } }, () => {});
                 }}
               />
             </div>
