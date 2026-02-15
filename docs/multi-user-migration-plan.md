@@ -351,11 +351,11 @@ L'index Qdrant est **global** : les vecteurs ne contiennent pas de `userId` dans
 
 ---
 
-### Phase 3 — Dual MongoDB driver (code DONE, infra 3.6 DONE, tunnel 3.4 TODO)
+### Phase 3 — Dual MongoDB driver (code DONE, infra 3.6 DONE, tunnel 3.4 DONE)
 
 **Objectif** : l'instance locale de Mick se connecte a la DB remote pour les collections partagees (y compris `users`), et garde la DB locale pour les collections local-only.
 
-**Statut** : code implemente (branche `feature/multi-user-auth`). `localDriver.js` cree, 23 collections local-only modifiees. Infra Docker restructuree sur le VPS (3.6 DONE le 2026-02-15). Reste a faire : tunnel SSH (3.4).
+**Statut** : code implemente (branche `feature/multi-user-auth`). `localDriver.js` cree, 23 collections local-only modifiees. Infra Docker restructuree sur le VPS (3.6 DONE le 2026-02-15). Tunnel SSH configure (3.4 DONE le 2026-02-15).
 
 **Approche inversee** : plutot qu'ajouter un `remoteDriver` sur les 8 collections partagees, `MONGO_URL` pointe directement vers la DB remote. Seules les ~21 collections local-only recoivent un `localDriver`. Avantages :
 - `Meteor.users` est automatiquement sur la DB remote (un seul compte, un seul mot de passe, un seul `userId`)
@@ -406,47 +406,38 @@ Les collections remote (projects, tasks, notes, noteSessions, noteLines, links, 
 
 **Note** : en dev mode, Meteor demarre toujours son MongoDB interne, meme quand `MONGO_URL` est defini. Le port interne = port de l'app + 1 (ex: app sur 3000 → MongoDB sur 3001).
 
-#### 3.4 Tunnel SSH automatique
+#### 3.4 Tunnel SSH automatique ✅ DONE (2026-02-15)
 
 L'instance locale de Mick accede a MongoDB et Qdrant via tunnel SSH.
 
-**Prerequis** : exposer les ports MongoDB et Qdrant sur localhost du VPS (pas sur internet). Actuellement, `organizer-mongodb` et `organizer-qdrant` n'exposent **aucun port** sur l'hote — ils sont accessibles uniquement sur le reseau Docker interne. Le tunnel SSH ne peut pas forwarder vers un port qui n'ecoute pas sur l'hote.
+**Prerequis** : les ports MongoDB (`127.0.0.1:27017`) et Qdrant (`127.0.0.1:6333`) sont exposes sur localhost du VPS depuis la restructuration infra (Phase 3.6). Ils ne sont pas accessibles depuis internet — uniquement via tunnel SSH.
 
-Modifier `/var/www/organizer/server/docker-compose.prod.yml` :
+**Ce qui a ete fait** :
 
-```yaml
-  mongodb:
-    image: mongo:5
-    container_name: organizer-mongodb
-    ports:
-      - "127.0.0.1:27017:27017"  # AJOUTER — accessible uniquement depuis localhost (tunnel SSH)
-    # ... reste inchange
+1. **`autossh` installe** via Homebrew (reconnexion automatique si le tunnel tombe)
+2. **Tunnels testes et fonctionnels** :
+   - MongoDB : `localhost:27018` → VPS `localhost:27017` (replica set `rs0` accessible)
+   - Qdrant : `localhost:16333` → VPS `localhost:6333` (collections listees OK)
+3. **Script `start-local.sh`** cree a la racine du projet :
+   - Demarre le tunnel `autossh` si pas deja actif (avec `ServerAliveInterval=30`, `ServerAliveCountMax=3`)
+   - Verifie que MongoDB repond via le tunnel (10 tentatives)
+   - Lance Meteor avec les env vars :
+     - `MONGO_URL=mongodb://localhost:27018/panorama` (DB remote via tunnel)
+     - `MONGO_OPLOG_URL=mongodb://localhost:27018/local` (reactivite oplog)
+     - `LOCAL_MONGO_URL=mongodb://localhost:3001/meteor` (DB locale Meteor)
+     - `QDRANT_URL=http://localhost:16333` (Qdrant via tunnel)
+4. **Variable `PANORAMA_VPS_HOST`** : l'IP du VPS n'est pas dans le script (versionne). Elle est lue depuis `PANORAMA_VPS_HOST` defini dans `~/.env.secrets` (non versionne).
 
-  qdrant:
-    image: qdrant/qdrant:v1.16.3
-    container_name: organizer-qdrant
-    ports:
-      - "127.0.0.1:6333:6333"    # AJOUTER — pour le tunnel Qdrant
-    # ... reste inchange
-```
-
-Appliquer : `cd /var/www/organizer/server && docker compose -f docker-compose.prod.yml up -d`
-
-**Tunnels SSH** :
+**Usage** :
 
 ```bash
-# MongoDB : port local 27018 → VPS localhost:27017
-# Qdrant  : port local 16333 → VPS localhost:6333
-autossh -M 0 -f -N \
-  -L 27018:localhost:27017 \
-  -L 16333:localhost:6333 \
-  ubuntu@51.210.150.25
+./start-local.sh
 ```
 
-Integration dans le workflow de dev :
-- Script `start-local.sh` qui demarre le tunnel puis lance Meteor
-- Ou `autossh` en service launchd (macOS) pour un tunnel permanent
-- Port local 27018 (pour ne pas conflicter avec un MongoDB local eventuel)
+**Ports locaux** :
+- `27018` : MongoDB remote (choisi pour ne pas conflicter avec un MongoDB local sur 27017)
+- `16333` : Qdrant remote
+- `3001` : MongoDB interne Meteor (port app + 1, demarre automatiquement en dev mode)
 
 #### 3.5 Replica set, oplog et ports (absorbe par 3.6)
 
@@ -1117,10 +1108,10 @@ Phase 3.1-3.3 (Code dual driver)  ✅ DONE
 Phase 3.6 (Restructuration infra VPS)  ✅ DONE (2026-02-15)
     |
     v
-Phase 3.4 (Tunnel SSH depuis le Mac)  <-- PROCHAINE ETAPE
+Phase 3.4 (Tunnel SSH depuis le Mac)  ✅ DONE (2026-02-15)
     |
     v
-Phase 4 (Migration donnees)
+Phase 4 (Migration donnees)  <-- PROCHAINE ETAPE
     |
     v
 Phase 5 (Deploiement VPS)
@@ -1131,7 +1122,7 @@ Phase 6 (Fichiers)       \
 Phase 7 (Qdrant)          /
 ```
 
-Les phases 1-3.6 sont terminees. L'infra VPS est restructuree (MongoDB en replica set, Qdrant, prototype David supprime). Prochaine etape : tunnel SSH (3.4) pour connecter l'instance locale de Mick a la DB remote.
+Les phases 1-3 sont terminees (auth, userId, dual driver, infra VPS, tunnel SSH). Prochaine etape : migration des donnees (Phase 4).
 
 ## Risques identifies
 
