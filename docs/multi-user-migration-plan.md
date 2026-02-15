@@ -100,7 +100,7 @@ L'infra partagee est separee des applications. Prototype de David supprime.
 |   (Mac de Mick)        |         |   (VPS OVH)            |
 |                        |         |                        |
 |   Claude Code          |         |   App web              |
-|   Fichiers locaux      |         |   (Mick, David, etc.)  |
+|   Fichiers via VPS     |         |   (Mick, David, etc.)  |
 |   MCP servers          |         |                        |
 |   Electron             |         |   App Android (futur)  |
 |                        |         |                        |
@@ -984,28 +984,54 @@ Non utilise — MUP fonctionne bien avec Meteor 3.4. Garde en reserve.
 
 ---
 
-### Phase 6 — Stockage de fichiers distant
+### Phase 6 — Stockage de fichiers distant ✅ DONE (2026-02-15)
 
-**Objectif** : les users du web peuvent uploader et voir des fichiers.
+**Objectif** : tous les fichiers vont sur le VPS, point barre. L'instance locale delegue les operations fichiers au VPS via HTTP.
 
-#### 6.1 Modifier la route d'upload
+**Statut** : implemente. Routes HTTP internes sur le VPS (`/api/files/*`), protegees par API key. L'instance locale les utilise pour upload/download/delete au lieu de `fs.writeFile`/`fs.readFile`/`fs.unlink`.
 
-Actuellement les fichiers sont ecrits sur le filesystem local via `files.insert` (base64 → `fs.writeFile`).
+#### Ce qui a ete fait
 
-Pour l'instance remote :
-- Les fichiers sont ecrits sur le disque du VPS (`/var/www/panorama/files/` ou configurable)
-- La route HTTP `/files/<storedFileName>` sert les fichiers avec verification d'authentification
-- Ajouter un check : le fichier appartient-il a un projet du user connecte ?
+**Approche** : routes HTTP internes sur le VPS (`/api/files/store`, `/api/files/raw/<name>`, `/api/files/delete`), protegees par header `X-API-Key`. L'instance locale les utilise quand `PANORAMA_FILES_URL` + `PANORAMA_FILES_API_KEY` sont definis.
 
-Pour l'instance locale de Mick :
-- Les fichiers locaux restent accessibles localement
-- Les fichiers distants sont accessibles via l'URL du VPS
+**Fichiers modifies/crees** :
 
-#### 6.2 Auth sur la route de fichiers
+| Fichier | Action |
+|---------|--------|
+| `.deploy/mup.js` | Volume Docker `-v /var/www/panorama/files:/var/www/panorama/files` + env `PANORAMA_FILES_API_KEY` |
+| `imports/api/files/internalRoutes.js` | **Cree** : 3 routes HTTP internes (store, raw, delete), protegees par `X-API-Key` |
+| `imports/api/files/remoteFileClient.js` | **Cree** : client HTTP avec `isRemoteFileStorage()`, `remoteStoreFile()`, `remoteGetFileStream()`, `remoteDeleteFile()` |
+| `imports/api/files/methods.js` | `getStorageDir` exporte. `files.insert`, route download `/files/<name>`, `files.remove` branchent remote/local via `isRemoteFileStorage()` |
+| `server/main.js` | Import `internalRoutes` ajoute |
+| `start-local.sh` | Env vars `PANORAMA_FILES_URL` + `PANORAMA_FILES_API_KEY` ajoutees |
 
-Actuellement la route `/files/` n'a aucun controle d'acces. Ajouter :
-- Verifier le cookie de session Meteor (ou un token dans le query string)
-- Verifier que le fichier appartient au user
+**Fonctionnement** :
+
+- **VPS (remote)** : `PANORAMA_FILES_API_KEY` defini dans env, pas de `PANORAMA_FILES_URL` → les operations fichiers vont directement sur le disque local (`/var/www/panorama/files/`). Les routes `/api/files/*` sont actives et servent les requetes du client local.
+- **Mac (local)** : `PANORAMA_FILES_URL` + `PANORAMA_FILES_API_KEY` definis → `isRemoteFileStorage()` retourne `true` → les operations fichiers sont deleguees au VPS via HTTP.
+- **Dev/Test** : aucune env var definie → `isRemoteFileStorage()` retourne `false` → comportement local (`~/PanoramaFiles`).
+
+**Protection path traversal** : `path.basename()` sur `storedFileName` dans les routes internes.
+
+**Body limit** : pas de limite explicite (Meteor/connect n'en impose pas par defaut sur les streams). Les fichiers tres volumineux transitent en base64 dans le JSON body — acceptable pour les fichiers typiques (documents, images). Pour des fichiers > ~50 MB, envisager un upload multipart (amelioration future).
+
+**Auth route download** : la route `/files/<name>` (pour les navigateurs) reste protegee par cookie Meteor + ownership check (Phase 5.6). Les routes `/api/files/*` sont protegees par API key (server-to-server uniquement).
+
+#### Migration des fichiers existants
+
+```bash
+rsync -avz ~/PanoramaFiles/ ubuntu@51.210.150.25:/var/www/panorama/files/
+```
+
+Les `storedFileName` en DB ne changent pas — pas de migration de metadonnees.
+
+#### Pre-deploy sur le VPS
+
+```bash
+ssh ubuntu@51.210.150.25 'sudo mkdir -p /var/www/panorama/files && sudo chown 1000:1000 /var/www/panorama/files'
+```
+
+Generer l'API key : `openssl rand -hex 32` → ajouter `PANORAMA_FILES_API_KEY=<key>` dans `~/.env.secrets`.
 
 ---
 
@@ -1171,13 +1197,13 @@ Phase 5 (Deploiement VPS)  ✅ DONE (2026-02-15)
   5.7 (Backups)            ✅ DONE (2026-02-15)
     |
     v
-Phase 6 (Fichiers)          <-- PROCHAINE ETAPE
+Phase 6 (Fichiers)          ✅ DONE (2026-02-15)
     |
     v
 Phase 7 (Qdrant)          ✅ DONE (2026-02-15)
 ```
 
-Les phases 1-5 et 7 sont terminees. Prochaine etape : Phase 6 (fichiers distants).
+Toutes les phases sont terminees.
 
 ### Checklist post-merge (avant d'inviter David)
 
