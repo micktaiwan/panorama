@@ -406,38 +406,91 @@ Les collections remote (projects, tasks, notes, noteSessions, noteLines, links, 
 
 **Note** : en dev mode, Meteor demarre toujours son MongoDB interne, meme quand `MONGO_URL` est defini. Le port interne = port de l'app + 1 (ex: app sur 3000 → MongoDB sur 3001).
 
-#### 3.4 Tunnel SSH automatique ✅ DONE (2026-02-15)
+#### 3.4 Connexion MongoDB distante — TLS + Auth (TODO)
 
-L'instance locale de Mick accede a MongoDB et Qdrant via tunnel SSH.
+L'instance locale de Mick (et celle de David sur Windows) accede au MongoDB du VPS. Qdrant reste derriere un tunnel SSH.
 
-**Prerequis** : les ports MongoDB (`127.0.0.1:27017`) et Qdrant (`127.0.0.1:6333`) sont exposes sur localhost du VPS depuis la restructuration infra (Phase 3.6). Ils ne sont pas accessibles depuis internet — uniquement via tunnel SSH.
+**Approche abandonnee — tunnel SSH** : le replica set annonce un hostname Docker interne (`organizer-mongodb:27017`). Le driver MongoDB decouvre ce hostname et tente de s'y connecter, ce qui echoue depuis le Mac (hostname non resolvable). `directConnection=true` cause une erreur "Topology is closed" dans Meteor. Les workarounds (`/etc/hosts`, alias loopback `127.0.0.2`, stopper MongoDB local) sont fragiles et ne passent pas a l'echelle (chaque dev doit bidouiller sa machine).
 
-**Ce qui a ete fait** :
+**Approche retenue — MongoDB expose publiquement avec TLS + auth** : MongoDB ecoute sur un port public (27018) avec chiffrement TLS (Let's Encrypt) et authentification SCRAM-SHA-256. Chaque dev a une simple connection string, sans tunnel SSH ni modification systeme.
 
-1. **`autossh` installe** via Homebrew (reconnexion automatique si le tunnel tombe)
-2. **Tunnels testes et fonctionnels** :
-   - MongoDB : `localhost:27018` → VPS `localhost:27017` (replica set `rs0` accessible)
-   - Qdrant : `localhost:16333` → VPS `localhost:6333` (collections listees OK)
-3. **Script `start-local.sh`** cree a la racine du projet :
-   - Demarre le tunnel `autossh` si pas deja actif (avec `ServerAliveInterval=30`, `ServerAliveCountMax=3`)
-   - Verifie que MongoDB repond via le tunnel (10 tentatives)
-   - Lance Meteor avec les env vars :
-     - `MONGO_URL=mongodb://localhost:27018/panorama` (DB remote via tunnel)
-     - `MONGO_OPLOG_URL=mongodb://localhost:27018/local` (reactivite oplog)
-     - `LOCAL_MONGO_URL=mongodb://localhost:3001/meteor` (DB locale Meteor)
-     - `QDRANT_URL=http://localhost:16333` (Qdrant via tunnel)
-4. **Variable `PANORAMA_VPS_HOST`** : l'IP du VPS n'est pas dans le script (versionne). Elle est lue depuis `PANORAMA_VPS_HOST` defini dans `~/.env.secrets` (non versionne).
+**Connection string cible** :
 
-**Usage** :
-
-```bash
-./start-local.sh
+```
+mongodb://panorama:PASSWORD@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin&directConnection=true
 ```
 
-**Ports locaux** :
-- `27018` : MongoDB remote (choisi pour ne pas conflicter avec un MongoDB local sur 27017)
-- `16333` : Qdrant remote
-- `3001` : MongoDB interne Meteor (port app + 1, demarre automatiquement en dev mode)
+**Implementation prevue** :
+
+**Etape 1 — Preparation TLS sur le VPS** :
+- Creer `/opt/infra/mongodb-tls/`
+- Extraire le cert Let's Encrypt du container `mup-nginx-proxy` (fullchain.pem + key.pem → mongodb.pem)
+- Generer un keyFile pour l'auth replica set (`openssl rand -base64 756`)
+- Script `generate-pem.sh` pour automatiser l'extraction et le renouvellement
+
+**Etape 2 — Modifier `/opt/infra/docker-compose.yml`** :
+
+```yaml
+mongodb:
+  image: mongo:5
+  container_name: organizer-mongodb
+  restart: unless-stopped
+  command: ["--replSet", "rs0",
+    "--tlsMode", "preferTLS",
+    "--tlsCertificateKeyFile", "/etc/ssl/mongodb.pem",
+    "--tlsAllowConnectionsWithoutCertificates",
+    "--keyFile", "/data/keyfile/mongo-keyfile"]
+  ports:
+    - "127.0.0.1:27017:27017"   # Interne (Docker + localhost)
+    - "0.0.0.0:27018:27017"     # Externe (TLS + auth, public)
+  volumes:
+    - mongodb_data:/data/db
+    - /opt/infra/mongodb-tls/mongodb.pem:/etc/ssl/mongodb.pem:ro
+    - /opt/infra/mongodb-tls/mongo-keyfile:/data/keyfile/mongo-keyfile:ro
+```
+
+Choix techniques :
+- `preferTLS` : accepte TLS et non-TLS. Clients Docker internes (Organizer) gardent leur connexion sans TLS. Clients externes utilisent TLS.
+- `--keyFile` : active l'authentification pour le replica set
+- `--tlsAllowConnectionsWithoutCertificates` : pas de certificat client requis (TLS one-way, comme HTTPS)
+- Port 27018 sur `0.0.0.0` : accessible depuis internet, protege par TLS + auth
+
+**Etape 3 — Creer les utilisateurs MongoDB** (via localhost exception) :
+
+| User | Roles | Usage |
+|---|---|---|
+| `admin` | `root` sur `admin` | DBA, backups |
+| `panorama` | `readWrite` sur `panorama`, `read` sur `local` | App Panorama (oplog) |
+| `organizer` | `readWrite` sur `organizer` | App Organizer |
+
+**Etape 4 — Mettre a jour Organizer** :
+
+```
+MONGODB_URI=mongodb://organizer:PASS@organizer-mongodb:27017/organizer?authSource=admin&directConnection=true
+```
+
+`directConnection=true` empeche Mongoose de decouvrir le RS member et d'essayer de s'y connecter via le hostname public.
+
+**Etape 5 — Ouvrir le firewall port 27018** (iptables + firewall OVH si necessaire)
+
+**Etape 6 — Mettre a jour `start-local.sh`** :
+- Supprime le tunnel SSH pour MongoDB (plus besoin)
+- Garde le tunnel SSH pour Qdrant
+- `MONGO_URL` et `MONGO_OPLOG_URL` pointent vers `panorama.mickaelfm.me:27018` avec `tls=true&authSource=admin&directConnection=true`
+- `LOCAL_MONGO_URL=mongodb://localhost:4001/meteor` (Meteor port 4000, MongoDB interne port 4001)
+- Credentials dans `~/.env.secrets` (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`), pas dans le script
+
+**Etape 7 — Cron renouvellement cert** : `generate-pem.sh` hebdomadaire (regenere le PEM + restart MongoDB)
+
+**Etape 8 — Mettre a jour le script de backup** : ajouter les credentials auth a `mongodump`
+
+**Note sur directConnection=true** : l'erreur "Topology is closed" rencontree precedemment etait probablement causee par un mauvais port `LOCAL_MONGO_URL` (3001 au lieu de 4001). Si `directConnection=true` pose toujours probleme avec Meteor apres correction, le plan B est de reconfigurer le RS member a `panorama.mickaelfm.me:27018` (`rs.reconfig`).
+
+**Impact pour David (Windows)** : aucune config systeme. Il clone le repo, definit les variables d'environnement (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`), et lance `start-local.sh` (ou l'equivalent Windows). Pas de tunnel SSH, pas de `/etc/hosts`.
+
+**Qdrant** : reste derriere le tunnel SSH (`autossh`, port local 16333 → VPS 6333). Qdrant n'a pas d'auth built-in suffisante pour une exposition publique.
+
+**Rollback** : restaurer `docker-compose.yml` depuis `.bak-pre-tls`, restaurer le docker-compose Organizer, `git checkout start-local.sh`. Les donnees MongoDB sont intactes.
 
 #### 3.5 Replica set, oplog et ports (absorbe par 3.6)
 
@@ -1085,7 +1138,7 @@ Le vrai point de non-retour est quand **plusieurs users ont cree des donnees sur
 | 1 | **Auth bypass en local ?** | **Auth partout** | Mick s'authentifie aussi en local. Coherent, securise, et teste le flow d'auth en continu. |
 | 2 | **Signup public ?** | **Signup ouvert** | N'importe qui peut creer un compte. Implique : validation email, rate limiting (`ddp-rate-limiter`), protection anti-abus. |
 | 3 | **MongoDB : instance partagee ou dediee ?** | **Reutiliser `organizer-mongodb`** | ~~Container dedie~~ → reutiliser le mongo:5 existant avec une database `panorama` separee. Deja en place, economise de la RAM sur un VPS a 1.9 GB. |
-| 4 | **Acces DB depuis le Mac ?** | **Tunnel SSH** | MongoDB bind localhost sur le VPS (port ferme). L'instance locale accede via tunnel SSH. Le tunnel est auto-demarre avec Meteor local (via `autossh` ou script de lancement). |
+| 4 | **Acces DB depuis le Mac ?** | **~~Tunnel SSH~~ → TLS + Auth public** | ~~MongoDB bind localhost sur le VPS (port ferme). L'instance locale accede via tunnel SSH.~~ Le tunnel SSH posait des problemes de resolution de hostname du replica set (driver MongoDB insiste pour se connecter au hostname annonce par le RS, non resolvable depuis le Mac). Nouvelle approche : MongoDB expose sur port 27018 avec TLS (Let's Encrypt) + auth (SCRAM-SHA-256). Connection string directe, sans tunnel ni `/etc/hosts`. |
 | 5 | **Denormaliser userId ?** | **Oui** | userId ajoute directement sur noteLines, situation_actors, situation_notes, situation_questions, situation_summaries. Plus simple et performant que les jointures reactives. |
 | 6 | **AppPreferences : comment scinder ?** | **Nouvelle collection `userPreferences`** | Separation nette : `appPreferences` garde la config d'instance (filesDir, qdrantUrl), `userPreferences` stocke les prefs par user (theme, cle API, config AI). |
 | 7 | **Outil de deploiement ?** | **MUP (Meteor Up)** | Gere build, Docker, Nginx, Let's Encrypt en une commande. Compatible Meteor 3 avec workaround Node 20.9.0. MongoDB et Qdrant geres separement (containers Docker dedies). Fallback : deploy manuel si MUP instable. |
@@ -1108,10 +1161,10 @@ Phase 3.1-3.3 (Code dual driver)  ✅ DONE
 Phase 3.6 (Restructuration infra VPS)  ✅ DONE (2026-02-15)
     |
     v
-Phase 3.4 (Tunnel SSH depuis le Mac)  ✅ DONE (2026-02-15)
+Phase 3.4 (MongoDB TLS + Auth public)  ⬜ TODO
     |
     v
-Phase 4 (Migration donnees)  <-- PROCHAINE ETAPE
+Phase 4 (Migration donnees)
     |
     v
 Phase 5 (Deploiement VPS)
@@ -1122,7 +1175,7 @@ Phase 6 (Fichiers)       \
 Phase 7 (Qdrant)          /
 ```
 
-Les phases 1-3 sont terminees (auth, userId, dual driver, infra VPS, tunnel SSH). Prochaine etape : migration des donnees (Phase 4).
+Les phases 1-3.3 et 3.6 sont terminees (auth, userId, dual driver, infra VPS). Prochaine etape : Phase 3.4 (MongoDB TLS + Auth), puis migration des donnees (Phase 4).
 
 ## Risques identifies
 
