@@ -63,7 +63,8 @@ const validateProjectId = async (projectId) => {
 
 const embedQuery = async (text) => {
   const { embedText } = await import('/imports/api/search/vectorStore');
-  return embedText(text);
+  const userId = getMCPUserId();
+  return embedText(text, { userId });
 };
 
 const fetchPreview = async (kind, rawId) => {
@@ -348,6 +349,7 @@ export const TOOL_HANDLERS = {
     }
   },
   async tool_semanticSearch(args, memory) {
+    const userId = getMCPUserId();
     const limit = Math.max(1, Math.min(50, Number(args?.limit) || 20));
     const q = String(args?.query || '').trim();
     const url = getQdrantUrl();
@@ -362,7 +364,8 @@ export const TOOL_HANDLERS = {
     try {
       const client = new QdrantClient({ url });
       const vector = await embedQuery(q);
-      const searchRes = await client.search(COLLECTION(), { vector, limit, with_payload: true });
+      const filter = { must: [{ key: 'userId', match: { value: userId } }] };
+      const searchRes = await client.search(COLLECTION(), { vector, limit, filter, with_payload: true });
       const items = Array.isArray(searchRes) ? searchRes : (searchRes?.result || []);
       const out = await Promise.all(items.map(async (it) => {
         const p = it?.payload || {};

@@ -68,7 +68,7 @@ Meteor.methods({
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${sanitized.title || ''} ${sanitized.notes || ''}`.trim();
-      await upsertDoc({ kind: 'task', id: _id, text, projectId: sanitized.projectId || null });
+      await upsertDoc({ kind: 'task', id: _id, text, projectId: sanitized.projectId || null, userId: this.userId });
     } catch (e) { console.error('[search][tasks.insert] upsert failed', e); }
     return _id;
   },
@@ -101,7 +101,7 @@ Meteor.methods({
         const next = await TasksCollection.findOneAsync(taskId, { fields: { title: 1, notes: 1, projectId: 1 } });
         const text = `${next?.title || ''} ${next?.notes || ''}`.trim();
         const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-        await upsertDoc({ kind: 'task', id: taskId, text, projectId: next && next.projectId });
+        await upsertDoc({ kind: 'task', id: taskId, text, projectId: next && next.projectId, userId: this.userId });
       } catch (e) { console.error('[search][tasks.update] upsert failed', e); }
     }
     return res;

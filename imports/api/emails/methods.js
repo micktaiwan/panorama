@@ -252,11 +252,12 @@ Meteor.methods({
         try {
           const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
           const emailText = `${from} ${to} ${subject} ${snippet} ${body}`;
-          await upsertDocChunks({ 
-            kind: 'email', 
-            id: message.id, 
-            text: emailText, 
-            threadId: message.threadId || null 
+          await upsertDocChunks({
+            kind: 'email',
+            id: message.id,
+            text: emailText,
+            userId: this.userId,
+            threadId: message.threadId || null
           });
           console.log(`[GMAIL API] Successfully vectorized message ${message.id}`);
         } catch (vectorError) {
@@ -304,11 +305,12 @@ Meteor.methods({
           const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
           const emailText = `${message.snippet || ''}`;
           if (emailText.trim()) {
-            await upsertDocChunks({ 
-              kind: 'email', 
-              id: message.id, 
-              text: emailText, 
-              threadId: message.threadId || null 
+            await upsertDocChunks({
+              kind: 'email',
+              id: message.id,
+              text: emailText,
+              userId: this.userId,
+              threadId: message.threadId || null
             });
             console.log(`[GMAIL API] Successfully vectorized message ${message.id} with basic data`);
           }

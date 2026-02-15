@@ -6,15 +6,16 @@ import { DEFAULT_CLEAN_PROMPT } from '/imports/api/notes/cleanPrompt';
 import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 // Helper function to update note index and project timestamp
-const updateNoteIndex = async (noteId) => {
+const updateNoteIndex = async (noteId, userId) => {
   const { NotesCollection } = await import('/imports/api/notes/collections');
   const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
   const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-  await upsertDoc({ 
-    kind: 'note', 
-    id: noteId, 
-    text: `${next?.title || ''} ${next?.content || ''}`.trim(), 
-    projectId: next?.projectId || null 
+  await upsertDoc({
+    kind: 'note',
+    id: noteId,
+    text: `${next?.title || ''} ${next?.content || ''}`.trim(),
+    projectId: next?.projectId || null,
+    userId
   });
   if (next?.projectId) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
@@ -56,7 +57,7 @@ Meteor.methods({
       await NotesCollection.updateAsync(noteId, { $set: { content: cleaned, updatedAt: new Date() } });
 
       // Update search vector and project updatedAt
-      await updateNoteIndex(noteId);
+      await updateNoteIndex(noteId, this.userId);
 
       return { content: cleaned };
     } catch (error) {
@@ -104,7 +105,7 @@ Meteor.methods({
       await NotesCollection.updateAsync(noteId, { $set: { content: summarized, updatedAt: new Date() } });
 
       // Update search vector and project updatedAt
-      await updateNoteIndex(noteId);
+      await updateNoteIndex(noteId, this.userId);
 
       return { content: summarized };
     } catch (error) {

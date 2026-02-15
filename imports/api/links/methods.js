@@ -39,7 +39,7 @@ Meteor.methods({
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${clean.name || ''} ${clean.url || ''}`.trim();
-      await upsertDoc({ kind: 'link', id: _id, text, projectId: clean.projectId || null });
+      await upsertDoc({ kind: 'link', id: _id, text, projectId: clean.projectId || null, userId: this.userId });
     } catch (e) { console.error('[search][links.insert] upsert failed', e); }
     return _id;
   },
@@ -55,7 +55,7 @@ Meteor.methods({
       const next = await LinksCollection.findOneAsync(linkId, { fields: { name: 1, url: 1, projectId: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${next?.name || ''} ${next?.url || ''}`.trim();
-      await upsertDoc({ kind: 'link', id: linkId, text, projectId: next?.projectId || null });
+      await upsertDoc({ kind: 'link', id: linkId, text, projectId: next?.projectId || null, userId: this.userId });
     } catch (e) { console.error('[search][links.update] upsert failed', e); }
     return res;
   },

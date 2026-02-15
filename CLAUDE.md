@@ -65,7 +65,7 @@ The app uses a **proxy pattern** to route AI calls between local and remote prov
 - **Manual reindexing required** when switching embedding models or AI modes
 - Abstractions in `imports/api/search/vectorStore.js`: `embedText(text)`, `upsertDoc({kind, id, text, projectId})`, `deleteDoc(kind, id)`
 - Fallback to `search.instant` when Qdrant unavailable
-- **Known gap**: Qdrant index is currently global (no `userId` in payloads or search filters). `collectDocs()`/`collectDocsByKind()` in `search/methods.js` query remote collections without userId filtering. Phase 7 will add per-user isolation. See `docs/multi-user-migration-plan.md`
+- **Qdrant isolation**: Qdrant payloads include `userId`, all searches and indexation filter by userId. Payload index on `userId` (Keyword) for performance. Reindexation required after deployment (Preferences > Qdrant > Rebuild).
 
 ### UI Component Patterns
 
@@ -144,7 +144,7 @@ Config helpers in `imports/api/_shared/config.js`:
 - **MCP tools**: use `localUserId` from `appPreferences` for server-to-server calls (no DDP session)
 - **LLM responses**: no validation/sanitization (trust AI providers)
 - **API keys**: store in User Preferences or env vars, no format validation
-- **Qdrant**: currently global (no per-user isolation) — Phase 7 pending
+- **Qdrant**: per-user isolation via `userId` in payloads + search filters (Phase 7 done)
 
 ## Key Features
 
@@ -155,6 +155,17 @@ Config helpers in `imports/api/_shared/config.js`:
 - **Situations Analyzer**: LLM-powered workspace for analyzing scenarios. Prompt helpers in `imports/api/situations/promptHelpers.js`
 - **Gmail Integration**: OAuth2 integration for reading emails. Collections: `emails`. See `docs/gmail-setup.md`
 - **Claude Code**: In-app Claude CLI integration with session management, permission prompts, and shell escape (`!command`). UI: `imports/ui/ClaudeCode/`, API: `imports/api/claudeSessions/`, `imports/api/claudeMessages/`. Logs: `~/.panorama-claude.log`. See `docs/features/23-feature-claude-code.md`
+
+## Deployment
+
+Deploy via [Meteor Up (mup)](https://github.com/zodern/meteor-up) from the `.deploy/` directory:
+
+```bash
+source ~/.env.secrets
+cd .deploy && nvm exec 20.9.0 mup deploy
+```
+
+First-time setup: `cd .deploy && nvm exec 20.9.0 mup setup`
 
 ## Testing
 
