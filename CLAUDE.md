@@ -158,14 +158,13 @@ Config helpers in `imports/api/_shared/config.js`:
 
 ## Deployment
 
-Deploy via [Meteor Up (mup)](https://github.com/zodern/meteor-up) from the `.deploy/` directory:
+Deploy via [Meteor Up (mup)](https://github.com/zodern/meteor-up):
 
 ```bash
-source ~/.env.secrets
-cd .deploy && nvm exec 20.9.0 mup deploy
+./deploy.sh
 ```
 
-First-time setup: `cd .deploy && nvm exec 20.9.0 mup setup`
+First-time setup: `source ~/.env.secrets && cd .deploy && nvm exec 20.9.0 mup setup`
 
 ## Testing
 
