@@ -42,7 +42,7 @@ export const ReleasesPage = ({ releaseId }) => {
                 <span className="releasesPage-version">v{r.version}</span>
                 <h3 className="releasesPage-title">{r.title}</h3>
                 <span className="releasesPage-date">
-                  {r.createdAt?.toLocaleDateString('fr-FR', {
+                  {r.createdAt?.toLocaleDateString(undefined, {
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric',
