@@ -33,7 +33,10 @@ module.exports = {
     path: '../',
     docker: {
       image: 'zodern/meteor:root',
-      args: ['--network=server_organizer-network'],
+      args: [
+        '--network=server_organizer-network',
+        '-v', '/var/www/panorama/files:/var/www/panorama/files',
+      ],
     },
     servers: { one: {} },
     buildOptions: {
@@ -46,6 +49,7 @@ module.exports = {
       PANORAMA_MODE: 'remote',
       PANORAMA_FILES_DIR: '/var/www/panorama/files',
       QDRANT_URL: 'http://organizer-qdrant:6333',
+      PANORAMA_FILES_API_KEY: process.env.PANORAMA_FILES_API_KEY,
     },
     deployCheckWaitTime: 120,
   },

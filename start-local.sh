@@ -42,6 +42,8 @@ MONGO_OPLOG_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/local?${MON
 
 export MONGO_URL MONGO_OPLOG_URL
 export QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}"
+export PANORAMA_FILES_URL="https://panorama.mickaelfm.me"
+export PANORAMA_FILES_API_KEY="${PANORAMA_FILES_API_KEY:?Définir PANORAMA_FILES_API_KEY dans ~/.env.secrets}"
 
 echo "→ Lancement Meteor + Electron (port $METEOR_PORT)..."
 echo "  MONGO_URL        = mongodb://${MONGO_USER}:***@${MONGO_HOST}/panorama?${MONGO_OPTS}"

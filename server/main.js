@@ -115,6 +115,7 @@ import '/imports/api/alarms/methods';
 import '/imports/api/files/collections';
 import '/imports/api/files/publications';
 import '/imports/api/files/methods';
+import '/imports/api/files/internalRoutes';
 import '/imports/api/links/collections';
 import '/imports/api/links/publications';
 import '/imports/api/links/methods';

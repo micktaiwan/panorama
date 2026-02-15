@@ -14,7 +14,7 @@ import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 // 2. Environment variable PANORAMA_FILES_DIR
 // 3. Meteor settings filesDir
 // 4. Default directory in the user's home directory named 'PanoramaFiles'
-const getStorageDir = async () => {
+export const getStorageDir = async () => {
   const pref = await AppPreferencesCollection.findOneAsync({});
   const fromPrefs = pref?.filesDir && typeof pref.filesDir === 'string' && pref.filesDir.trim() ? pref.filesDir.trim() : null;
   const base = fromPrefs || process.env.PANORAMA_FILES_DIR || (Meteor.settings?.filesDir) || path.join(os.homedir(), 'PanoramaFiles');
@@ -36,13 +36,17 @@ Meteor.methods({
     ensureLoggedIn(this.userId);
     const cleanName = sanitizeName(name);
     if (!cleanName) throw new Meteor.Error('invalid-name', 'File name is required');
-    const storageDir = await getStorageDir();
     const uniqueId = Random.id();
     const safeOriginal = String(originalName || '').replace(/[^a-zA-Z0-9._-]+/g, '_');
     const storedFileName = `${cleanName}__${uniqueId}__${safeOriginal}`;
-    const filePath = path.join(storageDir, storedFileName);
     const buffer = Buffer.from(contentBase64, 'base64');
-    await fs.promises.writeFile(filePath, buffer);
+    const { isRemoteFileStorage, remoteStoreFile } = await import('./remoteFileClient');
+    if (isRemoteFileStorage()) {
+      await remoteStoreFile(storedFileName, contentBase64);
+    } else {
+      const storageDir = await getStorageDir();
+      await fs.promises.writeFile(path.join(storageDir, storedFileName), buffer);
+    }
     const now = new Date();
     const _id = await FilesCollection.insertAsync({
       userId: this.userId,
@@ -77,9 +81,14 @@ Meteor.methods({
     const f = await ensureOwner(FilesCollection, fileId, this.userId);
     if (f?.storedFileName) {
       try {
-        const storageDir = await getStorageDir();
-        const p = path.join(storageDir, f.storedFileName);
-        if (fs.existsSync(p)) await fs.promises.unlink(p);
+        const { isRemoteFileStorage, remoteDeleteFile } = await import('./remoteFileClient');
+        if (isRemoteFileStorage()) {
+          await remoteDeleteFile(f.storedFileName);
+        } else {
+          const storageDir = await getStorageDir();
+          const p = path.join(storageDir, f.storedFileName);
+          if (fs.existsSync(p)) await fs.promises.unlink(p);
+        }
       } catch (e) {
         console.error('files.remove unlink failed', e);
       }
@@ -106,14 +115,23 @@ WebApp.connectHandlers.use(async (req, res, next) => {
   if (!name) { res.statusCode = 400; res.end('Bad request'); return; }
   const fileDoc = await FilesCollection.findOneAsync({ storedFileName: name, userId });
   if (!fileDoc) { res.statusCode = 404; res.end('Not found'); return; }
-  const storageDir = await getStorageDir();
-  const p = path.join(storageDir, name);
-  if (!fs.existsSync(p)) { res.statusCode = 404; res.end('Not found'); return; }
   try {
-    const stat = fs.statSync(p);
-    res.setHeader('Content-Length', String(stat.size));
-    res.setHeader('Content-Type', fileDoc.mimeType || 'application/octet-stream');
-    fs.createReadStream(p).pipe(res);
+    const { isRemoteFileStorage, remoteGetFileStream } = await import('./remoteFileClient');
+    if (isRemoteFileStorage()) {
+      const { body, size, contentType } = await remoteGetFileStream(name);
+      if (size) res.setHeader('Content-Length', size);
+      res.setHeader('Content-Type', fileDoc.mimeType || contentType || 'application/octet-stream');
+      const { Readable } = await import('stream');
+      Readable.fromWeb(body).pipe(res);
+    } else {
+      const storageDir = await getStorageDir();
+      const p = path.join(storageDir, name);
+      if (!fs.existsSync(p)) { res.statusCode = 404; res.end('Not found'); return; }
+      const stat = fs.statSync(p);
+      res.setHeader('Content-Length', String(stat.size));
+      res.setHeader('Content-Type', fileDoc.mimeType || 'application/octet-stream');
+      fs.createReadStream(p).pipe(res);
+    }
   } catch (e) {
     console.error('file serve failed', e);
     res.statusCode = 500;
