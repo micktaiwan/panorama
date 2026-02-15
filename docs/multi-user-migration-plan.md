@@ -357,7 +357,7 @@ L'index Qdrant est **global** : les vecteurs ne contiennent pas de `userId` dans
 
 **Objectif** : l'instance locale de Mick se connecte a la DB remote pour les collections partagees (y compris `users`), et garde la DB locale pour les collections local-only.
 
-**Statut** : code implemente (branche `feature/multi-user-auth`). `localDriver.js` cree, 23 collections local-only modifiees. Reste a faire : tunnel SSH (3.4) et replica set (3.5) sur le VPS.
+**Statut** : code implemente (branche `feature/multi-user-auth`). `localDriver.js` cree, 23 collections local-only modifiees. `/opt/infra/docker-compose.yml` cree sur le VPS. Reste a faire : basculement infra (3.6) et tunnel SSH (3.4).
 
 **Approche inversee** : plutot qu'ajouter un `remoteDriver` sur les 8 collections partagees, `MONGO_URL` pointe directement vers la DB remote. Seules les ~21 collections local-only recoivent un `localDriver`. Avantages :
 - `Meteor.users` est automatiquement sur la DB remote (un seul compte, un seul mot de passe, un seul `userId`)
