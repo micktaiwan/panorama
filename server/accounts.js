@@ -58,6 +58,14 @@ Accounts.emailTemplates.resetPassword = {
   },
 };
 
+// --- Track last login ---
+
+Accounts.onLogin(async ({ user }) => {
+  await Meteor.users.updateAsync(user._id, {
+    $set: { lastLoginAt: new Date() },
+  });
+});
+
 // --- Rate limiting ---
 
 // createUser: 5 per 10 seconds per connection
