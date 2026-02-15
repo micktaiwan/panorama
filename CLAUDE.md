@@ -14,18 +14,17 @@ Panorama is a **local-first, multi-user** project management and notes applicati
 
 ### Database Access
 
-Meteor dev mode runs its own MongoDB instance (not the system MongoDB). Data is stored in `.meteor/local/db`. The port varies — check with `ss -tlnp | grep mongod` (commonly **3001** or **4001**).
+The app uses **two MongoDB connections** in local dev mode:
+
+- **Remote MongoDB** (shared collections): `MONGO_URL` points to the VPS via TLS + auth (`panorama.mickaelfm.me:27018`). Credentials in `~/.env.secrets` (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`). Connection string: `mongodb://USER:PASS@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin&directConnection=true`
+- **Local MongoDB** (local-only collections): Meteor's built-in MongoDB on port `METEOR_PORT + 1` (e.g., port **4001** when app runs on 4000). Data in `.meteor/local/db`.
 
 ```bash
-# Find the actual MongoDB port
-ss -tlnp | grep mongod
+# Connect to remote DB (shared collections)
+mongosh "mongodb://$PANORAMA_MONGO_USER:$PANORAMA_MONGO_PASS@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin&directConnection=true"
 
-# Connect to the dev database (replace PORT)
-mongosh "mongodb://127.0.0.1:PORT/meteor"
-
-# Example queries
-mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.getCollectionNames()'
-mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.tasks.find({}).limit(5).toArray()'
+# Connect to local DB (local-only collections)
+mongosh "mongodb://127.0.0.1:4001/meteor"
 ```
 
 **Do NOT use** `mongosh meteor` or the system MongoDB — those are different databases and will return empty results.
