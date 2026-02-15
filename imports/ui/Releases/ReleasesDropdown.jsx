@@ -32,7 +32,7 @@ export const ReleasesDropdown = ({ releases, lastSeen, onClose }) => {
                   <span className="releasesDropdown-version">v{r.version}</span>
                   <span className="releasesDropdown-title">{r.title}</span>
                   <span className="releasesDropdown-date">
-                    {r.createdAt?.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                    {r.createdAt?.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                   </span>
                 </button>
               </li>
