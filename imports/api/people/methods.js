@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { PeopleCollection } from './collections';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 const normalize = (s) => {
   const base = String(s || '').trim();
@@ -9,6 +10,7 @@ const normalize = (s) => {
 
 Meteor.methods({
   async 'people.insert'(fields) {
+    ensureLoggedIn(this.userId);
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const name = String(fields.name || '').trim();
     if (!name) throw new Meteor.Error('invalid-arg', 'name is required');
@@ -24,7 +26,7 @@ Meteor.methods({
     const subteam = typeof fields.subteam === 'string' ? fields.subteam.trim() : '';
     const teamId = fields.teamId ? String(fields.teamId) : undefined;
     const arrivalDate = fields.arrivalDate ? new Date(fields.arrivalDate) : undefined;
-    const doc = { name, lastName, normalizedName, aliases, role, email, notes, left, contactOnly, createdAt: now, updatedAt: now };
+    const doc = { name, lastName, normalizedName, aliases, role, email, notes, left, contactOnly, userId: this.userId, createdAt: now, updatedAt: now };
     if (teamId) doc.teamId = teamId;
     if (subteam) doc.subteam = subteam;
     if (arrivalDate && !isNaN(arrivalDate.getTime())) doc.arrivalDate = arrivalDate;
@@ -33,6 +35,8 @@ Meteor.methods({
   },
   async 'people.update'(id, fields) {
     check(id, String);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(PeopleCollection, id, this.userId);
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const updates = {};
     const unset = {};
@@ -67,6 +71,8 @@ Meteor.methods({
   },
   async 'people.remove'(id) {
     check(id, String);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(PeopleCollection, id, this.userId);
     await PeopleCollection.removeAsync({ _id: id });
   }
 });
@@ -76,13 +82,14 @@ Meteor.methods({
 Meteor.methods({
   async 'people.importGoogleWorkspace'(records) {
     check(records, Array);
+    ensureLoggedIn(this.userId);
     const now = new Date();
 
     // Count total before import
-    const totalBefore = await PeopleCollection.find({}).countAsync();
+    const totalBefore = await PeopleCollection.find({ userId: this.userId }).countAsync();
 
     // Build lookup maps from existing people
-    const cursor = PeopleCollection.find({}, { fields: { _id: 1, email: 1, name: 1, lastName: 1, left: 1 } });
+    const cursor = PeopleCollection.find({ userId: this.userId }, { fields: { _id: 1, email: 1, name: 1, lastName: 1, left: 1 } });
     const existingPeople = typeof cursor.fetchAsync === 'function' ? await cursor.fetchAsync() : cursor.fetch();
     const emailToPerson = new Map();
     const lastLowerToPerson = new Map();
@@ -154,6 +161,7 @@ Meteor.methods({
           email,
           notes: '',
           left: !!left,
+          userId: this.userId,
           createdAt: now,
           updatedAt: now
         };
@@ -166,7 +174,7 @@ Meteor.methods({
     }
 
     // Count total after import
-    const totalAfter = await PeopleCollection.find({}).countAsync();
+    const totalAfter = await PeopleCollection.find({ userId: this.userId }).countAsync();
 
     return { inserted, updated, skipped, totalBefore, totalAfter };
   }

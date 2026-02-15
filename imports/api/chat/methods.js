@@ -4,9 +4,12 @@
 import { Meteor } from 'meteor/meteor';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { runChatAgent, isClaudeAgentAvailable } from './claudeAgent';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'chat.ask'(payload) {
+    ensureLoggedIn(this.userId);
+    const userId = this.userId;
     const query = String(payload?.query || '').trim();
     const history = Array.isArray(payload?.history) ? payload.history : [];
 
@@ -20,6 +23,7 @@ Meteor.methods({
         role: 'assistant',
         content: 'Clé API Anthropic non configurée. Ajoutez-la dans Préférences → Secrets → Anthropic API Key.',
         error: true,
+        userId,
         createdAt: new Date()
       });
       throw new Meteor.Error(
@@ -36,6 +40,7 @@ Meteor.methods({
       role: 'assistant',
       content: '🤔 Réflexion…',
       isStatus: true,
+      userId,
       createdAt: new Date()
     });
 
@@ -84,6 +89,7 @@ Meteor.methods({
             role: 'assistant',
             content: '🤔 Analyse des résultats…',
             isStatus: true,
+            userId,
             createdAt: new Date()
           });
         },
@@ -104,6 +110,7 @@ Meteor.methods({
       const base = {
         role: 'assistant',
         content: text,
+        userId,
         createdAt: new Date()
       };
 
@@ -133,6 +140,7 @@ Meteor.methods({
         role: 'assistant',
         content: `Erreur: ${error.message || 'Erreur inconnue'}`,
         error: true,
+        userId,
         createdAt: new Date()
       });
 

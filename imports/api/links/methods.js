@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { LinksCollection } from './collections';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 const ensureHttpUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
@@ -23,10 +24,12 @@ Meteor.methods({
       name: String,
       url: String,
     });
+    ensureLoggedIn(this.userId);
     const now = new Date();
     const clean = normalize(doc);
     const _id = await LinksCollection.insertAsync({
       ...clean,
+      userId: this.userId,
       clicksCount: 0,
       lastClickedAt: null,
       createdAt: now,
@@ -36,13 +39,15 @@ Meteor.methods({
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${clean.name || ''} ${clean.url || ''}`.trim();
-      await upsertDoc({ kind: 'link', id: _id, text, projectId: clean.projectId || null });
+      await upsertDoc({ kind: 'link', id: _id, text, projectId: clean.projectId || null, userId: this.userId });
     } catch (e) { console.error('[search][links.insert] upsert failed', e); }
     return _id;
   },
   async 'links.update'(linkId, modifier) {
     check(linkId, String);
     check(modifier, Object);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(LinksCollection, linkId, this.userId);
     const clean = normalize(modifier);
     const res = await LinksCollection.updateAsync(linkId, { $set: { ...clean, updatedAt: new Date() } });
     // Live search upsert
@@ -50,12 +55,14 @@ Meteor.methods({
       const next = await LinksCollection.findOneAsync(linkId, { fields: { name: 1, url: 1, projectId: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${next?.name || ''} ${next?.url || ''}`.trim();
-      await upsertDoc({ kind: 'link', id: linkId, text, projectId: next?.projectId || null });
+      await upsertDoc({ kind: 'link', id: linkId, text, projectId: next?.projectId || null, userId: this.userId });
     } catch (e) { console.error('[search][links.update] upsert failed', e); }
     return res;
   },
   async 'links.remove'(linkId) {
     check(linkId, String);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(LinksCollection, linkId, this.userId);
     const res = await LinksCollection.removeAsync(linkId);
     try {
       const { deleteDoc } = await import('/imports/api/search/vectorStore.js');
@@ -65,11 +72,14 @@ Meteor.methods({
   },
   async 'links.registerClick'(linkId) {
     check(linkId, String);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(LinksCollection, linkId, this.userId);
     return LinksCollection.updateAsync(linkId, { $inc: { clicksCount: 1 }, $set: { lastClickedAt: new Date(), updatedAt: new Date() } });
   },
   async 'links.getUrl'(linkId, opts = {}) {
     check(linkId, String);
-    const registerClick = !!(opts && opts.registerClick);
+    ensureLoggedIn(this.userId);
+    await ensureOwner(LinksCollection, linkId, this.userId);
     const l = await LinksCollection.findOneAsync({ _id: linkId }, { fields: { url: 1 } });
     if (!l || !l.url) throw new Meteor.Error('not-found', 'Link not found');
     const url = ensureHttpUrl(l.url);

@@ -1,0 +1,105 @@
+.authGate {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.authContainer {
+  width: 100%;
+  max-width: 400px;
+  padding: 24px;
+}
+
+.authLogo {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.authLogo h1 {
+  margin: 8px 0 0;
+  color: var(--text-heading);
+  font-size: 24px;
+}
+
+.authLoading {
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Shared auth form styles */
+
+.authCard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.authCard h2 {
+  margin: 0 0 16px;
+  color: var(--text-heading);
+  font-size: 20px;
+}
+
+.authLabel {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.authLabel input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: var(--surface, var(--bg));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.authLabel input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.authError {
+  color: var(--danger);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.authSubmit {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.authLinks {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.authLinks a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.authLinks a:hover {
+  text-decoration: underline;
+}
+
+.authLinks a + a {
+  margin-left: 16px;
+}
+
+.authMuted {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}

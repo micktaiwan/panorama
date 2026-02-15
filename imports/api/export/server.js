@@ -37,10 +37,10 @@ Meteor.methods({
   }
 });
 
-const writeCollectionNdjson = async (stream, name, col) => {
+const writeCollectionNdjson = async (stream, name, col, filter = {}) => {
   // Header line to delimit collections
   stream.write(Buffer.from(JSON.stringify({ collection: name, type: 'begin' }) + '\n'));
-  const cursor = col.find({});
+  const cursor = col.find(filter);
   const batch = await cursor.fetchAsync();
   for (const doc of batch) {
     stream.write(Buffer.from(JSON.stringify({ collection: name, doc }) + '\n'));
@@ -48,7 +48,8 @@ const writeCollectionNdjson = async (stream, name, col) => {
   stream.write(Buffer.from(JSON.stringify({ collection: name, type: 'end' }) + '\n'));
 };
 
-const startArchiveJob = async (jobId) => {
+const startArchiveJob = async (jobId, userId) => {
+  const userFilter = userId ? { userId } : {};
   const tmpDir = os.tmpdir();
   const outPath = path.join(tmpDir, `panorama-export-${jobId}.ndjson.gz`);
   const gzip = zlib.createGzip({ level: 9 });
@@ -77,28 +78,31 @@ const startArchiveJob = async (jobId) => {
   const { ErrorsCollection } = await import('/imports/api/errors/collections');
   const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
 
-  await writeCollectionNdjson(gzip, 'projects', ProjectsCollection);
-  await writeCollectionNdjson(gzip, 'tasks', TasksCollection);
-  await writeCollectionNdjson(gzip, 'notes', NotesCollection);
-  await writeCollectionNdjson(gzip, 'noteSessions', NoteSessionsCollection);
-  await writeCollectionNdjson(gzip, 'noteLines', NoteLinesCollection);
-  await writeCollectionNdjson(gzip, 'alarms', AlarmsCollection);
-  await writeCollectionNdjson(gzip, 'links', LinksCollection);
-  await writeCollectionNdjson(gzip, 'files', FilesCollection);
-  await writeCollectionNdjson(gzip, 'teams', TeamsCollection);
-  await writeCollectionNdjson(gzip, 'people', PeopleCollection);
-  await writeCollectionNdjson(gzip, 'situations', SituationsCollection);
-  await writeCollectionNdjson(gzip, 'situationActors', SituationActorsCollection);
-  await writeCollectionNdjson(gzip, 'situationNotes', SituationNotesCollection);
-  await writeCollectionNdjson(gzip, 'situationQuestions', SituationQuestionsCollection);
-  await writeCollectionNdjson(gzip, 'situationSummaries', SituationSummariesCollection);
-  await writeCollectionNdjson(gzip, 'budgetLines', BudgetLinesCollection);
+  // Remote collections: filter by userId
+  await writeCollectionNdjson(gzip, 'projects', ProjectsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'tasks', TasksCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'notes', NotesCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'noteSessions', NoteSessionsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'noteLines', NoteLinesCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'links', LinksCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'files', FilesCollection, userFilter);
+  // Previously local-only collections: now filter by userId
+  await writeCollectionNdjson(gzip, 'alarms', AlarmsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'teams', TeamsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'people', PeopleCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situations', SituationsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationActors', SituationActorsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationNotes', SituationNotesCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationQuestions', SituationQuestionsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'situationSummaries', SituationSummariesCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'budgetLines', BudgetLinesCollection, userFilter);
+  // appPreferences is a global singleton - no userId filter
   await writeCollectionNdjson(gzip, 'appPreferences', AppPreferencesCollection);
-  await writeCollectionNdjson(gzip, 'chats', ChatsCollection);
-  await writeCollectionNdjson(gzip, 'errors', ErrorsCollection);
-  await writeCollectionNdjson(gzip, 'userLogs', UserLogsCollection);
-  await writeCollectionNdjson(gzip, 'vendorsCache', VendorsCacheCollection);
-  await writeCollectionNdjson(gzip, 'vendorsIgnore', VendorsIgnoreCollection);
+  await writeCollectionNdjson(gzip, 'chats', ChatsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'errors', ErrorsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'userLogs', UserLogsCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'vendorsCache', VendorsCacheCollection, userFilter);
+  await writeCollectionNdjson(gzip, 'vendorsIgnore', VendorsIgnoreCollection, userFilter);
 
   gzip.end();
   await new Promise((resolve, reject) => {
@@ -112,11 +116,14 @@ const startArchiveJob = async (jobId) => {
 
 Meteor.methods({
   async 'app.exportArchiveStart'() {
+    const { ensureLoggedIn } = await import('/imports/api/_shared/auth');
+    ensureLoggedIn(this.userId);
+    const userId = this.userId;
     const id = Random.id();
     jobs.set(id, { ready: false, filePath: null, size: 0, error: null });
     // Run async; do not await in method
     setTimeout(() => {
-      startArchiveJob(id)
+      startArchiveJob(id, userId)
         .then(() => {})
         .catch((e) => {
           console.error('exportArchive job failed', e);

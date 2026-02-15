@@ -2,7 +2,8 @@ import { Meteor } from 'meteor/meteor';
 import { PeopleCollection } from './collections';
 
 Meteor.publish('people.all', function () {
-  return PeopleCollection.find({}, {
+  if (!this.userId) return this.ready();
+  return PeopleCollection.find({ userId: this.userId }, {
     fields: {
       name: 1,
       lastName: 1,

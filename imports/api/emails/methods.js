@@ -5,6 +5,7 @@ import { GmailTokensCollection, GmailMessagesCollection, EmailActionLogsCollecti
 import { chatComplete } from '/imports/api/_shared/llmProxy.js';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections.js';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 // OAuth2 configuration
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'];
@@ -21,8 +22,8 @@ const oauth2Client = new google.auth.OAuth2(
 let apiCallCount = 0;
 
 // Helper function to ensure valid tokens before API calls
-async function ensureValidTokens() {
-  const tokenDoc = await GmailTokensCollection.findOneAsync({});
+async function ensureValidTokens(userId) {
+  const tokenDoc = await GmailTokensCollection.findOneAsync({ userId });
   if (!tokenDoc) {
     throw new Meteor.Error('not-authorized', 'Gmail not connected');
   }
@@ -42,32 +43,33 @@ async function ensureValidTokens() {
       const { credentials } = await oauth2Client.refreshAccessToken();
       
       // Update tokens in database
-      await GmailTokensCollection.upsertAsync({}, {
+      await GmailTokensCollection.upsertAsync({ userId }, {
         $set: {
           ...credentials,
+          userId,
           updatedAt: new Date(),
         }
       });
-      
+
       console.log('[GMAIL API] Tokens refreshed successfully');
       return credentials;
     } catch (refreshError) {
       console.error('[GMAIL API ERROR] Token refresh failed:', refreshError);
-      
+
       // Check if it's a network error
       const errorMessage = refreshError.message || 'Unknown error';
-      const isNetworkError = errorMessage.includes('request to') && 
+      const isNetworkError = errorMessage.includes('request to') &&
                             errorMessage.includes('failed') ||
                             refreshError.code === 'ENOTFOUND' ||
                             refreshError.code === 'ECONNREFUSED' ||
                             refreshError.code === 'ETIMEDOUT';
-      
+
       if (isNetworkError) {
         throw new Meteor.Error('network-error', 'Network error refreshing Gmail tokens. Please check your internet connection.');
       }
-      
+
       // If refresh fails, clear tokens and require reconnection
-      await GmailTokensCollection.removeAsync({});
+      await GmailTokensCollection.removeAsync({ userId });
       console.log('[GMAIL API] Cleared invalid tokens due to refresh failure');
       throw new Meteor.Error('oauth-expired', 'Gmail connection expired. Please reconnect to Gmail.');
     }
@@ -84,6 +86,7 @@ const logApiCall = (method, endpoint, details = '') => {
 
 Meteor.methods({
   'gmail.getAuthUrl'() {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', '/auth/url', 'Generate OAuth URL');
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -93,16 +96,18 @@ Meteor.methods({
   },
 
   async 'gmail.exchangeCode'(code) {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', '/auth/token', 'Exchange code for tokens');
-    
+
     try {
       const { tokens } = await oauth2Client.getToken(code);
       oauth2Client.setCredentials(tokens);
-      
+
       // Store tokens in database
-      await GmailTokensCollection.upsertAsync({}, {
+      await GmailTokensCollection.upsertAsync({ userId: this.userId }, {
         $set: {
           ...tokens,
+          userId: this.userId,
           updatedAt: new Date(),
         }
       });
@@ -134,8 +139,9 @@ Meteor.methods({
   },
 
   async 'gmail.getTokens'() {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', '/tokens', 'Get stored tokens from DB');
-    const tokenDoc = await GmailTokensCollection.findOneAsync({});
+    const tokenDoc = await GmailTokensCollection.findOneAsync({ userId: this.userId });
     if (!tokenDoc) {
       throw new Meteor.Error('not-authorized', 'Gmail not connected');
     }
@@ -143,9 +149,10 @@ Meteor.methods({
   },
 
   async 'gmail.listMessages'(query = '', maxResults = 20) {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', '/messages/list', `Query: "${query}", MaxResults: ${maxResults}`);
 
-    await ensureValidTokens();
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     // Always filter to show only inbox emails (not archived)
@@ -182,7 +189,7 @@ Meteor.methods({
     
     // Get existing message IDs to avoid re-downloading
     const existingIds = new Set();
-    const existingMessages = await GmailMessagesCollection.find({}, { fields: { id: 1 } }).fetchAsync();
+    const existingMessages = await GmailMessagesCollection.find({ userId: this.userId }, { fields: { id: 1 } }).fetchAsync();
     existingMessages.forEach(msg => existingIds.add(msg.id));
     
     // Process only new messages
@@ -228,6 +235,7 @@ Meteor.methods({
         await GmailMessagesCollection.insertAsync({
           id: message.id,
           threadId: message.threadId,
+          userId: this.userId,
           createdAt: new Date(),
           gmailDate: gmailDate,
           from: from,
@@ -244,11 +252,12 @@ Meteor.methods({
         try {
           const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
           const emailText = `${from} ${to} ${subject} ${snippet} ${body}`;
-          await upsertDocChunks({ 
-            kind: 'email', 
-            id: message.id, 
-            text: emailText, 
-            threadId: message.threadId || null 
+          await upsertDocChunks({
+            kind: 'email',
+            id: message.id,
+            text: emailText,
+            userId: this.userId,
+            threadId: message.threadId || null
           });
           console.log(`[GMAIL API] Successfully vectorized message ${message.id}`);
         } catch (vectorError) {
@@ -276,6 +285,7 @@ Meteor.methods({
         await GmailMessagesCollection.insertAsync({
           id: message.id,
           threadId: message.threadId,
+          userId: this.userId,
           createdAt: new Date(),
           gmailDate: new Date(),
           from: '',
@@ -295,11 +305,12 @@ Meteor.methods({
           const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
           const emailText = `${message.snippet || ''}`;
           if (emailText.trim()) {
-            await upsertDocChunks({ 
-              kind: 'email', 
-              id: message.id, 
-              text: emailText, 
-              threadId: message.threadId || null 
+            await upsertDocChunks({
+              kind: 'email',
+              id: message.id,
+              text: emailText,
+              userId: this.userId,
+              threadId: message.threadId || null
             });
             console.log(`[GMAIL API] Successfully vectorized message ${message.id} with basic data`);
           }
@@ -326,7 +337,7 @@ Meteor.methods({
       console.log(`[GMAIL API] Syncing labels for all ${existingIds.size} existing messages`);
 
       const existingMessagesToSync = await GmailMessagesCollection.find(
-        { id: { $in: Array.from(existingIds) } },
+        { id: { $in: Array.from(existingIds) }, userId: this.userId },
         {
           fields: { id: 1, labelIds: 1 },
           sort: { gmailDate: -1 }
@@ -355,7 +366,7 @@ Meteor.methods({
 
           if (labelsChanged) {
             await GmailMessagesCollection.updateAsync(
-              { id: existingMsg.id },
+              { id: existingMsg.id, userId: this.userId },
               { $set: { labelIds: currentLabelIds, labelsSyncedAt: new Date() } }
             );
             console.log(`[GMAIL API] Updated labels for message ${existingMsg.id}`);
@@ -397,10 +408,11 @@ Meteor.methods({
   },
 
   async 'gmail.getMessage'(messageId) {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', `/messages/${messageId}`, 'Get message from DB or API');
-    
+
     // First try to get from database
-    const existingMessage = await GmailMessagesCollection.findOneAsync({ id: messageId });
+    const existingMessage = await GmailMessagesCollection.findOneAsync({ id: messageId, userId: this.userId });
     if (existingMessage?.fullPayload) {
       console.log(`[GMAIL API] Message ${messageId} found in DB (no API call needed)`);
       return {
@@ -420,8 +432,8 @@ Meteor.methods({
 
     // Fallback to API call if not in database
     logApiCall('GET', `/messages/${messageId}`, 'Fallback to API call (not in DB)');
-    
-    await ensureValidTokens();
+
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     const response = await gmail.users.messages.get({
@@ -464,9 +476,10 @@ Meteor.methods({
   },
 
   async 'gmail.archiveMessage'(messageId) {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', `/messages/${messageId}/modify`, 'Archive message');
-    
-    await ensureValidTokens();
+
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     try {
@@ -480,24 +493,24 @@ Meteor.methods({
       });
 
       // Remove from local collection
-      await GmailMessagesCollection.removeAsync({ id: messageId });
+      await GmailMessagesCollection.removeAsync({ id: messageId, userId: this.userId });
       console.log(`[GMAIL API] Message ${messageId} archived and removed from DB`);
 
       return { success: true };
     } catch (error) {
       console.error(`[GMAIL API ERROR] Failed to archive message ${messageId}:`, error);
-      
+
       // Check if it's an OAuth2/token error
       const errorMessage = error.message || 'Unknown error';
-      const isOAuthError = errorMessage.includes('oauth2') || 
-                          errorMessage.includes('token') || 
+      const isOAuthError = errorMessage.includes('oauth2') ||
+                          errorMessage.includes('token') ||
                           errorMessage.includes('unauthorized') ||
                           errorMessage.includes('authentication') ||
                           error.code === 401;
-      
+
       if (isOAuthError) {
         // Clear invalid tokens
-        await GmailTokensCollection.removeAsync({});
+        await GmailTokensCollection.removeAsync({ userId: this.userId });
         console.log('[GMAIL API] Cleared invalid tokens due to OAuth error');
         throw new Meteor.Error('oauth-expired', 'Gmail connection expired. Please reconnect to Gmail.');
       }
@@ -508,9 +521,10 @@ Meteor.methods({
   },
 
   async 'gmail.addLabel'(messageId, labelId) {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', `/messages/${messageId}/modify`, `Add label: ${labelId}`);
 
-    await ensureValidTokens();
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     await gmail.users.messages.modify({
@@ -522,12 +536,12 @@ Meteor.methods({
     });
 
     // Update local collection
-    const email = await GmailMessagesCollection.findOneAsync({ id: messageId });
+    const email = await GmailMessagesCollection.findOneAsync({ id: messageId, userId: this.userId });
     if (email) {
       const currentLabels = email.labelIds || [];
       if (!currentLabels.includes(labelId)) {
         await GmailMessagesCollection.updateAsync(
-          { id: messageId },
+          { id: messageId, userId: this.userId },
           { $set: { labelIds: [...currentLabels, labelId] } }
         );
       }
@@ -538,9 +552,10 @@ Meteor.methods({
   },
 
   async 'gmail.removeLabel'(messageId, labelId) {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', `/messages/${messageId}/modify`, `Remove label: ${labelId}`);
 
-    await ensureValidTokens();
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     await gmail.users.messages.modify({
@@ -552,11 +567,11 @@ Meteor.methods({
     });
 
     // Update local collection
-    const email = await GmailMessagesCollection.findOneAsync({ id: messageId });
+    const email = await GmailMessagesCollection.findOneAsync({ id: messageId, userId: this.userId });
     if (email) {
       const currentLabels = email.labelIds || [];
       await GmailMessagesCollection.updateAsync(
-        { id: messageId },
+        { id: messageId, userId: this.userId },
         { $set: { labelIds: currentLabels.filter(l => l !== labelId) } }
       );
     }
@@ -566,9 +581,10 @@ Meteor.methods({
   },
 
   async 'gmail.listLabels'() {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', '/labels', 'List all labels');
 
-    await ensureValidTokens();
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     const response = await gmail.users.labels.list({
@@ -582,13 +598,14 @@ Meteor.methods({
   },
 
   async 'gmail.createLabel'(labelName) {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', '/labels', `Create label: ${labelName}`);
 
     if (!labelName || typeof labelName !== 'string' || labelName.trim().length === 0) {
       throw new Meteor.Error('invalid-label-name', 'Label name is required and must be a non-empty string');
     }
 
-    await ensureValidTokens();
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     try {
@@ -638,7 +655,7 @@ Meteor.methods({
 
       if (isOAuthError) {
         // Clear invalid tokens
-        await GmailTokensCollection.removeAsync({});
+        await GmailTokensCollection.removeAsync({ userId: this.userId });
         console.log('[GMAIL API] Cleared invalid tokens due to OAuth error');
         throw new Meteor.Error('oauth-expired', 'Gmail connection expired. Please reconnect to Gmail.');
       }
@@ -649,6 +666,7 @@ Meteor.methods({
 
   // Method to get API call statistics
   'gmail.getApiStats'() {
+    ensureLoggedIn(this.userId);
     return {
       totalApiCalls: apiCallCount,
       timestamp: new Date().toISOString()
@@ -657,11 +675,12 @@ Meteor.methods({
 
   // Method to get email statistics via RPC
   async 'gmail.getEmailStats'() {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', '/email-stats', 'Get email statistics');
-    
+
     try {
       // Get all messages for statistics
-      const allMessages = await GmailMessagesCollection.find({}).fetchAsync();
+      const allMessages = await GmailMessagesCollection.find({ userId: this.userId }).fetchAsync();
       
       // Count inbox messages
       const inboxMessages = allMessages.filter(message => {
@@ -690,12 +709,14 @@ Meteor.methods({
 
   // Method to get all messages in a thread via RPC
   async 'gmail.getThreadMessages'(threadId) {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', `/thread/${threadId}`, 'Get thread messages');
-    
+
     try {
       // Get all messages in the thread (including archived ones)
       const threadMessages = await GmailMessagesCollection.find({
-        threadId: threadId
+        threadId: threadId,
+        userId: this.userId
       }, {
         sort: { gmailDate: 1 } // Sort chronologically
       }).fetchAsync();
@@ -709,11 +730,12 @@ Meteor.methods({
   },
 
   async 'gmail.cleanupDuplicates'() {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', '/cleanup-duplicates', 'Clean up duplicate messages');
-    
+
     try {
       // Get all messages
-      const allMessages = await GmailMessagesCollection.find({}).fetchAsync();
+      const allMessages = await GmailMessagesCollection.find({ userId: this.userId }).fetchAsync();
       console.log(`[GMAIL CLEANUP] Found ${allMessages.length} total messages`);
       
       // Group by message ID to find duplicates
@@ -760,6 +782,7 @@ Meteor.methods({
 
 
   async 'gmail.analyzeThread'(threadData) {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', '/analyze-thread', 'Analyze email thread with AI based on preferences');
     
     // Import the LLM proxy function
@@ -821,14 +844,15 @@ ${fullThreadText}`;
   },
 
   async 'gmail.syncLabels'(maxMessages = 50) {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', '/sync-labels', `Sync labels for up to ${maxMessages} messages`);
-    
-    await ensureValidTokens();
+
+    await ensureValidTokens(this.userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     try {
       // Get existing messages from database
-      const existingMessages = await GmailMessagesCollection.find({}, { 
+      const existingMessages = await GmailMessagesCollection.find({ userId: this.userId }, {
         fields: { id: 1, labelIds: 1, subject: 1 },
         limit: maxMessages,
         sort: { gmailDate: -1 } // Start with most recent messages
@@ -862,10 +886,10 @@ ${fullThreadText}`;
           if (labelsChanged) {
             // Update the message with new labels
             await GmailMessagesCollection.updateAsync(
-              { id: message.id },
+              { id: message.id, userId: this.userId },
               { $set: { labelIds: currentLabelIds, labelsSyncedAt: new Date() } }
             );
-            
+
             console.log(`[GMAIL SYNC] Updated labels for message ${message.id}: ${currentLabelIds.join(', ')}`);
           }
           
@@ -910,11 +934,11 @@ ${fullThreadText}`;
       
       if (isOAuthError) {
         // Clear invalid tokens
-        await GmailTokensCollection.removeAsync({});
+        await GmailTokensCollection.removeAsync({ userId: this.userId });
         console.log('[GMAIL SYNC] Cleared invalid tokens due to OAuth error');
         throw new Meteor.Error('oauth-expired', 'Gmail connection expired. Please reconnect to Gmail.');
       }
-      
+
       throw new Meteor.Error('sync-failed', `Failed to sync labels: ${errorMessage}`);
     }
   },
@@ -1174,15 +1198,17 @@ Body preview: ${emailContext.bodyPreview}`;
 
 Meteor.methods({
   async 'emails.suggestCta'(emailId) {
+    ensureLoggedIn(this.userId);
     return await suggestCtaInternal(emailId);
   },
 
   async 'emails.moveToTrash'(emailId) {
+    ensureLoggedIn(this.userId);
     console.log('[MOVE TO TRASH] Starting deletion for emailId:', emailId);
     // Try to find by Gmail ID first, then by MongoDB _id
-    let email = await GmailMessagesCollection.findOneAsync({ id: emailId });
+    let email = await GmailMessagesCollection.findOneAsync({ id: emailId, userId: this.userId });
     if (!email) {
-      email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
+      email = await GmailMessagesCollection.findOneAsync({ _id: emailId, userId: this.userId });
     }
     if (!email) {
       console.error('[MOVE TO TRASH] Email not found for id:', emailId);
@@ -1193,6 +1219,7 @@ Meteor.methods({
     // Log the action
     await EmailActionLogsCollection.insertAsync({
       emailId,
+      userId: this.userId,
       suggestedAction: email.ctaSuggestion?.action || null,
       chosenAction: 'delete',
       confidence: email.ctaSuggestion?.confidence || null,
@@ -1203,7 +1230,7 @@ Meteor.methods({
     });
 
     // Move to trash via Gmail API
-    return ensureValidTokens().then(async (credentials) => {
+    return ensureValidTokens(this.userId).then(async (credentials) => {
       oauth2Client.setCredentials(credentials);
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
       
@@ -1229,7 +1256,8 @@ Meteor.methods({
   },
 
   async 'emails.archive'(emailId) {
-    const email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
+    ensureLoggedIn(this.userId);
+    const email = await GmailMessagesCollection.findOneAsync({ _id: emailId, userId: this.userId });
     if (!email) {
       throw new Meteor.Error('email-not-found', 'Email not found');
     }
@@ -1237,6 +1265,7 @@ Meteor.methods({
     // Log the action
     await EmailActionLogsCollection.insertAsync({
       emailId,
+      userId: this.userId,
       suggestedAction: email.ctaSuggestion?.action || null,
       chosenAction: 'archive',
       confidence: email.ctaSuggestion?.confidence || null,
@@ -1247,7 +1276,7 @@ Meteor.methods({
     });
 
     // Archive via Gmail API
-    return ensureValidTokens().then(async (credentials) => {
+    return ensureValidTokens(this.userId).then(async (credentials) => {
       oauth2Client.setCredentials(credentials);
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
       
@@ -1272,7 +1301,8 @@ Meteor.methods({
   },
 
   async 'emails.markReply'(emailId) {
-    const email = await GmailMessagesCollection.findOneAsync({ _id: emailId });
+    ensureLoggedIn(this.userId);
+    const email = await GmailMessagesCollection.findOneAsync({ _id: emailId, userId: this.userId });
     if (!email) {
       throw new Meteor.Error('email-not-found', 'Email not found');
     }
@@ -1280,6 +1310,7 @@ Meteor.methods({
     // Log the action
     await EmailActionLogsCollection.insertAsync({
       emailId,
+      userId: this.userId,
       suggestedAction: email.ctaSuggestion?.action || null,
       chosenAction: 'reply',
       confidence: email.ctaSuggestion?.confidence || null,
@@ -1301,21 +1332,25 @@ Meteor.methods({
   },
 
   async 'emails.getCtaStats'() {
+    ensureLoggedIn(this.userId);
     try {
       console.log('[emails.getCtaStats] Loading CTA statistics');
 
       // Count prepared emails
       const preparedCount = await GmailMessagesCollection.find({
-        ctaPrepared: true
+        ctaPrepared: true,
+        userId: this.userId
       }).countAsync();
 
       // Count preparing emails
       const preparingCount = await GmailMessagesCollection.find({
-        ctaPreparing: true
+        ctaPreparing: true,
+        userId: this.userId
       }).countAsync();
 
       // Count total eligible emails (in inbox, not archived/deleted)
       const totalEligibleCount = await GmailMessagesCollection.find({
+        userId: this.userId,
         $and: [
           { labelIds: { $in: ['INBOX'] } },
           { labelIds: { $nin: ['TRASH'] } }
@@ -1323,7 +1358,7 @@ Meteor.methods({
       }).countAsync();
 
       // Get action logs for acceptance rate
-      const actionLogs = await EmailActionLogsCollection.find({}).fetchAsync();
+      const actionLogs = await EmailActionLogsCollection.find({ userId: this.userId }).fetchAsync();
       const totalActions = actionLogs.length;
       const acceptedActions = actionLogs.filter(log => log.accepted).length;
       const acceptanceRate = totalActions > 0 ? (acceptedActions / totalActions) : 0;
@@ -1364,11 +1399,12 @@ Meteor.methods({
 
   // ✅ Méthode pour EmailsPage : Résoudre le problème des threads avec emails archivés
   async 'emails.getEmailsPageThreads'() {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', '/emails-page-threads', 'Get threads for EmailsPage with complete context');
-    
+
     try {
       // Get all messages to have complete thread context
-      const allMessages = await GmailMessagesCollection.find({}, {
+      const allMessages = await GmailMessagesCollection.find({ userId: this.userId }, {
         sort: { gmailDate: -1 }
       }).fetchAsync();
       
@@ -1466,11 +1502,12 @@ Meteor.methods({
 
   // ✅ Méthode pour InboxZero : Garder la méthode existante
   async 'emails.getInboxZeroThreads'() {
+    ensureLoggedIn(this.userId);
     logApiCall('GET', '/inbox-zero-threads', 'Get threads for InboxZero with complete context');
-    
+
     try {
       // Get all messages to have complete thread context
-      const allMessages = await GmailMessagesCollection.find({}, {
+      const allMessages = await GmailMessagesCollection.find({ userId: this.userId }, {
         sort: { gmailDate: -1 }
       }).fetchAsync();
       
@@ -1562,10 +1599,11 @@ Meteor.methods({
   },
 
   async 'emails.archiveLocally'(messageId) {
+    ensureLoggedIn(this.userId);
     // Try to find by Gmail ID first, then by MongoDB _id
-    let email = await GmailMessagesCollection.findOneAsync({ id: messageId });
+    let email = await GmailMessagesCollection.findOneAsync({ id: messageId, userId: this.userId });
     if (!email) {
-      email = await GmailMessagesCollection.findOneAsync({ _id: messageId });
+      email = await GmailMessagesCollection.findOneAsync({ _id: messageId, userId: this.userId });
     }
     if (!email) {
       throw new Meteor.Error('email-not-found', 'Email not found');
@@ -1574,6 +1612,7 @@ Meteor.methods({
     // Log the action
     await EmailActionLogsCollection.insertAsync({
       emailId: messageId,
+      userId: this.userId,
       suggestedAction: email.ctaSuggestion?.action || null,
       chosenAction: 'archiveLocally',
       confidence: email.ctaSuggestion?.confidence || null,
@@ -1595,13 +1634,14 @@ Meteor.methods({
   },
 
   async 'emails.clearCache'() {
+    ensureLoggedIn(this.userId);
     logApiCall('POST', '/clear-cache', 'Clear all emails from local cache');
 
     try {
-      const count = await GmailMessagesCollection.find({}).countAsync();
+      const count = await GmailMessagesCollection.find({ userId: this.userId }).countAsync();
       console.log(`[CLEAR CACHE] Removing ${count} emails from local cache`);
 
-      await GmailMessagesCollection.removeAsync({});
+      await GmailMessagesCollection.removeAsync({ userId: this.userId });
 
       console.log('[CLEAR CACHE] Email cache cleared successfully');
 

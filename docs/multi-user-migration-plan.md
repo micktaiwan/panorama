@@ -1,6 +1,6 @@
 # Plan de migration multi-user
 
-Derniere mise a jour : 2026-02-14. Decisions prises le 2026-02-14.
+Derniere mise a jour : 2026-02-15. Decisions prises le 2026-02-14.
 
 ## Contexte
 
@@ -50,7 +50,9 @@ L'application est **integralement single-user** :
 
 ### Infrastructure existante sur le VPS (fevrier 2026)
 
-Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et une version de Panorama faite par David (Express 5 + React, a remplacer).
+Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et un prototype de Panorama fait par David (Express 5 + React, abandonne — a supprimer).
+
+**Note historique** : David avait nomme son prototype "Panoramix" et deploye des containers `panoramix-api` + `panoramix-web`. Ce nom n'est pas retenu — le projet s'appelle **Panorama**. Les containers de David seront supprimes et remplaces par le deploiement Meteor. La DB `panoramix` sur le VPS peut etre droppee apres la mise en production.
 
 **Specs VPS** :
 
@@ -60,26 +62,25 @@ Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et une version
 | CPU | 2 vCPU (upgrade fevrier 2026, etait 1) |
 | Disque | 40 GB (upgrade fevrier 2026, etait 20 GB). Swap: 2 GB (`/swapfile`) |
 
-**Services Docker en place** :
+**Services Docker en place** (apres restructuration Phase 3.6, 2026-02-15) :
 
-| Container | Image | RAM | Role |
+L'infra partagee est separee des applications. Prototype de David supprime.
+
+| Container | Image | Docker-compose | Role |
 |---|---|---|---|
-| `organizer-mongodb` | mongo:5 | ~170 MB | DB partagee (databases `organizer` + `panoramix`). Alias reseau : `mongodb` |
-| `organizer-api` | Node.js 20 | ~97 MB | API Organizer (port 3001) |
-| `organizer-qdrant` | qdrant:v1.16.3 | ~30 MB | Vector DB partagee (ports 6333/6334) |
-| `organizer-coturn` | coturn | ~6 MB | TURN server (Organizer) |
-| `mup-nginx-proxy` | zodern/nginx-proxy | ~58 MB | Reverse proxy SSL (ports 80/443) |
-| `mup-nginx-proxy-letsencrypt` | letsencrypt-companion | ~20 MB | Renouvellement auto SSL |
-| `panoramix-api` | Node.js Express 5 | ~61 MB | API Panorama de David (**a remplacer**) |
-| `panoramix-web` | nginx:alpine | ~3 MB | Frontend React de David (**a remplacer**) |
+| `organizer-mongodb` | mongo:5 (replica set `rs0`) | `/opt/infra/docker-compose.yml` | DB partagee, port `127.0.0.1:27017` |
+| `organizer-qdrant` | qdrant:v1.16.3 | `/opt/infra/docker-compose.yml` | Vector DB, port `127.0.0.1:6333` |
+| `mup-nginx-proxy` | zodern/nginx-proxy | gere par MUP | Reverse proxy SSL (ports 80/443) |
+| `mup-nginx-proxy-letsencrypt` | letsencrypt-companion | gere par MUP | Renouvellement auto SSL |
+| `organizer-api` | Node.js 20 | `/var/www/organizer/server/docker-compose.prod.yml` | API Organizer (port 3001) |
+| `organizer-coturn` | coturn | `/var/www/organizer/server/docker-compose.prod.yml` | TURN server (Organizer) |
+| `panorama` | zodern/meteor:root | gere par MUP (`.deploy/mup.js`) | Panorama Meteor (port 3000, reseau `server_organizer-network`) |
 
 **Domaine** : `panorama.mickaelfm.me` deja configure avec SSL Let's Encrypt via le proxy MUP.
 
 **Reseau Docker** : `server_organizer-network` — tous les containers partagent ce reseau interne.
 
-**Backups** : `mongodump` quotidien automatise pour la DB `organizer` (cron 2h UTC, 7j retention, `/opt/backups/`). La DB `panoramix` a des backups manuels dans `/opt/backups/panorama/` (pas automatises).
-
-**Historique** : David avait d'abord deploye Panorama avec MUP (image `zodern/meteor:root`), puis l'a reecrit en Express 5 + React. Le proxy MUP est reste en place et gere le SSL pour `panorama.mickaelfm.me`.
+**Backups** : `mongodump` quotidien automatise pour la DB `organizer` (cron 2h UTC, 7j retention, `/opt/backups/`). La DB `panorama` n'a pas encore de backup automatise (a ajouter en Phase 5.7).
 
 ### Contraintes
 
@@ -121,18 +122,9 @@ Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et une version
                    | (disque VPS)    |
                    +-----------------+
 
-+----------+-------------+
-|   DB locale             |
-|   (.meteor/local/db)    |
-|                         |
-|   claudeSessions        |
-|   claudeMessages        |
-|   claudeCommands        |
-|   claudeProjects        |
-|   mcpServers            |
-|   toolCallLogs          |
-|   errors (local debug)  |
-+-------------------------+
+Note : LOCAL_MONGO_URL n'est pas utilise dans la configuration actuelle.
+Toutes les collections vivent sur la DB remote avec userId + ensureLoggedIn.
+La distinction local-only/remote a ete supprimee en Phase 3.7.
 ```
 
 ## Split des collections : remote vs local
@@ -200,322 +192,550 @@ Les collections locales peuvent migrer en remote au cas par cas quand le besoin 
 
 ## Phases de migration
 
-### Phase 1 — Authentification
+### Phase 1 — Authentification ✅ DONE (2026-02-15)
 
 **Objectif** : systeme de login fonctionnel, prerequis pour tout le reste.
 
-#### 1.1 Installer les packages Meteor accounts
+**Statut** : implemente et teste en local. Branche `feature/multi-user-auth`.
 
-```bash
-meteor add accounts-base accounts-password
-```
+#### Ce qui a ete fait
 
-Optionnel (plus tard) : `accounts-google` pour OAuth.
-
-#### 1.2 Creer l'UI d'authentification
-
-- Page de login (email/password)
-- Page de signup ouverte (email/password) — tout le monde peut creer un compte
-- Bouton logout dans la navbar
-- Composants dans `imports/ui/Auth/Login.jsx`, `imports/ui/Auth/Signup.jsx`
-- Routes : `#/login`, `#/signup`
-
-#### 1.3 Securiser le signup ouvert
-
-- Validation email (envoi d'un email de confirmation avant activation)
-- Rate limiting sur la creation de compte (`ddp-rate-limiter`)
-- Longueur minimale du mot de passe
-
-#### 1.4 Configurer l'envoi d'emails
-
-**Prerequis pour la validation email et le password reset.** Aucun service d'envoi d'email n'est configure actuellement.
-
-- **Service SMTP : Resend** (compte existant)
-- Configurer `EMAIL_URL` dans les variables d'environnement Meteor :
-  ```
-  EMAIL_URL=smtp://resend:re_YOUR_API_KEY@smtp.resend.com:465
-  ```
-- Verifier que le domaine d'expedition est configure dans Resend (DNS SPF/DKIM)
-- Templates d'emails : confirmation de compte, reset de mot de passe
-- Adresse d'expedition (ex: `noreply@panorama.example.com`)
-
-#### 1.5 Password reset
-
-Flow "mot de passe oublie" — necessaire des qu'on a un signup ouvert :
-
-- Route `#/forgot-password` : formulaire email → `Accounts.forgotPassword()`
-- Route `#/reset-password/:token` : formulaire nouveau mot de passe → `Accounts.resetPassword()`
-- Composants dans `imports/ui/Auth/ForgotPassword.jsx`, `imports/ui/Auth/ResetPassword.jsx`
-- Depend de la configuration SMTP (1.4)
-
-#### 1.6 Proteger l'application
-
-- Wrapper l'App principale : si pas authentifie → redirect vers `#/login`
-- Guard sur les routes : les pages ne sont accessibles qu'authentifie
+- **Packages installes** : `accounts-base`, `accounts-password`, `ddp-rate-limiter`
+- **Config serveur** (`server/accounts.js`) : `Accounts.config({ passwordMinLength: 8 })`, `Accounts.validateNewUser()`, email templates (verification + reset password avec URLs hash-based), rate limiting (createUser 5/10s, login 10/10s, forgotPassword 3/60s)
+- **Import** dans `server/main.js`
+- **Composant AuthGate** (`imports/ui/Auth/AuthGate.jsx`) : wrappe `<App/>`, redirige vers la page login si pas authentifie
+- **Pages auth** dans `imports/ui/Auth/` : `Login.jsx`, `Signup.jsx`, `ForgotPassword.jsx`, `ResetPassword.jsx`, `VerifyEmail.jsx` + CSS partage dans `AuthGate.css`
+- **Routes** ajoutees dans `imports/ui/router.js` : `#/login`, `#/signup`, `#/forgot-password`, `#/reset-password/:token`, `#/verify-email/:token`
+- **Logout** : bouton dans le header de `App.jsx` (email du user + bouton logout)
 - **Auth partout** : pas de bypass en local, Mick s'authentifie comme tout le monde
 
-#### 1.7 Creer les premiers users
+#### Ce qui reste a faire (non-bloquant pour la suite)
 
-- Mick et David creent leur compte via le signup ouvert
+- **Configurer `EMAIL_URL`** (Resend SMTP) pour l'envoi reel d'emails — sans ca, les emails sont imprimes dans la console serveur Meteor (suffisant pour le dev)
+- **Configurer DNS SPF/DKIM** sur le domaine d'expedition dans Resend
+- **Verification email non bloquante** : le signup ne bloque pas le login si l'email n'est pas verifie. Peut etre durci plus tard avec `Accounts.validateLoginAttempt()`
+- Optionnel : `accounts-google` pour OAuth (plus tard)
 - Optionnel : role admin pour Mick (gestion des users, si besoin plus tard)
 
 ---
 
-### Phase 2 — Multi-tenancy (userId partout)
+### Phase 2 — Multi-tenancy (userId partout) ✅ DONE (2026-02-15)
 
 **Objectif** : chaque document appartient a un user. C'est le plus gros chantier.
 
-#### 2.1 Ajouter userId aux methodes d'ecriture
+**Statut** : implemente et teste en local. Branche `feature/multi-user-auth`.
 
-Pour chaque collection remote, modifier les methodes `insert` :
+#### Ce qui a ete fait
 
-```javascript
-// Avant
-async 'projects.insert'(doc) {
-  return ProjectsCollection.insertAsync({ ...doc, createdAt: new Date() });
-}
+**Etape 1 — Module auth helper** (`imports/api/_shared/auth.js`) :
+- `ensureLoggedIn(userId)` — throw `not-authorized` si falsy
+- `ensureOwner(collection, docId, userId)` — find `{_id, userId}`, throw `not-found` si absent, retourne le doc
+- `isRemoteInstance()` — `process.env.PANORAMA_MODE === 'remote'`
+- `ensureLocalOnly()` — throw `local-only` si `isRemoteInstance()`
 
-// Apres
-async 'projects.insert'(doc) {
-  const userId = this.userId;
-  if (!userId) throw new Meteor.Error('not-authorized');
-  return ProjectsCollection.insertAsync({ ...doc, userId, createdAt: new Date() });
-}
-```
+**Etape 2 — userId sur les 8 collections remote** :
 
-Pour les methodes `update` et `remove`, verifier l'ownership :
+Pattern applique a `projects`, `tasks`, `notes`, `noteSessions`, `noteLines`, `links`, `files` :
+- **Insert** : `ensureLoggedIn(this.userId)` + `userId: this.userId` dans le doc
+- **Update/Remove** : `ensureLoggedIn(this.userId)` + `ensureOwner(Collection, docId, this.userId)`
+- **Publications** : `if (!this.userId) return this.ready()` + `find({ userId: this.userId })`
+- **aiMethods** : meme pattern pour `projects/aiMethods.js`, `tasks/aiMethods.js`, `notes/aiMethods.js`, `sessions/aiMethods.js`
 
-```javascript
-async 'projects.update'(projectId, modifier) {
-  const userId = this.userId;
-  if (!userId) throw new Meteor.Error('not-authorized');
-  const doc = await ProjectsCollection.findOneAsync({ _id: projectId, userId });
-  if (!doc) throw new Meteor.Error('not-found');
-  return ProjectsCollection.updateAsync(projectId, { $set: modifier });
-}
-```
+Fichiers modifies : `*/methods.js`, `*/publications.js`, `*/aiMethods.js` pour les 7 collections + `userPreferences`.
 
-**Helper reutilisable** : creer `imports/api/_shared/auth.js` avec :
-- `ensureLoggedIn(userId)` — throw si pas connecte
-- `ensureOwner(collection, docId, userId)` — throw si le doc n'appartient pas au user
+Points d'attention traites :
+- `tasks.promoteToTop` : le `globalOpenSelector` filtre par userId (sinon re-rank des taches des autres users)
+- `notes.duplicate` : le doc copie a `userId: this.userId`
+- `noteSessions.remove` : cascade delete de noteLines filtre par userId
+- `noteLines` : userId denormalise (pas de jointure vers session)
+- `links.registerClick`, `links.getUrl` : ownership check
+- `projects.remove` : cascade delete de tasks/notes/sessions/lines/links/files filtre par userId
 
-#### 2.2 Filtrer les publications par userId
+**Etape 3 — Export securise** :
+- `app.exportAll` : `ensureLoggedIn` + chaque `find` filtre par `{userId: this.userId}`
+- `app.exportArchiveStart` : `ensureLoggedIn`, userId passe au job, `writeCollectionNdjson` filtre les collections remote par userId
 
-```javascript
-// Avant
-Meteor.publish('projects', function () {
-  return ProjectsCollection.find();
-});
+**Etape 4 — Guards local-only** :
+- `ensureLocalOnly()` ajoute en tete de **chaque methode** des ~21 fichiers methods.js des collections locales : situations, situationActors, situationNotes, situationQuestions, situationSummaries, budget, calendar, chats, userLogs (+aiMethods), emails, notionIntegrations, notionTickets, claudeSessions, claudeCommands, claudeProjects, mcpServers, errors, alarms, people, teams
+- Approche choisie : **guard par methode** (plus simple que l'import conditionnel)
+- ~146 guards au total
 
-// Apres
-Meteor.publish('projects', function () {
-  if (!this.userId) return this.ready();
-  return ProjectsCollection.find({ userId: this.userId });
-});
-```
+**Etape 5 — Collection `userPreferences`** :
+- Fichiers crees : `imports/api/userPreferences/collections.js`, `methods.js`, `publications.js`
+- Methodes : `userPreferences.ensure` (upsert initial + migration one-time), `userPreferences.update` (mise a jour partielle)
+- `ensure` inclut une migration one-time (flag `_keysBackfilled`) : copie `openaiApiKey`, `anthropicApiKey`, `perplexityApiKey` et `ai` depuis `appPreferences` si les champs sont `null` dans `userPreferences`. Evite la perte de donnees lors du split appPreferences → userPreferences. Le flag empeche la re-migration si un user efface volontairement une cle.
+- Publication filtree par `this.userId`, index unique `{ userId: 1 }`
 
-Pour `noteLines` qui herite du userId via la session : **denormaliser**. Ajouter userId directement sur noteLines (plus simple et performant que des jointures reactives).
+Split des preferences :
+- **`userPreferences`** (per-user, remote) : `theme`, `openaiApiKey`, `anthropicApiKey`, `perplexityApiKey`, `ai` (mode, fallback, models, timeouts)
+- **`appPreferences`** (instance, local) : `filesDir`, `qdrantUrl`, `devUrlMode`, `onboardedAt`, `pennylaneBaseUrl`, `pennylaneToken`, `slack`, `googleCalendar`, `calendarIcsUrl`, `cta`, `localUserId`
 
-#### 2.3 Collections impactees
+Refactoring `config.js` :
+- Nouveaux getters async user-aware : `getUserPrefs(userId)`, `getOpenAiApiKeyAsync(userId)`, `getAnthropicApiKeyAsync(userId)`, `getAIConfigAsync(userId)`
+- `getLocalUserId()` : lit `localUserId` depuis appPreferences (pour le contexte MCP)
+- Les getters sync existants (`getOpenAiApiKey()`, `getAIConfig()`) continuent de fonctionner (backward compat pour code serveur hors methode)
 
-Les 8 collections remote : `projects`, `tasks`, `notes`, `noteSessions`, `noteLines`, `links`, `files`, `userPreferences`. Pour chacune :
-1. Ajouter `userId` a l'insert
-2. Filtrer par `userId` dans le find des publications
-3. Verifier `userId` dans update/remove
-4. Ajouter un index MongoDB sur `{ userId: 1 }` (ou compound `{ userId: 1, projectId: 1 }` etc.)
+UI refactoring :
+- `Preferences.jsx` : subscribe a `userPreferences`, passe `userPref` prop aux sous-composants
+- `PrefsGeneral.jsx` : theme lit/ecrit dans userPreferences. useEffect depend de `[userPref?._id, userPref?.theme]`
+- `PrefsSecrets.jsx` : API keys (openai, anthropic, perplexity) lisent/ecrivent dans userPreferences. Placeholders uniformes `"(not set)"`. useEffect depend de `[userPref?._id, ...keyFields]`
+- `PrefsAI.jsx` : config AI lit/ecrit dans userPreferences via `userPreferences.update`. useEffect depend de `[userPref?._id, JSON.stringify(userPref?.ai)]`
+- `App.jsx` : theme sync lit depuis userPreferences
+- **Important** : les useEffect des composants Prefs ne doivent **pas** dependre uniquement de `userPref?._id` — sinon les mises a jour server-side (migration, sync) ne se refletent pas dans l'UI
 
-C'est un chantier beaucoup plus leger que les 21 collections initialement prevues.
+**Etape 6 — Indexes MongoDB** :
 
-#### 2.4 Securiser les methodes d'export
+Ajoutes dans `Meteor.startup` de `server/main.js` :
 
-Les methodes `app.exportAll` et `app.exportArchiveStart` n'ont aucun check d'authentification. En multi-user :
-- Ajouter `if (!this.userId) throw new Meteor.Error('not-authorized')` aux deux methodes
-- Filtrer l'export par userId : n'exporter que les documents du user connecte
-- L'export des collections local-only (situations, budget, etc.) reste inchange sur l'instance locale
+| Collection | Index |
+|---|---|
+| `projects` | `{ userId: 1 }` |
+| `tasks` | `{ userId: 1, projectId: 1 }` |
+| `tasks` | `{ userId: 1, done: 1 }` |
+| `notes` | `{ userId: 1, projectId: 1 }` |
+| `noteSessions` | `{ userId: 1, projectId: 1 }` |
+| `noteLines` | `{ userId: 1, sessionId: 1 }` |
+| `links` | `{ userId: 1, projectId: 1 }` |
+| `files` | `{ userId: 1, projectId: 1 }` |
+| `userPreferences` | `{ userId: 1 }` unique |
 
-#### 2.5 Proteger les methodes local-only sur l'instance remote
+**Etape 7 — MCP tools userId filtering** :
 
-Les methodes et publications des collections locales (situations, budget, claude, gmail, etc.) sont importees par `server/main.js` sur les deux instances. Sur l'instance remote, ces collections n'existent pas dans la DB — mais les methodes restent appelables.
+Le MCP server obtient le userId via `localUserId` dans `appPreferences` (lu par `getLocalUserId()` dans `config.js`).
 
-Options :
-- **Guard par methode** : ajouter `if (isRemoteInstance()) throw new Meteor.Error('local-only')` en tete des methodes local-only
-- **Import conditionnel** : ne pas importer ces modules dans `server/main.js` quand `isRemoteInstance()` est vrai (plus propre mais plus complexe a mettre en place)
+Helpers ajoutes dans `handlers.js` :
+- `getMCPUserId()` : lit `localUserId`, throw si non configure
+- `callMethodAs(methodName, userId, ...args)` : appelle `Meteor.server.method_handlers[methodName].call({userId}, ...args)` pour simuler un appel DDP avec userId
 
-> **Question ouverte** : quelle approche privilegier ? Le guard par methode est plus simple. L'import conditionnel est plus propre mais demande de reorganiser `server/main.js`.
+Lectures modifiees (ajout de `{userId}` au selector) :
+- `validateProjectId`, `fetchPreview`
+- `tool_tasksByProject`, `tool_tasksFilter`, `tool_projectsList`, `tool_projectByName`
+- `tool_notesByProject`, `tool_noteById`, `tool_notesByTitleOrContent`
+- `tool_noteSessionsByProject`, `tool_noteLinesBySession`
+- `tool_linksByProject`, `tool_filesByProject`
+- `tool_collectionQuery` : injection automatique de userId si la collection est dans `REMOTE_COLLECTIONS`
+- `tool_projectsOverview` : utilise `callMethodAs` au lieu de `Meteor.callAsync`
 
-#### 2.6 AppPreferences : scinder en deux collections
+Ecritures modifiees (remplacement de `Meteor.callAsync` par `callMethodAs`) :
+- `tool_createProject`, `tool_updateProject`
+- `tool_createTask`, `tool_updateTask`, `tool_deleteTask`
+- `tool_createNote`, `tool_updateNote`, `tool_deleteNote`
+- `tool_createLink`
 
-Nouvelle collection **`userPreferences`** (remote, avec userId) :
-- `theme`, `openaiApiKey`, `ai: { mode, embeddingModel, chatModel, ... }`
-- Preferences d'affichage, raccourcis, etc.
-- Un document par user
+Les outils MCP local-only (alarms, emails, etc.) gardent `Meteor.callAsync` — `ensureLocalOnly()` ne verifie pas userId.
 
-Collection **`appPreferences`** existante (local, sans userId) :
-- `filesDir`, `qdrantUrl`, chemins locaux, config MCP
-- Config specifique a l'instance/machine
+**Etape 8 — Methodes supplementaires securisees** :
 
-Refactoring de `imports/api/_shared/config.js` :
-- `getConfig()` merge les deux sources : userPreferences du user connecte + appPreferences de l'instance en fallback
-- Creer `imports/api/userPreferences/collections.js`, `methods.js`, `publications.js`
-- Migrer l'UI Preferences pour lire/ecrire dans la bonne collection selon le champ
+Au-dela du plan initial, les methodes suivantes ont ete mises a jour avec `ensureLoggedIn` + userId filtering :
+- `panorama.getOverview` : filtre projects/tasks/notes/links/files/sessions par userId
+- `panorama.setRank` : `ensureLoggedIn` + `ensureOwner`
+- `panorama.countAllTokens` : filtre les collections remote par userId
+- `search.instant` : filtre projects/tasks/notes par userId
+- `reporting.recentActivity` : filtre projects/tasks/notes par userId
+- `reporting.aiSummarizeWindow` : filtre projects/tasks/notes par userId
+- `chat.ask` : `ensureLocalOnly`
 
-> **Question ouverte — resolution des prefs cote serveur** : dans les methodes Meteor, `this.userId` est disponible pour charger les userPreferences. Mais le code serveur hors methodes (LLM proxy, background processing, vectorStore) n'a pas de userId en contexte. Options :
-> - Passer userId explicitement dans les fonctions serveur qui en ont besoin (ex: `chatComplete({..., userId})`)
-> - Pour le code qui tourne hors requete utilisateur (cron, reindex), utiliser les appPreferences d'instance en fallback
-> - A clarifier au moment de l'implementation
+#### ~~Limitation connue — Qdrant non isole par user~~ (RESOLVED — Phase 7 DONE)
 
-#### 2.7 Strategie d'indexes
+L'index Qdrant est desormais **isole par user** : les vecteurs contiennent `userId` dans les payloads, toutes les recherches et indexations filtrent par userId. Voir Phase 7 ci-dessous.
 
-Ajouter des indexes MongoDB sur les collections remote pour eviter les full scans. Indexes recommandes :
-
-| Collection | Index | Justification |
-|---|---|---|
-| `projects` | `{ userId: 1 }` | Filtre principal des publications |
-| `tasks` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `tasks` | `{ userId: 1, done: 1 }` | Taches ouvertes d'un user |
-| `notes` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `noteSessions` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `noteLines` | `{ userId: 1, sessionId: 1 }` | Filtre par user + session |
-| `links` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `files` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `userPreferences` | `{ userId: 1 }` unique | Un document par user |
-
-Creer les indexes avant la migration des donnees (Phase 4) pour que les inserts soient indexes au fil de l'eau.
-
-#### 2.8 Impact sur le MCP Server
-
-Les outils MCP (`imports/api/tools/`) requetent les collections sans filtre userId actuellement. Apres la migration, l'instance locale de Mick tape sur la DB remote qui contient les donnees de tous les users.
-
-**Probleme** : sans filtre userId, les outils MCP retourneraient les donnees de tous les users.
-
-**Solution** : les outils MCP tournent uniquement en local (Claude Code = shell local). L'instance locale connait le user connecte (Mick). Il faut :
-- Injecter le `userId` du user connecte dans le contexte des outils MCP
-- Modifier les helpers de requete dans `imports/api/tools/helpers.js` pour filtrer par userId
-- Adapter `tool_tasksByProject`, `tool_notesByProject`, `tool_semanticSearch`, `tool_collectionQuery`, etc.
-- `COMMON_QUERIES` dans `helpers.js` doivent inclure le filtre userId
-
-> **Question ouverte** : comment le MCP server obtient-il le userId ? Options :
-> - Variable d'environnement (`PANORAMA_USER_ID`) configuree au lancement local
-> - Le MCP server appelle `Meteor.userId()` s'il tourne dans le contexte Meteor
-> - Config dans `appPreferences` de l'instance locale (champ `localUserId`)
+**Note** : apres deploiement, chaque user doit relancer "Rebuild" depuis Preferences > Qdrant pour reindexer avec userId.
 
 ---
 
-### Phase 3 — Dual MongoDB driver
+### Phase 3 — Infrastructure DB remote (DONE)
 
-**Objectif** : l'instance locale de Mick se connecte a la DB remote pour les collections partagees, et garde la DB locale pour le reste.
+**Objectif** : l'instance locale de Mick se connecte a la DB remote. Toutes les collections utilisent le meme pattern userId + ensureLoggedIn.
 
-#### 3.1 Configurer le remote driver
+**Statut** : complet. Infra Docker restructuree (3.6), MongoDB TLS + Auth (3.4), collections unifiees (3.7). La distinction local-only/remote a ete supprimee — `localDriver.js`, `ensureLocalOnly()` et `isRemoteInstance()` n'existent plus.
+
+**Note** : `LOCAL_MONGO_URL` n'est pas utilise. Quand `MONGO_URL` pointe vers le VPS, Meteor ne demarre **pas** son MongoDB interne. Toutes les collections utilisent la DB remote.
+
+**Approche inversee** : plutot qu'ajouter un `remoteDriver` sur les 8 collections partagees, `MONGO_URL` pointe directement vers la DB remote. Seules les ~21 collections local-only recoivent un `localDriver`. Avantages :
+- `Meteor.users` est automatiquement sur la DB remote (un seul compte, un seul mot de passe, un seul `userId`)
+- Les collections partagees ne necessitent **aucune modification**
+- En dev/test (pas de `LOCAL_MONGO_URL`), tout reste local — comportement identique a l'existant
+
+#### 3.1 Configurer le local driver
 
 ```javascript
-// imports/api/_shared/remoteDriver.js
+// imports/api/_shared/localDriver.js
 import { MongoInternals } from 'meteor/mongo';
 
-const remoteUrl = process.env.REMOTE_MONGO_URL;
+const localUrl = process.env.LOCAL_MONGO_URL;
 
-export const remoteDriver = remoteUrl
-  ? new MongoInternals.RemoteCollectionDriver(remoteUrl)
-  : null; // Si pas de REMOTE_MONGO_URL, tout reste local (dev, tests)
+export const localDriver = localUrl
+  ? new MongoInternals.RemoteCollectionDriver(localUrl)
+  : null; // Si pas de LOCAL_MONGO_URL, tout utilise le driver par defaut (dev, tests, VPS)
 ```
 
-#### 3.2 Modifier les declarations de collections
+#### 3.2 Modifier les declarations des collections local-only
 
 ```javascript
-// imports/api/projects/collections.js
+// imports/api/situations/collections.js (exemple — appliquer a toutes les collections local-only)
 import { Mongo } from 'meteor/mongo';
-import { remoteDriver } from '/imports/api/_shared/remoteDriver';
+import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = remoteDriver ? { _driver: remoteDriver } : {};
+const driverOptions = localDriver ? { _driver: localDriver } : {};
 
-export const ProjectsCollection = new Mongo.Collection('projects', driverOptions);
+export const SituationsCollection = new Mongo.Collection('situations', driverOptions);
 ```
 
-Appliquer ce pattern a toutes les collections remote.
+Appliquer ce pattern a toutes les collections local-only (~21 fichiers, voir liste en Phase 2 etape 4).
 
-Les collections local-only ne changent pas (pas de `driverOptions`).
+Les collections remote (projects, tasks, notes, noteSessions, noteLines, links, files, userPreferences) ne changent **pas** — elles utilisent le driver par defaut (`MONGO_URL`), qui pointe vers la DB remote.
 
 #### 3.3 Configuration par environnement
 
-| Environnement | MONGO_URL | REMOTE_MONGO_URL |
+| Environnement | MONGO_URL | LOCAL_MONGO_URL | MONGO_OPLOG_URL |
+|---|---|---|---|
+| Local (Mick) | `mongodb://USER:PASS@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin` | non defini | `mongodb://USER:PASS@panorama.mickaelfm.me:27018/local?tls=true&authSource=admin` |
+| Remote (VPS) | `mongodb://panorama:PASS@organizer-mongodb:27017/panorama?authSource=admin` (reseau Docker, sans TLS) | non defini | `mongodb://panorama:PASS@organizer-mongodb:27017/local?authSource=admin` |
+| Dev/Test | defaut Meteor | non defini | non defini (polling) |
+
+**Comportement par environnement** :
+- **Dev/Test** : `MONGO_URL` non defini → Meteor demarre son MongoDB interne → toutes les collections utilisent la DB locale. Comportement identique a l'existant.
+- **VPS** : `MONGO_URL` pointe vers la DB remote (reseau Docker, sans TLS). `LOCAL_MONGO_URL` non defini → les collections local-only utilisent aussi la DB remote, mais `ensureLocalOnly()` bloque toutes leurs methodes. Aucun risque d'ecriture accidentelle.
+- **Local (Mick)** : `MONGO_URL` pointe vers la DB remote via TLS + auth. Meteor ne demarre **pas** son MongoDB interne quand `MONGO_URL` est defini. `LOCAL_MONGO_URL` non defini → toutes les collections (remote et local-only) utilisent la DB remote. C'est le comportement voulu : les donnees locales sont stockees sur le VPS et protegees par `ensureLocalOnly()` sur l'instance remote.
+
+**Note** : contrairement a ce qui avait ete prevu initialement, Meteor ne demarre **pas** son MongoDB interne quand `MONGO_URL` est defini. Le dual driver n'est donc pas operationnel sans `LOCAL_MONGO_URL`, mais ce n'est pas un probleme : toutes les collections fonctionnent sur la DB remote.
+
+#### 3.4 Connexion MongoDB distante — TLS + Auth ✅ DONE (2026-02-15)
+
+L'instance locale de Mick (et celle de David sur Windows) accede au MongoDB du VPS. Qdrant reste derriere un tunnel SSH.
+
+**Approche abandonnee — tunnel SSH** : le replica set annonce un hostname Docker interne (`organizer-mongodb:27017`). Le driver MongoDB decouvre ce hostname et tente de s'y connecter, ce qui echoue depuis le Mac (hostname non resolvable). `directConnection=true` cause une erreur "Topology is closed" dans Meteor. Les workarounds (`/etc/hosts`, alias loopback `127.0.0.2`, stopper MongoDB local) sont fragiles et ne passent pas a l'echelle (chaque dev doit bidouiller sa machine).
+
+**Approche retenue — MongoDB expose publiquement avec TLS + auth** : MongoDB ecoute sur un port public (27018) avec chiffrement TLS (Let's Encrypt) et authentification SCRAM-SHA-256. Chaque dev a une simple connection string, sans tunnel SSH ni modification systeme.
+
+**Connection string cible** :
+
+```
+mongodb://panorama:PASSWORD@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin
+```
+
+**Note** : pas de `directConnection=true` dans les connection strings Meteor — ca provoquait l'erreur "Topology is closed". Le RS member est reconfigure a `panorama.mickaelfm.me:27018` (hostname public) pour que la decouverte automatique du driver fonctionne.
+
+**Implementation prevue** :
+
+**Etape 1 — Preparation TLS sur le VPS** :
+- Creer `/opt/infra/mongodb-tls/`
+- Extraire le cert Let's Encrypt du container `mup-nginx-proxy` (fullchain.pem + key.pem → mongodb.pem)
+- Generer un keyFile pour l'auth replica set (`openssl rand -base64 756`)
+- Script `generate-pem.sh` pour automatiser l'extraction et le renouvellement
+
+**Etape 2 — Modifier `/opt/infra/docker-compose.yml`** :
+
+```yaml
+mongodb:
+  image: mongo:5
+  container_name: organizer-mongodb
+  restart: unless-stopped
+  command: ["--replSet", "rs0",
+    "--tlsMode", "allowTLS",
+    "--tlsCertificateKeyFile", "/etc/ssl/mongodb.pem",
+    "--tlsCAFile", "/etc/ssl/ca.pem",
+    "--tlsAllowConnectionsWithoutCertificates",
+    "--keyFile", "/data/keyfile/mongo-keyfile"]
+  ports:
+    - "127.0.0.1:27017:27017"   # Interne (Docker + localhost)
+    - "0.0.0.0:27018:27017"     # Externe (TLS + auth, public)
+  volumes:
+    - mongodb_data:/data/db
+    - /opt/infra/mongodb-tls/mongodb.pem:/etc/ssl/mongodb.pem:ro
+    - /opt/infra/mongodb-tls/ca.pem:/etc/ssl/ca.pem:ro
+    - /opt/infra/mongodb-tls/mongo-keyfile:/data/keyfile/mongo-keyfile:ro
+```
+
+Choix techniques :
+- `allowTLS` (pas `preferTLS`) : accepte TLS et non-TLS. `preferTLS` causait des erreurs de validation SSL interne du replica set ("unable to get issuer certificate" — le RS monitor tente TLS pour se connecter a lui-meme). Avec `allowTLS`, les connexions internes restent non-TLS, les clients externes utilisent TLS.
+- `--tlsCAFile` : requis par MongoDB 5 meme avec `--tlsAllowConnectionsWithoutCertificates` ("The use of TLS without specifying a chain of trust is no longer supported"). Pointe vers `chain.pem` (CA intermediaire Let's Encrypt).
+- `--keyFile` : active l'authentification pour le replica set (SCRAM-SHA-256)
+- `--tlsAllowConnectionsWithoutCertificates` : pas de certificat client requis (TLS one-way, comme HTTPS)
+- Port 27018 sur `0.0.0.0` : accessible depuis internet, protege par TLS + auth
+- **RS member reconfigure** : `rs.reconfig()` pour changer le hostname du member de `organizer-mongodb:27017` a `panorama.mickaelfm.me:27018`. Permet au driver MongoDB de decouvrir le member via le hostname public (sans `directConnection=true`).
+
+**Etape 3 — Creer les utilisateurs MongoDB** (via localhost exception) :
+
+| User | Roles | Usage |
 |---|---|---|
-| Local (Mick) | `mongodb://localhost:3001/meteor` (defaut Meteor) | `mongodb://localhost:27018/panorama` (via tunnel SSH vers `organizer-mongodb`) |
-| Remote (VPS) | `mongodb://organizer-mongodb:27017/panorama` (reseau Docker) | non defini (tout est local au VPS) |
-| Dev/Test | defaut Meteor | non defini (tout local) |
+| `admin` | `root` sur `admin` | DBA, backups |
+| `panorama` | `readWrite` sur `panorama`, `read` sur `local` | App Panorama (oplog) |
+| `organizer` | `readWrite` sur `organizer` | App Organizer |
 
-Quand `REMOTE_MONGO_URL` n'est pas defini, `remoteDriver` est `null` et toutes les collections utilisent la DB locale. Cela preserve la compatibilite dev/test.
-
-#### 3.4 Tunnel SSH automatique
-
-L'instance locale de Mick accede a MongoDB via tunnel SSH (MongoDB bind localhost sur le VPS, port jamais expose sur internet).
-
-```bash
-# Le tunnel forward le port local 27018 vers le MongoDB du VPS (localhost:27017)
-autossh -M 0 -f -N -L 27018:localhost:27017 user@51.210.150.25
-```
-
-Integration dans le workflow de dev :
-- Script `start-local.sh` qui demarre le tunnel puis lance Meteor
-- Ou `autossh` en service launchd (macOS) pour un tunnel permanent
-- Port local 27018 (pour ne pas conflicte avec un MongoDB local eventuel)
-
-#### 3.5 Oplog tailing
-
-Pour la reactivite Meteor sur la DB remote, configurer `REMOTE_MONGO_OPLOG_URL` (aussi via le tunnel SSH) :
+**Etape 4 — Mettre a jour Organizer** :
 
 ```
-REMOTE_MONGO_OPLOG_URL=mongodb://localhost:27018/local
+MONGODB_URI=mongodb://organizer:PASS@organizer-mongodb:27017/organizer?authSource=admin&directConnection=true
 ```
 
-Sans oplog, Meteor fait du polling (moins reactif mais fonctionnel).
+`directConnection=true` empeche Mongoose de decouvrir le RS member et d'essayer de s'y connecter via le hostname public. Note : `directConnection=true` fonctionne bien avec Mongoose (Organizer) mais cause "Topology is closed" avec le driver Meteor — ne pas l'utiliser dans les connection strings Meteor.
 
-**Prerequis** : MongoDB doit tourner en **replica set** pour que l'oplog existe. Actuellement `organizer-mongodb` n'est **pas** en replica set. Un replica set single-node suffit :
+**Etape 5 — Ouvrir le firewall port 27018** (iptables + firewall OVH si necessaire)
 
-```bash
-# Modifier le docker-compose d'organizer pour ajouter --replSet rs0 au lancement de MongoDB
-# Puis initialiser une seule fois
-docker exec organizer-mongodb mongosh --eval 'rs.initiate()'
+**Etape 6 — Mettre a jour `start-local.sh`** :
+- Supprime le tunnel SSH pour MongoDB (plus besoin)
+- Garde le tunnel SSH pour Qdrant
+- `MONGO_URL` et `MONGO_OPLOG_URL` pointent vers `panorama.mickaelfm.me:27018` avec `tls=true&authSource=admin` (sans `directConnection=true`)
+- Pas de `LOCAL_MONGO_URL` — toutes les collections utilisent la DB remote
+- Credentials dans `~/.env.secrets` (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`), pas dans le script
+- Lance `npm run dev:desktop:4000` (Meteor + Electron)
+
+**Etape 7 — Cron renouvellement cert** : `generate-pem.sh` hebdomadaire (regenere le PEM + restart MongoDB)
+
+**Etape 8 — Mettre a jour le script de backup** : ajouter les credentials auth a `mongodump`
+
+**Retour d'experience — directConnection=true et "Topology is closed"** : l'erreur "Topology is closed" etait causee par `LOCAL_MONGO_URL=mongodb://localhost:4001/meteor` pointant vers un MongoDB inexistant (Meteor ne demarre pas son MongoDB interne quand `MONGO_URL` est defini). La solution : ne pas utiliser `LOCAL_MONGO_URL` du tout, et ne pas utiliser `directConnection=true` dans les connection strings Meteor. Le RS member a ete reconfigure a `panorama.mickaelfm.me:27018` via `rs.reconfig()` pour que la decouverte automatique fonctionne.
+
+**Impact pour David (Windows)** : aucune config systeme. Il clone le repo, definit les variables d'environnement (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`), et lance `start-local.sh` (ou l'equivalent Windows). Pas de tunnel SSH, pas de `/etc/hosts`.
+
+**Qdrant** : reste derriere le tunnel SSH (`autossh`, port local 16333 → VPS 6333). Qdrant n'a pas d'auth built-in suffisante pour une exposition publique.
+
+**Rollback** : restaurer `docker-compose.yml` depuis `.bak-pre-tls`, restaurer le docker-compose Organizer, `git checkout start-local.sh`. Les donnees MongoDB sont intactes.
+
+#### 3.5 Replica set, oplog et ports (absorbe par 3.6)
+
+Meteor utilise l'**oplog** (journal des operations MongoDB) pour la reactivite en temps reel. Sans oplog, Meteor poll la DB toutes les ~10 secondes — insuffisant pour une bonne UX.
+
+**Prerequis** : MongoDB doit tourner en **replica set** pour que l'oplog existe. Un replica set n'est pas une DB separee : c'est un mode de fonctionnement de MongoDB qui active le journal des operations. Un single-node suffit (pas besoin de plusieurs serveurs). Actuellement `organizer-mongodb` n'est **pas** en replica set.
+
+**Ces modifications (replica set + ports exposes sur localhost) sont incluses directement dans la Phase 3.6** (restructuration infra Docker). Pas besoin de les faire en deux temps.
+
+**Configuration oplog** : Meteor lit l'oplog via `MONGO_OPLOG_URL` (voir tableau 3.3). Sur le VPS : `mongodb://panorama:PASS@organizer-mongodb:27017/local?authSource=admin`. En local (Mick) : `mongodb://USER:PASS@panorama.mickaelfm.me:27018/local?tls=true&authSource=admin`.
+
+#### 3.6 Restructuration infra Docker ✅ DONE (2026-02-15)
+
+**Objectif** : separer l'infra partagee (MongoDB, Qdrant, reverse proxy) des applications (Organizer, Panorama). Avant, MongoDB et Qdrant etaient definis dans le docker-compose d'Organizer — couplage artificiel.
+
+**Architecture en place** :
+
+```
+/opt/infra/docker-compose.yml          → mongodb (replica set rs0), qdrant
+/var/www/organizer/server/docker-compose.prod.yml  → api, coturn (reseau externe)
+mup-nginx-proxy + letsencrypt          → geres par MUP, autonomes
+Panorama                               → a deployer via MUP (Phase 5)
 ```
 
-**Attention** : ce changement impacte aussi Organizer. Verifier que l'API Organizer fonctionne correctement apres l'activation du replica set (normalement transparent pour Mongoose).
+**Ce qui a ete fait** :
 
-Sans replica set, l'oplog n'existe pas et Meteor tombe en fallback polling automatiquement.
+1. Backup frais `organizer-pre-restructure.gz` (rapatrie en local dans `.backups/`)
+2. Checkpoint : Organizer fonctionne (health 200)
+3. Prototype de David stoppe et supprime (`/opt/panoramix` → containers `panoramix-api` + `panoramix-web` supprimes)
+4. Organizer stoppe
+5. Infra partagee demarree depuis `/opt/infra/docker-compose.yml`
+6. Docker-compose Organizer simplifie (mongodb/qdrant retires, reseau externe, coturn ajoute)
+7. **Replica set initialise AVANT de relancer Organizer** — necessaire car MongoDB en mode `--replSet` refuse les connexions tant que `rs.initiate()` n'est pas fait. L'ordre prevu dans le plan initial (checkpoint Organizer avant rs.initiate) ne fonctionne pas.
+8. Organizer relance → healthy, messages desktop↔Android OK
+
+**Corrections par rapport au plan initial** :
+
+- **Reseau `external: true`** : le reseau `server_organizer-network` existait deja (cree par le proxy MUP). Il fallait le declarer `external: true` dans `/opt/infra/docker-compose.yml` au lieu de `driver: bridge` + `name:`, sinon Docker refuse de le reutiliser (conflit de labels).
+- **Ordre rs.initiate** : `rs.initiate()` doit etre fait **avant** de relancer Organizer, pas apres. Mongoose ne peut pas se connecter a un MongoDB en mode replica set non initialise (topology "Unknown", timeout 30s).
+
+**`/opt/infra/docker-compose.yml`** (tel que deploye en 3.6, avant TLS — voir 3.4 pour la version avec TLS + Auth) :
+
+```yaml
+services:
+  mongodb:
+    image: mongo:5
+    container_name: organizer-mongodb
+    restart: unless-stopped
+    command: ["--replSet", "rs0"]
+    ports:
+      - "127.0.0.1:27017:27017"       # accessible via reseau Docker
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - shared-infra
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.3
+    container_name: organizer-qdrant
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    ports:
+      - "127.0.0.1:6333:6333"         # accessible via tunnel SSH
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - shared-infra
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__HTTP_PORT=6333
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+networks:
+  shared-infra:
+    external: true                     # reseau existant cree par le proxy MUP
+    name: server_organizer-network
+
+volumes:
+  mongodb_data:
+    external: true
+    name: server_mongodb_data
+  qdrant_data:
+    external: true
+    name: server_qdrant_data
+```
+
+**`/var/www/organizer/server/docker-compose.prod.yml`** (tel que deploye) :
+
+```yaml
+services:
+  api:
+    build: .
+    container_name: organizer-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=mongodb://organizer:PASS@organizer-mongodb:27017/organizer?authSource=admin&directConnection=true  # Auth ajoutee en Phase 3.4
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - QDRANT_URL=http://organizer-qdrant:6333
+      - LOG_DIR=/app/logs
+      - MCP_URL=http://localhost:3001/mcp
+      - EKO_MCP_TOKEN=${EKO_MCP_TOKEN}
+    volumes:
+      - uploads_data:/app/public/uploads
+      - apk_data:/app/public/apk
+      - logs_data:/app/logs
+      - ./agent-config.json:/app/agent-config.json:ro
+    networks:
+      - server_organizer-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  coturn:
+    image: coturn/coturn
+    container_name: organizer-coturn
+    restart: unless-stopped
+    networks:
+      - server_organizer-network
+
+networks:
+  server_organizer-network:
+    external: true
+
+volumes:
+  uploads_data:
+  apk_data:
+  logs_data:
+```
+
+**Backup** : l'ancien docker-compose Organizer est sauvegarde dans `/var/www/organizer/server/docker-compose.prod.yml.bak`.
 
 ---
 
-### Phase 4 — Migration des donnees existantes
+### Phase 3.7 — Collections unifiees (suppression local/remote) ✅ DONE (2026-02-15)
+
+**Objectif** : supprimer la distinction local-only / remote. Toutes les collections utilisent le meme pattern `userId` + `ensureLoggedIn` + `ensureOwner`.
+
+**Contexte** : avec le TLS + Auth (Phase 3.4), toutes les donnees vivent dans une seule DB remote. `LOCAL_MONGO_URL` n'est pas utilise, `localDriver` est toujours `null`. La distinction "local-only" via `ensureLocalOnly()` est devenue artificielle.
+
+**Ce qui a ete fait** :
+
+1. **Infrastructure supprimee** :
+   - `imports/api/_shared/localDriver.js` supprime
+   - `ensureLocalOnly()` et `isRemoteInstance()` supprimes de `auth.js`
+   - `localDriver` et `driverOptions` retires des 23 fichiers `collections.js`
+
+2. **22 fichiers methods.js migres** (~133 guards remplaces) :
+   - `ensureLocalOnly()` remplace par `ensureLoggedIn(this.userId)`
+   - `ensureOwner()` ajoute aux methodes update/remove
+   - `userId: this.userId` ajoute aux inserts et queries
+   - Cas speciaux : `errors/serverConsoleOverride.js` (userId: null), `claudeSessions/processManager.js` (userId en parametre), `cron/jobs.js` (getLocalUserId)
+
+3. **~20 publications corrigees** : filtre `userId: this.userId` ajoute. `errors` utilise `$or: [{userId: this.userId}, {userId: null}]` (erreurs serveur).
+
+4. **MCP tools mis a jour** (`handlers.js`) :
+   - `REMOTE_COLLECTIONS` remplace par `GLOBAL_COLLECTIONS = ['appPreferences']`
+   - `userId: getMCPUserId()` ajoute aux queries sur toutes les collections sauf appPreferences
+
+5. **Export NDJSON** : `userFilter` ajoute aux collections anciennement locales (sauf appPreferences)
+
+6. **25 indexes `{userId: 1}`** ajoutes dans `server/main.js` pour les collections nouvellement migrees
+
+7. **Backfill userId** : migration au startup avec flag `_userIdBackfilledLocal` dans appPreferences
+
+8. **Integrations migrees vers userPreferences** : pennylane, slack, googleCalendar, calendarIcsUrl, cta. Config async user-aware ajoutee dans `config.js`.
+
+**Impact** : il n'existe plus de distinction local-only / remote. Toutes les collections sont traitees de la meme facon (userId + auth). `PANORAMA_MODE` et `isRemoteInstance` ne sont plus utilises dans le code.
+
+---
+
+### Phase 4 — Migration des donnees existantes ✅ DONE (2026-02-15)
 
 **Objectif** : transferer les 8 mois de donnees locales vers la DB remote.
 
-#### 4.1 Construire la methode d'import
+#### 4.1 Strategie de migration : mongodump/mongorestore
 
-**Il n'existe aucune methode d'import dans le code actuel.** Seul l'export existe (`app.exportArchiveStart` dans `imports/api/export/server.js`, exporte 21 collections en NDJSON gzip). Il faut construire le pendant :
+~~L'approche initiale (methode Meteor `app.importArchive` via NDJSON) est abandonnee~~ : le contenu NDJSON transite par DDP qui a une limite de taille de message (~10 MB), insuffisant pour 8 mois de donnees.
 
-```javascript
-// imports/api/export/methods.js
-async 'app.importArchive'({ ndjsonContent, targetUserId }) {
-  // Pour chaque ligne du NDJSON :
-  // 1. Parser { collection, doc } ou { collection, type: 'begin'/'end' }
-  // 2. Filtrer : ne migrer que les collections remote (projects, tasks, notes, noteSessions, noteLines, links, files)
-  // 3. Ajouter userId: targetUserId au doc
-  // 4. Inserer dans la collection correspondante (via le remote driver)
-  // 5. Gerer les conflits d'_id (skip ou overwrite)
-}
+**Approche retenue** : `mongodump` / `mongorestore` avec remapping de namespace (`meteor.*` → `panorama.*`). Toutes les collections migrees d'un coup (pas uniquement les remote), userId remappe sur la totalite.
+
+#### 4.2 Ce qui a ete fait
+
+**Etape 1 — Correction pre-migration** : `note_lines` (118 docs) et `note_sessions` (11 docs) n'avaient pas de userId dans la DB locale (le backfill Phase 4.4 les avait marques "deja ok" a tort — ils etaient vides a l'epoque, les docs ont ete crees apres sans userId). Corrige avec `updateMany({userId: {$exists: false}}, {$set: {userId: "y2bayW975C6hocRkh"}})`.
+
+**Etape 2 — Backup propre** : `mongodump` de la DB locale (`meteor`, port 4001) → `.backups/panorama_2026-02-15_pre-migration-clean.gz` (36 collections, 5 549 docs, tous avec userId sauf appPreferences/users/toolCallLogs).
+
+**Etape 3 — Restauration vers la DB remote** :
+
+```bash
+source ~/.env.secrets
+REMOTE_URI="mongodb://${PANORAMA_MONGO_USER}:${PANORAMA_MONGO_PASS}@panorama.mickaelfm.me:27018/?tls=true&authSource=admin"
+
+mongorestore --gzip \
+  --archive=.backups/panorama_2026-02-15_pre-migration-clean.gz \
+  --uri="$REMOTE_URI" \
+  --nsFrom="meteor.*" --nsTo="panorama.*" \
+  --drop \
+  --nsExclude="meteor.appPreferences" \
+  --nsExclude="meteor.toolCallLogs" \
+  --nsExclude="meteor.users" \
+  --nsExclude="meteor.userPreferences"
 ```
 
-#### 4.2 Procedure de migration
+**Attention** : l'URI ne doit **pas** contenir le nom de la DB (`/panorama`) — sinon `mongorestore` l'interprete comme `--db` et les flags `--nsFrom`/`--nsTo` sont ignores silencieusement (0 docs restaures sans erreur). Utiliser `/?tls=true&...` au lieu de `/panorama?tls=true&...`.
 
-1. Demarrer Panorama en local (mode classique, DB locale)
-2. Exporter via `app.exportArchiveStart` → fichier `.ndjson.gz`
-3. Demarrer la DB remote sur le VPS
-4. Creer le user Mick dans la DB remote (via accounts-password)
-5. Executer l'import avec `targetUserId` = id du user Mick
-6. Verifier les donnees (compter les documents, spot-check)
-7. Configurer `REMOTE_MONGO_URL` sur l'instance locale
-8. Redemarrer l'instance locale → elle tape sur la DB remote
-9. Verifier que tout fonctionne
-10. Les donnees dans `.meteor/local/db` deviennent un backup
+Resultat : **5 337 docs restaures, 0 echecs**. Collections exclues : `appPreferences` (singleton existant), `users` (compte existant `oinyXGWPpvuvtZfje`), `userPreferences` (existant), `toolCallLogs` (debug local). Index restaures automatiquement.
 
-#### 4.3 Migration des fichiers
+**Etape 4 — Remap userId** :
+
+Ancien userId (local) : `y2bayW975C6hocRkh` → Nouveau userId (remote) : `oinyXGWPpvuvtZfje`
+
+Remap en deux passes :
+1. **7 collections remote** (projects, tasks, notes, note_sessions, note_lines, links, files) : **706 docs**
+2. **24 collections local-only** (alarms, budgetLines, calendarEvents, chats, claudeCommands, claudeMessages, claudeProjects, claudeSessions, emailActionLogs, gmailMessages, gmailTokens, mcpServers, notionIntegrations, notionTickets, people, situation_actors, situation_notes, situation_questions, situation_summaries, situations, teams, userLogs, vendorsCache, vendorsIgnore) : **4 629 docs**
+
+Total remappe : **5 335 docs**, 0 restants avec l'ancien userId.
+
+**Etape 5 — Configuration localUserId** : `db.appPreferences.updateOne({}, {$set: {localUserId: "oinyXGWPpvuvtZfje"}})` sur la DB remote.
+
+**Etape 6 — Verification** : app locale relancee avec `MONGO_URL` vers le remote (`start-local.sh`), toutes les donnees visibles et fonctionnelles.
+
+#### 4.3 Migration des fichiers (a faire en Phase 6)
 
 Les fichiers physiques sont dans `~/PanoramaFiles` (ou le chemin configure).
 
@@ -525,25 +745,22 @@ Les fichiers physiques sont dans `~/PanoramaFiles` (ou le chemin configure).
 4. L'instance locale de Mick garde ses fichiers locaux (pour Claude Code etc.)
 5. Les nouveaux fichiers uploades via le web vont directement sur le disque VPS
 
-#### 4.4 Backfill des champs denormalises
+#### 4.4 Backfill des champs denormalises ✅ DONE (2026-02-15)
 
-Apres l'import initial (4.2), certains documents ont besoin d'un backfill :
+Backfill effectue sur la DB locale de Mick (userId `y2bayW975C6hocRkh`), puis corrige avant la migration :
 
-- **noteLines** : ajouter `userId` sur chaque noteLine (copie depuis la noteSession parente via `sessionId`)
-- Verifier que tous les documents des 8 collections remote ont bien un champ `userId` non-null
-- Script de verification :
+| Collection | Documents backfilles | Note |
+|---|---|---|
+| projects | 38 | |
+| tasks | 260 | |
+| notes | 245 | |
+| noteSessions | 0 → **11** | Corrige pre-migration (etaient vides lors du backfill initial) |
+| noteLines | 0 → **118** | Corrige pre-migration (etaient vides lors du backfill initial) |
+| links | 33 | |
+| files | 1 | |
+| **Total** | **706** | |
 
-```javascript
-// Pour chaque collection remote, compter les documents sans userId
-for (const coll of ['projects', 'tasks', 'notes', 'noteSessions', 'noteLines', 'links', 'files']) {
-  const count = await db.collection(coll).countDocuments({ userId: { $exists: false } });
-  console.log(`${coll}: ${count} documents sans userId`);
-}
-```
-
-Ce backfill doit etre fait **avant** de basculer les publications en mode filtre userId (sinon les documents sans userId deviennent invisibles).
-
-#### 4.5 Reindexation Qdrant
+#### 4.5 Reindexation Qdrant (Phase 7 DONE)
 
 Qdrant est deja en place sur le VPS (`organizer-qdrant`, v1.16.3, ports 6333/6334).
 
@@ -554,194 +771,215 @@ Qdrant est deja en place sur le VPS (`organizer-qdrant`, v1.16.3, ports 6333/633
 
 ---
 
-### Phase 5 — Deploiement de l'instance remote
+### Phase 5 — Deploiement de l'instance remote ✅ DONE (2026-02-15)
 
-**Objectif** : Panorama accessible depuis un navigateur.
+**Objectif** : Panorama accessible depuis un navigateur sur `https://panorama.mickaelfm.me`.
 
-#### 5.1 Nom de domaine
+**Statut** : deploye et fonctionnel. Container `panorama` sur le VPS, SSL actif, page de login accessible.
 
-**Resolu** : `panorama.mickaelfm.me` est deja configure avec SSL Let's Encrypt via le proxy MUP existant. Ce domaine sera reutilise pour le deploiement Meteor.
+#### 5.1 Nom de domaine ✅
+
+`panorama.mickaelfm.me` — SSL Let's Encrypt gere par le proxy MUP existant.
 
 - `ROOT_URL=https://panorama.mickaelfm.me`
-- SSL : deja gere par `mup-nginx-proxy` + `mup-nginx-proxy-letsencrypt`
-- Resend : configurer SPF/DKIM sur `mickaelfm.me` (ou utiliser un autre domaine d'expedition)
+- Resend : configurer SPF/DKIM sur `mickaelfm.me` (non fait, emails en console pour l'instant)
 
-#### 5.2 Infrastructure sur le VPS
+#### 5.2 Infrastructure sur le VPS ✅
 
-L'infrastructure est deja en place (voir "Infrastructure existante" dans le contexte). Pas besoin d'installer :
+Aucune nouvelle infra a installer. Tout reutilise l'existant :
 
-- **MongoDB** : ~~container Docker dedie~~ → reutiliser `organizer-mongodb` (mongo:5) avec une database `panorama` separee. Alias reseau `mongodb` deja disponible
-- **Qdrant** : ~~a installer~~ → `organizer-qdrant` (v1.16.3) deja en place, collections isolees par nom
-- **Reverse proxy + SSL** : ~~a configurer~~ → `mup-nginx-proxy` + letsencrypt companion deja en place
-- **Panorama Meteor** : seul composant a deployer — remplace les containers `panoramix-api` + `panoramix-web` de David
+- **MongoDB** : `organizer-mongodb` (database `panorama` separee)
+- **Qdrant** : `organizer-qdrant` (v1.16.3), accessible via reseau Docker
+- **Reverse proxy + SSL** : `mup-nginx-proxy` + letsencrypt companion
+- **Panorama Meteor** : nouveau container `panorama`
 
-#### 5.3 Deploiement avec MUP (Meteor Up)
+#### 5.3 Deploiement avec MUP (Meteor Up) ✅
 
-**Approche recommandee** : utiliser [MUP](https://meteor-up.com/) pour automatiser le deploiement. MUP gere le build, le deploiement Docker, Nginx reverse proxy et Let's Encrypt en une seule commande.
+MUP fonctionne avec Meteor 3.4. Le CLI MUP doit tourner sous **Node 20.9.0** (bug SSH avec les versions plus recentes).
 
-**Compatibilite Meteor 3** : MUP fonctionne avec Meteor 3 moyennant un workaround — le CLI MUP doit tourner sous Node 20.9.0 (bug SSH avec les versions plus recentes). Workaround : `nvm exec 20.9.0 mup deploy`. Le projet MUP est en cours de revitalisation (nouvelle organisation GitHub, nouveaux maintainers en janvier 2026).
+**Fichiers crees** :
 
-**Note** : le proxy MUP (`mup-nginx-proxy` + letsencrypt) est deja en place sur le VPS et gere le domaine `panorama.mickaelfm.me`. Le deploiement MUP reutilisera ce proxy existant.
+| Fichier | Role |
+|---|---|
+| `.deploy/mup.js` | Configuration MUP (serveur, env vars, proxy) |
+| `.deploy/settings.json` | Meteor settings (`public.isRemote: true`) |
 
-**Setup** :
-
-```bash
-npm install -g mup
-mkdir .deploy && cd .deploy
-mup init
-```
-
-**Configuration** (`mup.js`) :
+**Configuration effective** (`.deploy/mup.js`) :
 
 ```javascript
 module.exports = {
   servers: {
     one: {
       host: '51.210.150.25',
-      username: 'root',  // ou user avec sudo
-      pem: '~/.ssh/id_rsa'
-    }
+      username: 'ubuntu',
+      // Uses ssh-agent (ed25519 key loaded via ssh-add)
+    },
   },
   app: {
     name: 'panorama',
     path: '../',
-    docker: { image: 'zodern/meteor:root' },
+    docker: {
+      image: 'zodern/meteor:root',
+      args: ['--network=server_organizer-network'],
+    },
     servers: { one: {} },
     buildOptions: { serverOnly: true },
     env: {
       ROOT_URL: 'https://panorama.mickaelfm.me',
-      MONGO_URL: 'mongodb://organizer-mongodb:27017/panorama',  // DB partagee, database separee
-      PORT: 4000,
-      EMAIL_URL: 'smtp://resend:re_YOUR_API_KEY@smtp.resend.com:465',
+      MONGO_URL: 'mongodb://panorama:PASS@organizer-mongodb:27017/panorama?authSource=admin',
+      MONGO_OPLOG_URL: 'mongodb://panorama:PASS@organizer-mongodb:27017/local?authSource=admin',
       PANORAMA_MODE: 'remote',
+      PANORAMA_FILES_DIR: '/var/www/panorama/files',
+      QDRANT_URL: 'http://organizer-qdrant:6333',
     },
-    deployCheckWaitTime: 60,
+    deployCheckWaitTime: 120,
   },
   proxy: {
     domains: 'panorama.mickaelfm.me',
-    ssl: { letsEncryptEmail: 'faivred@gmail.com', forceSSL: true }
+    ssl: { letsEncryptEmail: 'faivrem@gmail.com', forceSSL: true },
   },
-  // PAS de section mongo ici — on reutilise organizer-mongodb
+  // No mongo section — reusing organizer-mongodb
 };
 ```
 
-**Deploiement** :
+**Commandes de deploiement** :
 
 ```bash
-# Setup initial (une seule fois)
-nvm exec 20.9.0 mup setup
-
-# Deploy
+source ~/.env.secrets
+nvm exec 20.9.0 mup setup    # first time only
 nvm exec 20.9.0 mup deploy
-
-# Logs
-nvm exec 20.9.0 mup logs
+nvm exec 20.9.0 mup logs     # check logs
 ```
 
-**Ce que MUP gere** : build Meteor, container Docker app, Nginx reverse proxy, Let's Encrypt SSL, zero-downtime deploy, logs.
+**Ecarts avec le plan initial** :
 
-**Ce que MUP ne gere PAS** (deja en place ou a faire separement) :
-- MongoDB : reutilise `organizer-mongodb` existant (database `panorama` separee)
+| Prevu | Reel | Raison |
+|---|---|---|
+| `pem: '~/.ssh/id_rsa'` | ssh-agent (ed25519) | La cle `id_rsa` est au format OpenSSH (pas PEM), la lib ssh2 de MUP ne la supporte pas. L'agent SSH fonctionne. |
+| `PORT: 4000` | Port 3000 (defaut MUP) | MUP ignore `PORT` quand le proxy est active. 3000 est le defaut interne au container, pas de conflit. |
+| `METEOR_SETTINGS` dans env | `.deploy/settings.json` | MUP exige un fichier `settings.json` dans `.deploy/` et l'injecte automatiquement comme `METEOR_SETTINGS`. Pas besoin de le passer en env var. |
+| Seeder `appPreferences` avec `filesDir`/`qdrantUrl` | Env vars `PANORAMA_FILES_DIR`/`QDRANT_URL` | Le document `appPreferences` est un **singleton partage** entre l'instance locale et remote. Ecrire `filesDir` dedans casserait l'instance locale. Les env vars (`PANORAMA_FILES_DIR`, `QDRANT_URL`) resolvent le probleme sans toucher au document partage — `config.js` les lit en fallback. |
+| `EMAIL_URL` (Resend SMTP) | Non configure | Non bloquant. Les emails (verification, reset password) sont affiches dans les logs container (`mup logs`). A ajouter quand Resend est configure. |
+| `deployCheckWaitTime: 60` | `deployCheckWaitTime: 120` | Meteor 3 peut etre lent au premier demarrage en production. |
+| CSP sans `unsafe-eval` en production | `unsafe-eval` ajoute | Meteor runtime (EJSON, DDP, dynamic imports) utilise `eval()`. Sans `unsafe-eval`, le client crashait avec `EvalError`. Fix dans `server/main.js`. |
+
+**Fix CSP** : le CSP en production n'incluait pas `'unsafe-eval'`, mais le runtime Meteor l'utilise. Le script-src a ete unifie en `script-src 'self' 'unsafe-inline' 'unsafe-eval'` dans `server/main.js` (dev et production).
+
+**Ce que MUP gere** : build Meteor, container Docker app, Nginx reverse proxy config, Let's Encrypt SSL, zero-downtime deploy, logs, restart automatique (Docker restart policy).
+
+**Ce que MUP ne gere PAS** :
+- MongoDB : reutilise `organizer-mongodb` existant
 - Qdrant : reutilise `organizer-qdrant` existant
-- Backups : etendre le script existant (voir 5.7)
+- Connexion du proxy au reseau Docker (voir section "Probleme reseau proxy" ci-dessous)
+- Backups : a etendre (voir 5.7)
 
-**Fallback** : si MUP pose trop de problemes avec Meteor 3, deploiement manuel via `meteor build` + `scp` + PM2 (voir 5.9).
+**Seeding `appPreferences`** : pas necessaire. Le document existait deja dans la DB (cree par l'instance locale lors de la Phase 4). Il contient `onboardedAt` (pas de redirection vers l'onboarding) et `localUserId`. Les config specifiques au remote (`filesDir`, `qdrantUrl`) passent par les env vars.
+
+#### 5.3.1 Probleme reseau proxy (resolu, attention requise)
+
+**Probleme** : apres `mup setup`, le proxy nginx ne pouvait pas atteindre le container Panorama. La config nginx generee affichait `# Cannot connect to network of this container`.
+
+**Cause** : MUP demarre le proxy sur le reseau `bridge` uniquement. Panorama est sur `server_organizer-network`. Ils ne partagent aucun reseau → le proxy ne peut pas router le trafic.
+
+**Solution** : connecter le proxy au reseau partage apres son demarrage. Le script de demarrage du proxy (`/opt/mup-nginx-proxy/config/start.sh`) a ete modifie pour ajouter automatiquement cette connexion :
+
+```bash
+# Ligne ajoutee apres le bloc "docker network connect mup-proxy"
+# dans /opt/mup-nginx-proxy/config/start.sh :
+docker network connect server_organizer-network $APPNAME 2>/dev/null || true
+```
+
+La config nginx resultante contient deux entrees dans l'upstream : un `server 127.0.0.1 down;` (artefact de la detection initiale) et le vrai `server 172.18.0.x:3000;`. nginx utilise le serveur actif — c'est le comportement attendu de jwilder/nginx-proxy.
+
+**⚠️ ATTENTION** : un futur `mup setup` pourrait ecraser le script de demarrage du proxy et perdre cette modification. Apres chaque `mup setup`, verifier que la ligne `docker network connect server_organizer-network` est toujours presente dans `/opt/mup-nginx-proxy/config/start.sh`. Si elle est absente, la re-ajouter et relancer le proxy.
 
 #### 5.4 Flag isRemote
 
-Variable d'environnement ou setting Meteor pour distinguer les deux instances :
+Deux mecanismes complementaires pour distinguer les instances :
 
-```javascript
-// Cote serveur
-export const isRemoteInstance = () =>
-  process.env.PANORAMA_MODE === 'remote' ||
-  Meteor.settings?.public?.isRemote === true;
+- **Serveur** : `process.env.PANORAMA_MODE === 'remote'` (env var dans `mup.js`)
+- **Client** : `Meteor.settings?.public?.isRemote === true` (injecte via `.deploy/settings.json`)
 
-// Cote client (Meteor.settings.public est accessible)
-export const isRemoteInstance = () =>
-  Meteor.settings?.public?.isRemote === true;
-```
+**Important** : le client ne peut PAS lire les env vars serveur. Le flag client passe par `Meteor.settings.public`, configure dans `.deploy/settings.json` et injecte automatiquement par MUP.
 
-Usage : masquer les features local-only dans l'UI remote. Sur l'instance remote, les users ne voient que le coeur metier (projets, taches, notes, liens, fichiers). Les features perso (Claude Code, MCP, situations, budget, calendrier, gmail, notion, alarms, chat AI, userLogs) sont masquees.
+**Statut** : les flags sont deployes mais **le UI gating n'est pas encore implemente**. Toutes les pages sont visibles sur l'instance remote. Les methodes serveur protegent les donnees via `ensureLoggedIn + ensureOwner`, donc pas de risque de securite, mais l'UX n'est pas optimale (l'utilisateur voit des menus pour des features inutiles en remote comme Claude Code, MCP, situations, budget, etc.).
+
+A faire : implementer `isRemoteInstance()` cote client et masquer les features local-only dans l'UI.
 
 #### 5.5 Securite
 
-- **HTTPS obligatoire** (Nginx + Let's Encrypt)
-- **MongoDB** : ne pas exposer le port 27017 sur internet. Connexion locale uniquement (Meteor sur le meme VPS) + tunnel SSH pour l'instance locale de Mick
-- **Rate limiting** : `ddp-rate-limiter` (package Meteor built-in) sur les methodes. Note : aucun rate limiting n'est installe actuellement — a ajouter des la Phase 1
-- **Validation des inputs** : renforcer les `check()` existants (actuellement `check(doc, Object)` sans validation des champs individuels dans la plupart des methodes)
-- **CORS** : configurer si l'app Android tape directement sur le DDP
+- **HTTPS obligatoire** ✅ (Nginx + Let's Encrypt, `forceSSL: true`)
+- **MongoDB** : port 27017 Docker interne (sans TLS). Port 27018 public (TLS + auth SCRAM-SHA-256) ✅
+- **Rate limiting** : `ddp-rate-limiter` sur createUser/login/forgotPassword ✅ (configure en Phase 1 dans `server/accounts.js`)
+- **Validation des inputs** : a renforcer (actuellement `check(doc, Object)` sans validation des champs individuels)
+- **CORS** : non configure (pas de besoin immediat)
+- **CSP** : `script-src 'self' 'unsafe-inline' 'unsafe-eval'` — `unsafe-eval` necessaire pour le runtime Meteor
 
 #### 5.6 Securiser les routes HTTP existantes
 
-Plusieurs routes HTTP server-side existent sans authentification :
+⚠️ **Non fait** — a traiter avant d'ouvrir le signup aux autres users.
 
-| Route | Usage actuel | Action requise |
+| Route | Statut | Action requise |
 |---|---|---|
-| `/files/<name>` | Sert les fichiers uploades | Ajouter auth (cookie session ou token). Detaille en Phase 6 |
-| `/tasks-mobile` | Page HTML server-rendered des taches ouvertes | Ajouter auth (cookie session, basic auth, ou token dans l'URL) |
-| `/download-export/<jobId>` | Telecharge l'export NDJSON | Ajouter auth + verifier que l'export appartient au user |
-| `/oauth/google-calendar/callback` | Callback OAuth Google Calendar | Local-only, masquer sur l'instance remote (via `isRemoteInstance()`) |
+| `/files/<name>` | ❌ Pas d'auth | Ajouter auth (cookie session ou token). Detaille en Phase 6 |
+| `/tasks-mobile` | ❌ Pas d'auth | Ajouter auth (cookie session, basic auth, ou token dans l'URL) |
+| `/download-export/<jobId>` | ❌ Pas d'auth | Ajouter auth + verifier que l'export appartient au user |
+| `/oauth/google-calendar/callback` | ⚠️ Ouvert | Pas de risque immediat (callback OAuth), mais masquer sur l'instance remote si besoin |
 
 #### 5.7 Monitoring et backups
 
-Pas de monitoring ni de backup automatique actuellement. A mettre en place sur le VPS :
+⚠️ **Non fait** — a traiter avant la mise en production.
 
 **Backups MongoDB** :
-- Le script `/usr/local/bin/backup-organizer.sh` existe deja (cron quotidien 2h UTC, 7j retention, `mongodump --db organizer`)
+- Le script `/usr/local/bin/backup-organizer.sh` existe (cron quotidien 2h UTC, 7j retention, `mongodump --db organizer`)
 - **A etendre** : ajouter `--db panorama` au script (ou creer un second cron `backup-panorama.sh`)
-- Les backups Panorama manuels existants (`/opt/backups/panorama/`) seront remplaces par le cron automatise
-- Tester la restauration avec `mongorestore` avant la mise en production
 
-**Monitoring applicatif** :
-- **PM2** ou **Docker healthchecks** pour le process Meteor (redemarrage auto si crash)
-- **Uptime monitoring** : service externe (UptimeRobot, Healthchecks.io) qui ping l'URL publique
-- **Logs** : `pm2 logs` ou Docker logging driver. Rotation des logs
+**Monitoring** :
+- MUP gere le restart automatique du container (Docker `--restart=always`)
+- Uptime monitoring externe (UptimeRobot) sur `https://panorama.mickaelfm.me` — a configurer
 
-**Alertes** :
-- Alerte si le service tombe (via uptime monitor)
-- Alerte si l'espace disque est bas (fichiers uploades + MongoDB)
+#### 5.8 Sizing VPS et budget memoire ✅
 
-MUP gere le redemarrage automatique du container Meteor (Docker restart policy). Pour le monitoring externe, UptimeRobot gratuit sur `https://panorama.mickaelfm.me` suffit pour le MVP.
+**Mesures reelles apres deploiement** (2026-02-15) :
 
-#### 5.8 Sizing VPS et budget memoire
-
-**Specs VPS** : 4 GB RAM, 2 vCPU, 40 GB disque. Upgrade de fevrier 2026 (etait 1.9 GB / 1 vCPU / 20 GB).
-
-**Estimation memoire apres deploiement** :
-
-| Container | RAM estimee | Notes |
+| Container | RAM reelle | Estimation initiale |
 |---|---|---|
-| `organizer-mongodb` | ~170 MB | Existant. Database `panorama` ajoutera un peu |
-| `organizer-api` | ~97 MB | Existant, inchange |
-| `organizer-qdrant` | ~30 MB | Existant. Collections Panorama ajouteront un peu |
-| `organizer-coturn` | ~6 MB | Existant, inchange |
-| `mup-nginx-proxy` | ~58 MB | Existant, inchange |
-| `mup-nginx-proxy-letsencrypt` | ~20 MB | Existant, inchange |
-| **Panorama Meteor** | **~250-400 MB** | **Nouveau** — remplace panoramix-api (61 MB) + panoramix-web (3 MB) |
-| **Total estime** | **~630-780 MB** | Reste ~3.2 GB pour l'OS et le cache — confortable |
+| `panorama` | **172 MB** | 250-400 MB |
+| `organizer-mongodb` | 199 MB | ~170 MB |
+| `organizer-api` | 63 MB | ~97 MB |
+| `organizer-qdrant` | 37 MB | ~30 MB |
+| `openclaw-gateway` | 412 MB | (non prevu dans le plan) |
+| `mup-nginx-proxy` | 108 MB | ~58 MB |
+| `mup-nginx-proxy-letsencrypt` | 34 MB | ~20 MB |
+| `organizer-coturn` | 9 MB | ~6 MB |
+| **Total** | **~1.2 GB** | ~630-780 MB |
 
-Avec 4 GB de RAM, le budget memoire n'est plus une contrainte.
+Le total est plus eleve que prevu a cause de `openclaw-gateway` (412 MB) qui n'etait pas dans l'estimation. Avec 3.7 GB de RAM, il reste ~2.2 GB disponibles — confortable.
 
-#### 5.9 Fallback : deploiement manuel (si MUP ne convient pas)
+#### 5.9 Fallback : deploiement manuel
 
-Si MUP pose des problemes de compatibilite avec Meteor 3, deploiement manuel :
-
-```bash
-# Sur le Mac
-meteor build --server-only ../output
-scp ../output/panorama.tar.gz user@51.210.150.25:/var/www/panorama/
-
-# Sur le VPS (via SSH)
-cd /var/www/panorama
-tar xzf panorama.tar.gz
-cd bundle/programs/server && npm install --production
-pm2 restart panorama
-```
-
-Dans ce cas, Nginx + Let's Encrypt et PM2 doivent etre configures manuellement sur le VPS.
+Non utilise — MUP fonctionne bien avec Meteor 3.4. Garde en reserve.
 
 **CI/CD (plus tard)** : GitHub Actions qui build + deploy sur push vers `main`, a envisager quand les deploys deviennent frequents.
+
+#### 5.10 Points d'attention pour la suite
+
+**Avant d'ouvrir le signup** (bloquant) :
+
+1. **Routes HTTP non securisees** (5.6) : `/files/`, `/tasks-mobile`, `/download-export/` n'ont pas d'auth. Un utilisateur non authentifie pourrait acceder aux fichiers si le nom du fichier est devinable.
+2. **Backup automatise** (5.7) : la DB `panorama` n'a pas de backup automatise. Si le disque ou la DB corrompt, les donnees sont perdues.
+3. ~~**Qdrant non isole par user** (Phase 7)~~ : DONE — les vecteurs contiennent `userId`, les recherches et indexations filtrent par user.
+
+**Apres le deploiement** (non bloquant, ameliore l'UX) :
+
+4. **UI gating** (5.4) : implementer `isRemoteInstance()` cote client pour masquer les features local-only (Claude Code, MCP, situations, budget, calendrier, gmail, notion, alarms, chat AI, userLogs). Actuellement tout est visible — pas de risque securitaire (les methodes protegent les donnees), mais UX confuse pour les nouveaux users.
+5. **EMAIL_URL** : configurer le SMTP Resend pour l'envoi reel d'emails (verification de compte, reset password). Sans cela, les emails sont affiches dans les logs container uniquement.
+6. **Monitoring uptime** : configurer UptimeRobot (gratuit) pour alerter si `https://panorama.mickaelfm.me` tombe.
+
+**Maintenance recurrente** :
+
+7. **Script proxy** : le script `/opt/mup-nginx-proxy/config/start.sh` a ete modifie pour connecter le proxy au reseau `server_organizer-network`. Un futur `mup setup` peut ecraser ce script. Toujours verifier apres un `mup setup`.
+8. **Redeploy** : `source ~/.env.secrets && nvm exec 20.9.0 mup deploy` depuis `.deploy/`. Le ssh-agent doit avoir la cle ed25519 chargee (`ssh-add -l` pour verifier).
 
 ---
 
@@ -773,6 +1011,12 @@ Actuellement la route `/files/` n'a aucun controle d'acces. Ajouter :
 ### Phase 7 — Qdrant multi-user
 
 **Objectif** : la recherche semantique fonctionne pour chaque user independamment.
+
+**Statut** : DONE (2026-02-15). Prerequis avant deploiement multi-user en production.
+
+**Reindexation requise** : apres deploiement, chaque user doit relancer "Rebuild" depuis Preferences > Qdrant pour reindexer ses vecteurs avec userId dans les payloads. Les anciens points sans userId ne sont plus visibles dans les recherches filtrees.
+
+**Contexte** : apres la Phase 2, l'index Qdrant est le seul composant encore global. Les fonctions `collectDocs()` et `collectDocsByKind()` dans `search/methods.js` requetent les collections remote sans filtre userId. L'outil MCP `tool_semanticSearch` dans `handlers.js` interroge Qdrant sans filtre userId non plus. En consequence, la recherche semantique peut retourner des resultats appartenant a d'autres users.
 
 #### 7.1 Ajouter userId aux payloads Qdrant
 
@@ -809,7 +1053,18 @@ export const searchDocs = async (queryText, userId, limit = 10) => {
 };
 ```
 
-#### 7.3 Reindexation
+#### 7.3 Adapter les fonctions d'indexation
+
+Les fonctions suivantes dans `search/methods.js` doivent etre modifiees pour filtrer par userId lors de la collecte des documents :
+- `collectDocs()` : ajouter `{userId}` au selector des 6 collections remote (projects, tasks, notes, noteSessions, noteLines, links)
+- `collectDocsByKind()` : idem
+- `qdrant.indexStart` et `qdrant.indexKindStart` : passer userId au contexte d'indexation
+
+#### 7.4 Adapter les outils MCP
+
+- `tool_semanticSearch` dans `handlers.js` : ajouter un filtre Qdrant `{ must: [{ key: 'userId', match: { value: getMCPUserId() } }] }` dans la requete de recherche
+
+#### 7.5 Reindexation
 
 Apres la migration des donnees, reindexer tous les documents avec le userId dans les payloads. Utiliser le flow existant (Preferences → Qdrant → Rebuild) en l'adaptant pour inclure userId.
 
@@ -858,8 +1113,8 @@ Chaque phase doit etre reversible independamment. La DB locale (`.meteor/local/d
 |---|---|
 | **Phase 1 (Auth)** | Retirer `accounts-base`/`accounts-password`, supprimer les composants Auth. Les collections Meteor `users` et `meteor_accounts_loginServiceConfiguration` sont creees automatiquement et peuvent etre ignorees |
 | **Phase 2 (userId)** | Le champ userId est ajoute mais les publications/methodes peuvent revenir a l'ancienne version (sans filtre). Les documents avec userId restent valides pour le code single-user |
-| **Phase 3 (Dual driver)** | Retirer `REMOTE_MONGO_URL` → tout revient en local automatiquement (le `remoteDriver` est `null`) |
-| **Phase 4 (Migration)** | La DB locale est intacte. Si la migration echoue : `REMOTE_MONGO_URL` non defini → retour au local. Sur le VPS : `db.dropDatabase()` et recommencer |
+| **Phase 3 (Dual driver)** | Retirer `MONGO_URL` → Meteor demarre sa DB interne, tout revient en local automatiquement. `LOCAL_MONGO_URL` n'est pas utilise. |
+| **Phase 4 (Migration)** | La DB locale est intacte (`.meteor/local/db`). Si la migration echoue : retirer `MONGO_URL` → retour au local. Sur le VPS : `db.dropDatabase()` et recommencer |
 | **Phase 5 (Deploy)** | Eteindre l'instance remote. Les users web perdent l'acces mais l'instance locale continue de fonctionner |
 | **Phase 6-7 (Fichiers/Qdrant)** | Les fichiers locaux restent. Qdrant peut etre reindexe a tout moment |
 
@@ -878,36 +1133,58 @@ Le vrai point de non-retour est quand **plusieurs users ont cree des donnees sur
 | 1 | **Auth bypass en local ?** | **Auth partout** | Mick s'authentifie aussi en local. Coherent, securise, et teste le flow d'auth en continu. |
 | 2 | **Signup public ?** | **Signup ouvert** | N'importe qui peut creer un compte. Implique : validation email, rate limiting (`ddp-rate-limiter`), protection anti-abus. |
 | 3 | **MongoDB : instance partagee ou dediee ?** | **Reutiliser `organizer-mongodb`** | ~~Container dedie~~ → reutiliser le mongo:5 existant avec une database `panorama` separee. Deja en place, economise de la RAM sur un VPS a 1.9 GB. |
-| 4 | **Acces DB depuis le Mac ?** | **Tunnel SSH** | MongoDB bind localhost sur le VPS (port ferme). L'instance locale accede via tunnel SSH. Le tunnel est auto-demarre avec Meteor local (via `autossh` ou script de lancement). |
+| 4 | **Acces DB depuis le Mac ?** | **TLS + Auth public** | ~~Tunnel SSH~~ → MongoDB expose sur port 27018 avec TLS (Let's Encrypt, mode `allowTLS`) + auth (SCRAM-SHA-256). RS member reconfigure a `panorama.mickaelfm.me:27018`. Connection string directe, sans tunnel, sans `directConnection=true`, sans `/etc/hosts`. |
 | 5 | **Denormaliser userId ?** | **Oui** | userId ajoute directement sur noteLines, situation_actors, situation_notes, situation_questions, situation_summaries. Plus simple et performant que les jointures reactives. |
 | 6 | **AppPreferences : comment scinder ?** | **Nouvelle collection `userPreferences`** | Separation nette : `appPreferences` garde la config d'instance (filesDir, qdrantUrl), `userPreferences` stocke les prefs par user (theme, cle API, config AI). |
 | 7 | **Outil de deploiement ?** | **MUP (Meteor Up)** | Gere build, Docker, Nginx, Let's Encrypt en une commande. Compatible Meteor 3 avec workaround Node 20.9.0. MongoDB et Qdrant geres separement (containers Docker dedies). Fallback : deploy manuel si MUP instable. |
 | 8 | **Service SMTP ?** | **Resend** | Compte existant. Config : `EMAIL_URL=smtp://resend:API_KEY@smtp.resend.com:465`. Necessite DNS SPF/DKIM sur le domaine d'expedition. |
+| 9 | **Direction du dual driver ?** | **Inversee : MONGO_URL → remote** | `MONGO_URL` pointe vers la DB remote (VPS). Un `localDriver` est cree pour les ~21 collections local-only. Resout le probleme de `Meteor.users` (automatiquement sur la DB remote, un seul compte). En dev/test, pas de `LOCAL_MONGO_URL` → tout reste local. |
+| 10 | **Replica set ?** | **Requis** | Necessaire pour l'oplog et la reactivite temps reel de Meteor. Single-node replica set sur `organizer-mongodb`. Impact Organizer a verifier (normalement transparent pour Mongoose). |
 
 ## Ordre d'execution recommande
 
 ```
-Phase 1 (Auth)
+Phase 1 (Auth)            ✅ DONE
     |
     v
-Phase 2 (userId partout)  <-- le plus gros, peut etre fait collection par collection
+Phase 2 (userId partout)  ✅ DONE
     |
     v
-Phase 3 (Dual driver)
+Phase 3.1-3.3 (Code dual driver)  ✅ DONE
     |
     v
-Phase 4 (Migration donnees)
+Phase 3.6 (Restructuration infra VPS)  ✅ DONE (2026-02-15)
     |
     v
-Phase 5 (Deploiement VPS)
+Phase 3.4 (MongoDB TLS + Auth public)  ✅ DONE (2026-02-15)
     |
     v
-Phase 6 (Fichiers)       \
-    |                      > peuvent etre faites en parallele
-Phase 7 (Qdrant)          /
+Phase 3.7 (Unified collections)  ✅ DONE (2026-02-15)
+    |
+    v
+Phase 4 (Migration donnees)  ✅ DONE (2026-02-15)
+    |
+    v
+Phase 5 (Deploiement VPS)  ✅ DONE (2026-02-15)
+    |
+    v
+Phase 6 (Fichiers)          <-- PROCHAINE ETAPE
+    |
+    v
+Phase 7 (Qdrant)          ✅ DONE (2026-02-15)
 ```
 
-Les phases 1 et 2 peuvent etre developpees et testees entierement en local avant de toucher au VPS.
+Les phases 1-5 et 7 sont terminees. Prochaine etape : securiser les routes HTTP (5.6), fichiers (Phase 6).
+
+### Checklist post-merge (avant d'inviter David)
+
+- [ ] Deployer sur le VPS (`./deploy.sh`)
+- [ ] Creer un 2e compte (signup David)
+- [ ] Verifier l'isolation : David ne voit pas les projets/taches/notes de Mick
+- [ ] Verifier l'ownership : David ne peut pas modifier un doc de Mick (tester via console navigateur)
+- [ ] Verifier Qdrant rebuild avec la cle API de David (userPreferences)
+- [ ] Verifier la recherche semantique filtree par userId
+- [ ] Configurer le backup DB panorama (5.7)
 
 ## Risques identifies
 
@@ -917,11 +1194,27 @@ Les phases 1 et 2 peuvent etre developpees et testees entierement en local avant
 | **Perte de connexion internet** | L'instance locale ne peut plus lire/ecrire les collections remote | Minimongo client cache les donnees en lecture. Accepter la limitation ou prevoir un mode degrade |
 | **Volume de donnees a migrer** | 8 mois de donnees, potentiellement volumineux | L'export NDJSON gzip est deja optimise. Tester sur un sous-ensemble d'abord |
 | **Regression sur les features existantes** | L'ajout de userId partout peut casser des queries | Tester chaque collection incrementalement. Garder la DB locale comme backup |
-| **Tunnel SSH instable** | Perte de connexion DB si le tunnel tombe | `autossh` avec reconnexion automatique, ou service launchd permanent |
+| **Tunnel SSH instable (Qdrant)** | Perte de recherche semantique si le tunnel Qdrant tombe | `autossh` avec reconnexion automatique. MongoDB n'est plus concerne (TLS + Auth direct) |
 | **Signup ouvert : abus** | Comptes spam, surcharge | Rate limiting, validation email, monitoring |
-| **Dual driver Meteor 3** | `MongoInternals.RemoteCollectionDriver` pas documente officiellement dans Meteor 3 | Tester tot. Alternative : `MONGO_URL` pointe directement vers le remote, pas de dual driver (plus simple mais pas de collections locales) |
+| **Local driver Meteor 3** | `MongoInternals.RemoteCollectionDriver` pour le `localDriver` pas documente officiellement dans Meteor 3 | Tester tot en dev. Si probleme, les collections local-only restent dans la DB remote mais protegees par `ensureLocalOnly()` (fallback acceptable) |
 | **RAM VPS** | ~~Risque resolu~~ — VPS upgrade a 4 GB (fevrier 2026), budget memoire confortable | Monitorer avec `docker stats` apres deploiement |
-| **Replica set sur MongoDB partage** | Activer le replica set sur `organizer-mongodb` impacte aussi Organizer | Tester que Organizer (Mongoose) fonctionne correctement apres activation. Normalement transparent |
+| **Replica set sur MongoDB partage** | ~~Risque resolu~~ — replica set active le 2026-02-15, Organizer fonctionne normalement (Mongoose transparent). Note : `rs.initiate()` doit etre fait **avant** de relancer les apps clientes | — |
+
+## Future : rotation des logs
+
+Les collections de logs locales n'ont pas de mecanisme de purge automatique (sauf `toolCallLogs` qui a un TTL index de 30 jours). A mettre en place :
+
+| Collection | Volume actuel | Action |
+|---|---|---|
+| `errors` | ~9500 docs/8 mois (purges le 2026-02-15) | Ajouter TTL index ou purge periodique |
+| `toolCallLogs` | TTL 30 jours deja en place | OK |
+| `claudeMessages` | Croissant | Evaluer si purge necessaire |
+| `userLogs` | Faible | Pas urgent |
+
+Options :
+- **TTL index MongoDB** : `{ createdAt: 1 }, { expireAfterSeconds: N }` — automatique, zero maintenance
+- **Meteor method** : `errors.removeOld` existe deja, a appeler via cron ou startup
+- **Script bash** : purge via `mongosh` dans un cron
 
 ## Future : projets partages
 

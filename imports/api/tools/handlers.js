@@ -3,9 +3,23 @@
 // Enhanced with structured responses (Clever Cloud MCP best practices)
 
 import { Meteor } from 'meteor/meteor';
-import { getQdrantUrl } from '/imports/api/_shared/config';
+import { getQdrantUrl, getLocalUserId } from '/imports/api/_shared/config';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { COLLECTION } from '/imports/api/search/vectorStore';
+
+// MCP userId helper: reads localUserId from appPreferences for server-to-server calls
+const getMCPUserId = () => {
+  const id = getLocalUserId();
+  if (!id) throw new Meteor.Error('mcp-no-user', 'localUserId not configured in appPreferences. Set it in Preferences to use MCP tools.');
+  return id;
+};
+
+// Call a Meteor method with a simulated userId context (for MCP server-to-server calls)
+const callMethodAs = async (methodName, userId, ...args) => {
+  const handler = Meteor.server.method_handlers[methodName];
+  if (!handler) throw new Meteor.Error('method-not-found', `Method ${methodName} not found`);
+  return handler.call({ userId }, ...args);
+};
 import {
   buildProjectByNameSelector,
   buildByProjectSelector,
@@ -39,7 +53,8 @@ const validateProjectId = async (projectId) => {
     return { valid: false, error: `Invalid projectId format: "${id}". Expected 17 alphanumeric characters.` };
   }
   const { ProjectsCollection } = await import('/imports/api/projects/collections');
-  const exists = await ProjectsCollection.findOneAsync({ _id: id }, { fields: { _id: 1 } });
+  const userId = getMCPUserId();
+  const exists = await ProjectsCollection.findOneAsync({ _id: id, userId }, { fields: { _id: 1 } });
   if (!exists) {
     return { valid: false, error: `Project not found: "${id}". Use tool_projectByName to find the correct ID.` };
   }
@@ -48,46 +63,48 @@ const validateProjectId = async (projectId) => {
 
 const embedQuery = async (text) => {
   const { embedText } = await import('/imports/api/search/vectorStore');
-  return embedText(text);
+  const userId = getMCPUserId();
+  return embedText(text, { userId });
 };
 
 const fetchPreview = async (kind, rawId) => {
   const id = String(rawId || '').split(':').pop();
+  const userId = getMCPUserId();
   switch (kind) {
     case 'project': {
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
-      const p = await ProjectsCollection.findOneAsync({ _id: id }, { fields: { name: 1, description: 1 } });
+      const p = await ProjectsCollection.findOneAsync({ _id: id, userId }, { fields: { name: 1, description: 1 } });
       if (!p) return { title: '(project)', text: '' };
       return { title: p.name || '(project)', text: `${p.name || ''} ${p.description || ''}`.trim() };
     }
     case 'task': {
       const { TasksCollection } = await import('/imports/api/tasks/collections');
-      const t = await TasksCollection.findOneAsync({ _id: id }, { fields: { title: 1 } });
+      const t = await TasksCollection.findOneAsync({ _id: id, userId }, { fields: { title: 1 } });
       return { title: t?.title || '(task)', text: t?.title || '' };
     }
     case 'note': {
       const { NotesCollection } = await import('/imports/api/notes/collections');
-      const n = await NotesCollection.findOneAsync({ _id: id }, { fields: { title: 1, content: 1 } });
+      const n = await NotesCollection.findOneAsync({ _id: id, userId }, { fields: { title: 1, content: 1 } });
       return { title: n?.title || '(note)', text: `${n?.title || ''} ${n?.content || ''}`.trim() };
     }
     case 'session': {
       const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
-      const s = await NoteSessionsCollection.findOneAsync({ _id: id }, { fields: { name: 1, aiSummary: 1 } });
+      const s = await NoteSessionsCollection.findOneAsync({ _id: id, userId }, { fields: { name: 1, aiSummary: 1 } });
       return { title: s?.name || '(session)', text: `${s?.name || ''} ${s?.aiSummary || ''}`.trim() };
     }
     case 'line': {
       const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
-      const l = await NoteLinesCollection.findOneAsync({ _id: id }, { fields: { content: 1 } });
+      const l = await NoteLinesCollection.findOneAsync({ _id: id, userId }, { fields: { content: 1 } });
       return { title: '(line)', text: l?.content || '' };
     }
     case 'alarm': {
       const { AlarmsCollection } = await import('/imports/api/alarms/collections');
-      const a = await AlarmsCollection.findOneAsync({ _id: id }, { fields: { title: 1 } });
+      const a = await AlarmsCollection.findOneAsync({ _id: id, userId }, { fields: { title: 1 } });
       return { title: a?.title || '(alarm)', text: a?.title || '' };
     }
     case 'link': {
       const { LinksCollection } = await import('/imports/api/links/collections');
-      const l = await LinksCollection.findOneAsync({ _id: id }, { fields: { name: 1, url: 1 } });
+      const l = await LinksCollection.findOneAsync({ _id: id, userId }, { fields: { name: 1, url: 1 } });
       return { title: l?.name || '(link)', text: `${l?.name || ''} ${l?.url || ''}`.trim(), url: l?.url || '' };
     }
     default:
@@ -155,7 +172,8 @@ export const TOOL_HANDLERS = {
     }
 
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const selector = buildByProjectSelector(validation.id);
+    const userId = getMCPUserId();
+    const selector = { ...buildByProjectSelector(validation.id), userId };
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
@@ -172,7 +190,8 @@ export const TOOL_HANDLERS = {
   },
   async tool_tasksFilter(args, memory) {
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const selector = buildFilterSelector(args || {});
+    const userId = getMCPUserId();
+    const selector = { ...buildFilterSelector(args || {}), userId };
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
@@ -189,7 +208,8 @@ export const TOOL_HANDLERS = {
   },
   async tool_projectsList(args, memory) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+    const userId = getMCPUserId();
+    const projects = await ProjectsCollection.find({ userId }, { fields: { name: 1, description: 1 } }).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
     const compact = (projects || []).map(p => ({ id: p._id, name: clampText(p.name || ''), description: clampText(p.description || '') }));
     if (memory) {
@@ -203,7 +223,8 @@ export const TOOL_HANDLERS = {
   },
   async tool_projectByName(args, memory) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const selector = buildProjectByNameSelector(args?.name);
+    const userId = getMCPUserId();
+    const selector = { ...buildProjectByNameSelector(args?.name), userId };
     const projects = await ProjectsCollection.find(selector, { fields: { name: 1, description: 1 } }).fetchAsync();
 
     // Map results to compact format
@@ -252,7 +273,8 @@ export const TOOL_HANDLERS = {
       if (args?.description) doc.description = String(args.description);
       if (args?.status) doc.status = String(args.status);
 
-      const projectId = await Meteor.callAsync('projects.insert', doc);
+      const userId = getMCPUserId();
+      const projectId = await callMethodAs('projects.insert', userId, doc);
 
       const result = { projectId, name, description: doc.description || null };
       if (memory) {
@@ -289,7 +311,8 @@ export const TOOL_HANDLERS = {
     }
 
     try {
-      await Meteor.callAsync('projects.update', projectId, modifier);
+      const userId = getMCPUserId();
+      await callMethodAs('projects.update', userId, projectId, modifier);
 
       const result = { success: true, projectId, updated: modifier };
       if (memory) {
@@ -306,8 +329,9 @@ export const TOOL_HANDLERS = {
     const periodDays = Number(args?.periodDays) || 14;
 
     try {
-      // Call the panorama.getOverview method (wrapper pattern)
-      const overview = await Meteor.callAsync('panorama.getOverview', { periodDays });
+      // Call the panorama.getOverview method with userId context
+      const userId = getMCPUserId();
+      const overview = await callMethodAs('panorama.getOverview', userId, { periodDays });
 
       // Store in memory for tool chaining
       if (memory) {
@@ -325,6 +349,7 @@ export const TOOL_HANDLERS = {
     }
   },
   async tool_semanticSearch(args, memory) {
+    const userId = getMCPUserId();
     const limit = Math.max(1, Math.min(50, Number(args?.limit) || 20));
     const q = String(args?.query || '').trim();
     const url = getQdrantUrl();
@@ -339,7 +364,8 @@ export const TOOL_HANDLERS = {
     try {
       const client = new QdrantClient({ url });
       const vector = await embedQuery(q);
-      const searchRes = await client.search(COLLECTION(), { vector, limit, with_payload: true });
+      const filter = { must: [{ key: 'userId', match: { value: userId } }] };
+      const searchRes = await client.search(COLLECTION(), { vector, limit, filter, with_payload: true });
       const items = Array.isArray(searchRes) ? searchRes : (searchRes?.result || []);
       const out = await Promise.all(items.map(async (it) => {
         const p = it?.payload || {};
@@ -367,8 +393,15 @@ export const TOOL_HANDLERS = {
     const select = Array.isArray(args?.select) ? args.select.filter(f => FIELD_ALLOWLIST[collection]?.includes(f)) : [];
     const sort = args?.sort || {};
 
+    // Global collections that do NOT need userId filtering
+    const GLOBAL_COLLECTIONS = ['appPreferences'];
+
     try {
       const selector = compileWhere(collection, where);
+      // If not a global collection, add userId filter
+      if (!GLOBAL_COLLECTIONS.includes(collection)) {
+        selector.userId = getMCPUserId();
+      }
       let cursor;
       if (collection === 'tasks') {
         const { TasksCollection } = await import('/imports/api/tasks/collections');
@@ -468,7 +501,8 @@ export const TOOL_HANDLERS = {
     }
 
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const notes = await NotesCollection.find({ projectId: validation.id }, { fields: { title: 1 } }).fetchAsync();
+    const userId = getMCPUserId();
+    const notes = await NotesCollection.find({ projectId: validation.id, userId }, { fields: { title: 1 } }).fetchAsync();
     const mapped = (notes || []).map(n => ({ id: n._id, title: clampText(n.title || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.notes = mapped; }
     return buildSuccessResponse({ notes: mapped, total: mapped.length }, 'tool_notesByProject');
@@ -482,8 +516,9 @@ export const TOOL_HANDLERS = {
         suggestion: 'Provide a valid note ID, e.g., {noteId: "abc123"}'
       });
     }
+    const userId = getMCPUserId();
     const note = await NotesCollection.findOneAsync(
-      { _id: noteId },
+      { _id: noteId, userId },
       { fields: { title: 1, content: 1, projectId: 1, createdAt: 1, updatedAt: 1 } }
     );
     if (!note) {
@@ -537,8 +572,10 @@ export const TOOL_HANDLERS = {
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = { $regex: escaped, $options: 'i' };
 
-    // Search in title OR content
+    // Search in title OR content, scoped by userId
+    const userId = getMCPUserId();
     const selector = {
+      userId,
       $or: [
         { title: regex },
         { content: regex }
@@ -590,7 +627,8 @@ export const TOOL_HANDLERS = {
   async tool_noteSessionsByProject(args, memory) {
     const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
     const projectId = String(args?.projectId || '').trim();
-    const sessions = await NoteSessionsCollection.find({ projectId }, { fields: { name: 1 } }).fetchAsync();
+    const userId = getMCPUserId();
+    const sessions = await NoteSessionsCollection.find({ projectId, userId }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (sessions || []).map(s => ({ id: s._id, name: clampText(s.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.noteSessions = mapped; }
     return buildSuccessResponse({ sessions: mapped, total: mapped.length }, 'tool_noteSessionsByProject');
@@ -598,7 +636,8 @@ export const TOOL_HANDLERS = {
   async tool_noteLinesBySession(args, memory) {
     const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
     const sessionId = String(args?.sessionId || '').trim();
-    const lines = await NoteLinesCollection.find({ sessionId }, { fields: { content: 1 } }).fetchAsync();
+    const userId = getMCPUserId();
+    const lines = await NoteLinesCollection.find({ sessionId, userId }, { fields: { content: 1 } }).fetchAsync();
     const mapped = (lines || []).map(l => ({ id: l._id, content: clampText(l.content || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.noteLines = mapped; }
     return buildSuccessResponse({ lines: mapped, total: mapped.length }, 'tool_noteLinesBySession');
@@ -606,7 +645,8 @@ export const TOOL_HANDLERS = {
   async tool_linksByProject(args, memory) {
     const { LinksCollection } = await import('/imports/api/links/collections');
     const projectId = String(args?.projectId || '').trim();
-    const links = await LinksCollection.find({ projectId }, { fields: { name: 1, url: 1 } }).fetchAsync();
+    const userId = getMCPUserId();
+    const links = await LinksCollection.find({ projectId, userId }, { fields: { name: 1, url: 1 } }).fetchAsync();
     const mapped = (links || []).map(l => ({ id: l._id, name: clampText(l.name || ''), url: l.url || null }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.links = mapped; }
     return buildSuccessResponse({ links: mapped, total: mapped.length }, 'tool_linksByProject');
@@ -615,7 +655,7 @@ export const TOOL_HANDLERS = {
     const { PeopleCollection } = await import('/imports/api/people/collections');
 
     // Default filters: active employees only
-    const selector = {};
+    const selector = { userId: getMCPUserId() };
     if (args?.teamId) selector.teamId = String(args.teamId).trim();
     if (!args?.includeLeft) selector.left = { $ne: true };
     if (!args?.includeContacts) selector.contactOnly = { $ne: true };
@@ -655,7 +695,7 @@ export const TOOL_HANDLERS = {
   },
   async tool_teamsList(args, memory) {
     const { TeamsCollection } = await import('/imports/api/teams/collections');
-    const teams = await TeamsCollection.find({}, { fields: { name: 1 } }).fetchAsync();
+    const teams = await TeamsCollection.find({ userId: getMCPUserId() }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (teams || []).map(t => ({ id: t._id, name: clampText(t.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.teams = mapped; }
     return buildSuccessResponse({ teams: mapped, total: mapped.length }, 'tool_teamsList');
@@ -663,7 +703,8 @@ export const TOOL_HANDLERS = {
   async tool_filesByProject(args, memory) {
     const { FilesCollection } = await import('/imports/api/files/collections');
     const projectId = String(args?.projectId || '').trim();
-    const files = await FilesCollection.find({ projectId }, { fields: { name: 1 } }).fetchAsync();
+    const userId = getMCPUserId();
+    const files = await FilesCollection.find({ projectId, userId }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (files || []).map(f => ({ id: f._id, name: clampText(f.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.files = mapped; }
     return buildSuccessResponse({ files: mapped, total: mapped.length }, 'tool_filesByProject');
@@ -671,7 +712,7 @@ export const TOOL_HANDLERS = {
   async tool_alarmsList(args, memory) {
     const { AlarmsCollection } = await import('/imports/api/alarms/collections');
     const enabled = (typeof args?.enabled === 'boolean') ? args.enabled : undefined;
-    const sel = (typeof enabled === 'boolean') ? { enabled } : {};
+    const sel = (typeof enabled === 'boolean') ? { enabled, userId: getMCPUserId() } : { userId: getMCPUserId() };
     const alarms = await AlarmsCollection.find(sel, { fields: { title: 1 } }).fetchAsync();
     const mapped = (alarms || []).map(a => ({ id: a._id, title: clampText(a.title || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.alarms = mapped; }
@@ -705,7 +746,8 @@ export const TOOL_HANDLERS = {
       doc.recurrence = args.recurrence;
     }
 
-    const alarmId = await Meteor.callAsync('alarms.insert', doc);
+    const userId = getMCPUserId();
+    const alarmId = await callMethodAs('alarms.insert', userId, doc);
 
     const result = { alarmId, title, nextTriggerAt };
     if (memory) {
@@ -733,9 +775,10 @@ export const TOOL_HANDLERS = {
     if (args?.projectId) {
       const projectId = String(args.projectId).trim();
 
+      const userId = getMCPUserId();
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
       const existingProject = await ProjectsCollection.findOneAsync(
-        { _id: projectId },
+        { _id: projectId, userId },
         { fields: { _id: 1 } }
       );
 
@@ -755,7 +798,8 @@ export const TOOL_HANDLERS = {
     if (typeof args?.isUrgent === 'boolean') doc.isUrgent = args.isUrgent;
     if (typeof args?.isImportant === 'boolean') doc.isImportant = args.isImportant;
 
-    const taskId = await Meteor.callAsync('tasks.insert', doc);
+    const mcpUserId = getMCPUserId();
+    const taskId = await callMethodAs('tasks.insert', mcpUserId, doc);
 
     const result = { taskId, title, projectId: doc.projectId || null };
     if (memory) {
@@ -775,8 +819,9 @@ export const TOOL_HANDLERS = {
     }
 
     // Validate that the task exists before attempting update
+    const userId = getMCPUserId();
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const existingTask = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { _id: 1 } });
+    const existingTask = await TasksCollection.findOneAsync({ _id: taskId, userId }, { fields: { _id: 1 } });
 
     if (!existingTask) {
       console.warn(`[tool_updateTask] Task not found: ${taskId}`);
@@ -801,7 +846,7 @@ export const TOOL_HANDLERS = {
       if (projectIdValue) {
         const { ProjectsCollection } = await import('/imports/api/projects/collections');
         const existingProject = await ProjectsCollection.findOneAsync(
-          { _id: projectIdValue },
+          { _id: projectIdValue, userId },
           { fields: { _id: 1 } }
         );
 
@@ -827,7 +872,7 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    const res = await Meteor.callAsync('tasks.update', taskId, modifier);
+    const res = await callMethodAs('tasks.update', userId, taskId, modifier);
 
     // Verify that the update actually modified a document
     if (res === 0) {
@@ -858,8 +903,9 @@ export const TOOL_HANDLERS = {
     }
 
     // Validate that the task exists before attempting delete
+    const userId = getMCPUserId();
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const existingTask = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { _id: 1 } });
+    const existingTask = await TasksCollection.findOneAsync({ _id: taskId, userId }, { fields: { _id: 1 } });
 
     if (!existingTask) {
       console.warn(`[tool_deleteTask] Task not found: ${taskId}`);
@@ -870,7 +916,7 @@ export const TOOL_HANDLERS = {
     }
 
     try {
-      await Meteor.callAsync('tasks.remove', taskId);
+      await callMethodAs('tasks.remove', userId, taskId);
 
       console.log(`[tool_deleteTask] Successfully deleted task: ${taskId}`);
 
@@ -900,12 +946,13 @@ export const TOOL_HANDLERS = {
     if (args?.content) doc.content = String(args.content);
 
     // Validate projectId if provided
+    const mcpUserId = getMCPUserId();
     if (args?.projectId) {
       const projectId = String(args.projectId).trim();
 
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
       const existingProject = await ProjectsCollection.findOneAsync(
-        { _id: projectId },
+        { _id: projectId, userId: mcpUserId },
         { fields: { _id: 1 } }
       );
 
@@ -920,7 +967,7 @@ export const TOOL_HANDLERS = {
       doc.projectId = projectId;
     }
 
-    const noteId = await Meteor.callAsync('notes.insert', doc);
+    const noteId = await callMethodAs('notes.insert', mcpUserId, doc);
 
     const result = { noteId, title, projectId: doc.projectId || null };
     if (memory) {
@@ -940,8 +987,9 @@ export const TOOL_HANDLERS = {
     }
 
     // Validate that the note exists before attempting update
+    const userId = getMCPUserId();
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { _id: 1 } });
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId, userId }, { fields: { _id: 1 } });
 
     if (!existingNote) {
       console.warn(`[tool_updateNote] Note not found: ${noteId}`);
@@ -964,7 +1012,7 @@ export const TOOL_HANDLERS = {
       if (projectIdValue) {
         const { ProjectsCollection } = await import('/imports/api/projects/collections');
         const existingProject = await ProjectsCollection.findOneAsync(
-          { _id: projectIdValue },
+          { _id: projectIdValue, userId },
           { fields: { _id: 1 } }
         );
 
@@ -987,7 +1035,7 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    const res = await Meteor.callAsync('notes.update', noteId, modifier);
+    const res = await callMethodAs('notes.update', userId, noteId, modifier);
 
     // Verify that the update actually modified a document
     if (res === 0) {
@@ -1018,8 +1066,9 @@ export const TOOL_HANDLERS = {
     }
 
     // Validate that the note exists before attempting delete
+    const userId = getMCPUserId();
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { _id: 1 } });
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId, userId }, { fields: { _id: 1 } });
 
     if (!existingNote) {
       console.warn(`[tool_deleteNote] Note not found: ${noteId}`);
@@ -1030,7 +1079,7 @@ export const TOOL_HANDLERS = {
     }
 
     try {
-      await Meteor.callAsync('notes.remove', noteId);
+      await callMethodAs('notes.remove', userId, noteId);
 
       console.log(`[tool_deleteNote] Successfully deleted note: ${noteId}`);
 
@@ -1067,7 +1116,8 @@ export const TOOL_HANDLERS = {
 
     if (args?.projectId) doc.projectId = String(args.projectId).trim();
 
-    const linkId = await Meteor.callAsync('links.insert', doc);
+    const userId = getMCPUserId();
+    const linkId = await callMethodAs('links.insert', userId, doc);
 
     const result = { linkId, name, url, projectId: doc.projectId || null };
     if (memory) {
@@ -1080,7 +1130,7 @@ export const TOOL_HANDLERS = {
   async tool_userLogsFilter(args, memory) {
     const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
 
-    const selector = {};
+    const selector = { userId: getMCPUserId() };
 
     // Filter by lastDays if provided
     const hasDateFilter = args?.lastDays && Number(args.lastDays) > 0;
@@ -1186,7 +1236,7 @@ export const TOOL_HANDLERS = {
 
         // Fetch full email data from MongoDB
         emails = await GmailMessagesCollection.find(
-          { id: { $in: emailIds } },
+          { id: { $in: emailIds }, userId: getMCPUserId() },
           { fields: { id: 1, from: 1, subject: 1, snippet: 1, gmailDate: 1, labelIds: 1 } }
         ).fetchAsync();
 
@@ -1336,6 +1386,9 @@ export const TOOL_HANDLERS = {
         selector = { $and: conditions };
       }
 
+      // Scope by userId
+      selector.userId = getMCPUserId();
+
       emails = await GmailMessagesCollection.find(selector, {
         fields: { id: 1, from: 1, subject: 1, snippet: 1, gmailDate: 1, labelIds: 1 },
         sort: { gmailDate: -1 },
@@ -1371,6 +1424,7 @@ export const TOOL_HANDLERS = {
 
     const includeThread = !!args?.includeThread;
     const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+    const mcpUserId = getMCPUserId();
 
     const emails = [];
 
@@ -1378,9 +1432,9 @@ export const TOOL_HANDLERS = {
       const id = String(emailId).trim();
 
       // Try to find by Gmail ID first, then by MongoDB _id
-      let email = await GmailMessagesCollection.findOneAsync({ id });
+      let email = await GmailMessagesCollection.findOneAsync({ id, userId: mcpUserId });
       if (!email) {
-        email = await GmailMessagesCollection.findOneAsync({ _id: id });
+        email = await GmailMessagesCollection.findOneAsync({ _id: id, userId: mcpUserId });
       }
 
       if (!email) {
@@ -1465,11 +1519,12 @@ export const TOOL_HANDLERS = {
     try {
       // messageId might be MongoDB _id or Gmail id - need to resolve to Gmail id
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const mcpUserId = getMCPUserId();
       let gmailMessageId = messageId;
 
       // If it looks like a MongoDB ObjectId (24 hex chars), look it up
       if (/^[0-9a-f]{24}$/i.test(messageId)) {
-        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId });
+        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId, userId: mcpUserId });
         if (!email?.id) {
           throw new Error(`Email not found with _id: ${messageId}`);
         }
@@ -1506,11 +1561,12 @@ export const TOOL_HANDLERS = {
     try {
       // messageId might be MongoDB _id or Gmail id - need to resolve to Gmail id
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const mcpUserId = getMCPUserId();
       let gmailMessageId = messageId;
 
       // If it looks like a MongoDB ObjectId (24 hex chars), look it up
       if (/^[0-9a-f]{24}$/i.test(messageId)) {
-        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId });
+        const email = await GmailMessagesCollection.findOneAsync({ _id: messageId, userId: mcpUserId });
         if (!email?.id) {
           throw new Error(`Email not found with _id: ${messageId}`);
         }
@@ -1582,9 +1638,10 @@ export const TOOL_HANDLERS = {
       const dryRun = args?.dryRun === true; // Default: false
 
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const mcpUserId = getMCPUserId();
 
-      // Get all emails from cache
-      const allEmails = await GmailMessagesCollection.find({}).fetchAsync();
+      // Get all emails from cache for this user
+      const allEmails = await GmailMessagesCollection.find({ userId: mcpUserId }).fetchAsync();
       const totalCount = allEmails.length;
 
       // Calculate cutoff date for recent emails
@@ -1737,6 +1794,7 @@ export const TOOL_HANDLERS = {
       }
 
       const { MCPServersCollection } = await import('/imports/api/mcpServers/collections');
+      const mcpUserId = getMCPUserId();
 
       const results = {
         imported: [],
@@ -1747,8 +1805,8 @@ export const TOOL_HANDLERS = {
       // Import each server
       for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
         try {
-          // Check if server already exists
-          const existing = await MCPServersCollection.findOneAsync({ name: serverName });
+          // Check if server already exists for this user
+          const existing = await MCPServersCollection.findOneAsync({ name: serverName, userId: mcpUserId });
           if (existing) {
             results.skipped.push({
               name: serverName,
@@ -1770,6 +1828,7 @@ export const TOOL_HANDLERS = {
               args: serverConfig.args || [],
               env: serverConfig.env || {},
               enabled: true,
+              userId: mcpUserId,
               createdAt: new Date()
             };
           } else if (serverConfig.url) {
@@ -1781,6 +1840,7 @@ export const TOOL_HANDLERS = {
               url: serverConfig.url,
               headers: serverConfig.headers || {},
               enabled: true,
+              userId: mcpUserId,
               createdAt: new Date()
             };
           } else {
@@ -1837,7 +1897,7 @@ export const TOOL_HANDLERS = {
 
   async tool_claudeProjectsList(args, memory) {
     const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
-    const projects = await ClaudeProjectsCollection.find({}, {
+    const projects = await ClaudeProjectsCollection.find({ userId: getMCPUserId() }, {
       fields: { name: 1, cwd: 1, model: 1, permissionMode: 1, createdAt: 1, updatedAt: 1 },
       sort: { updatedAt: -1 }
     }).fetchAsync();
@@ -1861,8 +1921,9 @@ export const TOOL_HANDLERS = {
       });
     }
     // Validate that the Claude project exists
+    const mcpUserId = getMCPUserId();
     const { ClaudeProjectsCollection } = await import('/imports/api/claudeProjects/collections');
-    const project = await ClaudeProjectsCollection.findOneAsync({ _id: projectId }, { fields: { _id: 1 } });
+    const project = await ClaudeProjectsCollection.findOneAsync({ _id: projectId, userId: mcpUserId }, { fields: { _id: 1 } });
     if (!project) {
       return buildErrorResponse(`Claude project not found: "${projectId}"`, 'tool_claudeSessionsByProject', {
         code: 'NOT_FOUND',
@@ -1870,7 +1931,7 @@ export const TOOL_HANDLERS = {
       });
     }
     const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
-    const sessions = await ClaudeSessionsCollection.find({ projectId }, {
+    const sessions = await ClaudeSessionsCollection.find({ projectId, userId: mcpUserId }, {
       fields: { name: 1, projectId: 1, status: 1, totalCostUsd: 1, totalDurationMs: 1, claudeCodeVersion: 1, activeModel: 1, createdAt: 1, updatedAt: 1 },
       sort: { createdAt: -1 }
     }).fetchAsync();
@@ -1897,8 +1958,9 @@ export const TOOL_HANDLERS = {
         suggestion: 'Use tool_claudeSessionsByProject to find the correct session ID.'
       });
     }
+    const mcpUserId = getMCPUserId();
     const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
-    const session = await ClaudeSessionsCollection.findOneAsync({ _id: sessionId }, {
+    const session = await ClaudeSessionsCollection.findOneAsync({ _id: sessionId, userId: mcpUserId }, {
       fields: { name: 1, projectId: 1, status: 1, totalCostUsd: 1, totalDurationMs: 1, claudeCodeVersion: 1, activeModel: 1, createdAt: 1, updatedAt: 1 }
     });
     if (!session) {
@@ -1908,7 +1970,7 @@ export const TOOL_HANDLERS = {
       });
     }
     const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
-    const messages = await ClaudeMessagesCollection.find({ sessionId }, {
+    const messages = await ClaudeMessagesCollection.find({ sessionId, userId: mcpUserId }, {
       fields: { role: 1, type: 1, costUsd: 1, durationMs: 1 }
     }).fetchAsync();
 
@@ -1958,7 +2020,7 @@ export const TOOL_HANDLERS = {
     }
     const limit = Math.min(200, Math.max(1, Number(args?.limit) || 50));
     const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
-    const messages = await ClaudeMessagesCollection.find({ sessionId }, {
+    const messages = await ClaudeMessagesCollection.find({ sessionId, userId: getMCPUserId() }, {
       fields: { role: 1, type: 1, contentText: 1, toolName: 1, costUsd: 1, durationMs: 1, model: 1, createdAt: 1 },
       sort: { createdAt: 1 },
       limit
@@ -1990,7 +2052,7 @@ export const TOOL_HANDLERS = {
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = { $regex: escaped, $options: 'i' };
     const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');
-    const messages = await ClaudeMessagesCollection.find({ contentText: regex }, {
+    const messages = await ClaudeMessagesCollection.find({ contentText: regex, userId: getMCPUserId() }, {
       fields: { sessionId: 1, role: 1, type: 1, contentText: 1, createdAt: 1 },
       sort: { createdAt: -1 },
       limit
@@ -2019,7 +2081,7 @@ export const TOOL_HANDLERS = {
     const sortOrder = args?.sortOrder === 'asc' ? 1 : -1;
 
     // 2. Build selector
-    const selector = status ? { status } : {};
+    const selector = status ? { status, userId: getMCPUserId() } : { userId: getMCPUserId() };
 
     // 3. Query sessions
     const sessions = await ClaudeSessionsCollection.find(selector, {

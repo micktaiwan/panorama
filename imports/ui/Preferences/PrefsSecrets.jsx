@@ -4,7 +4,7 @@ import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import { navigateTo } from '../router.js';
 import { notify } from '../utils/notify.js';
 
-export const PrefsSecrets = ({ pref }) => {
+export const PrefsSecrets = ({ pref, userPref }) => {
   const [openaiApiKey, setOpenaiApiKey] = React.useState('');
   const [anthropicApiKey, setAnthropicApiKey] = React.useState('');
   const [perplexityApiKey, setPerplexityApiKey] = React.useState('');
@@ -22,22 +22,24 @@ export const PrefsSecrets = ({ pref }) => {
   const [slackAllowedUserId, setSlackAllowedUserId] = React.useState('');
 
   React.useEffect(() => {
-    if (!pref) return;
-    setOpenaiApiKey(pref.openaiApiKey || '');
-    setAnthropicApiKey(pref.anthropicApiKey || '');
-    setPerplexityApiKey(pref.perplexityApiKey || '');
-    setPennyBaseUrl(pref.pennylaneBaseUrl || '');
-    setPennyToken(pref.pennylaneToken || '');
-    setCalendarIcsUrl(pref.calendarIcsUrl || '');
-    setGoogleCalendarClientId(pref.googleCalendar?.clientId || '');
-    setGoogleCalendarClientSecret(pref.googleCalendar?.clientSecret || '');
-    setGoogleCalendarConnected(!!(pref.googleCalendar?.refreshToken));
-    setGoogleCalendarLastSync(pref.googleCalendar?.lastSyncAt || null);
-    setSlackEnabled(!!pref.slack?.enabled);
-    setSlackBotToken(pref.slack?.botToken || '');
-    setSlackAppToken(pref.slack?.appToken || '');
-    setSlackAllowedUserId(pref.slack?.allowedUserId || '');
-  }, [pref?._id]);
+    if (!userPref) return;
+    setOpenaiApiKey(userPref.openaiApiKey || '');
+    setAnthropicApiKey(userPref.anthropicApiKey || '');
+    setPerplexityApiKey(userPref.perplexityApiKey || '');
+    setPennyBaseUrl(userPref.pennylaneBaseUrl || '');
+    setPennyToken(userPref.pennylaneToken || '');
+    setCalendarIcsUrl(userPref.calendarIcsUrl || '');
+    setGoogleCalendarClientId(userPref.googleCalendar?.clientId || '');
+    setGoogleCalendarClientSecret(userPref.googleCalendar?.clientSecret || '');
+    setGoogleCalendarConnected(!!(userPref.googleCalendar?.refreshToken));
+    setGoogleCalendarLastSync(userPref.googleCalendar?.lastSyncAt || null);
+    setSlackEnabled(!!userPref.slack?.enabled);
+    setSlackBotToken(userPref.slack?.botToken || '');
+    setSlackAppToken(userPref.slack?.appToken || '');
+    setSlackAllowedUserId(userPref.slack?.allowedUserId || '');
+  }, [userPref?._id, userPref?.openaiApiKey, userPref?.anthropicApiKey, userPref?.perplexityApiKey,
+      userPref?.pennylaneBaseUrl, userPref?.pennylaneToken, userPref?.calendarIcsUrl,
+      JSON.stringify(userPref?.googleCalendar), JSON.stringify(userPref?.slack)]);
 
   return (
     <>
@@ -52,7 +54,7 @@ export const PrefsSecrets = ({ pref }) => {
               fullWidth
               onSubmit={(next) => {
                 setOpenaiApiKey(next);
-                Meteor.call('appPreferences.update', { openaiApiKey: next }, () => {});
+                Meteor.call('userPreferences.update', { openaiApiKey: next }, () => {});
               }}
             />
           </div>
@@ -62,11 +64,11 @@ export const PrefsSecrets = ({ pref }) => {
           <div className="prefsValue">
             <InlineEditable
               value={anthropicApiKey}
-              placeholder="sk-ant-..."
+              placeholder="(not set)"
               fullWidth
               onSubmit={(next) => {
                 setAnthropicApiKey(next);
-                Meteor.call('appPreferences.update', { anthropicApiKey: next }, () => {});
+                Meteor.call('userPreferences.update', { anthropicApiKey: next }, () => {});
               }}
             />
             <div className="muted mt4" style={{ fontSize: '12px' }}>
@@ -83,7 +85,7 @@ export const PrefsSecrets = ({ pref }) => {
               fullWidth
               onSubmit={(next) => {
                 setPerplexityApiKey(next);
-                Meteor.call('appPreferences.update', { perplexityApiKey: next }, () => {});
+                Meteor.call('userPreferences.update', { perplexityApiKey: next }, () => {});
               }}
             />
           </div>
@@ -137,7 +139,7 @@ export const PrefsSecrets = ({ pref }) => {
                       notify({ message: 'Client ID and Secret required', kind: 'error' });
                       return;
                     }
-                    Meteor.call('appPreferences.update', {
+                    Meteor.call('userPreferences.update', {
                       googleCalendar: {
                         clientId: googleCalendarClientId.trim(),
                         clientSecret: googleCalendarClientSecret.trim()
@@ -213,7 +215,7 @@ export const PrefsSecrets = ({ pref }) => {
                 onSubmit={(next) => {
                   const v = next === 'enabled';
                   setSlackEnabled(v);
-                  Meteor.call('appPreferences.update', { slack: { enabled: v, botToken: slackBotToken, appToken: slackAppToken, allowedUserId: slackAllowedUserId } }, () => {});
+                  Meteor.call('userPreferences.update', { slack: { enabled: v, botToken: slackBotToken, appToken: slackAppToken, allowedUserId: slackAllowedUserId } }, () => {});
                 }}
               />
             </div>
@@ -227,7 +229,7 @@ export const PrefsSecrets = ({ pref }) => {
                     fullWidth
                     onSubmit={(next) => {
                       setSlackBotToken(next);
-                      Meteor.call('appPreferences.update', { slack: { enabled: slackEnabled, botToken: next, appToken: slackAppToken, allowedUserId: slackAllowedUserId } }, () => {});
+                      Meteor.call('userPreferences.update', { slack: { enabled: slackEnabled, botToken: next, appToken: slackAppToken, allowedUserId: slackAllowedUserId } }, () => {});
                     }}
                   />
                 </div>
@@ -239,7 +241,7 @@ export const PrefsSecrets = ({ pref }) => {
                     fullWidth
                     onSubmit={(next) => {
                       setSlackAppToken(next);
-                      Meteor.call('appPreferences.update', { slack: { enabled: slackEnabled, botToken: slackBotToken, appToken: next, allowedUserId: slackAllowedUserId } }, () => {});
+                      Meteor.call('userPreferences.update', { slack: { enabled: slackEnabled, botToken: slackBotToken, appToken: next, allowedUserId: slackAllowedUserId } }, () => {});
                     }}
                   />
                 </div>
@@ -251,7 +253,7 @@ export const PrefsSecrets = ({ pref }) => {
                     fullWidth
                     onSubmit={(next) => {
                       setSlackAllowedUserId(next);
-                      Meteor.call('appPreferences.update', { slack: { enabled: slackEnabled, botToken: slackBotToken, appToken: slackAppToken, allowedUserId: next } }, () => {});
+                      Meteor.call('userPreferences.update', { slack: { enabled: slackEnabled, botToken: slackBotToken, appToken: slackAppToken, allowedUserId: next } }, () => {});
                     }}
                   />
                 </div>
@@ -271,7 +273,7 @@ export const PrefsSecrets = ({ pref }) => {
               fullWidth
               onSubmit={(next) => {
                 setPennyBaseUrl(next);
-                Meteor.call('appPreferences.update', { pennylaneBaseUrl: next }, () => {});
+                Meteor.call('userPreferences.update', { pennylaneBaseUrl: next }, () => {});
               }}
             />
           </div>
@@ -285,7 +287,7 @@ export const PrefsSecrets = ({ pref }) => {
               fullWidth
               onSubmit={(next) => {
                 setPennyToken(next);
-                Meteor.call('appPreferences.update', { pennylaneToken: next }, () => {});
+                Meteor.call('userPreferences.update', { pennylaneToken: next }, () => {});
               }}
             />
           </div>

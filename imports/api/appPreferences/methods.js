@@ -47,6 +47,7 @@ Meteor.methods({
     }
     if (modifier.theme === 'dark' || modifier.theme === 'light') set.theme = modifier.theme;
     if (Number.isFinite(modifier.settingsVersion)) set.settingsVersion = modifier.settingsVersion;
+    if (typeof modifier.localUserId === 'string') set.localUserId = modifier.localUserId.trim() || null;
     const doc = await AppPreferencesCollection.findOneAsync({});
     if (!doc) {
       await AppPreferencesCollection.insertAsync({ ...set, createdAt: new Date() });

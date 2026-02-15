@@ -91,4 +91,113 @@ export const getGoogleCalendarConfig = () => {
   return { clientId, clientSecret, refreshToken, redirectUri };
 };
 
+// --- Async user-aware getters (for Meteor method context) ---
+// Merge: userPreferences > appPreferences > env > settings
+
+const getUserPrefs = async (userId) => {
+  if (!userId) return null;
+  const { UserPreferencesCollection } = await import('/imports/api/userPreferences/collections');
+  return UserPreferencesCollection.findOneAsync({ userId });
+};
+
+export const getOpenAiApiKeyAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = userPref?.openaiApiKey?.trim() || null;
+  if (fromUser) return fromUser;
+  return getOpenAiApiKey();
+};
+
+export const getAnthropicApiKeyAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = userPref?.anthropicApiKey?.trim() || null;
+  if (fromUser) return fromUser;
+  return getAnthropicApiKey();
+};
+
+export const getAIConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const base = getAIConfig(); // instance-level defaults
+  if (!userPref?.ai) return base;
+  // Merge user overrides on top of instance config
+  return {
+    mode: userPref.ai.mode || base.mode,
+    fallback: userPref.ai.fallback || base.fallback,
+    timeoutMs: userPref.ai.timeoutMs || base.timeoutMs,
+    maxTokens: userPref.ai.maxTokens || base.maxTokens,
+    temperature: userPref.ai.temperature ?? base.temperature,
+    local: { ...base.local, ...(userPref.ai.local || {}) },
+    remote: { ...base.remote, ...(userPref.ai.remote || {}) }
+  };
+};
+
+export const getPennylaneConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = {
+    baseUrl: userPref?.pennylaneBaseUrl?.trim() || null,
+    token: userPref?.pennylaneToken?.trim() || null,
+  };
+  if (fromUser.baseUrl && fromUser.token) return fromUser;
+  return getPennylaneConfig(); // fallback to instance-level
+};
+
+export const getSlackConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  if (userPref?.slack) {
+    return {
+      enabled: userPref.slack.enabled ?? false,
+      botToken: userPref.slack.botToken?.trim() || null,
+      appToken: userPref.slack.appToken?.trim() || null,
+      allowedUserId: userPref.slack.allowedUserId?.trim() || null,
+    };
+  }
+  return getSlackConfig(); // fallback to instance-level
+};
+
+export const getGoogleCalendarConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  if (userPref?.googleCalendar) {
+    const gc = userPref.googleCalendar;
+    return {
+      clientId: gc.clientId?.trim() || null,
+      clientSecret: gc.clientSecret?.trim() || null,
+      refreshToken: gc.refreshToken?.trim() || null,
+      redirectUri: gc.redirectUri?.trim() || null,
+    };
+  }
+  return getGoogleCalendarConfig(); // fallback to instance-level
+};
+
+export const getCtaConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  if (userPref?.cta) {
+    return {
+      enabled: userPref.cta.enabled ?? false,
+      model: userPref.cta.model || null,
+    };
+  }
+  // fallback to appPreferences
+  const pref = getPrefs();
+  return {
+    enabled: pref?.cta?.enabled ?? false,
+    model: pref?.cta?.model || null,
+  };
+};
+
+export const getCalendarIcsUrlAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = userPref?.calendarIcsUrl?.trim() || null;
+  if (fromUser) return fromUser;
+  // fallback to appPreferences
+  const pref = getPrefs();
+  return pref?.calendarIcsUrl?.trim() || null;
+};
+
+/**
+ * Read localUserId from appPreferences (for MCP server context).
+ */
+export const getLocalUserId = () => {
+  const pref = getPrefs();
+  return pref?.localUserId || null;
+};
+
 

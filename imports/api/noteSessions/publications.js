@@ -2,7 +2,8 @@ import { Meteor } from 'meteor/meteor';
 import { NoteSessionsCollection } from './collections';
 
 Meteor.publish('noteSessions', function publishNoteSessions() {
-  return NoteSessionsCollection.find();
+  if (!this.userId) return this.ready();
+  return NoteSessionsCollection.find({ userId: this.userId });
 });
 
 
