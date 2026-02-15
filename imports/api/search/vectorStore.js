@@ -186,7 +186,7 @@ export const ensureCollection = async () => {
   }
   // Ensure payload index on userId for filtered searches
   try {
-    await client.createPayloadIndex(collectionName, { field_name: 'userId', field_schema: 'Keyword' });
+    await client.createPayloadIndex(collectionName, { field_name: 'userId', field_schema: 'keyword' });
     console.log(`[qdrant] Payload index on 'userId' ensured for '${collectionName}'`);
   } catch (indexError) {
     // Index may already exist — ignore
