@@ -62,24 +62,22 @@ Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et un prototyp
 | CPU | 2 vCPU (upgrade fevrier 2026, etait 1) |
 | Disque | 40 GB (upgrade fevrier 2026, etait 20 GB). Swap: 2 GB (`/swapfile`) |
 
-**Services Docker en place** :
+**Services Docker en place** (apres restructuration Phase 3.6, 2026-02-15) :
 
-Les services sont actuellement repartis entre plusieurs docker-compose (Organizer, prototype de David). L'architecture cible separe l'infra partagee des applications (voir Phase 3.6).
+L'infra partagee est separee des applications. Prototype de David supprime.
 
-| Container | Image | RAM | Role | Cible |
-|---|---|---|---|---|
-| `organizer-mongodb` | mongo:5 | ~170 MB | DB partagee (databases `organizer` + `panorama`) | → `infra/docker-compose.yml` |
-| `organizer-qdrant` | qdrant:v1.16.3 | ~30 MB | Vector DB partagee (ports 6333/6334) | → `infra/docker-compose.yml` |
-| `mup-nginx-proxy` | zodern/nginx-proxy | ~58 MB | Reverse proxy SSL (ports 80/443) | → `infra/docker-compose.yml` |
-| `mup-nginx-proxy-letsencrypt` | letsencrypt-companion | ~20 MB | Renouvellement auto SSL | → `infra/docker-compose.yml` |
-| `organizer-api` | Node.js 20 | ~97 MB | API Organizer (port 3001) | reste dans Organizer |
-| `organizer-coturn` | coturn | ~6 MB | TURN server (Organizer) | reste dans Organizer |
-| `panoramix-api` | Node.js Express 5 | ~61 MB | Prototype David (**a supprimer**) | supprime |
-| `panoramix-web` | nginx:alpine | ~3 MB | Prototype David (**a supprimer**) | supprime |
+| Container | Image | Docker-compose | Role |
+|---|---|---|---|
+| `organizer-mongodb` | mongo:5 (replica set `rs0`) | `/opt/infra/docker-compose.yml` | DB partagee, port `127.0.0.1:27017` |
+| `organizer-qdrant` | qdrant:v1.16.3 | `/opt/infra/docker-compose.yml` | Vector DB, port `127.0.0.1:6333` |
+| `mup-nginx-proxy` | zodern/nginx-proxy | gere par MUP | Reverse proxy SSL (ports 80/443) |
+| `mup-nginx-proxy-letsencrypt` | letsencrypt-companion | gere par MUP | Renouvellement auto SSL |
+| `organizer-api` | Node.js 20 | `/var/www/organizer/server/docker-compose.prod.yml` | API Organizer (port 3001) |
+| `organizer-coturn` | coturn | `/var/www/organizer/server/docker-compose.prod.yml` | TURN server (Organizer) |
 
 **Domaine** : `panorama.mickaelfm.me` deja configure avec SSL Let's Encrypt via le proxy MUP.
 
-**Reseau Docker** : `server_organizer-network` — tous les containers partagent ce reseau interne. Sera renomme en `shared-infra` lors de la restructuration (Phase 3.6).
+**Reseau Docker** : `server_organizer-network` — tous les containers partagent ce reseau interne.
 
 **Backups** : `mongodump` quotidien automatise pour la DB `organizer` (cron 2h UTC, 7j retention, `/opt/backups/`). La DB `panorama` n'a pas encore de backup automatise (a ajouter en Phase 5.7).
 
@@ -353,11 +351,11 @@ L'index Qdrant est **global** : les vecteurs ne contiennent pas de `userId` dans
 
 ---
 
-### Phase 3 — Dual MongoDB driver (code DONE, infra TODO)
+### Phase 3 — Dual MongoDB driver (code DONE, infra 3.6 DONE, tunnel 3.4 TODO)
 
 **Objectif** : l'instance locale de Mick se connecte a la DB remote pour les collections partagees (y compris `users`), et garde la DB locale pour les collections local-only.
 
-**Statut** : code implemente (branche `feature/multi-user-auth`). `localDriver.js` cree, 23 collections local-only modifiees. `/opt/infra/docker-compose.yml` cree sur le VPS. Reste a faire : basculement infra (3.6) et tunnel SSH (3.4).
+**Statut** : code implemente (branche `feature/multi-user-auth`). `localDriver.js` cree, 23 collections local-only modifiees. Infra Docker restructuree sur le VPS (3.6 DONE le 2026-02-15). Reste a faire : tunnel SSH (3.4).
 
 **Approche inversee** : plutot qu'ajouter un `remoteDriver` sur les 8 collections partagees, `MONGO_URL` pointe directement vers la DB remote. Seules les ~21 collections local-only recoivent un `localDriver`. Avantages :
 - `Meteor.users` est automatiquement sur la DB remote (un seul compte, un seul mot de passe, un seul `userId`)
@@ -460,84 +458,44 @@ Meteor utilise l'**oplog** (journal des operations MongoDB) pour la reactivite e
 
 **Configuration oplog** : Meteor lit l'oplog via `MONGO_OPLOG_URL` (voir tableau 3.3). Sur le VPS : `mongodb://organizer-mongodb:27017/local`. En local (Mick) : `mongodb://localhost:27018/local` (via le meme tunnel SSH).
 
-#### 3.6 Restructuration infra Docker
+#### 3.6 Restructuration infra Docker ✅ DONE (2026-02-15)
 
-**Objectif** : separer l'infra partagee (MongoDB, Qdrant, reverse proxy) des applications (Organizer, Panorama). Actuellement, MongoDB et Qdrant sont definis dans le docker-compose d'Organizer — ce qui cree un couplage artificiel. Si Organizer est arrete, l'infra tombe aussi.
+**Objectif** : separer l'infra partagee (MongoDB, Qdrant, reverse proxy) des applications (Organizer, Panorama). Avant, MongoDB et Qdrant etaient definis dans le docker-compose d'Organizer — couplage artificiel.
 
-**Architecture cible** :
+**Architecture en place** :
 
 ```
-/opt/infra/docker-compose.yml          → mongodb, qdrant, nginx proxy, letsencrypt
-/var/www/organizer/server/docker-compose.prod.yml  → api, coturn (connecte au reseau infra)
-Panorama                               → deploye via MUP (connecte au reseau infra)
+/opt/infra/docker-compose.yml          → mongodb (replica set rs0), qdrant
+/var/www/organizer/server/docker-compose.prod.yml  → api, coturn (reseau externe)
+mup-nginx-proxy + letsencrypt          → geres par MUP, autonomes
+Panorama                               → a deployer via MUP (Phase 5)
 ```
 
-**Attention** : c'est l'operation la plus risquee du plan — c'est la seule qui touche un service de production existant (Organizer). Le replica set est normalement transparent pour Mongoose, mais "normalement" c'est pas "garanti".
+**Ce qui a ete fait** :
 
-**Procedure** :
+1. Backup frais `organizer-pre-restructure.gz` (rapatrie en local dans `.backups/`)
+2. Checkpoint : Organizer fonctionne (health 200)
+3. Prototype de David stoppe et supprime (`/opt/panoramix` → containers `panoramix-api` + `panoramix-web` supprimes)
+4. Organizer stoppe
+5. Infra partagee demarree depuis `/opt/infra/docker-compose.yml`
+6. Docker-compose Organizer simplifie (mongodb/qdrant retires, reseau externe, coturn ajoute)
+7. **Replica set initialise AVANT de relancer Organizer** — necessaire car MongoDB en mode `--replSet` refuse les connexions tant que `rs.initiate()` n'est pas fait. L'ordre prevu dans le plan initial (checkpoint Organizer avant rs.initiate) ne fonctionne pas.
+8. Organizer relance → healthy, messages desktop↔Android OK
 
-```bash
-# 0. BACKUP FRAIS avant toute modification (ne pas compter sur le cron quotidien)
-docker exec organizer-mongodb mongodump --db organizer --archive=/tmp/organizer-pre-restructure.gz --gzip
-docker cp organizer-mongodb:/tmp/organizer-pre-restructure.gz /opt/backups/
-# Rapatrier en local aussi (scp vers le Mac)
-# CHECKPOINT : verifier qu'Organizer fonctionne AVANT le changement
+**Corrections par rapport au plan initial** :
 
-# 1. Creer le dossier infra
-sudo mkdir -p /opt/infra
+- **Reseau `external: true`** : le reseau `server_organizer-network` existait deja (cree par le proxy MUP). Il fallait le declarer `external: true` dans `/opt/infra/docker-compose.yml` au lieu de `driver: bridge` + `name:`, sinon Docker refuse de le reutiliser (conflit de labels).
+- **Ordre rs.initiate** : `rs.initiate()` doit etre fait **avant** de relancer Organizer, pas apres. Mongoose ne peut pas se connecter a un MongoDB en mode replica set non initialise (topology "Unknown", timeout 30s).
 
-# 2. Creer /opt/infra/docker-compose.yml avec les services partages
-#    (voir contenu ci-dessous)
-
-# 3. Stopper le prototype de David (a ne plus relancer)
-cd /opt/panoramix && docker compose -f docker-compose.prod.yml down
-
-# 4. Stopper Organizer (brievement)
-cd /var/www/organizer/server && docker compose -f docker-compose.prod.yml down
-
-# 5. Demarrer l'infra partagee
-cd /opt/infra && docker compose up -d
-
-# 6. Retirer mongodb et qdrant du docker-compose Organizer,
-#    remplacer le reseau par le reseau infra externe
-# 7. Redemarrer Organizer
-cd /var/www/organizer/server && docker compose -f docker-compose.prod.yml up -d
-
-# 8. CHECKPOINT : verifier qu'Organizer fonctionne
-# Tester manuellement l'app (login, navigation, creation de donnees)
-
-# 9. Initialiser le replica set (une seule fois)
-docker exec organizer-mongodb mongosh --eval 'rs.initiate()'
-# Attendre quelques secondes
-docker exec organizer-mongodb mongosh --eval 'rs.status()'
-# Verifier : "stateStr" doit etre "PRIMARY"
-
-# 10. Re-verifier Organizer apres l'init du replica set
-
-# 11. Attendre 24h et verifier la stabilite avant de passer a la Phase 4
-```
-
-**Rollback si Organizer casse** :
-
-```bash
-# Option 1 : remettre l'ancien docker-compose Organizer (avec mongodb/qdrant dedans)
-cd /var/www/organizer/server && docker compose -f docker-compose.prod.yml up -d
-# Stopper l'infra separee
-cd /opt/infra && docker compose down
-
-# Option 2 : si les donnees sont corrompues, restaurer le backup
-docker exec -i organizer-mongodb mongorestore --gzip --archive=/tmp/organizer-pre-restructure.gz --drop
-```
-
-**`/opt/infra/docker-compose.yml`** :
+**`/opt/infra/docker-compose.yml`** (tel que deploye) :
 
 ```yaml
 services:
   mongodb:
     image: mongo:5
-    container_name: organizer-mongodb  # garder le nom pour ne pas casser les references
+    container_name: organizer-mongodb
     restart: unless-stopped
-    command: ["--replSet", "rs0"]      # replica set pour l'oplog Meteor
+    command: ["--replSet", "rs0"]
     ports:
       - "127.0.0.1:27017:27017"       # accessible via tunnel SSH, pas sur internet
     volumes:
@@ -552,7 +510,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.16.3
-    container_name: organizer-qdrant   # garder le nom
+    container_name: organizer-qdrant
     restart: unless-stopped
     security_opt:
       - seccomp:unconfined
@@ -573,27 +531,19 @@ services:
 
 networks:
   shared-infra:
-    driver: bridge
-    name: server_organizer-network     # garder le nom du reseau existant pour ne pas
-                                       # reconfigurer le proxy MUP immediatement
+    external: true                     # reseau existant cree par le proxy MUP
+    name: server_organizer-network
 
 volumes:
   mongodb_data:
-    external: true                     # reutiliser le volume existant
+    external: true
     name: server_mongodb_data
   qdrant_data:
     external: true
     name: server_qdrant_data
 ```
 
-**Notes** :
-- Les noms de containers (`organizer-mongodb`, `organizer-qdrant`) et le nom du reseau (`server_organizer-network`) sont conserves pour eviter de tout reconfigurer d'un coup. Ils pourront etre renommes plus tard.
-- Les volumes sont declares `external` pour reutiliser les donnees existantes.
-- Le proxy MUP (`mup-nginx-proxy` + letsencrypt) reste tel quel — il est deja autonome et gere par MUP.
-- `--replSet rs0` est inclus directement — pas besoin de le faire en deux temps si on fait la restructuration.
-- Apres le demarrage, initialiser le replica set : `docker exec organizer-mongodb mongosh --eval 'rs.initiate()'`
-
-**Docker-compose Organizer simplifie** (`/var/www/organizer/server/docker-compose.prod.yml`) :
+**`/var/www/organizer/server/docker-compose.prod.yml`** (tel que deploye) :
 
 ```yaml
 services:
@@ -648,7 +598,7 @@ volumes:
   logs_data:
 ```
 
-**Impact** : downtime bref (~1 min) pendant le basculement. Organizer et le proxy continuent de fonctionner normalement apres. Le replica set et les ports exposes sont configures en meme temps — les etapes 3.4 et 3.5 sont absorbees par cette restructuration.
+**Backup** : l'ancien docker-compose Organizer est sauvegarde dans `/var/www/organizer/server/docker-compose.prod.yml.bak`.
 
 ---
 
@@ -1164,10 +1114,10 @@ Phase 2 (userId partout)  ✅ DONE
 Phase 3.1-3.3 (Code dual driver)  ✅ DONE
     |
     v
-Phase 3.6 (Restructuration infra VPS)  <-- premiere operation sur le VPS
-    |                                       inclut replica set, ports, suppression prototype David
+Phase 3.6 (Restructuration infra VPS)  ✅ DONE (2026-02-15)
+    |
     v
-Phase 3.4 (Tunnel SSH depuis le Mac)
+Phase 3.4 (Tunnel SSH depuis le Mac)  <-- PROCHAINE ETAPE
     |
     v
 Phase 4 (Migration donnees)
@@ -1181,7 +1131,7 @@ Phase 6 (Fichiers)       \
 Phase 7 (Qdrant)          /
 ```
 
-Les phases 1-2 et 3.1-3.3 sont terminees (tout en local). A partir de la Phase 3.6, on touche au VPS.
+Les phases 1-3.6 sont terminees. L'infra VPS est restructuree (MongoDB en replica set, Qdrant, prototype David supprime). Prochaine etape : tunnel SSH (3.4) pour connecter l'instance locale de Mick a la DB remote.
 
 ## Risques identifies
 
@@ -1195,7 +1145,7 @@ Les phases 1-2 et 3.1-3.3 sont terminees (tout en local). A partir de la Phase 3
 | **Signup ouvert : abus** | Comptes spam, surcharge | Rate limiting, validation email, monitoring |
 | **Local driver Meteor 3** | `MongoInternals.RemoteCollectionDriver` pour le `localDriver` pas documente officiellement dans Meteor 3 | Tester tot en dev. Si probleme, les collections local-only restent dans la DB remote mais protegees par `ensureLocalOnly()` (fallback acceptable) |
 | **RAM VPS** | ~~Risque resolu~~ — VPS upgrade a 4 GB (fevrier 2026), budget memoire confortable | Monitorer avec `docker stats` apres deploiement |
-| **Replica set sur MongoDB partage** | Activer le replica set sur `organizer-mongodb` impacte aussi Organizer | Tester que Organizer (Mongoose) fonctionne correctement apres activation. Normalement transparent |
+| **Replica set sur MongoDB partage** | ~~Risque resolu~~ — replica set active le 2026-02-15, Organizer fonctionne normalement (Mongoose transparent). Note : `rs.initiate()` doit etre fait **avant** de relancer les apps clientes | — |
 
 ## Future : rotation des logs
 
