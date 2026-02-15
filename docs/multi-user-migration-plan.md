@@ -349,9 +349,11 @@ L'index Qdrant est **global** : les vecteurs ne contiennent pas de `userId` dans
 
 ---
 
-### Phase 3 — Dual MongoDB driver
+### Phase 3 — Dual MongoDB driver (code DONE, infra TODO)
 
 **Objectif** : l'instance locale de Mick se connecte a la DB remote pour les collections partagees (y compris `users`), et garde la DB locale pour les collections local-only.
+
+**Statut** : code implemente (branche `feature/multi-user-auth`). `localDriver.js` cree, 23 collections local-only modifiees. Reste a faire : tunnel SSH (3.4) et replica set (3.5) sur le VPS.
 
 **Approche inversee** : plutot qu'ajouter un `remoteDriver` sur les 8 collections partagees, `MONGO_URL` pointe directement vers la DB remote. Seules les ~21 collections local-only recoivent un `localDriver`. Avantages :
 - `Meteor.users` est automatiquement sur la DB remote (un seul compte, un seul mot de passe, un seul `userId`)
@@ -456,16 +458,14 @@ async 'app.importArchive'({ ndjsonContent, targetUserId }) {
 
 #### 4.2 Procedure de migration
 
-1. Demarrer Panorama en local (mode classique, DB locale)
+1. Demarrer Panorama en local (mode classique, DB locale, sans `MONGO_URL` ni `LOCAL_MONGO_URL`)
 2. Exporter via `app.exportArchiveStart` → fichier `.ndjson.gz`
-3. Demarrer la DB remote sur le VPS
-4. Demarrer l'instance locale avec `MONGO_URL` pointant vers la DB remote (Phase 3). Mick s'inscrit normalement — le compte est cree directement sur la DB remote
+3. Demarrer la DB remote sur le VPS (replica set active, voir Phase 3.5)
+4. Configurer le tunnel SSH (Phase 3.4) et demarrer l'instance locale avec `MONGO_URL` pointant vers la DB remote + `LOCAL_MONGO_URL` vers le MongoDB interne Meteor (voir tableau 3.3). Mick s'inscrit normalement — le compte est cree directement sur la DB remote
 5. Executer l'import avec `targetUserId` = id du user Mick (recupere via `Meteor.userId()`)
 6. Verifier les donnees (compter les documents, spot-check)
-7. Configurer `REMOTE_MONGO_URL` sur l'instance locale
-8. Redemarrer l'instance locale → elle tape sur la DB remote
-9. Verifier que tout fonctionne
-10. Les donnees dans `.meteor/local/db` deviennent un backup
+7. Verifier que tout fonctionne (collections remote sur le VPS, collections locales dans `.meteor/local/db`)
+8. Les donnees dans l'ancienne DB locale (`.meteor/local/db` d'avant migration) deviennent un backup
 
 #### 4.3 Migration des fichiers
 
@@ -477,13 +477,22 @@ Les fichiers physiques sont dans `~/PanoramaFiles` (ou le chemin configure).
 4. L'instance locale de Mick garde ses fichiers locaux (pour Claude Code etc.)
 5. Les nouveaux fichiers uploades via le web vont directement sur le disque VPS
 
-#### 4.4 Backfill des champs denormalises
+#### 4.4 Backfill des champs denormalises ✅ DONE (2026-02-15)
 
-Apres l'import initial (4.2), certains documents ont besoin d'un backfill :
+Backfill effectue sur la DB locale de Mick (userId `y2bayW975C6hocRkh`) :
 
-- **noteLines** : ajouter `userId` sur chaque noteLine (copie depuis la noteSession parente via `sessionId`)
-- Verifier que tous les documents des 8 collections remote ont bien un champ `userId` non-null
-- Script de verification :
+| Collection | Documents backfilles |
+|---|---|
+| projects | 38 |
+| tasks | 260 |
+| notes | 245 |
+| noteSessions | 0 (deja ok) |
+| noteLines | 0 (deja ok) |
+| links | 33 |
+| files | 1 |
+| **Total** | **577** |
+
+**Note** : ce backfill devra etre refait sur la DB remote apres la migration (4.2) si les documents sont importes sans userId. Script de verification :
 
 ```javascript
 // Pour chaque collection remote, compter les documents sans userId
@@ -492,8 +501,6 @@ for (const coll of ['projects', 'tasks', 'notes', 'noteSessions', 'noteLines', '
   console.log(`${coll}: ${count} documents sans userId`);
 }
 ```
-
-Ce backfill doit etre fait **avant** de basculer les publications en mode filtre userId (sinon les documents sans userId deviennent invisibles).
 
 #### 4.5 Reindexation Qdrant
 
@@ -826,8 +833,8 @@ Chaque phase doit etre reversible independamment. La DB locale (`.meteor/local/d
 |---|---|
 | **Phase 1 (Auth)** | Retirer `accounts-base`/`accounts-password`, supprimer les composants Auth. Les collections Meteor `users` et `meteor_accounts_loginServiceConfiguration` sont creees automatiquement et peuvent etre ignorees |
 | **Phase 2 (userId)** | Le champ userId est ajoute mais les publications/methodes peuvent revenir a l'ancienne version (sans filtre). Les documents avec userId restent valides pour le code single-user |
-| **Phase 3 (Dual driver)** | Retirer `REMOTE_MONGO_URL` → tout revient en local automatiquement (le `remoteDriver` est `null`) |
-| **Phase 4 (Migration)** | La DB locale est intacte. Si la migration echoue : `REMOTE_MONGO_URL` non defini → retour au local. Sur le VPS : `db.dropDatabase()` et recommencer |
+| **Phase 3 (Dual driver)** | Retirer `MONGO_URL` et `LOCAL_MONGO_URL` → tout revient en local automatiquement (le `localDriver` est `null`, Meteor utilise sa DB interne) |
+| **Phase 4 (Migration)** | La DB locale est intacte. Si la migration echoue : retirer `MONGO_URL` et `LOCAL_MONGO_URL` → retour au local. Sur le VPS : `db.dropDatabase()` et recommencer |
 | **Phase 5 (Deploy)** | Eteindre l'instance remote. Les users web perdent l'acces mais l'instance locale continue de fonctionner |
 | **Phase 6-7 (Fichiers/Qdrant)** | Les fichiers locaux restent. Qdrant peut etre reindexe a tout moment |
 
