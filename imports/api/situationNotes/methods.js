@@ -1,9 +1,11 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { SituationNotesCollection } from './collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'situationNotes.insert'(fields) {
+    ensureLocalOnly();
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const situationId = String(fields.situationId || '');
     if (!situationId) throw new Meteor.Error('invalid-arg', 'situationId is required');
@@ -15,6 +17,7 @@ Meteor.methods({
   },
   async 'situationNotes.update'(id, fields) {
     check(id, String);
+    ensureLocalOnly();
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const updates = {};
     if ('content' in fields) updates.content = String(fields.content || '').trim();
@@ -22,6 +25,7 @@ Meteor.methods({
   },
   async 'situationNotes.remove'(id) {
     check(id, String);
+    ensureLocalOnly();
     await SituationNotesCollection.removeAsync({ _id: id });
   }
 });

@@ -91,4 +91,51 @@ export const getGoogleCalendarConfig = () => {
   return { clientId, clientSecret, refreshToken, redirectUri };
 };
 
+// --- Async user-aware getters (for Meteor method context) ---
+// Merge: userPreferences > appPreferences > env > settings
+
+const getUserPrefs = async (userId) => {
+  if (!userId) return null;
+  const { UserPreferencesCollection } = await import('/imports/api/userPreferences/collections');
+  return UserPreferencesCollection.findOneAsync({ userId });
+};
+
+export const getOpenAiApiKeyAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = userPref?.openaiApiKey?.trim() || null;
+  if (fromUser) return fromUser;
+  return getOpenAiApiKey();
+};
+
+export const getAnthropicApiKeyAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const fromUser = userPref?.anthropicApiKey?.trim() || null;
+  if (fromUser) return fromUser;
+  return getAnthropicApiKey();
+};
+
+export const getAIConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const base = getAIConfig(); // instance-level defaults
+  if (!userPref?.ai) return base;
+  // Merge user overrides on top of instance config
+  return {
+    mode: userPref.ai.mode || base.mode,
+    fallback: userPref.ai.fallback || base.fallback,
+    timeoutMs: userPref.ai.timeoutMs || base.timeoutMs,
+    maxTokens: userPref.ai.maxTokens || base.maxTokens,
+    temperature: userPref.ai.temperature ?? base.temperature,
+    local: { ...base.local, ...(userPref.ai.local || {}) },
+    remote: { ...base.remote, ...(userPref.ai.remote || {}) }
+  };
+};
+
+/**
+ * Read localUserId from appPreferences (for MCP server context).
+ */
+export const getLocalUserId = () => {
+  const pref = getPrefs();
+  return pref?.localUserId || null;
+};
+
 

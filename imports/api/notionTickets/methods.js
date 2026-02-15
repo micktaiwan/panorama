@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { NotionTicketsCollection } from './collections.js';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 /**
  * Meteor methods for Notion Tickets
@@ -24,6 +25,7 @@ Meteor.methods({
       nextStep: String,
       url: Match.Optional(String)
     });
+    ensureLocalOnly();
 
     const now = new Date();
 
@@ -63,6 +65,7 @@ Meteor.methods({
   async 'notionTickets.bulkUpsert'(integrationId, tickets) {
     check(integrationId, String);
     check(tickets, Array);
+    ensureLocalOnly();
 
     const now = new Date();
     let insertedCount = 0;
@@ -108,6 +111,7 @@ Meteor.methods({
    */
   async 'notionTickets.clearByIntegration'(integrationId) {
     check(integrationId, String);
+    ensureLocalOnly();
 
     const result = await NotionTicketsCollection.removeAsync({ integrationId });
     return { deletedCount: result };
@@ -118,6 +122,7 @@ Meteor.methods({
    */
   async 'notionTickets.countByIntegration'(integrationId) {
     check(integrationId, String);
+    ensureLocalOnly();
 
     const count = await NotionTicketsCollection.countDocuments({ integrationId });
     return count;
@@ -129,6 +134,7 @@ Meteor.methods({
    */
   async 'notionTickets.deleteOld'(daysOld = 30) {
     check(daysOld, Number);
+    ensureLocalOnly();
 
     const threshold = new Date();
     threshold.setDate(threshold.getDate() - daysOld);

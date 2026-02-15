@@ -2,9 +2,11 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { TeamsCollection } from './collections';
 import { PeopleCollection } from '../people/collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'teams.insert'(fields) {
+    ensureLocalOnly();
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const name = String(fields.name || '').trim();
     if (!name) throw new Meteor.Error('invalid-arg', 'name is required');
@@ -14,6 +16,7 @@ Meteor.methods({
   },
   async 'teams.update'(id, fields) {
     check(id, String);
+    ensureLocalOnly();
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const updates = {};
     if ('name' in fields) updates.name = String(fields.name || '').trim();
@@ -22,18 +25,21 @@ Meteor.methods({
   },
   async 'teams.remove'(id) {
     check(id, String);
+    ensureLocalOnly();
     const members = await PeopleCollection.find({ teamId: id }).countAsync();
     if (members > 0) throw new Meteor.Error('team-not-empty', `Team has ${members} member(s)`);
     await TeamsCollection.removeAsync({ _id: id });
   },
   async 'teams.canRemove'(id) {
     check(id, String);
+    ensureLocalOnly();
     const members = await PeopleCollection.find({ teamId: id }).countAsync();
     return { canRemove: members === 0, count: members };
   },
   async 'teams.removeAndReassign'(id, newTeamId) {
     check(id, String);
     if (newTeamId != null) check(newTeamId, String);
+    ensureLocalOnly();
     const exists = await TeamsCollection.findOneAsync({ _id: id });
     if (!exists) throw new Meteor.Error('not-found', 'Team not found');
     if (newTeamId) {

@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { check } from 'meteor/check';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 const windowKeyToMs = (key) => {
   const k = String(key || '').toLowerCase();
@@ -15,6 +16,7 @@ const windowKeyToMs = (key) => {
 Meteor.methods({
   async 'reporting.aiSummarizeWindow'(windowKey, projFilters, userPrompt, options) {
     check(windowKey, String);
+    ensureLoggedIn(this.userId);
     if (projFilters && typeof projFilters !== 'object') throw new Meteor.Error('invalid-arg', 'projFilters must be an object');
     if (userPrompt !== undefined && typeof userPrompt !== 'string') throw new Meteor.Error('invalid-arg', 'userPrompt must be a string');
     if (options && typeof options !== 'object') throw new Meteor.Error('invalid-arg', 'options must be an object');
@@ -23,6 +25,7 @@ Meteor.methods({
     const { TasksCollection } = await import('/imports/api/tasks/collections');
 
     const k = String(windowKey || '').toLowerCase();
+    const userId = this.userId;
     let since;
     let until;
     if (k === 'all') {
@@ -36,9 +39,9 @@ Meteor.methods({
 
     const includeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === 1).map(([k]) => k));
     const excludeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === -1).map(([k]) => k));
-    const projectSelector = { createdAt: { $gte: since } };
-    const taskSelector = { status: 'done', statusChangedAt: { $gte: since } };
-    const noteSelector = { createdAt: { $gte: since } };
+    const projectSelector = { userId, createdAt: { $gte: since } };
+    const taskSelector = { userId, status: 'done', statusChangedAt: { $gte: since } };
+    const noteSelector = { userId, createdAt: { $gte: since } };
     if (excludeIds.size > 0 || includeIds.size > 0) {
       const idCond = includeIds.size > 0 ? { $in: Array.from(includeIds) } : { $nin: Array.from(excludeIds) };
       projectSelector._id = idCond;

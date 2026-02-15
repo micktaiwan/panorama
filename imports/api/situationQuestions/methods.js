@@ -1,11 +1,13 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { SituationQuestionsCollection } from './collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'situationQuestions.upsertForActor'(situationId, actorId, questions) {
     check(situationId, String);
     check(actorId, String);
+    ensureLocalOnly();
     if (!Array.isArray(questions)) throw new Meteor.Error('invalid-arg', 'questions must be an array');
     const now = new Date();
     const existing = await SituationQuestionsCollection.findOneAsync({ situationId, actorId });

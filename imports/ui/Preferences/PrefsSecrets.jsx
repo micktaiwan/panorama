@@ -4,7 +4,7 @@ import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import { navigateTo } from '../router.js';
 import { notify } from '../utils/notify.js';
 
-export const PrefsSecrets = ({ pref }) => {
+export const PrefsSecrets = ({ pref, userPref }) => {
   const [openaiApiKey, setOpenaiApiKey] = React.useState('');
   const [anthropicApiKey, setAnthropicApiKey] = React.useState('');
   const [perplexityApiKey, setPerplexityApiKey] = React.useState('');
@@ -23,9 +23,6 @@ export const PrefsSecrets = ({ pref }) => {
 
   React.useEffect(() => {
     if (!pref) return;
-    setOpenaiApiKey(pref.openaiApiKey || '');
-    setAnthropicApiKey(pref.anthropicApiKey || '');
-    setPerplexityApiKey(pref.perplexityApiKey || '');
     setPennyBaseUrl(pref.pennylaneBaseUrl || '');
     setPennyToken(pref.pennylaneToken || '');
     setCalendarIcsUrl(pref.calendarIcsUrl || '');
@@ -38,6 +35,13 @@ export const PrefsSecrets = ({ pref }) => {
     setSlackAppToken(pref.slack?.appToken || '');
     setSlackAllowedUserId(pref.slack?.allowedUserId || '');
   }, [pref?._id]);
+
+  React.useEffect(() => {
+    if (!userPref) return;
+    setOpenaiApiKey(userPref.openaiApiKey || '');
+    setAnthropicApiKey(userPref.anthropicApiKey || '');
+    setPerplexityApiKey(userPref.perplexityApiKey || '');
+  }, [userPref?._id]);
 
   return (
     <>
@@ -52,7 +56,7 @@ export const PrefsSecrets = ({ pref }) => {
               fullWidth
               onSubmit={(next) => {
                 setOpenaiApiKey(next);
-                Meteor.call('appPreferences.update', { openaiApiKey: next }, () => {});
+                Meteor.call('userPreferences.update', { openaiApiKey: next }, () => {});
               }}
             />
           </div>
@@ -66,7 +70,7 @@ export const PrefsSecrets = ({ pref }) => {
               fullWidth
               onSubmit={(next) => {
                 setAnthropicApiKey(next);
-                Meteor.call('appPreferences.update', { anthropicApiKey: next }, () => {});
+                Meteor.call('userPreferences.update', { anthropicApiKey: next }, () => {});
               }}
             />
             <div className="muted mt4" style={{ fontSize: '12px' }}>
@@ -83,7 +87,7 @@ export const PrefsSecrets = ({ pref }) => {
               fullWidth
               onSubmit={(next) => {
                 setPerplexityApiKey(next);
-                Meteor.call('appPreferences.update', { perplexityApiKey: next }, () => {});
+                Meteor.call('userPreferences.update', { perplexityApiKey: next }, () => {});
               }}
             />
           </div>

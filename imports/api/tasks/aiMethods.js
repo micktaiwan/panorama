@@ -3,14 +3,15 @@ import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine } from '/imports/api/_shared/aiCore';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'ai.textToTasksAnalyze'(inputText) {
     check(inputText, String);
-
+    ensureLoggedIn(this.userId);
 
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+    const projects = await ProjectsCollection.find({ userId: this.userId }, { fields: { name: 1, description: 1 } }).fetchAsync();
 
     const catalog = projects
       .filter(p => !!p.name)

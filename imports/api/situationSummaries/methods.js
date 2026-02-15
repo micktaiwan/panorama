@@ -1,10 +1,12 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { SituationSummariesCollection } from './collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'situationSummaries.upsert'(situationId, markdown) {
     check(situationId, String);
+    ensureLocalOnly();
     const text = String(markdown || '');
     const existing = await SituationSummariesCollection.findOneAsync({ situationId });
     const now = new Date();

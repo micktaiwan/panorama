@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 /**
  * Clean AI response by removing Markdown code blocks (```json...```)
@@ -18,8 +19,9 @@ function cleanJsonResponse(text) {
 Meteor.methods({
   async 'ai.project.improvementQuestions'(projectId) {
     check(projectId, String);
+    ensureLoggedIn(this.userId);
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const project = await ProjectsCollection.findOneAsync({ _id: projectId });
+    const project = await ProjectsCollection.findOneAsync({ _id: projectId, userId: this.userId });
     if (!project) throw new Meteor.Error('not-found', 'Project not found');
 
     const name = String(project.name || '').trim();
@@ -73,11 +75,12 @@ Meteor.methods({
   async 'ai.project.applyImprovement'(projectId, payload) {
     check(projectId, String);
     check(payload, Object);
+    ensureLoggedIn(this.userId);
     const answers = Array.isArray(payload.answers) ? payload.answers.map(a => String(a || '')) : [];
     const freeText = typeof payload.freeText === 'string' ? payload.freeText : '';
 
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const project = await ProjectsCollection.findOneAsync({ _id: projectId });
+    const project = await ProjectsCollection.findOneAsync({ _id: projectId, userId: this.userId });
     if (!project) throw new Meteor.Error('not-found', 'Project not found');
 
     const name = String(project.name || '').trim();

@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { MCPServersCollection } from './collections.js';
 import { MCPClient } from '/imports/api/mcp/MCPClient.js';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 /**
  * Meteor methods for MCP Servers management
@@ -24,6 +25,7 @@ Meteor.methods({
       url: Match.Optional(String),
       headers: Match.Optional(Object)
     });
+    ensureLocalOnly();
 
     // Validate type
     if (!['stdio', 'http'].includes(config.type)) {
@@ -88,6 +90,7 @@ Meteor.methods({
       url: Match.Optional(String),
       headers: Match.Optional(Object)
     });
+    ensureLocalOnly();
 
     const server = await MCPServersCollection.findOneAsync({ _id: serverId });
     if (!server) {
@@ -132,6 +135,7 @@ Meteor.methods({
    */
   async 'mcpServers.remove'(serverId) {
     check(serverId, String);
+    ensureLocalOnly();
 
     const server = await MCPServersCollection.findOneAsync({ _id: serverId });
     if (!server) {
@@ -148,6 +152,7 @@ Meteor.methods({
    */
   async 'mcpServers.testConnection'(serverId) {
     check(serverId, String);
+    ensureLocalOnly();
 
     const server = await MCPServersCollection.findOneAsync({ _id: serverId });
     if (!server) {
@@ -206,6 +211,7 @@ Meteor.methods({
     check(serverId, String);
     check(toolName, String);
     check(args, Match.Optional(Object));
+    ensureLocalOnly();
 
     const server = await MCPServersCollection.findOneAsync({ _id: serverId });
     if (!server) {
@@ -255,6 +261,7 @@ Meteor.methods({
    * Reads claude_desktop_config.json and imports server configurations
    */
   async 'mcpServers.syncFromClaudeDesktop'() {
+    ensureLocalOnly();
     const fs = await import('fs/promises');
     const os = await import('os');
     const path = await import('path');

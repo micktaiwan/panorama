@@ -227,143 +227,125 @@ Les collections locales peuvent migrer en remote au cas par cas quand le besoin 
 
 ---
 
-### Phase 2 — Multi-tenancy (userId partout)
+### Phase 2 — Multi-tenancy (userId partout) ✅ DONE (2026-02-15)
 
 **Objectif** : chaque document appartient a un user. C'est le plus gros chantier.
 
-#### 2.1 Ajouter userId aux methodes d'ecriture
+**Statut** : implemente et teste en local. Branche `feature/multi-user-auth`.
 
-Pour chaque collection remote, modifier les methodes `insert` :
+#### Ce qui a ete fait
 
-```javascript
-// Avant
-async 'projects.insert'(doc) {
-  return ProjectsCollection.insertAsync({ ...doc, createdAt: new Date() });
-}
+**Etape 1 — Module auth helper** (`imports/api/_shared/auth.js`) :
+- `ensureLoggedIn(userId)` — throw `not-authorized` si falsy
+- `ensureOwner(collection, docId, userId)` — find `{_id, userId}`, throw `not-found` si absent, retourne le doc
+- `isRemoteInstance()` — `process.env.PANORAMA_MODE === 'remote'`
+- `ensureLocalOnly()` — throw `local-only` si `isRemoteInstance()`
 
-// Apres
-async 'projects.insert'(doc) {
-  const userId = this.userId;
-  if (!userId) throw new Meteor.Error('not-authorized');
-  return ProjectsCollection.insertAsync({ ...doc, userId, createdAt: new Date() });
-}
-```
+**Etape 2 — userId sur les 8 collections remote** :
 
-Pour les methodes `update` et `remove`, verifier l'ownership :
+Pattern applique a `projects`, `tasks`, `notes`, `noteSessions`, `noteLines`, `links`, `files` :
+- **Insert** : `ensureLoggedIn(this.userId)` + `userId: this.userId` dans le doc
+- **Update/Remove** : `ensureLoggedIn(this.userId)` + `ensureOwner(Collection, docId, this.userId)`
+- **Publications** : `if (!this.userId) return this.ready()` + `find({ userId: this.userId })`
+- **aiMethods** : meme pattern pour `projects/aiMethods.js`, `tasks/aiMethods.js`, `notes/aiMethods.js`, `sessions/aiMethods.js`
 
-```javascript
-async 'projects.update'(projectId, modifier) {
-  const userId = this.userId;
-  if (!userId) throw new Meteor.Error('not-authorized');
-  const doc = await ProjectsCollection.findOneAsync({ _id: projectId, userId });
-  if (!doc) throw new Meteor.Error('not-found');
-  return ProjectsCollection.updateAsync(projectId, { $set: modifier });
-}
-```
+Fichiers modifies : `*/methods.js`, `*/publications.js`, `*/aiMethods.js` pour les 7 collections + `userPreferences`.
 
-**Helper reutilisable** : creer `imports/api/_shared/auth.js` avec :
-- `ensureLoggedIn(userId)` — throw si pas connecte
-- `ensureOwner(collection, docId, userId)` — throw si le doc n'appartient pas au user
+Points d'attention traites :
+- `tasks.promoteToTop` : le `globalOpenSelector` filtre par userId (sinon re-rank des taches des autres users)
+- `notes.duplicate` : le doc copie a `userId: this.userId`
+- `noteSessions.remove` : cascade delete de noteLines filtre par userId
+- `noteLines` : userId denormalise (pas de jointure vers session)
+- `links.registerClick`, `links.getUrl` : ownership check
+- `projects.remove` : cascade delete de tasks/notes/sessions/lines/links/files filtre par userId
 
-#### 2.2 Filtrer les publications par userId
+**Etape 3 — Export securise** :
+- `app.exportAll` : `ensureLoggedIn` + chaque `find` filtre par `{userId: this.userId}`
+- `app.exportArchiveStart` : `ensureLoggedIn`, userId passe au job, `writeCollectionNdjson` filtre les collections remote par userId
 
-```javascript
-// Avant
-Meteor.publish('projects', function () {
-  return ProjectsCollection.find();
-});
+**Etape 4 — Guards local-only** :
+- `ensureLocalOnly()` ajoute en tete de **chaque methode** des ~21 fichiers methods.js des collections locales : situations, situationActors, situationNotes, situationQuestions, situationSummaries, budget, calendar, chats, userLogs (+aiMethods), emails, notionIntegrations, notionTickets, claudeSessions, claudeCommands, claudeProjects, mcpServers, errors, alarms, people, teams
+- Approche choisie : **guard par methode** (plus simple que l'import conditionnel)
+- ~146 guards au total
 
-// Apres
-Meteor.publish('projects', function () {
-  if (!this.userId) return this.ready();
-  return ProjectsCollection.find({ userId: this.userId });
-});
-```
+**Etape 5 — Collection `userPreferences`** :
+- Fichiers crees : `imports/api/userPreferences/collections.js`, `methods.js`, `publications.js`
+- Methodes : `userPreferences.ensure` (upsert initial), `userPreferences.update` (mise a jour partielle)
+- Publication filtree par `this.userId`, index unique `{ userId: 1 }`
 
-Pour `noteLines` qui herite du userId via la session : **denormaliser**. Ajouter userId directement sur noteLines (plus simple et performant que des jointures reactives).
+Split des preferences :
+- **`userPreferences`** (per-user, remote) : `theme`, `openaiApiKey`, `anthropicApiKey`, `perplexityApiKey`, `ai` (mode, fallback, models, timeouts)
+- **`appPreferences`** (instance, local) : `filesDir`, `qdrantUrl`, `devUrlMode`, `onboardedAt`, `pennylaneBaseUrl`, `pennylaneToken`, `slack`, `googleCalendar`, `calendarIcsUrl`, `cta`, `localUserId`
 
-#### 2.3 Collections impactees
+Refactoring `config.js` :
+- Nouveaux getters async user-aware : `getUserPrefs(userId)`, `getOpenAiApiKeyAsync(userId)`, `getAnthropicApiKeyAsync(userId)`, `getAIConfigAsync(userId)`
+- `getLocalUserId()` : lit `localUserId` depuis appPreferences (pour le contexte MCP)
+- Les getters sync existants (`getOpenAiApiKey()`, `getAIConfig()`) continuent de fonctionner (backward compat pour code serveur hors methode)
 
-Les 8 collections remote : `projects`, `tasks`, `notes`, `noteSessions`, `noteLines`, `links`, `files`, `userPreferences`. Pour chacune :
-1. Ajouter `userId` a l'insert
-2. Filtrer par `userId` dans le find des publications
-3. Verifier `userId` dans update/remove
-4. Ajouter un index MongoDB sur `{ userId: 1 }` (ou compound `{ userId: 1, projectId: 1 }` etc.)
+UI refactoring :
+- `Preferences.jsx` : subscribe a `userPreferences`, passe `userPref` prop aux sous-composants
+- `PrefsGeneral.jsx` : theme lit/ecrit dans userPreferences
+- `PrefsSecrets.jsx` : API keys (openai, anthropic, perplexity) lisent/ecrivent dans userPreferences
+- `PrefsAI.jsx` : config AI lit/ecrit dans userPreferences via `userPreferences.update`
+- `App.jsx` : theme sync lit depuis userPreferences
 
-C'est un chantier beaucoup plus leger que les 21 collections initialement prevues.
+**Etape 6 — Indexes MongoDB** :
 
-#### 2.4 Securiser les methodes d'export
+Ajoutes dans `Meteor.startup` de `server/main.js` :
 
-Les methodes `app.exportAll` et `app.exportArchiveStart` n'ont aucun check d'authentification. En multi-user :
-- Ajouter `if (!this.userId) throw new Meteor.Error('not-authorized')` aux deux methodes
-- Filtrer l'export par userId : n'exporter que les documents du user connecte
-- L'export des collections local-only (situations, budget, etc.) reste inchange sur l'instance locale
+| Collection | Index |
+|---|---|
+| `projects` | `{ userId: 1 }` |
+| `tasks` | `{ userId: 1, projectId: 1 }` |
+| `tasks` | `{ userId: 1, done: 1 }` |
+| `notes` | `{ userId: 1, projectId: 1 }` |
+| `noteSessions` | `{ userId: 1, projectId: 1 }` |
+| `noteLines` | `{ userId: 1, sessionId: 1 }` |
+| `links` | `{ userId: 1, projectId: 1 }` |
+| `files` | `{ userId: 1, projectId: 1 }` |
+| `userPreferences` | `{ userId: 1 }` unique |
 
-#### 2.5 Proteger les methodes local-only sur l'instance remote
+**Etape 7 — MCP tools userId filtering** :
 
-Les methodes et publications des collections locales (situations, budget, claude, gmail, etc.) sont importees par `server/main.js` sur les deux instances. Sur l'instance remote, ces collections n'existent pas dans la DB — mais les methodes restent appelables.
+Le MCP server obtient le userId via `localUserId` dans `appPreferences` (lu par `getLocalUserId()` dans `config.js`).
 
-Options :
-- **Guard par methode** : ajouter `if (isRemoteInstance()) throw new Meteor.Error('local-only')` en tete des methodes local-only
-- **Import conditionnel** : ne pas importer ces modules dans `server/main.js` quand `isRemoteInstance()` est vrai (plus propre mais plus complexe a mettre en place)
+Helpers ajoutes dans `handlers.js` :
+- `getMCPUserId()` : lit `localUserId`, throw si non configure
+- `callMethodAs(methodName, userId, ...args)` : appelle `Meteor.server.method_handlers[methodName].call({userId}, ...args)` pour simuler un appel DDP avec userId
 
-> **Question ouverte** : quelle approche privilegier ? Le guard par methode est plus simple. L'import conditionnel est plus propre mais demande de reorganiser `server/main.js`.
+Lectures modifiees (ajout de `{userId}` au selector) :
+- `validateProjectId`, `fetchPreview`
+- `tool_tasksByProject`, `tool_tasksFilter`, `tool_projectsList`, `tool_projectByName`
+- `tool_notesByProject`, `tool_noteById`, `tool_notesByTitleOrContent`
+- `tool_noteSessionsByProject`, `tool_noteLinesBySession`
+- `tool_linksByProject`, `tool_filesByProject`
+- `tool_collectionQuery` : injection automatique de userId si la collection est dans `REMOTE_COLLECTIONS`
+- `tool_projectsOverview` : utilise `callMethodAs` au lieu de `Meteor.callAsync`
 
-#### 2.6 AppPreferences : scinder en deux collections
+Ecritures modifiees (remplacement de `Meteor.callAsync` par `callMethodAs`) :
+- `tool_createProject`, `tool_updateProject`
+- `tool_createTask`, `tool_updateTask`, `tool_deleteTask`
+- `tool_createNote`, `tool_updateNote`, `tool_deleteNote`
+- `tool_createLink`
 
-Nouvelle collection **`userPreferences`** (remote, avec userId) :
-- `theme`, `openaiApiKey`, `ai: { mode, embeddingModel, chatModel, ... }`
-- Preferences d'affichage, raccourcis, etc.
-- Un document par user
+Les outils MCP local-only (alarms, emails, etc.) gardent `Meteor.callAsync` — `ensureLocalOnly()` ne verifie pas userId.
 
-Collection **`appPreferences`** existante (local, sans userId) :
-- `filesDir`, `qdrantUrl`, chemins locaux, config MCP
-- Config specifique a l'instance/machine
+**Etape 8 — Methodes supplementaires securisees** :
 
-Refactoring de `imports/api/_shared/config.js` :
-- `getConfig()` merge les deux sources : userPreferences du user connecte + appPreferences de l'instance en fallback
-- Creer `imports/api/userPreferences/collections.js`, `methods.js`, `publications.js`
-- Migrer l'UI Preferences pour lire/ecrire dans la bonne collection selon le champ
+Au-dela du plan initial, les methodes suivantes ont ete mises a jour avec `ensureLoggedIn` + userId filtering :
+- `panorama.getOverview` : filtre projects/tasks/notes/links/files/sessions par userId
+- `panorama.setRank` : `ensureLoggedIn` + `ensureOwner`
+- `panorama.countAllTokens` : filtre les collections remote par userId
+- `search.instant` : filtre projects/tasks/notes par userId
+- `reporting.recentActivity` : filtre projects/tasks/notes par userId
+- `reporting.aiSummarizeWindow` : filtre projects/tasks/notes par userId
+- `chat.ask` : `ensureLocalOnly`
 
-> **Question ouverte — resolution des prefs cote serveur** : dans les methodes Meteor, `this.userId` est disponible pour charger les userPreferences. Mais le code serveur hors methodes (LLM proxy, background processing, vectorStore) n'a pas de userId en contexte. Options :
-> - Passer userId explicitement dans les fonctions serveur qui en ont besoin (ex: `chatComplete({..., userId})`)
-> - Pour le code qui tourne hors requete utilisateur (cron, reindex), utiliser les appPreferences d'instance en fallback
-> - A clarifier au moment de l'implementation
+#### Limitation connue — Qdrant non isole par user
 
-#### 2.7 Strategie d'indexes
+L'index Qdrant est **global** : les vecteurs ne contiennent pas de `userId` dans les payloads, et les fonctions `collectDocs()`/`collectDocsByKind()` (utilisees par `qdrant.indexAll`/`qdrant.indexStart`) requetent les collections remote sans filtre userId. La recherche semantique retourne potentiellement des resultats d'autres users.
 
-Ajouter des indexes MongoDB sur les collections remote pour eviter les full scans. Indexes recommandes :
-
-| Collection | Index | Justification |
-|---|---|---|
-| `projects` | `{ userId: 1 }` | Filtre principal des publications |
-| `tasks` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `tasks` | `{ userId: 1, done: 1 }` | Taches ouvertes d'un user |
-| `notes` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `noteSessions` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `noteLines` | `{ userId: 1, sessionId: 1 }` | Filtre par user + session |
-| `links` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `files` | `{ userId: 1, projectId: 1 }` | Filtre par user + projet |
-| `userPreferences` | `{ userId: 1 }` unique | Un document par user |
-
-Creer les indexes avant la migration des donnees (Phase 4) pour que les inserts soient indexes au fil de l'eau.
-
-#### 2.8 Impact sur le MCP Server
-
-Les outils MCP (`imports/api/tools/`) requetent les collections sans filtre userId actuellement. Apres la migration, l'instance locale de Mick tape sur la DB remote qui contient les donnees de tous les users.
-
-**Probleme** : sans filtre userId, les outils MCP retourneraient les donnees de tous les users.
-
-**Solution** : les outils MCP tournent uniquement en local (Claude Code = shell local). L'instance locale connait le user connecte (Mick). Il faut :
-- Injecter le `userId` du user connecte dans le contexte des outils MCP
-- Modifier les helpers de requete dans `imports/api/tools/helpers.js` pour filtrer par userId
-- Adapter `tool_tasksByProject`, `tool_notesByProject`, `tool_semanticSearch`, `tool_collectionQuery`, etc.
-- `COMMON_QUERIES` dans `helpers.js` doivent inclure le filtre userId
-
-> **Question ouverte** : comment le MCP server obtient-il le userId ? Options :
-> - Variable d'environnement (`PANORAMA_USER_ID`) configuree au lancement local
-> - Le MCP server appelle `Meteor.userId()` s'il tourne dans le contexte Meteor
-> - Config dans `appPreferences` de l'instance locale (champ `localUserId`)
+**Impact** : acceptable tant que Qdrant tourne en local. En deploiement multi-user, il faut implementer la Phase 7 (Qdrant multi-user) — voir ci-dessous.
 
 ---
 
@@ -740,6 +722,10 @@ Actuellement la route `/files/` n'a aucun controle d'acces. Ajouter :
 
 **Objectif** : la recherche semantique fonctionne pour chaque user independamment.
 
+**Statut** : non commence. Prerequis avant deploiement multi-user en production.
+
+**Contexte** : apres la Phase 2, l'index Qdrant est le seul composant encore global. Les fonctions `collectDocs()` et `collectDocsByKind()` dans `search/methods.js` requetent les collections remote sans filtre userId. L'outil MCP `tool_semanticSearch` dans `handlers.js` interroge Qdrant sans filtre userId non plus. En consequence, la recherche semantique peut retourner des resultats appartenant a d'autres users.
+
 #### 7.1 Ajouter userId aux payloads Qdrant
 
 ```javascript
@@ -775,7 +761,18 @@ export const searchDocs = async (queryText, userId, limit = 10) => {
 };
 ```
 
-#### 7.3 Reindexation
+#### 7.3 Adapter les fonctions d'indexation
+
+Les fonctions suivantes dans `search/methods.js` doivent etre modifiees pour filtrer par userId lors de la collecte des documents :
+- `collectDocs()` : ajouter `{userId}` au selector des 6 collections remote (projects, tasks, notes, noteSessions, noteLines, links)
+- `collectDocsByKind()` : idem
+- `qdrant.indexStart` et `qdrant.indexKindStart` : passer userId au contexte d'indexation
+
+#### 7.4 Adapter les outils MCP
+
+- `tool_semanticSearch` dans `handlers.js` : ajouter un filtre Qdrant `{ must: [{ key: 'userId', match: { value: getMCPUserId() } }] }` dans la requete de recherche
+
+#### 7.5 Reindexation
 
 Apres la migration des donnees, reindexer tous les documents avec le userId dans les payloads. Utiliser le flow existant (Preferences → Qdrant → Rebuild) en l'adaptant pour inclure userId.
 

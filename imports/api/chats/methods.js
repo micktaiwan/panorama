@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { ChatsCollection } from './collections';
+import { ensureLocalOnly } from '/imports/api/_shared/auth';
 
 const sanitizeMessage = (m) => ({
   role: (m && m.role === 'assistant') ? 'assistant' : 'user',
@@ -12,10 +13,12 @@ const sanitizeMessage = (m) => ({
 Meteor.methods({
   async 'chats.insert'(message) {
     check(message, Object);
+    ensureLocalOnly();
     const doc = sanitizeMessage(message);
     return ChatsCollection.insertAsync(doc);
   },
   async 'chats.clear'() {
+    ensureLocalOnly();
     await ChatsCollection.removeAsync({});
     // Seed with initial assistant message so the UI starts with a prompt
     await ChatsCollection.insertAsync({

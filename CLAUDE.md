@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Panorama is a **local-first, single-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support.
+Panorama is a **local-first, multi-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support. Authentication (Phase 1) and multi-tenancy with userId on all shared collections (Phase 2) are implemented.
 
 **Repo owner**: Mickael FM aka Mick (`micktaiwan` on GitHub), frère de David FM aka Dayd (`ddaydd` on GitHub) qui contribue aussi au projet.
 
@@ -37,9 +37,11 @@ mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.tasks.find({}).limi
 ### Data Layer (Meteor Collections)
 
 - Server methods are **async** and use `insertAsync`, `updateAsync`, `removeAsync`, `findOneAsync`, `countAsync`
-- Publications expose data to client (no user filtering, single-user app)
+- **Remote collections** (projects, tasks, notes, noteSessions, noteLines, links, files, userPreferences) have `userId` field, publications filter by `this.userId`, methods use `ensureLoggedIn` + `ensureOwner`
+- **Local-only collections** (situations, budget, calendar, chats, userLogs, emails, claude*, mcpServers, alarms, people, teams, errors, notionIntegrations, notionTickets, appPreferences) use `ensureLocalOnly()` guard
+- **Auth helpers** in `imports/api/_shared/auth.js`: `ensureLoggedIn(userId)`, `ensureOwner(collection, docId, userId)`, `ensureLocalOnly()`
 - Client uses `useTracker`, `useFind`, and custom hooks like `useSingle()` for reactive queries
-- Collections: see imports/api/* (projects, tasks, notes, noteSessions, noteLines, situations, people, teams, budget, calendar, alarms, files, links, chats, userLogs, emails, appPreferences, errors)
+- Collections: see imports/api/* (projects, tasks, notes, noteSessions, noteLines, situations, people, teams, budget, calendar, alarms, files, links, chats, userLogs, emails, appPreferences, userPreferences, errors)
 
 ### AI Integration Architecture
 
@@ -69,6 +71,7 @@ The app uses a **proxy pattern** to route AI calls between local and remote prov
 - **Manual reindexing required** when switching embedding models or AI modes
 - Abstractions in `imports/api/search/vectorStore.js`: `embedText(text)`, `upsertDoc({kind, id, text, projectId})`, `deleteDoc(kind, id)`
 - Fallback to `search.instant` when Qdrant unavailable
+- **Known gap**: Qdrant index is currently global (no `userId` in payloads or search filters). `collectDocs()`/`collectDocsByKind()` in `search/methods.js` query remote collections without userId filtering. Phase 7 will add per-user isolation. See `docs/multi-user-migration-plan.md`
 
 ### UI Component Patterns
 
@@ -99,13 +102,22 @@ The app uses a **proxy pattern** to route AI calls between local and remote prov
 
 ### Configuration System
 
-Configuration is resolved in this order (highest priority first):
-1. App Preferences (stored in MongoDB via Preferences UI)
-2. Environment variables (`PANORAMA_FILES_DIR`, `QDRANT_URL`, `OPENAI_API_KEY`, `PENNYLANE_TOKEN`)
-3. Meteor settings (`settings.json` or `METEOR_SETTINGS`)
-4. Safe defaults
+Two preference collections:
+- **`userPreferences`** (per-user, remote): `theme`, `openaiApiKey`, `anthropicApiKey`, `perplexityApiKey`, `ai` (mode, fallback, models, timeouts)
+- **`appPreferences`** (instance, local): `filesDir`, `qdrantUrl`, `devUrlMode`, `localUserId`, `pennylaneBaseUrl`, `pennylaneToken`, `slack`, `googleCalendar`, `cta`
 
-`settings.json` is **gitignored**. Use App Preferences or env vars for secrets.
+Configuration is resolved in this order (highest priority first):
+1. User Preferences (per-user, stored in `userPreferences` collection)
+2. App Preferences (instance-level, stored in `appPreferences` collection)
+3. Environment variables (`PANORAMA_FILES_DIR`, `QDRANT_URL`, `OPENAI_API_KEY`, `PENNYLANE_TOKEN`)
+4. Meteor settings (`settings.json` or `METEOR_SETTINGS`)
+5. Safe defaults
+
+Config helpers in `imports/api/_shared/config.js`:
+- **Sync getters** (instance-level, for server code outside methods): `getAIConfig()`, `getOpenAiApiKey()`, `getQdrantUrl()`, `getLocalUserId()`
+- **Async getters** (user-aware, for methods with `this.userId`): `getAIConfigAsync(userId)`, `getOpenAiApiKeyAsync(userId)`, `getAnthropicApiKeyAsync(userId)`
+
+`settings.json` is **gitignored**. Use User/App Preferences or env vars for secrets.
 
 ### Routing and Navigation
 
@@ -133,9 +145,13 @@ Configuration is resolved in this order (highest priority first):
 - Copy guidelines: concise, action-led
 
 ### Security Policy
-- **Local-first app**: minimal security concerns (single-user, trusted environment)
+- **Multi-user app**: authentication required (Phase 1), userId isolation on all shared data (Phase 2)
+- **Remote collections**: `ensureLoggedIn` + `ensureOwner` on all methods, publications filter by `userId`
+- **Local-only collections**: `ensureLocalOnly()` guard prevents remote access
+- **MCP tools**: use `localUserId` from `appPreferences` for server-to-server calls (no DDP session)
 - **LLM responses**: no validation/sanitization (trust AI providers)
-- **API keys**: store in App Preferences or env vars, no format validation
+- **API keys**: store in User Preferences or env vars, no format validation
+- **Qdrant**: currently global (no per-user isolation) — Phase 7 pending
 
 ## Key Features
 
@@ -155,7 +171,7 @@ Configuration is resolved in this order (highest priority first):
 
 ## Documentation
 
-Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` (collection schemas), `04-electron.md` (packaging), `ai-proxy.md` (AI architecture), `gmail-setup.md` (Gmail OAuth2), `features/` (feature-specific docs)
+Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` (collection schemas), `04-electron.md` (packaging), `ai-proxy.md` (AI architecture), `gmail-setup.md` (Gmail OAuth2), `multi-user-migration-plan.md` (multi-user migration phases 1-7), `features/` (feature-specific docs)
 
 ## Common Patterns and Gotchas
 
@@ -165,6 +181,8 @@ Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` 
 3. Create `imports/api/resourceName/publications.js` (expose data to client)
 4. Import all three in `server/main.js`
 5. If searchable: register in `vectorStore.js` and call `upsertDoc`/`deleteDoc` in methods
+6. **If remote (shared) collection**: add `userId` to inserts, `ensureLoggedIn` + `ensureOwner` to update/remove, filter publications by `userId`, add MongoDB index `{ userId: 1 }` in `server/main.js` startup
+7. **If local-only collection**: add `ensureLocalOnly()` at the top of each method
 
 ### When Adding AI Features
 - Use `chatComplete()` or `embed()` from `llmProxy.js`
