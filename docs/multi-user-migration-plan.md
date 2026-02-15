@@ -28,7 +28,7 @@ L'application est **integralement single-user** :
 - **1 collection Qdrant globale** (`panorama` ou `panorama_<model>`) sans userId dans les payloads
 - **Fichiers** servis via route HTTP `/files/` sans aucun controle d'acces
 - **Export NDJSON** existant (21 collections), mais **aucune methode d'import** dans le code
-- **Route `/tasks-mobile`** existante dans `imports/api/export/server.js` : page HTML server-rendered des tasks ouvertes, activable via flag — precedent d'acces distant
+- ~~**Route `/tasks-mobile`**~~ : supprimee (5.6). Etait une page HTML server-rendered des tasks ouvertes, supersedee par l'app deployee
 
 ### Fichiers cles du codebase
 
@@ -39,7 +39,7 @@ L'application est **integralement single-user** :
 | Publications | `imports/api/*/publications.js` |
 | Export petit (JSON) | `imports/api/export/methods.js` → `app.exportAll` |
 | Export gros (NDJSON gzip, 21 collections) | `imports/api/export/server.js` → `app.exportArchiveStart` |
-| Route `/tasks-mobile` | `imports/api/export/server.js` |
+| ~~Route `/tasks-mobile`~~ | ~~`imports/api/export/server.js`~~ (supprime en 5.6) |
 | Config / preferences | `imports/api/appPreferences/` et `imports/api/_shared/config.js` |
 | Vector store (Qdrant) | `imports/api/search/vectorStore.js` |
 | Route fichiers (upload) | `imports/api/files/methods.js` |
@@ -915,24 +915,25 @@ A faire : implementer `isRemoteInstance()` cote client et masquer les features l
 - **CORS** : non configure (pas de besoin immediat)
 - **CSP** : `script-src 'self' 'unsafe-inline' 'unsafe-eval'` — `unsafe-eval` necessaire pour le runtime Meteor
 
-#### 5.6 Securiser les routes HTTP existantes
+#### 5.6 Securiser les routes HTTP existantes ✅ DONE (2026-02-15)
 
-⚠️ **Non fait** — a traiter avant d'ouvrir le signup aux autres users.
+**Approche** : cookie-based auth. `AuthGate` sync le login token Meteor vers un cookie `meteor_login_token`. Le helper `resolveUserId(req)` (`imports/api/_shared/httpAuth.js`) lit ce cookie, le hash via `Accounts._hashLoginToken`, et lookup le user dans `Meteor.users`.
 
-| Route | Statut | Action requise |
+| Route | Statut | Implementation |
 |---|---|---|
-| `/files/<name>` | ❌ Pas d'auth | Ajouter auth (cookie session ou token). Detaille en Phase 6 |
-| `/tasks-mobile` | ❌ Pas d'auth | Ajouter auth (cookie session, basic auth, ou token dans l'URL) |
-| `/download-export/<jobId>` | ❌ Pas d'auth | Ajouter auth + verifier que l'export appartient au user |
-| `/oauth/google-calendar/callback` | ⚠️ Ouvert | Pas de risque immediat (callback OAuth), mais masquer sur l'instance remote si besoin |
+| `/files/<name>` | ✅ Auth + ownership | `resolveUserId` + `FilesCollection.findOneAsync({ storedFileName, userId })`. Sert aussi le bon `mimeType`. |
+| `/tasks-mobile` | ✅ Supprime | Route supprimee (supersedee par l'app deployee). Methodes `mobileTasksRoute.*`, UI dans PrefsGeneral, sync dans client/main.jsx supprimes. |
+| `/download-export/<jobId>` | ✅ Auth + ownership | `resolveUserId` + verification `j.userId === userId`. Le userId est stocke dans le job Map (create, complete, error). |
+| `/oauth/google-calendar/callback` | ⚠️ Ouvert | Pas de risque (callback OAuth par design). |
 
-#### 5.7 Monitoring et backups
-
-⚠️ **Non fait** — a traiter avant la mise en production.
+#### 5.7 Monitoring et backups ✅ DONE (2026-02-15)
 
 **Backups MongoDB** :
-- Le script `/usr/local/bin/backup-organizer.sh` existe (cron quotidien 2h UTC, 7j retention, `mongodump --db organizer`)
-- **A etendre** : ajouter `--db panorama` au script (ou creer un second cron `backup-panorama.sh`)
+- Nouveau script `/usr/local/bin/backup-databases.sh` remplace `backup-organizer.sh` (desactive → `.disabled`)
+- Dump les deux DBs (`organizer` et `panorama`) via `docker exec` avec le user `admin`
+- Cron : `/etc/cron.d/backup-databases`, quotidien 2h UTC, retention 7 jours
+- Fichiers : `/opt/backups/organizer-YYYY-MM-DD.gz` et `/opt/backups/panorama-YYYY-MM-DD.gz`
+- Script source : `.deploy/backup-databases.sh`
 
 **Monitoring** :
 - MUP gere le restart automatique du container (Docker `--restart=always`)
@@ -966,8 +967,8 @@ Non utilise — MUP fonctionne bien avec Meteor 3.4. Garde en reserve.
 
 **Avant d'ouvrir le signup** (bloquant) :
 
-1. **Routes HTTP non securisees** (5.6) : `/files/`, `/tasks-mobile`, `/download-export/` n'ont pas d'auth. Un utilisateur non authentifie pourrait acceder aux fichiers si le nom du fichier est devinable.
-2. **Backup automatise** (5.7) : la DB `panorama` n'a pas de backup automatise. Si le disque ou la DB corrompt, les donnees sont perdues.
+1. ~~**Routes HTTP non securisees** (5.6)~~ : DONE — `/files/` et `/download-export/` authentifies par cookie, `/tasks-mobile` supprime.
+2. ~~**Backup automatise** (5.7)~~ : DONE — script `backup-databases.sh` dump organizer + panorama quotidiennement.
 3. ~~**Qdrant non isole par user** (Phase 7)~~ : DONE — les vecteurs contiennent `userId`, les recherches et indexations filtrent par user.
 
 **Apres le deploiement** (non bloquant, ameliore l'UX) :
@@ -1085,7 +1086,7 @@ La migration touche transversalement toute l'application. Tests a prevoir :
 - **Isolation des donnees** : creer deux users, verifier que user A ne voit pas les donnees de user B (publications, methodes, Qdrant)
 - **Ownership check** : user A ne peut pas modifier/supprimer un document de user B
 - **Publications filtrees** : verifier que chaque publication retourne uniquement les documents du user connecte
-- **Routes HTTP** : verifier que `/files/`, `/download-export/`, `/tasks-mobile` rejettent les requetes non authentifiees
+- **Routes HTTP** : verifier que `/files/` et `/download-export/` rejettent les requetes non authentifiees
 
 ### Tests de non-regression
 
@@ -1166,6 +1167,8 @@ Phase 4 (Migration donnees)  ✅ DONE (2026-02-15)
     |
     v
 Phase 5 (Deploiement VPS)  ✅ DONE (2026-02-15)
+  5.6 (Routes HTTP auth)   ✅ DONE (2026-02-15)
+  5.7 (Backups)            ✅ DONE (2026-02-15)
     |
     v
 Phase 6 (Fichiers)          <-- PROCHAINE ETAPE
@@ -1174,7 +1177,7 @@ Phase 6 (Fichiers)          <-- PROCHAINE ETAPE
 Phase 7 (Qdrant)          ✅ DONE (2026-02-15)
 ```
 
-Les phases 1-5 et 7 sont terminees. Prochaine etape : securiser les routes HTTP (5.6), fichiers (Phase 6).
+Les phases 1-5 et 7 sont terminees. Prochaine etape : Phase 6 (fichiers distants).
 
 ### Checklist post-merge (avant d'inviter David)
 
@@ -1184,7 +1187,7 @@ Les phases 1-5 et 7 sont terminees. Prochaine etape : securiser les routes HTTP 
 - [ ] Verifier l'ownership : David ne peut pas modifier un doc de Mick (tester via console navigateur)
 - [ ] Verifier Qdrant rebuild avec la cle API de David (userPreferences)
 - [ ] Verifier la recherche semantique filtree par userId
-- [ ] Configurer le backup DB panorama (5.7)
+- [x] Configurer le backup DB panorama (5.7) — `backup-databases.sh` installe, cron actif
 
 ## Risques identifies
 
