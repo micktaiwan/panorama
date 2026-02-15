@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey, getAIConfig } from '/imports/api/_shared/config';
+import { getOpenAiApiKey, getAIConfig, getOpenAiApiKeyAsync } from '/imports/api/_shared/config';
 
 // Normalize multi-line text to a single line
 export const toOneLine = (s) => String(s || '').replace(/\s+/g, ' ').trim();
@@ -185,8 +185,8 @@ export const providers = {
   },
 
   openai: {
-    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat, schema } = {}) {
-      const apiKey = getOpenAiApiKey();
+    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 30000, tools, tool_choice, responseFormat, schema, userId } = {}) {
+      const apiKey = userId ? await getOpenAiApiKeyAsync(userId) : getOpenAiApiKey();
       if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
       
       const config = getAIConfig();
@@ -259,8 +259,8 @@ export const providers = {
       };
     },
 
-    async embed(texts, { model, timeoutMs = 30000 } = {}) {
-      const apiKey = getOpenAiApiKey();
+    async embed(texts, { model, timeoutMs = 30000, userId } = {}) {
+      const apiKey = userId ? await getOpenAiApiKeyAsync(userId) : getOpenAiApiKey();
       if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
       
       const config = getAIConfig();
@@ -328,8 +328,8 @@ export const providers = {
       };
     },
 
-    async healthCheck() {
-      const apiKey = getOpenAiApiKey();
+    async healthCheck({ userId } = {}) {
+      const apiKey = userId ? await getOpenAiApiKeyAsync(userId) : getOpenAiApiKey();
       if (!apiKey) {
         return { ok: false, details: 'API key missing' };
       }
@@ -357,8 +357,8 @@ export const providers = {
 };
 
 // Legacy function for backward compatibility
-export async function openAiChat({ system, user, expectJson, schema }) {
-  const apiKey = getOpenAiApiKey();
+export async function openAiChat({ system, user, expectJson, schema, userId }) {
+  const apiKey = userId ? await getOpenAiApiKeyAsync(userId) : getOpenAiApiKey();
   if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
   const { default: fetch } = await import('node-fetch');
   const body = expectJson

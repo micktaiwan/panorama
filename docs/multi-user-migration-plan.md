@@ -335,11 +335,11 @@ Au-dela du plan initial, les methodes suivantes ont ete mises a jour avec `ensur
 - `reporting.aiSummarizeWindow` : filtre projects/tasks/notes par userId
 - `chat.ask` : `ensureLocalOnly`
 
-#### Limitation connue — Qdrant non isole par user
+#### ~~Limitation connue — Qdrant non isole par user~~ (RESOLVED — Phase 7 DONE)
 
-L'index Qdrant est **global** : les vecteurs ne contiennent pas de `userId` dans les payloads, et les fonctions `collectDocs()`/`collectDocsByKind()` (utilisees par `qdrant.indexAll`/`qdrant.indexStart`) requetent les collections remote sans filtre userId. La recherche semantique retourne potentiellement des resultats d'autres users.
+L'index Qdrant est desormais **isole par user** : les vecteurs contiennent `userId` dans les payloads, toutes les recherches et indexations filtrent par userId. Voir Phase 7 ci-dessous.
 
-**Impact** : acceptable tant que Qdrant tourne en local. En deploiement multi-user, il faut implementer la Phase 7 (Qdrant multi-user) — voir ci-dessous.
+**Note** : apres deploiement, chaque user doit relancer "Rebuild" depuis Preferences > Qdrant pour reindexer avec userId.
 
 ---
 
@@ -760,7 +760,7 @@ Backfill effectue sur la DB locale de Mick (userId `y2bayW975C6hocRkh`), puis co
 | files | 1 | |
 | **Total** | **706** | |
 
-#### 4.5 Reindexation Qdrant (a faire en Phase 7)
+#### 4.5 Reindexation Qdrant (Phase 7 DONE)
 
 Qdrant est deja en place sur le VPS (`organizer-qdrant`, v1.16.3, ports 6333/6334).
 
@@ -968,7 +968,7 @@ Non utilise — MUP fonctionne bien avec Meteor 3.4. Garde en reserve.
 
 1. **Routes HTTP non securisees** (5.6) : `/files/`, `/tasks-mobile`, `/download-export/` n'ont pas d'auth. Un utilisateur non authentifie pourrait acceder aux fichiers si le nom du fichier est devinable.
 2. **Backup automatise** (5.7) : la DB `panorama` n'a pas de backup automatise. Si le disque ou la DB corrompt, les donnees sont perdues.
-3. **Qdrant non isole par user** (Phase 7) : la recherche semantique retourne potentiellement des resultats d'autres users. Acceptable tant qu'un seul user utilise le systeme.
+3. ~~**Qdrant non isole par user** (Phase 7)~~ : DONE — les vecteurs contiennent `userId`, les recherches et indexations filtrent par user.
 
 **Apres le deploiement** (non bloquant, ameliore l'UX) :
 
@@ -1012,7 +1012,9 @@ Actuellement la route `/files/` n'a aucun controle d'acces. Ajouter :
 
 **Objectif** : la recherche semantique fonctionne pour chaque user independamment.
 
-**Statut** : non commence. Prerequis avant deploiement multi-user en production.
+**Statut** : DONE (2026-02-15). Prerequis avant deploiement multi-user en production.
+
+**Reindexation requise** : apres deploiement, chaque user doit relancer "Rebuild" depuis Preferences > Qdrant pour reindexer ses vecteurs avec userId dans les payloads. Les anciens points sans userId ne sont plus visibles dans les recherches filtrees.
 
 **Contexte** : apres la Phase 2, l'index Qdrant est le seul composant encore global. Les fonctions `collectDocs()` et `collectDocsByKind()` dans `search/methods.js` requetent les collections remote sans filtre userId. L'outil MCP `tool_semanticSearch` dans `handlers.js` interroge Qdrant sans filtre userId non plus. En consequence, la recherche semantique peut retourner des resultats appartenant a d'autres users.
 
@@ -1166,12 +1168,13 @@ Phase 4 (Migration donnees)  ✅ DONE (2026-02-15)
 Phase 5 (Deploiement VPS)  ✅ DONE (2026-02-15)
     |
     v
-Phase 6 (Fichiers)       \  <-- PROCHAINES ETAPES
-    |                      > peuvent etre faites en parallele
-Phase 7 (Qdrant)          /
+Phase 6 (Fichiers)          <-- PROCHAINE ETAPE
+    |
+    v
+Phase 7 (Qdrant)          ✅ DONE (2026-02-15)
 ```
 
-Les phases 1-5 sont terminees (auth, userId, unified collections, infra VPS, TLS + Auth, migration donnees, deploiement). Prochaine etape : securiser les routes HTTP (5.6), fichiers (Phase 6), Qdrant multi-user (Phase 7).
+Les phases 1-5 et 7 sont terminees. Prochaine etape : securiser les routes HTTP (5.6), fichiers (Phase 6).
 
 ## Risques identifies
 

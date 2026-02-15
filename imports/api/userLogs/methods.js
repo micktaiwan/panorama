@@ -28,7 +28,7 @@ Meteor.methods({
     // Index to vector store (non-blocking best-effort)
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'userlog', id: _id, text: content });
+      await upsertDoc({ kind: 'userlog', id: _id, text: content, userId: this.userId });
     } catch (e) {
       console.error('[search][userLogs.insert] upsert failed', e);
     }
@@ -45,7 +45,7 @@ Meteor.methods({
     try {
       const next = await UserLogsCollection.findOneAsync({ _id: logId }, { fields: { content: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      await upsertDoc({ kind: 'userlog', id: logId, text: next?.content || '' });
+      await upsertDoc({ kind: 'userlog', id: logId, text: next?.content || '', userId: this.userId });
     } catch (e) {
       console.error('[search][userLogs.update] upsert failed', e);
     }
