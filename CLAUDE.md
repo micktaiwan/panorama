@@ -14,9 +14,16 @@ Two instances (local Electron + remote VPS at `panorama.mickaelfm.me`) share the
 
 ### Known Limitations
 
-- **HTTP routes not secured**: `/files/<name>`, `/tasks-mobile`, `/download-export/<jobId>` have no auth check — to fix before opening signup
 - **No EMAIL_URL**: verification and reset password emails print to server console only
-- **No backup for DB `panorama`**: only `organizer` DB has automated backup
+
+### File Storage
+
+Files are stored on the VPS filesystem (`/var/www/panorama/files/`). Two modes:
+- **VPS (remote)**: files written directly to disk. Internal HTTP API (`/api/files/*`) serves requests from the local instance, protected by `X-API-Key` header.
+- **Local (Electron)**: `PANORAMA_FILES_URL` + `PANORAMA_FILES_API_KEY` env vars set → file operations delegated to VPS via HTTP (`remoteFileClient.js`).
+- **Dev/Test**: no env vars → local filesystem (`~/PanoramaFiles`).
+
+Key files: `imports/api/files/methods.js` (branching logic), `imports/api/files/remoteFileClient.js` (HTTP client), `imports/api/files/internalRoutes.js` (VPS routes).
 
 ### Direct Database Access (fallback)
 
@@ -99,7 +106,7 @@ Resolution order: User Preferences > App Preferences > Env vars > Meteor setting
 ## Key Features
 
 - **In-App Alarms**: Client-side scheduler, multi-tab coordination (BroadcastChannel), catch-up on startup, snooze. See `docs/features/12-feature-alarms.md`
-- **Files and Links**: Files uploaded to external directory (filesDir), served via `/files/<storedFileName>`
+- **Files and Links**: Files stored on VPS via internal HTTP API (see File Storage above), served via `/files/<storedFileName>` (authenticated)
 - **Budget Imports**: Import from Pennylane CSV or API. See `imports/ui/Budget/import/parseWorkbook.js`
 - **Export/Import**: JSON or NDJSON archive. Calendar events excluded. Qdrant vectors: recompute on import.
 - **Gmail Integration**: OAuth2 for reading emails. See `docs/gmail-setup.md`
