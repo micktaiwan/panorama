@@ -121,4 +121,8 @@
     display: block;
     margin-left: auto;
   }
+  .hamburgerDrawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
 }
