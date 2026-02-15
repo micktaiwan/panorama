@@ -524,12 +524,17 @@ select:disabled,
 
 /* Mobile responsive */
 @media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+  }
   .container {
     padding: 12px;
     padding-bottom: 16px;
+    overflow-x: hidden;
   }
   .panel {
     padding: 12px;
     margin-bottom: 12px;
+    overflow-x: hidden;
   }
 }
