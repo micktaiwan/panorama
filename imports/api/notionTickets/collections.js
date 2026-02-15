@@ -1,6 +1,9 @@
 import { Mongo } from 'meteor/mongo';
+import { localDriver } from '/imports/api/_shared/localDriver';
 
-export const NotionTicketsCollection = new Mongo.Collection('notionTickets');
+const driverOptions = localDriver ? { _driver: localDriver } : {};
+
+export const NotionTicketsCollection = new Mongo.Collection('notionTickets', driverOptions);
 
 /**
  * Schema for Notion Tickets

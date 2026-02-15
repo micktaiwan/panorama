@@ -351,46 +351,56 @@ L'index Qdrant est **global** : les vecteurs ne contiennent pas de `userId` dans
 
 ### Phase 3 — Dual MongoDB driver
 
-**Objectif** : l'instance locale de Mick se connecte a la DB remote pour les collections partagees, et garde la DB locale pour le reste.
+**Objectif** : l'instance locale de Mick se connecte a la DB remote pour les collections partagees (y compris `users`), et garde la DB locale pour les collections local-only.
 
-#### 3.1 Configurer le remote driver
+**Approche inversee** : plutot qu'ajouter un `remoteDriver` sur les 8 collections partagees, `MONGO_URL` pointe directement vers la DB remote. Seules les ~21 collections local-only recoivent un `localDriver`. Avantages :
+- `Meteor.users` est automatiquement sur la DB remote (un seul compte, un seul mot de passe, un seul `userId`)
+- Les collections partagees ne necessitent **aucune modification**
+- En dev/test (pas de `LOCAL_MONGO_URL`), tout reste local — comportement identique a l'existant
+
+#### 3.1 Configurer le local driver
 
 ```javascript
-// imports/api/_shared/remoteDriver.js
+// imports/api/_shared/localDriver.js
 import { MongoInternals } from 'meteor/mongo';
 
-const remoteUrl = process.env.REMOTE_MONGO_URL;
+const localUrl = process.env.LOCAL_MONGO_URL;
 
-export const remoteDriver = remoteUrl
-  ? new MongoInternals.RemoteCollectionDriver(remoteUrl)
-  : null; // Si pas de REMOTE_MONGO_URL, tout reste local (dev, tests)
+export const localDriver = localUrl
+  ? new MongoInternals.RemoteCollectionDriver(localUrl)
+  : null; // Si pas de LOCAL_MONGO_URL, tout utilise le driver par defaut (dev, tests, VPS)
 ```
 
-#### 3.2 Modifier les declarations de collections
+#### 3.2 Modifier les declarations des collections local-only
 
 ```javascript
-// imports/api/projects/collections.js
+// imports/api/situations/collections.js (exemple — appliquer a toutes les collections local-only)
 import { Mongo } from 'meteor/mongo';
-import { remoteDriver } from '/imports/api/_shared/remoteDriver';
+import { localDriver } from '/imports/api/_shared/localDriver';
 
-const driverOptions = remoteDriver ? { _driver: remoteDriver } : {};
+const driverOptions = localDriver ? { _driver: localDriver } : {};
 
-export const ProjectsCollection = new Mongo.Collection('projects', driverOptions);
+export const SituationsCollection = new Mongo.Collection('situations', driverOptions);
 ```
 
-Appliquer ce pattern a toutes les collections remote.
+Appliquer ce pattern a toutes les collections local-only (~21 fichiers, voir liste en Phase 2 etape 4).
 
-Les collections local-only ne changent pas (pas de `driverOptions`).
+Les collections remote (projects, tasks, notes, noteSessions, noteLines, links, files, userPreferences) ne changent **pas** — elles utilisent le driver par defaut (`MONGO_URL`), qui pointe vers la DB remote.
 
 #### 3.3 Configuration par environnement
 
-| Environnement | MONGO_URL | REMOTE_MONGO_URL |
-|---|---|---|
-| Local (Mick) | `mongodb://localhost:3001/meteor` (defaut Meteor) | `mongodb://localhost:27018/panorama` (via tunnel SSH vers `organizer-mongodb`) |
-| Remote (VPS) | `mongodb://organizer-mongodb:27017/panorama` (reseau Docker) | non defini (tout est local au VPS) |
-| Dev/Test | defaut Meteor | non defini (tout local) |
+| Environnement | MONGO_URL | LOCAL_MONGO_URL | MONGO_OPLOG_URL |
+|---|---|---|---|
+| Local (Mick) | `mongodb://localhost:27018/panorama` (tunnel SSH vers VPS) | `mongodb://localhost:3001/meteor` (MongoDB interne Meteor) | `mongodb://localhost:27018/local` |
+| Remote (VPS) | `mongodb://organizer-mongodb:27017/panorama` (reseau Docker) | non defini | `mongodb://organizer-mongodb:27017/local` |
+| Dev/Test | defaut Meteor | non defini | non defini (polling) |
 
-Quand `REMOTE_MONGO_URL` n'est pas defini, `remoteDriver` est `null` et toutes les collections utilisent la DB locale. Cela preserve la compatibilite dev/test.
+**Comportement par environnement** :
+- **Dev/Test** : `LOCAL_MONGO_URL` non defini → `localDriver` est `null` → toutes les collections utilisent la DB Meteor locale. Comportement identique a l'existant.
+- **VPS** : `MONGO_URL` pointe vers la DB remote. `LOCAL_MONGO_URL` non defini → les collections local-only utilisent aussi la DB remote, mais `ensureLocalOnly()` bloque toutes leurs methodes. Aucun risque d'ecriture accidentelle.
+- **Local (Mick)** : `MONGO_URL` pointe vers la DB remote via tunnel. `LOCAL_MONGO_URL` pointe vers le MongoDB interne de Meteor (port = port app + 1, demarre automatiquement en dev mode). Les collections local-only sont isolees dans la DB locale.
+
+**Note** : en dev mode, Meteor demarre toujours son MongoDB interne, meme quand `MONGO_URL` est defini. Le port interne = port de l'app + 1 (ex: app sur 3000 → MongoDB sur 3001).
 
 #### 3.4 Tunnel SSH automatique
 
@@ -406,17 +416,11 @@ Integration dans le workflow de dev :
 - Ou `autossh` en service launchd (macOS) pour un tunnel permanent
 - Port local 27018 (pour ne pas conflicte avec un MongoDB local eventuel)
 
-#### 3.5 Oplog tailing
+#### 3.5 Replica set et oplog (requis)
 
-Pour la reactivite Meteor sur la DB remote, configurer `REMOTE_MONGO_OPLOG_URL` (aussi via le tunnel SSH) :
+Meteor utilise l'**oplog** (journal des operations MongoDB) pour la reactivite en temps reel. Sans oplog, Meteor poll la DB toutes les ~10 secondes — insuffisant pour une bonne UX.
 
-```
-REMOTE_MONGO_OPLOG_URL=mongodb://localhost:27018/local
-```
-
-Sans oplog, Meteor fait du polling (moins reactif mais fonctionnel).
-
-**Prerequis** : MongoDB doit tourner en **replica set** pour que l'oplog existe. Actuellement `organizer-mongodb` n'est **pas** en replica set. Un replica set single-node suffit :
+**Prerequis** : MongoDB doit tourner en **replica set** pour que l'oplog existe. Un replica set n'est pas une DB separee : c'est un mode de fonctionnement de MongoDB qui active le journal des operations. Un single-node suffit (pas besoin de plusieurs serveurs). Actuellement `organizer-mongodb` n'est **pas** en replica set :
 
 ```bash
 # Modifier le docker-compose d'organizer pour ajouter --replSet rs0 au lancement de MongoDB
@@ -426,7 +430,7 @@ docker exec organizer-mongodb mongosh --eval 'rs.initiate()'
 
 **Attention** : ce changement impacte aussi Organizer. Verifier que l'API Organizer fonctionne correctement apres l'activation du replica set (normalement transparent pour Mongoose).
 
-Sans replica set, l'oplog n'existe pas et Meteor tombe en fallback polling automatiquement.
+**Configuration oplog** : Meteor lit l'oplog via `MONGO_OPLOG_URL` (voir tableau 3.3). Sur le VPS : `mongodb://organizer-mongodb:27017/local`. En local (Mick) : `mongodb://localhost:27018/local` (via le meme tunnel SSH).
 
 ---
 
@@ -455,8 +459,8 @@ async 'app.importArchive'({ ndjsonContent, targetUserId }) {
 1. Demarrer Panorama en local (mode classique, DB locale)
 2. Exporter via `app.exportArchiveStart` → fichier `.ndjson.gz`
 3. Demarrer la DB remote sur le VPS
-4. Creer le user Mick dans la DB remote (via accounts-password)
-5. Executer l'import avec `targetUserId` = id du user Mick
+4. Demarrer l'instance locale avec `MONGO_URL` pointant vers la DB remote (Phase 3). Mick s'inscrit normalement — le compte est cree directement sur la DB remote
+5. Executer l'import avec `targetUserId` = id du user Mick (recupere via `Meteor.userId()`)
 6. Verifier les donnees (compter les documents, spot-check)
 7. Configurer `REMOTE_MONGO_URL` sur l'instance locale
 8. Redemarrer l'instance locale → elle tape sur la DB remote
@@ -559,6 +563,7 @@ module.exports = {
     env: {
       ROOT_URL: 'https://panorama.mickaelfm.me',
       MONGO_URL: 'mongodb://organizer-mongodb:27017/panorama',  // DB partagee, database separee
+      MONGO_OPLOG_URL: 'mongodb://organizer-mongodb:27017/local',
       PORT: 4000,
       EMAIL_URL: 'smtp://resend:re_YOUR_API_KEY@smtp.resend.com:465',
       PANORAMA_MODE: 'remote',
@@ -846,6 +851,8 @@ Le vrai point de non-retour est quand **plusieurs users ont cree des donnees sur
 | 6 | **AppPreferences : comment scinder ?** | **Nouvelle collection `userPreferences`** | Separation nette : `appPreferences` garde la config d'instance (filesDir, qdrantUrl), `userPreferences` stocke les prefs par user (theme, cle API, config AI). |
 | 7 | **Outil de deploiement ?** | **MUP (Meteor Up)** | Gere build, Docker, Nginx, Let's Encrypt en une commande. Compatible Meteor 3 avec workaround Node 20.9.0. MongoDB et Qdrant geres separement (containers Docker dedies). Fallback : deploy manuel si MUP instable. |
 | 8 | **Service SMTP ?** | **Resend** | Compte existant. Config : `EMAIL_URL=smtp://resend:API_KEY@smtp.resend.com:465`. Necessite DNS SPF/DKIM sur le domaine d'expedition. |
+| 9 | **Direction du dual driver ?** | **Inversee : MONGO_URL → remote** | `MONGO_URL` pointe vers la DB remote (VPS). Un `localDriver` est cree pour les ~21 collections local-only. Resout le probleme de `Meteor.users` (automatiquement sur la DB remote, un seul compte). En dev/test, pas de `LOCAL_MONGO_URL` → tout reste local. |
+| 10 | **Replica set ?** | **Requis** | Necessaire pour l'oplog et la reactivite temps reel de Meteor. Single-node replica set sur `organizer-mongodb`. Impact Organizer a verifier (normalement transparent pour Mongoose). |
 
 ## Ordre d'execution recommande
 
@@ -882,7 +889,7 @@ Les phases 1 et 2 peuvent etre developpees et testees entierement en local avant
 | **Regression sur les features existantes** | L'ajout de userId partout peut casser des queries | Tester chaque collection incrementalement. Garder la DB locale comme backup |
 | **Tunnel SSH instable** | Perte de connexion DB si le tunnel tombe | `autossh` avec reconnexion automatique, ou service launchd permanent |
 | **Signup ouvert : abus** | Comptes spam, surcharge | Rate limiting, validation email, monitoring |
-| **Dual driver Meteor 3** | `MongoInternals.RemoteCollectionDriver` pas documente officiellement dans Meteor 3 | Tester tot. Alternative : `MONGO_URL` pointe directement vers le remote, pas de dual driver (plus simple mais pas de collections locales) |
+| **Local driver Meteor 3** | `MongoInternals.RemoteCollectionDriver` pour le `localDriver` pas documente officiellement dans Meteor 3 | Tester tot en dev. Si probleme, les collections local-only restent dans la DB remote mais protegees par `ensureLocalOnly()` (fallback acceptable) |
 | **RAM VPS** | ~~Risque resolu~~ — VPS upgrade a 4 GB (fevrier 2026), budget memoire confortable | Monitorer avec `docker stats` apres deploiement |
 | **Replica set sur MongoDB partage** | Activer le replica set sur `organizer-mongodb` impacte aussi Organizer | Tester que Organizer (Mongoose) fonctionne correctement apres activation. Normalement transparent |
 

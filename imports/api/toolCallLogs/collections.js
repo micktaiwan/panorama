@@ -1,4 +1,7 @@
 import { Mongo } from 'meteor/mongo';
+import { localDriver } from '/imports/api/_shared/localDriver';
+
+const driverOptions = localDriver ? { _driver: localDriver } : {};
 
 /**
  * Tool Call Logs Collection
@@ -19,7 +22,7 @@ import { Mongo } from 'meteor/mongo';
  *   metadata: object? - Additional context (user agent, session, etc.)
  * }
  */
-export const ToolCallLogsCollection = new Mongo.Collection('toolCallLogs');
+export const ToolCallLogsCollection = new Mongo.Collection('toolCallLogs', driverOptions);
 
 // Indexes for common queries
 if (Meteor.isServer) {

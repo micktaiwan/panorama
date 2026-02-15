@@ -1,3 +1,6 @@
 import { Mongo } from 'meteor/mongo';
+import { localDriver } from '/imports/api/_shared/localDriver';
 
-export const ClaudeCommandsCollection = new Mongo.Collection('claudeCommands');
+const driverOptions = localDriver ? { _driver: localDriver } : {};
+
+export const ClaudeCommandsCollection = new Mongo.Collection('claudeCommands', driverOptions);
