@@ -408,31 +408,95 @@ Les collections remote (projects, tasks, notes, noteSessions, noteLines, links, 
 
 #### 3.4 Tunnel SSH automatique
 
-L'instance locale de Mick accede a MongoDB via tunnel SSH (MongoDB bind localhost sur le VPS, port jamais expose sur internet).
+L'instance locale de Mick accede a MongoDB et Qdrant via tunnel SSH.
+
+**Prerequis** : exposer les ports MongoDB et Qdrant sur localhost du VPS (pas sur internet). Actuellement, `organizer-mongodb` et `organizer-qdrant` n'exposent **aucun port** sur l'hote — ils sont accessibles uniquement sur le reseau Docker interne. Le tunnel SSH ne peut pas forwarder vers un port qui n'ecoute pas sur l'hote.
+
+Modifier `/var/www/organizer/server/docker-compose.prod.yml` :
+
+```yaml
+  mongodb:
+    image: mongo:5
+    container_name: organizer-mongodb
+    ports:
+      - "127.0.0.1:27017:27017"  # AJOUTER — accessible uniquement depuis localhost (tunnel SSH)
+    # ... reste inchange
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.3
+    container_name: organizer-qdrant
+    ports:
+      - "127.0.0.1:6333:6333"    # AJOUTER — pour le tunnel Qdrant
+    # ... reste inchange
+```
+
+Appliquer : `cd /var/www/organizer/server && docker compose -f docker-compose.prod.yml up -d`
+
+**Tunnels SSH** :
 
 ```bash
-# Le tunnel forward le port local 27018 vers le MongoDB du VPS (localhost:27017)
-autossh -M 0 -f -N -L 27018:localhost:27017 ubuntu@51.210.150.25
+# MongoDB : port local 27018 → VPS localhost:27017
+# Qdrant  : port local 16333 → VPS localhost:6333
+autossh -M 0 -f -N \
+  -L 27018:localhost:27017 \
+  -L 16333:localhost:6333 \
+  ubuntu@51.210.150.25
 ```
 
 Integration dans le workflow de dev :
 - Script `start-local.sh` qui demarre le tunnel puis lance Meteor
 - Ou `autossh` en service launchd (macOS) pour un tunnel permanent
-- Port local 27018 (pour ne pas conflicte avec un MongoDB local eventuel)
+- Port local 27018 (pour ne pas conflicter avec un MongoDB local eventuel)
 
 #### 3.5 Replica set et oplog (requis)
 
 Meteor utilise l'**oplog** (journal des operations MongoDB) pour la reactivite en temps reel. Sans oplog, Meteor poll la DB toutes les ~10 secondes — insuffisant pour une bonne UX.
 
-**Prerequis** : MongoDB doit tourner en **replica set** pour que l'oplog existe. Un replica set n'est pas une DB separee : c'est un mode de fonctionnement de MongoDB qui active le journal des operations. Un single-node suffit (pas besoin de plusieurs serveurs). Actuellement `organizer-mongodb` n'est **pas** en replica set :
+**Prerequis** : MongoDB doit tourner en **replica set** pour que l'oplog existe. Un replica set n'est pas une DB separee : c'est un mode de fonctionnement de MongoDB qui active le journal des operations. Un single-node suffit (pas besoin de plusieurs serveurs). Actuellement `organizer-mongodb` n'est **pas** en replica set.
+
+**Attention** : ce changement impacte aussi Organizer. C'est l'operation la plus risquee du plan — c'est la seule qui touche un service de production existant.
+
+**Procedure etape par etape** :
 
 ```bash
-# Modifier le docker-compose d'organizer pour ajouter --replSet rs0 au lancement de MongoDB
-# Puis initialiser une seule fois
+# 1. BACKUP FRAIS avant toute modification (ne pas compter sur le cron quotidien)
+docker exec organizer-mongodb mongodump --db organizer --archive=/tmp/organizer-pre-replicaset.gz --gzip
+docker cp organizer-mongodb:/tmp/organizer-pre-replicaset.gz /opt/backups/
+# Rapatrier en local aussi (scp vers le Mac)
+
+# 2. CHECKPOINT : verifier qu'Organizer fonctionne AVANT le changement
+curl -s https://organizer.mickaelfm.me/api/health  # ou endpoint equivalent
+# Noter l'etat de reference
+
+# 3. Modifier le docker-compose d'Organizer pour ajouter --replSet rs0
+# Dans docker-compose.yml, section organizer-mongodb :
+#   command: ["--replSet", "rs0"]
+# Puis redemarrer le container MongoDB :
+cd /var/www/organizer/server && docker compose -f docker-compose.prod.yml up -d
+
+# 4. Initialiser le replica set (une seule fois)
 docker exec organizer-mongodb mongosh --eval 'rs.initiate()'
+# Attendre quelques secondes que le replica set soit pret
+docker exec organizer-mongodb mongosh --eval 'rs.status()'
+# Verifier : "stateStr" doit etre "PRIMARY"
+
+# 5. CHECKPOINT : verifier qu'Organizer fonctionne APRES le changement
+curl -s https://organizer.mickaelfm.me/api/health
+# Tester manuellement l'app Organizer (login, navigation, creation de donnees)
+# Si Organizer est casse → rollback immediat (voir ci-dessous)
+
+# 6. Attendre 24h et verifier la stabilite avant de passer a la suite
 ```
 
-**Attention** : ce changement impacte aussi Organizer. Verifier que l'API Organizer fonctionne correctement apres l'activation du replica set (normalement transparent pour Mongoose).
+**Rollback si Organizer casse** :
+
+```bash
+# Retirer --replSet rs0 du docker-compose
+# Redemarrer le container
+cd /var/www/organizer/server && docker compose -f docker-compose.prod.yml up -d
+# Si les donnees sont corrompues :
+docker exec -i organizer-mongodb mongorestore --gzip --archive=/tmp/organizer-pre-replicaset.gz --drop
+```
 
 **Configuration oplog** : Meteor lit l'oplog via `MONGO_OPLOG_URL` (voir tableau 3.3). Sur le VPS : `mongodb://organizer-mongodb:27017/local`. En local (Mick) : `mongodb://localhost:27018/local` (via le meme tunnel SSH).
 
@@ -442,32 +506,74 @@ docker exec organizer-mongodb mongosh --eval 'rs.initiate()'
 
 **Objectif** : transferer les 8 mois de donnees locales vers la DB remote.
 
-#### 4.1 Construire la methode d'import
+#### 4.1 Strategie de migration : mongodump/mongorestore
 
-**Il n'existe aucune methode d'import dans le code actuel.** Seul l'export existe (`app.exportArchiveStart` dans `imports/api/export/server.js`, exporte 21 collections en NDJSON gzip). Il faut construire le pendant :
+~~L'approche initiale (methode Meteor `app.importArchive` via NDJSON) est abandonnee~~ : le contenu NDJSON transite par DDP qui a une limite de taille de message (~10 MB), insuffisant pour 8 mois de donnees.
 
-```javascript
-// imports/api/export/methods.js
-async 'app.importArchive'({ ndjsonContent, targetUserId }) {
-  // Pour chaque ligne du NDJSON :
-  // 1. Parser { collection, doc } ou { collection, type: 'begin'/'end' }
-  // 2. Filtrer : ne migrer que les collections remote (projects, tasks, notes, noteSessions, noteLines, links, files)
-  // 3. Ajouter userId: targetUserId au doc
-  // 4. Inserer dans la collection correspondante (via le remote driver)
-  // 5. Gerer les conflits d'_id (skip ou overwrite)
-}
+**Approche retenue** : `mongodump` / `mongorestore` directement entre les deux MongoDB. Plus rapide, plus fiable, sans limite de taille. Les donnees ont deja le `userId` (backfill Phase 2, etape 4.4).
+
+**Collections a migrer** (remote uniquement) :
+
+```bash
+COLLECTIONS="projects tasks notes noteSessions noteLines links files"
 ```
 
 #### 4.2 Procedure de migration
 
-1. Demarrer Panorama en local (mode classique, DB locale, sans `MONGO_URL` ni `LOCAL_MONGO_URL`)
-2. Exporter via `app.exportArchiveStart` → fichier `.ndjson.gz`
-3. Demarrer la DB remote sur le VPS (replica set active, voir Phase 3.5)
-4. Configurer le tunnel SSH (Phase 3.4) et demarrer l'instance locale avec `MONGO_URL` pointant vers la DB remote + `LOCAL_MONGO_URL` vers le MongoDB interne Meteor (voir tableau 3.3). Mick s'inscrit normalement — le compte est cree directement sur la DB remote
-5. Executer l'import avec `targetUserId` = id du user Mick (recupere via `Meteor.userId()`)
-6. Verifier les donnees (compter les documents, spot-check)
-7. Verifier que tout fonctionne (collections remote sur le VPS, collections locales dans `.meteor/local/db`)
-8. Les donnees dans l'ancienne DB locale (`.meteor/local/db` d'avant migration) deviennent un backup
+```bash
+# 1. BACKUP de la DB locale avant toute manipulation
+mongodump --host 127.0.0.1 --port 4001 --db meteor --gzip --archive=.backups/local-pre-migration.gz
+
+# 2. Demarrer le tunnel SSH (Phase 3.4 doit etre fait)
+autossh -M 0 -f -N -L 27018:localhost:27017 ubuntu@51.210.150.25
+
+# 3. Demarrer Meteor avec MONGO_URL vers le VPS, LOCAL_MONGO_URL vers la DB locale
+#    L'app sera vide (DB remote panorama n'existe pas encore) — c'est normal
+MONGO_URL=mongodb://localhost:27018/panorama \
+LOCAL_MONGO_URL=mongodb://localhost:4001/meteor \
+meteor
+
+# 4. S'inscrire dans l'app → cree le compte sur la DB remote
+#    Noter le nouveau userId (visible dans le header ou via mongosh sur le VPS)
+#    Exemple : NEW_USER_ID="xxxxxxxxx"
+
+# 5. Exporter les collections remote depuis la DB locale
+for coll in projects tasks notes noteSessions noteLines links files; do
+  mongodump --host 127.0.0.1 --port 4001 --db meteor \
+    --collection $coll --gzip --out .backups/migration-export/
+done
+
+# 6. Importer dans la DB remote via le tunnel
+for coll in projects tasks notes noteSessions noteLines links files; do
+  mongorestore --host 127.0.0.1 --port 27018 --db panorama \
+    --collection $coll --gzip .backups/migration-export/meteor/$coll.bson.gz
+done
+
+# 7. CRITIQUE : mettre a jour le userId sur tous les documents importes
+#    L'ancien userId (backfill local) doit etre remplace par le nouveau (compte remote)
+OLD_USER_ID="y2bayW975C6hocRkh"
+# NEW_USER_ID = celui note a l'etape 4
+mongosh "mongodb://localhost:27018/panorama" --eval "
+  const old = '$OLD_USER_ID';
+  const nw  = '$NEW_USER_ID';
+  for (const c of ['projects','tasks','notes','noteSessions','noteLines','links','files']) {
+    const r = db[c].updateMany({userId: old}, {\$set: {userId: nw}});
+    print(c + ': ' + r.modifiedCount + ' documents mis a jour');
+  }
+"
+
+# 8. Verifier les donnees
+mongosh "mongodb://localhost:27018/panorama" --eval "
+  for (const c of ['projects','tasks','notes','noteSessions','noteLines','links','files']) {
+    print(c + ': ' + db[c].countDocuments() + ' docs, sans userId: ' + db[c].countDocuments({userId: {\$exists: false}}));
+  }
+"
+
+# 9. Rafraichir l'app — les donnees doivent apparaitre
+# 10. L'ancienne DB locale (.meteor/local/db) reste intacte = backup naturel
+```
+
+**Rollback** : si la migration echoue, `mongosh "mongodb://localhost:27018/panorama" --eval "db.dropDatabase()"` et recommencer. La DB locale est intacte.
 
 #### 4.3 Migration des fichiers
 
@@ -566,7 +672,10 @@ module.exports = {
   app: {
     name: 'panorama',
     path: '../',
-    docker: { image: 'zodern/meteor:root' },
+    docker: {
+      image: 'zodern/meteor:root',
+      args: ['--network=server_organizer-network'],  // Rejoindre le reseau Docker d'Organizer
+    },
     servers: { one: {} },
     buildOptions: { serverOnly: true },
     env: {
@@ -576,6 +685,7 @@ module.exports = {
       PORT: 4000,
       EMAIL_URL: 'smtp://resend:re_YOUR_API_KEY@smtp.resend.com:465',
       PANORAMA_MODE: 'remote',
+      METEOR_SETTINGS: JSON.stringify({ public: { isRemote: true } }),  // Pour que le client masque les features local-only
     },
     deployCheckWaitTime: 60,
   },
@@ -585,6 +695,15 @@ module.exports = {
   },
   // PAS de section mongo ici — on reutilise organizer-mongodb
 };
+```
+
+**Pre-requis avant deploy** :
+
+```bash
+# 1. Stopper les containers de David (panoramix-api + panoramix-web)
+# OBLIGATOIRE : panoramix-web a VIRTUAL_HOST=panorama.mickaelfm.me
+# Si les deux containers sont up, le proxy nginx aura un conflit de domaine
+ssh ubuntu@51.210.150.25 "cd /opt/panoramix && docker compose -f docker-compose.prod.yml down"
 ```
 
 **Deploiement** :
@@ -606,12 +725,33 @@ nvm exec 20.9.0 mup logs
 - MongoDB : reutilise `organizer-mongodb` existant (database `panorama` separee)
 - Qdrant : reutilise `organizer-qdrant` existant
 - Backups : etendre le script existant (voir 5.7)
+- `appPreferences` : a seeder manuellement (voir ci-dessous)
+
+**Seeding `appPreferences` sur le VPS** :
+
+Sur l'instance remote, `ensureLocalOnly()` bloque toutes les methodes d'`appPreferences`. Mais le serveur a besoin de `filesDir` et `qdrantUrl` (lus par `config.js` via le cache `PREFS_CACHE`). Inserer le document via mongosh apres le premier deploy :
+
+```bash
+docker exec organizer-mongodb mongosh "mongodb://localhost:27017/panorama" --eval "
+  db.appPreferences.insertOne({
+    filesDir: '/var/www/panorama/files',
+    qdrantUrl: 'http://organizer-qdrant:6333',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  })
+"
+```
 
 **Fallback** : si MUP pose trop de problemes avec Meteor 3, deploiement manuel via `meteor build` + `scp` + PM2 (voir 5.9).
 
 #### 5.4 Flag isRemote
 
-Variable d'environnement ou setting Meteor pour distinguer les deux instances :
+Deux mecanismes complementaires pour distinguer les instances :
+
+- **Serveur** : `process.env.PANORAMA_MODE === 'remote'` (variable d'environnement dans `mup.js`)
+- **Client** : `Meteor.settings?.public?.isRemote === true` (injecte via `METEOR_SETTINGS` dans `mup.js`)
+
+**Important** : le client ne peut PAS lire les variables d'environnement serveur. Le flag client passe obligatoirement par `Meteor.settings.public`. C'est configure dans `mup.js` via `METEOR_SETTINGS: JSON.stringify({ public: { isRemote: true } })`.
 
 ```javascript
 // Cote serveur
