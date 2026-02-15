@@ -123,7 +123,8 @@ Meteor.methods({
     check(code, isNonEmptyString);
     ensureLoggedIn(this.userId);
     try {
-      const tokens = await exchangeCodeForTokens(code);
+      const gcConfig = await getGoogleCalendarConfigAsync(this.userId);
+      const tokens = await exchangeCodeForTokens(code, gcConfig);
       const { UserPreferencesCollection } = await import('/imports/api/userPreferences/collections');
       const now = new Date();
       const userPref = await UserPreferencesCollection.findOneAsync({ userId: this.userId });
