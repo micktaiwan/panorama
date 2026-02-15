@@ -1,50 +1,52 @@
 #!/usr/bin/env bash
-# start-local.sh — Lance Panorama en mode local avec tunnel SSH vers le VPS
+# start-local.sh — Lance Panorama en mode local
 #
-# MongoDB remote : localhost:27018 → VPS:27017 (collections partagées)
-# Qdrant remote  : localhost:16333 → VPS:6333
+# MongoDB remote : panorama.mickaelfm.me:27018 (TLS + auth)
+# Qdrant remote  : localhost:16333 → VPS:6333 (tunnel SSH)
 # MongoDB local  : localhost:4001  → .meteor/local/db (collections local-only)
 
 VPS_HOST="${PANORAMA_VPS_HOST:?Définir PANORAMA_VPS_HOST (ex: export PANORAMA_VPS_HOST=ubuntu@your-vps-ip)}"
-MONGO_TUNNEL_PORT=27018
+MONGO_USER="${PANORAMA_MONGO_USER:?Définir PANORAMA_MONGO_USER dans ~/.env.secrets}"
+MONGO_PASS="${PANORAMA_MONGO_PASS:?Définir PANORAMA_MONGO_PASS dans ~/.env.secrets}"
+MONGO_HOST="panorama.mickaelfm.me:27018"
 QDRANT_TUNNEL_PORT=16333
 METEOR_PORT=4000
 
-# Tunnel déjà actif ?
-if lsof -i :$MONGO_TUNNEL_PORT -P -n >/dev/null 2>&1; then
-  echo "✓ Tunnel déjà actif sur :$MONGO_TUNNEL_PORT et :$QDRANT_TUNNEL_PORT"
+# Tunnel SSH pour Qdrant (MongoDB n'en a plus besoin grâce au TLS)
+if lsof -i :$QDRANT_TUNNEL_PORT -P -n >/dev/null 2>&1; then
+  echo "✓ Tunnel Qdrant déjà actif sur :$QDRANT_TUNNEL_PORT"
 else
-  echo "→ Démarrage du tunnel SSH..."
+  echo "→ Démarrage du tunnel SSH (Qdrant)..."
   autossh -M 0 -f -N \
     -o "ServerAliveInterval=30" \
     -o "ServerAliveCountMax=3" \
-    -L ${MONGO_TUNNEL_PORT}:localhost:27017 \
     -L ${QDRANT_TUNNEL_PORT}:localhost:6333 \
     $VPS_HOST
-  echo "✓ Tunnel démarré"
+  echo "✓ Tunnel Qdrant démarré"
 fi
 
-# Attendre que MongoDB réponde
-echo "→ Vérification MongoDB via tunnel..."
-for i in $(seq 1 10); do
-  if mongosh --quiet "mongodb://127.0.0.1:${MONGO_TUNNEL_PORT}/" --eval "db.runCommand({ping:1}).ok" 2>/dev/null | grep -q 1; then
-    echo "✓ MongoDB accessible"
-    break
-  fi
-  [ $i -eq 10 ] && { echo "✗ MongoDB non accessible après 10 tentatives"; exit 1; }
-  sleep 1
-done
+# Vérifier la connexion MongoDB TLS
+echo "→ Vérification MongoDB (TLS)..."
+if mongosh --quiet "mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?tls=true&authSource=admin&directConnection=true" --eval "db.runCommand({ping:1}).ok" 2>/dev/null | grep -q 1; then
+  echo "✓ MongoDB accessible"
+else
+  echo "✗ MongoDB non accessible sur ${MONGO_HOST}"
+  exit 1
+fi
 
 # Lancer Meteor
 LOCAL_MONGO_PORT=$((METEOR_PORT + 1))
+MONGO_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?tls=true&authSource=admin&directConnection=true"
+MONGO_OPLOG_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/local?tls=true&authSource=admin&directConnection=true"
+
 echo "→ Lancement Meteor (port $METEOR_PORT)..."
-echo "  MONGO_URL        = mongodb://localhost:${MONGO_TUNNEL_PORT}/panorama?directConnection=true"
-echo "  MONGO_OPLOG_URL  = mongodb://localhost:${MONGO_TUNNEL_PORT}/local?directConnection=true"
+echo "  MONGO_URL        = mongodb://${MONGO_USER}:***@${MONGO_HOST}/panorama?tls=true&authSource=admin&directConnection=true"
+echo "  MONGO_OPLOG_URL  = mongodb://${MONGO_USER}:***@${MONGO_HOST}/local?tls=true&authSource=admin&directConnection=true"
 echo "  LOCAL_MONGO_URL  = mongodb://localhost:${LOCAL_MONGO_PORT}/meteor"
 echo "  QDRANT_URL       = http://localhost:${QDRANT_TUNNEL_PORT}"
 
-MONGO_URL="mongodb://localhost:${MONGO_TUNNEL_PORT}/panorama?directConnection=true" \
-MONGO_OPLOG_URL="mongodb://localhost:${MONGO_TUNNEL_PORT}/local?directConnection=true" \
+MONGO_URL="$MONGO_URL" \
+MONGO_OPLOG_URL="$MONGO_OPLOG_URL" \
 LOCAL_MONGO_URL="mongodb://localhost:${LOCAL_MONGO_PORT}/meteor" \
 QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}" \
 meteor run --port $METEOR_PORT --settings settings.json

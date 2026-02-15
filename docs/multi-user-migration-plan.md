@@ -406,7 +406,7 @@ Les collections remote (projects, tasks, notes, noteSessions, noteLines, links, 
 
 **Note** : en dev mode, Meteor demarre toujours son MongoDB interne, meme quand `MONGO_URL` est defini. Le port interne = port de l'app + 1 (ex: app sur 3000 → MongoDB sur 3001).
 
-#### 3.4 Connexion MongoDB distante — TLS + Auth (TODO)
+#### 3.4 Connexion MongoDB distante — TLS + Auth ✅ DONE (2026-02-15)
 
 L'instance locale de Mick (et celle de David sur Windows) accede au MongoDB du VPS. Qdrant reste derriere un tunnel SSH.
 
@@ -1161,10 +1161,10 @@ Phase 3.1-3.3 (Code dual driver)  ✅ DONE
 Phase 3.6 (Restructuration infra VPS)  ✅ DONE (2026-02-15)
     |
     v
-Phase 3.4 (MongoDB TLS + Auth public)  ⬜ TODO
+Phase 3.4 (MongoDB TLS + Auth public)  ✅ DONE (2026-02-15)
     |
     v
-Phase 4 (Migration donnees)
+Phase 4 (Migration donnees)  <-- PROCHAINE ETAPE
     |
     v
 Phase 5 (Deploiement VPS)
@@ -1175,7 +1175,7 @@ Phase 6 (Fichiers)       \
 Phase 7 (Qdrant)          /
 ```
 
-Les phases 1-3.3 et 3.6 sont terminees (auth, userId, dual driver, infra VPS). Prochaine etape : Phase 3.4 (MongoDB TLS + Auth), puis migration des donnees (Phase 4).
+Les phases 1-3 sont terminees (auth, userId, dual driver, infra VPS, TLS + Auth). Prochaine etape : migration des donnees (Phase 4).
 
 ## Risques identifies
 
