@@ -23,3 +23,15 @@ export const ensureOwner = async (collection, docId, userId) => {
   return doc;
 };
 
+/**
+ * Throw 'not-authorized' if user is not an admin.
+ * Use at the top of Meteor methods that require admin access.
+ */
+export const ensureAdmin = async (userId) => {
+  ensureLoggedIn(userId);
+  const user = await Meteor.users.findOneAsync(userId, { fields: { isAdmin: 1 } });
+  if (!user?.isAdmin) {
+    throw new Meteor.Error('not-authorized', 'Admin access required');
+  }
+};
+

@@ -100,14 +100,14 @@ export const NoteEditor = ({
             <button
               className="save-button"
               onClick={() => onSave(activeTabId)}
-              disabled={isSaving}
+              disabled={isSaving || !dirtySet.has(activeTabId)}
             >
               {isSaving ? 'Saving...' : 'Save'}
             </button>
             <button
               className="save-all-button"
               onClick={onSaveAll}
-              disabled={isSaving}
+              disabled={isSaving || dirtySet.size === 0}
             >
               {isSaving ? 'Saving...' : 'Save All'}
             </button>

@@ -712,4 +712,19 @@ export const TOOL_DEFINITIONS = [
       }
     }
   },
+  {
+    type: 'function',
+    name: 'tool_createRelease',
+    description: 'Create a new release note (global announcement visible to all users). Use when publishing release notes for a new version.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        version: { type: 'string', description: 'Version string (e.g., "1.2.3")' },
+        title: { type: 'string', description: 'Short title for the release' },
+        content: { type: 'string', description: 'Release notes content in markdown format' }
+      },
+      required: ['version', 'title', 'content']
+    }
+  },
 ];

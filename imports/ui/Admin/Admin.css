@@ -1,0 +1,117 @@
+/* Admin page styles */
+
+.adminTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.adminTable th,
+.adminTable td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.adminTable th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.adminTable tr:hover {
+  background: var(--bgElevated);
+}
+
+.adminTable input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.adminTable input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-danger {
+  color: var(--error, #e74c3c);
+  border-color: var(--error, #e74c3c);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--error, #e74c3c);
+  color: #fff;
+}
+.btn-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* Stats grid */
+.adminStatsGrid {
+  display: flex;
+  gap: 12px;
+}
+
+.adminStatTile {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.adminStatTileLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.adminStatValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.adminStatsDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.adminStatsLabel {
+  color: var(--muted);
+  margin-right: 8px;
+}
+
+.adminStatusOk {
+  color: var(--success, #2ecc71);
+  font-weight: 600;
+}
+
+.adminStatusError {
+  color: var(--error, #e74c3c);
+  font-weight: 600;
+}
+
+.adminBadge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--primary);
+  color: #fff;
+  margin-left: 8px;
+  vertical-align: middle;
+}
