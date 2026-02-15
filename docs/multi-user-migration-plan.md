@@ -1176,6 +1176,16 @@ Phase 7 (Qdrant)          ✅ DONE (2026-02-15)
 
 Les phases 1-5 et 7 sont terminees. Prochaine etape : securiser les routes HTTP (5.6), fichiers (Phase 6).
 
+### Checklist post-merge (avant d'inviter David)
+
+- [ ] Deployer sur le VPS (`./deploy.sh`)
+- [ ] Creer un 2e compte (signup David)
+- [ ] Verifier l'isolation : David ne voit pas les projets/taches/notes de Mick
+- [ ] Verifier l'ownership : David ne peut pas modifier un doc de Mick (tester via console navigateur)
+- [ ] Verifier Qdrant rebuild avec la cle API de David (userPreferences)
+- [ ] Verifier la recherche semantique filtree par userId
+- [ ] Configurer le backup DB panorama (5.7)
+
 ## Risques identifies
 
 | Risque | Impact | Mitigation |
