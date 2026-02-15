@@ -35,7 +35,7 @@ export const PrefsAI = ({ pref, userPref }) => {
     setAiRemoteProvider(userPref.ai?.remote?.provider || 'openai');
     setAiRemoteChatModel(userPref.ai?.remote?.chatModel || 'gpt-4o-mini');
     setAiRemoteEmbeddingModel(userPref.ai?.remote?.embeddingModel || 'text-embedding-3-small');
-  }, [userPref?._id]);
+  }, [userPref?._id, JSON.stringify(userPref?.ai)]);
 
   React.useEffect(() => {
     if (!pref) return;

@@ -44,7 +44,7 @@ export const PrefsGeneral = ({ pref, userPref }) => {
   React.useEffect(() => {
     if (!userPref) return;
     setTheme(userPref.theme || 'dark');
-  }, [userPref?._id]);
+  }, [userPref?._id, userPref?.theme]);
 
   return (
     <>
