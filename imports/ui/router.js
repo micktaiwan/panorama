@@ -37,6 +37,8 @@ export const parseHashRoute = () => {
   if (parts[0] === 'notion-reporting') return { name: 'notionReporting' };
   if (parts[0] === 'mcp-servers') return { name: 'mcpServers' };
   if (parts[0] === 'claude') return { name: 'claude', projectId: parts[1] };
+  if (parts[0] === 'releases') return { name: 'releases', releaseId: parts[1] };
+  if (parts[0] === 'admin') return { name: 'admin', tab: parts[1] || 'users' };
   return { name: 'home' };
 };
 
@@ -141,6 +143,12 @@ export const navigateTo = (route) => {
       break;
     case 'claude':
       window.location.hash = route.projectId ? `#/claude/${route.projectId}` : '#/claude';
+      break;
+    case 'releases':
+      window.location.hash = route.releaseId ? `#/releases/${route.releaseId}` : '#/releases';
+      break;
+    case 'admin':
+      window.location.hash = route.tab && route.tab !== 'users' ? `#/admin/${route.tab}` : '#/admin';
       break;
     default:
       window.location.hash = '#/';

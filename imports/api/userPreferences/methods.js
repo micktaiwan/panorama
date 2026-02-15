@@ -60,6 +60,28 @@ Meteor.methods({
   },
 
   /**
+   * Mark all releases as seen by updating lastSeenReleaseAt.
+   */
+  async 'userPreferences.markReleasesSeen'() {
+    ensureLoggedIn(this.userId);
+    const doc = await UserPreferencesCollection.findOneAsync({ userId: this.userId });
+    const now = new Date();
+    if (!doc) {
+      await UserPreferencesCollection.insertAsync({
+        userId: this.userId,
+        lastSeenReleaseAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      await UserPreferencesCollection.updateAsync(doc._id, {
+        $set: { lastSeenReleaseAt: now, updatedAt: now },
+      });
+    }
+    return true;
+  },
+
+  /**
    * Partial update of user preferences.
    * Only the fields present in `modifier` are written.
    */

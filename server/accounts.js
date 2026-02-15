@@ -17,6 +17,13 @@ Accounts.validateNewUser((user) => {
   return true;
 });
 
+Accounts.onCreateUser(async (options, user) => {
+  if (options.profile) user.profile = options.profile;
+  const count = await Meteor.users.find().countAsync();
+  user.isAdmin = count === 0;
+  return user;
+});
+
 // --- Email templates ---
 
 Accounts.emailTemplates.siteName = 'Panorama';

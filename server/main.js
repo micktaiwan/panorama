@@ -188,6 +188,15 @@ import '/imports/api/claudeCommands/collections';
 import '/imports/api/claudeCommands/publications';
 import '/imports/api/claudeCommands/methods';
 
+// Releases (global announcements)
+import '/imports/api/releases/collections';
+import '/imports/api/releases/publications';
+import '/imports/api/releases/methods';
+
+// Admin
+import '/imports/api/admin/methods';
+import '/imports/api/admin/publications';
+
 Meteor.startup(async () => {
   // Mark any Claude sessions stuck in "running" as interrupted (processes died on restart)
   const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
@@ -285,6 +294,16 @@ Meteor.startup(async () => {
     console.log(`[startup] AI mode: '${prefs.ai.mode}'`);
   }
 
+  // --- Admin bootstrap: promote first user if no admin exists ---
+  const adminExists = await Meteor.users.findOneAsync({ isAdmin: true }, { fields: { _id: 1 } });
+  if (!adminExists) {
+    const firstUser = await Meteor.users.findOneAsync({}, { sort: { createdAt: 1 }, fields: { _id: 1 } });
+    if (firstUser) {
+      await Meteor.users.updateAsync(firstUser._id, { $set: { isAdmin: true } });
+      console.log(`[startup] Promoted first user ${firstUser._id} to admin`);
+    }
+  }
+
   // --- Multi-user indexes (userId partitioning) ---
   const { ProjectsCollection } = await import('/imports/api/projects/collections');
   const { TasksCollection } = await import('/imports/api/tasks/collections');
@@ -350,6 +369,9 @@ Meteor.startup(async () => {
   ClaudeMessagesCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   ClaudeProjectsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   ClaudeCommandsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+
+  const { ReleasesCollection } = await import('/imports/api/releases/collections');
+  ReleasesCollection.rawCollection().createIndex({ createdAt: -1 }).catch(() => {});
 
   // --- Backfill userId on previously local-only collections ---
   // One-time migration: adds userId to documents that don't have one yet.

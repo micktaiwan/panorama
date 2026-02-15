@@ -127,9 +127,6 @@
 .btnArchive { background: var(--info-bg); border: 1px solid #2a3a7a; color: #cfe1ff; }
 .btnArchive:hover { background: #223066; }
 
-/* Ensure container padding does not increase overall width */
-.container { box-sizing: border-box; }
-
 /* Reserve space for docked chat (right sidebar) */
 body.withDockedChat .container {
   padding-right: var(--docked-chat-width, 420px);
@@ -188,4 +185,19 @@ body.chatWide .container {
   border: none;
   border-radius: 0;
   overflow: auto;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .appHeader { font-size: 20px; }
+  .headerUser { display: none; }
+  .appFooter { display: none; }
+  .favoritesBar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .favoritesBar::-webkit-scrollbar { display: none; }
+  .favChip { flex-shrink: 0; }
 }

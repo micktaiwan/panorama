@@ -251,15 +251,11 @@ a { cursor: pointer; }
 button { cursor: pointer; }
 
 .container {
-  max-width: 1100px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 24px;
   padding-bottom: 32px;
 }
-
-/* Container width toggle */
-.container.w90 { max-width: 90%; }
-.container.full { max-width: 100%; }
 
 /* Panels and layout */
 .panel {
@@ -524,4 +520,16 @@ select:disabled,
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 12px;
+    padding-bottom: 16px;
+  }
+  .panel {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
 }

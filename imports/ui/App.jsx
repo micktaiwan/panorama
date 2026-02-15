@@ -46,12 +46,16 @@ import { InboxZero } from '/imports/ui/Emails/InboxZero.jsx';
 import { NotionReporting } from '/imports/ui/NotionReporting/NotionReporting.jsx';
 import { MCPServers } from '/imports/ui/MCPServers/MCPServers.jsx';
 import { ClaudeCodePage } from '/imports/ui/ClaudeCode/ClaudeCodePage.jsx';
+import { Admin } from '/imports/ui/Admin/Admin.jsx';
+import { NotificationBell } from '/imports/ui/Releases/NotificationBell.jsx';
+import { ReleasesPage } from '/imports/ui/Releases/ReleasesPage.jsx';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
 import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
 // HelpBubble removed
 import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { HamburgerMenu } from '/imports/ui/components/HamburgerMenu/HamburgerMenu.jsx';
 
 const SortableChip = ({ id, name, onOpen, active }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -126,6 +130,7 @@ function App() {
     { key: 'n', label: 'New Note Session', action: 'newSession' },
     { key: 'h', label: 'Help', route: { name: 'help' } },
     { key: 'g', label: 'Preferences', route: { name: 'preferences' } },
+    ...(user?.isAdmin ? [{ key: 'd', label: 'Admin', route: { name: 'admin' } }] : []),
   ];
   const [goActiveIdx, setGoActiveIdx] = useState(0);
   // (removed local search states)
@@ -626,17 +631,6 @@ function App() {
 
   // create task now handled inside CommandPalette
 
-  const WIDTH_MODES = ['default', 'w90', 'full'];
-  const WIDTH_LABELS = { default: '1100px', w90: '90%', full: '100%' };
-  const [widthMode, setWidthMode] = useState(() => {
-    if (typeof localStorage === 'undefined') return 'default';
-    const stored = localStorage.getItem('container_width_mode');
-    return WIDTH_MODES.includes(stored) ? stored : 'default';
-  });
-  const cycleWidth = () => setWidthMode(m => WIDTH_MODES[(WIDTH_MODES.indexOf(m) + 1) % WIDTH_MODES.length]);
-  useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('container_width_mode', widthMode);
-  }, [widthMode]);
 
   // Redirect to onboarding if not configured
   useEffect(() => {
@@ -648,14 +642,20 @@ function App() {
   }, [subPrefs(), appPrefs?._id, route?.name]);
 
   return (
-    <div className={`container${widthMode !== 'default' ? ` ${widthMode}` : ''}${focusMode ? ' focusMode' : ''}`}>
+    <div className={`container${focusMode ? ' focusMode' : ''}`}>
       {!focusMode && (
         <h1 className="appHeader">
           <a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>
             <img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />
             Panorama
           </a>
+          <HamburgerMenu
+            user={user}
+            onNewSession={() => handleNewSession()}
+            onExport={() => setExportOpen(true)}
+          />
           <span className="headerUser">
+            <NotificationBell />
             <span className="headerEmail">{user?.emails?.[0]?.address}</span>
             <button className="btn-link headerLogout" onClick={() => Meteor.logout()}>Logout</button>
           </span>
@@ -825,6 +825,16 @@ function App() {
       {route?.name === 'onboarding' && (
         <div className="panel">
           <Onboarding />
+        </div>
+      )}
+      {route?.name === 'releases' && (
+        <div className="panel">
+          <ReleasesPage releaseId={route.releaseId} />
+        </div>
+      )}
+      {route?.name === 'admin' && (
+        <div className="panel">
+          <Admin tab={route.tab} />
         </div>
       )}
       {route?.name === 'preferences' && (
@@ -1037,8 +1047,10 @@ function App() {
           <a href="#/emails" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'emails' }); }}>Emails</a>
           <span className="dot">·</span>
           <a href="#/notion-reporting" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'notionReporting' }); }}>Notion</a>
-          <span className="dot">·</span>
-          <a href="#/width" onClick={(e) => { e.preventDefault(); cycleWidth(); }}>Width: {WIDTH_LABELS[widthMode]}</a>
+          {user?.isAdmin && <>
+            <span className="dot">·</span>
+            <a href="#/admin" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'admin' }); }}>Admin</a>
+          </>}
         </span>
       </footer>}
       <ChatWidget />

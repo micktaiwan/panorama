@@ -2237,5 +2237,41 @@ export const TOOL_HANDLERS = {
         message: error.message
       });
     }
+  },
+
+  async tool_createRelease(args, memory) {
+    const version = String(args?.version || '').trim();
+    const title = String(args?.title || '').trim();
+    const content = String(args?.content || '');
+
+    if (!version) {
+      return buildErrorResponse('version is required', 'tool_createRelease', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide version parameter, e.g., {version: "1.2.3"}'
+      });
+    }
+    if (!title) {
+      return buildErrorResponse('title is required', 'tool_createRelease', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide title parameter'
+      });
+    }
+    if (!content) {
+      return buildErrorResponse('content is required', 'tool_createRelease', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide content parameter (markdown release notes)'
+      });
+    }
+
+    const userId = getMCPUserId();
+    const releaseId = await callMethodAs('releases.insert', userId, { version, title, content });
+
+    const result = { releaseId, version, title };
+    if (memory) {
+      memory.ids = memory.ids || {};
+      memory.ids.releaseId = releaseId;
+    }
+
+    return buildSuccessResponse(result, 'tool_createRelease', { source: 'panorama_db', policy: 'write' });
   }
 };
