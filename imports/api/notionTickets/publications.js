@@ -3,14 +3,14 @@ import { check } from 'meteor/check';
 import { NotionTicketsCollection } from './collections.js';
 
 /**
- * Publish Notion tickets for a specific integration
- * Single-user app, no user filtering needed
+ * Publish Notion tickets for a specific integration, scoped by user
  */
 Meteor.publish('notionTickets.byIntegration', function(integrationId) {
+  if (!this.userId) return this.ready();
   check(integrationId, String);
 
   return NotionTicketsCollection.find(
-    { integrationId },
+    { integrationId, userId: this.userId },
     {
       sort: { syncedAt: -1 }, // Most recently synced first
       fields: {
@@ -31,10 +31,11 @@ Meteor.publish('notionTickets.byIntegration', function(integrationId) {
 });
 
 /**
- * Publish all tickets (for admin/debugging)
+ * Publish all tickets for the current user
  */
 Meteor.publish('notionTickets.all', function() {
-  return NotionTicketsCollection.find({}, {
+  if (!this.userId) return this.ready();
+  return NotionTicketsCollection.find({ userId: this.userId }, {
     sort: { syncedAt: -1 },
     limit: 1000 // Safety limit
   });

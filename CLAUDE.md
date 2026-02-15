@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Panorama is a **local-first, single-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support.
+Panorama is a **multi-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support. Authentication and multi-tenancy with `userId` on **all collections** are implemented.
 
 **Repo owner**: Mickael FM aka Mick (`micktaiwan` on GitHub), frère de David FM aka Dayd (`ddaydd` on GitHub) qui contribue aussi au projet.
 
@@ -14,19 +14,14 @@ Panorama is a **local-first, single-user** project management and notes applicat
 
 ### Database Access
 
-Meteor dev mode runs its own MongoDB instance (not the system MongoDB). Data is stored in `.meteor/local/db`. The port varies — check with `ss -tlnp | grep mongod` (commonly **3001** or **4001**).
+In local dev mode (Mick's Mac), `MONGO_URL` points to the VPS via TLS + auth (`panorama.mickaelfm.me:27018`). Credentials in `~/.env.secrets` (`PANORAMA_MONGO_USER`, `PANORAMA_MONGO_PASS`). When `MONGO_URL` is set, Meteor does **not** start its internal MongoDB — all collections use the remote database.
 
 ```bash
-# Find the actual MongoDB port
-ss -tlnp | grep mongod
-
-# Connect to the dev database (replace PORT)
-mongosh "mongodb://127.0.0.1:PORT/meteor"
-
-# Example queries
-mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.getCollectionNames()'
-mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.tasks.find({}).limit(5).toArray()'
+# Connect to the database (all collections)
+mongosh "mongodb://$PANORAMA_MONGO_USER:$PANORAMA_MONGO_PASS@panorama.mickaelfm.me:27018/panorama?tls=true&authSource=admin"
 ```
+
+In dev/test mode (no `MONGO_URL` set), Meteor starts its own MongoDB on port `METEOR_PORT + 1`. All collections are local.
 
 **Do NOT use** `mongosh meteor` or the system MongoDB — those are different databases and will return empty results.
 
@@ -37,9 +32,10 @@ mongosh --quiet "mongodb://127.0.0.1:PORT/meteor" --eval 'db.tasks.find({}).limi
 ### Data Layer (Meteor Collections)
 
 - Server methods are **async** and use `insertAsync`, `updateAsync`, `removeAsync`, `findOneAsync`, `countAsync`
-- Publications expose data to client (no user filtering, single-user app)
+- **All collections** have `userId` field, publications filter by `this.userId`, methods use `ensureLoggedIn` + `ensureOwner`. Exception: `appPreferences` is a global singleton (no userId)
+- **Auth helpers** in `imports/api/_shared/auth.js`: `ensureLoggedIn(userId)`, `ensureOwner(collection, docId, userId)`
 - Client uses `useTracker`, `useFind`, and custom hooks like `useSingle()` for reactive queries
-- Collections: see imports/api/* (projects, tasks, notes, noteSessions, noteLines, situations, people, teams, budget, calendar, alarms, files, links, chats, userLogs, emails, appPreferences, errors)
+- Collections: see imports/api/* (projects, tasks, notes, noteSessions, noteLines, situations, people, teams, budget, calendar, alarms, files, links, chats, userLogs, emails, appPreferences, userPreferences, errors)
 
 ### AI Integration Architecture
 
@@ -69,6 +65,7 @@ The app uses a **proxy pattern** to route AI calls between local and remote prov
 - **Manual reindexing required** when switching embedding models or AI modes
 - Abstractions in `imports/api/search/vectorStore.js`: `embedText(text)`, `upsertDoc({kind, id, text, projectId})`, `deleteDoc(kind, id)`
 - Fallback to `search.instant` when Qdrant unavailable
+- **Qdrant isolation**: Qdrant payloads include `userId`, all searches and indexation filter by userId. Payload index on `userId` (Keyword) for performance. Reindexation required after deployment (Preferences > Qdrant > Rebuild).
 
 ### UI Component Patterns
 
@@ -99,13 +96,22 @@ The app uses a **proxy pattern** to route AI calls between local and remote prov
 
 ### Configuration System
 
-Configuration is resolved in this order (highest priority first):
-1. App Preferences (stored in MongoDB via Preferences UI)
-2. Environment variables (`PANORAMA_FILES_DIR`, `QDRANT_URL`, `OPENAI_API_KEY`, `PENNYLANE_TOKEN`)
-3. Meteor settings (`settings.json` or `METEOR_SETTINGS`)
-4. Safe defaults
+Two preference collections:
+- **`userPreferences`** (per-user, remote): `theme`, `openaiApiKey`, `anthropicApiKey`, `perplexityApiKey`, `ai` (mode, fallback, models, timeouts)
+- **`appPreferences`** (instance, local): `filesDir`, `qdrantUrl`, `devUrlMode`, `localUserId`, `pennylaneBaseUrl`, `pennylaneToken`, `slack`, `googleCalendar`, `cta`
 
-`settings.json` is **gitignored**. Use App Preferences or env vars for secrets.
+Configuration is resolved in this order (highest priority first):
+1. User Preferences (per-user, stored in `userPreferences` collection)
+2. App Preferences (instance-level, stored in `appPreferences` collection)
+3. Environment variables (`PANORAMA_FILES_DIR`, `QDRANT_URL`, `OPENAI_API_KEY`, `PENNYLANE_TOKEN`)
+4. Meteor settings (`settings.json` or `METEOR_SETTINGS`)
+5. Safe defaults
+
+Config helpers in `imports/api/_shared/config.js`:
+- **Sync getters** (instance-level, for server code outside methods): `getAIConfig()`, `getOpenAiApiKey()`, `getQdrantUrl()`, `getLocalUserId()`
+- **Async getters** (user-aware, for methods with `this.userId`): `getAIConfigAsync(userId)`, `getOpenAiApiKeyAsync(userId)`, `getAnthropicApiKeyAsync(userId)`
+
+`settings.json` is **gitignored**. Use User/App Preferences or env vars for secrets.
 
 ### Routing and Navigation
 
@@ -133,9 +139,12 @@ Configuration is resolved in this order (highest priority first):
 - Copy guidelines: concise, action-led
 
 ### Security Policy
-- **Local-first app**: minimal security concerns (single-user, trusted environment)
+- **Multi-user app**: authentication required, userId isolation on **all** collections
+- **All collections** (except appPreferences): `ensureLoggedIn` + `ensureOwner` on methods, publications filter by `userId`
+- **MCP tools**: use `localUserId` from `appPreferences` for server-to-server calls (no DDP session)
 - **LLM responses**: no validation/sanitization (trust AI providers)
-- **API keys**: store in App Preferences or env vars, no format validation
+- **API keys**: store in User Preferences or env vars, no format validation
+- **Qdrant**: per-user isolation via `userId` in payloads + search filters (Phase 7 done)
 
 ## Key Features
 
@@ -147,6 +156,16 @@ Configuration is resolved in this order (highest priority first):
 - **Gmail Integration**: OAuth2 integration for reading emails. Collections: `emails`. See `docs/gmail-setup.md`
 - **Claude Code**: In-app Claude CLI integration with session management, permission prompts, and shell escape (`!command`). UI: `imports/ui/ClaudeCode/`, API: `imports/api/claudeSessions/`, `imports/api/claudeMessages/`. Logs: `~/.panorama-claude.log`. See `docs/features/23-feature-claude-code.md`
 
+## Deployment
+
+Deploy via [Meteor Up (mup)](https://github.com/zodern/meteor-up):
+
+```bash
+./deploy.sh
+```
+
+First-time setup: `source ~/.env.secrets && cd .deploy && nvm exec 20.9.0 mup setup`
+
 ## Testing
 
 - Mocha test runner via `meteortesting:mocha`
@@ -155,7 +174,7 @@ Configuration is resolved in this order (highest priority first):
 
 ## Documentation
 
-Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` (collection schemas), `04-electron.md` (packaging), `ai-proxy.md` (AI architecture), `gmail-setup.md` (Gmail OAuth2), `features/` (feature-specific docs)
+Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` (collection schemas), `04-electron.md` (packaging), `ai-proxy.md` (AI architecture), `gmail-setup.md` (Gmail OAuth2), `multi-user-migration-plan.md` (multi-user migration phases 1-7), `features/` (feature-specific docs)
 
 ## Common Patterns and Gotchas
 
@@ -165,6 +184,7 @@ Key docs in `docs/`: `02-tech-notes.md` (technical guidelines), `03-schemas.md` 
 3. Create `imports/api/resourceName/publications.js` (expose data to client)
 4. Import all three in `server/main.js`
 5. If searchable: register in `vectorStore.js` and call `upsertDoc`/`deleteDoc` in methods
+6. Add `userId` to inserts, `ensureLoggedIn` + `ensureOwner` to update/remove, filter publications by `userId`, add MongoDB index `{ userId: 1 }` in `server/main.js` startup
 
 ### When Adding AI Features
 - Use `chatComplete()` or `embed()` from `llmProxy.js`

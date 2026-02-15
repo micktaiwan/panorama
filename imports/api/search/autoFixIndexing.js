@@ -14,6 +14,7 @@ import { getQdrantClient, COLLECTION, toPointId, embedText, splitIntoChunks } fr
  */
 export const autoFixIndexing = async (opts = {}) => {
   const dryRun = !!opts.dryRun;
+  const userId = opts.userId || null;
   const sampleSize = opts.sampleSize === 0 ? 0 : Math.max(5, Math.min(1000, Number(opts?.sampleSize) || 100));
 
   const report = {
@@ -137,7 +138,7 @@ export const autoFixIndexing = async (opts = {}) => {
               if (!chunkText || !chunkText.trim()) continue;
 
               // Generate embedding
-              const vector = await embedText(chunkText);
+              const vector = await embedText(chunkText, { userId });
 
               // Create point ID
               const pointId = toPointId(kind, docId);

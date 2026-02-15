@@ -34,6 +34,36 @@
   margin-top: 0;
 }
 
+.appHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.headerUser {
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.headerEmail {
+  margin-right: 8px;
+}
+
+.headerLogout {
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.headerLogout:hover {
+  color: var(--danger);
+}
+
 .container > h1 a {
   color: inherit;
   text-decoration: none;

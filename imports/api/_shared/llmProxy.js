@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getAIConfig } from '/imports/api/_shared/config';
+import { getAIConfig, getAIConfigAsync } from '/imports/api/_shared/config';
 import { providers } from '/imports/api/_shared/aiCore';
 
 /**
@@ -36,8 +36,8 @@ async function getHealthCheck(provider) {
  * Determine which provider to use based on mode
  * NO AUTOMATIC SWITCHING - mode is strictly enforced
  */
-async function selectProvider(routeOverride = null) {
-  const config = getAIConfig();
+async function selectProvider(routeOverride = null, userId = null) {
+  const config = userId ? await getAIConfigAsync(userId) : getAIConfig();
 
   // Override takes precedence
   if (routeOverride === 'local') {
@@ -63,10 +63,10 @@ async function selectProvider(routeOverride = null) {
 /**
  * Chat completion with automatic provider selection
  */
-export async function chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs, route, tools, tool_choice, responseFormat, schema } = {}) {
-  const config = getAIConfig();
-  const provider = await selectProvider(route);
-  
+export async function chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs, route, tools, tool_choice, responseFormat, schema, userId } = {}) {
+  const config = userId ? await getAIConfigAsync(userId) : getAIConfig();
+  const provider = await selectProvider(route, userId);
+
   const options = {
     system,
     messages,
@@ -77,24 +77,26 @@ export async function chatComplete({ system, messages, model, temperature, maxTo
     tools,
     tool_choice,
     responseFormat,
-    schema
+    schema,
+    userId
   };
-  
+
   return await providers[provider].chatComplete(options);
 }
 
 /**
  * Embedding generation with automatic provider selection
  */
-export async function embed(texts, { model, timeoutMs, route } = {}) {
-  const config = getAIConfig();
-  const provider = await selectProvider(route);
-  
+export async function embed(texts, { model, timeoutMs, route, userId } = {}) {
+  const config = userId ? await getAIConfigAsync(userId) : getAIConfig();
+  const provider = await selectProvider(route, userId);
+
   const options = {
     model,
-    timeoutMs: timeoutMs || config.timeoutMs
+    timeoutMs: timeoutMs || config.timeoutMs,
+    userId
   };
-  
+
   return await providers[provider].embed(texts, options);
 }
 

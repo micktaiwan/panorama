@@ -86,15 +86,15 @@ export const makePreview = (text, max = 180) => {
   return chars.slice(0, max - 1).join('') + '…';
 };
 
-export const embedText = async (text) => {
+export const embedText = async (text, { userId } = {}) => {
   const normalizedText = String(text || '').trim();
-  
+
   // If text is empty after normalization, return null to indicate no embedding needed
   if (!normalizedText) {
     return null;
   }
-  
-  const result = await llmEmbed([normalizedText]);
+
+  const result = await llmEmbed([normalizedText], { userId });
   const vec = result.vectors?.[0];
   
   if (!Array.isArray(vec)) {
@@ -119,21 +119,22 @@ const ensureCollectionIfNeeded = async () => {
   collectionEnsured = true;
 };
 
-export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = null, extraPayload = {} }) => {
+export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {} }) => {
   const client = await getQdrantClient();
   await ensureCollectionIfNeeded();
-  const vector = await embedText(text);
-  
+  const vector = await embedText(text, { userId });
+
   // If no vector was generated (empty text), skip indexing
   if (!vector) {
     console.log(`[upsertDoc] Skipping indexing for ${kind}:${id} - no content to embed`);
     return;
   }
-  
+
   const nowMs = Date.now();
   const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(text), indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
   if (projectId) payload.projectId = projectId;
   if (sessionId) payload.sessionId = sessionId;
+  if (userId) payload.userId = userId;
   const pointId = toPointId(kind, id);
   await client.upsert(COLLECTION(), { points: [{ id: pointId, vector: Array.from(vector), payload }] });
 };
@@ -181,6 +182,16 @@ export const ensureCollection = async () => {
       } else {
         throw createError;
       }
+    }
+  }
+  // Ensure payload index on userId for filtered searches
+  try {
+    await client.createPayloadIndex(collectionName, { field_name: 'userId', field_schema: 'Keyword' });
+    console.log(`[qdrant] Payload index on 'userId' ensured for '${collectionName}'`);
+  } catch (indexError) {
+    // Index may already exist — ignore
+    if (!indexError?.data?.status?.error?.includes('already exists')) {
+      console.warn(`[qdrant] Could not create userId payload index: ${indexError?.message || indexError}`);
     }
   }
 };
@@ -241,7 +252,7 @@ export const splitIntoChunks = (text, minChars = 800, maxChars = 1200, overlap =
 };
 
 // Upsert multiple chunks for one logical document
-export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessionId = null, extraPayload = {}, minChars = 800, maxChars = 1200, overlap = 150 }) => {
+export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {}, minChars = 800, maxChars = 1200, overlap = 150 }) => {
   const client = await getQdrantClient();
   await ensureCollectionIfNeeded();
   const normalizedText = String(text || '').trim();
@@ -254,7 +265,7 @@ export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessio
   for (let i = 0; i < chunks.length; i += 1) {
     try {
       const chunk = chunks[i];
-      const vector = await embedText(chunk);
+      const vector = await embedText(chunk, { userId });
       
       // Skip chunks that couldn't be embedded (empty content)
       if (!vector) {
@@ -266,6 +277,7 @@ export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessio
       const payload = { kind, docId: `${kind}:${id}`, preview: makePreview(chunk), chunkIndex: i, indexedAt: new Date(nowMs).toISOString(), indexedAtMs: nowMs, ...extraPayload };
       if (projectId) payload.projectId = projectId;
       if (sessionId) payload.sessionId = sessionId;
+      if (userId) payload.userId = userId;
       const pointId = toPointId(kind, `${id}#${i}`);
       points.push({ id: pointId, vector: Array.from(vector), payload });
     } catch (e) {

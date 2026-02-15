@@ -1,6 +1,8 @@
 import React from 'react';
+import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { AppPreferencesCollection } from '../../api/appPreferences/collections';
+import { UserPreferencesCollection } from '../../api/userPreferences/collections';
 import { navigateTo } from '../router.js';
 import './Preferences.css';
 
@@ -24,9 +26,15 @@ export const Preferences = ({ tab }) => {
   const activeTab = TABS.find(t => t.id === tab) ? tab : 'general';
 
   const sub = useSubscribe('appPreferences');
+  const subUser = useSubscribe('userPreferences');
   const pref = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
+  const userPref = useFind(() => UserPreferencesCollection.find({}, { limit: 1 }))[0];
 
-  if (sub()) return <div>Loading...</div>;
+  React.useEffect(() => {
+    Meteor.call('userPreferences.ensure');
+  }, []);
+
+  if (sub() || subUser()) return <div>Loading...</div>;
 
   return (
     <div className="prefs">
@@ -55,9 +63,9 @@ export const Preferences = ({ tab }) => {
         </div>
       </nav>
       <div className="prefsContent">
-        {activeTab === 'general' && <PrefsGeneral pref={pref} />}
-        {activeTab === 'secrets' && <PrefsSecrets pref={pref} />}
-        {activeTab === 'ai' && <PrefsAI pref={pref} />}
+        {activeTab === 'general' && <PrefsGeneral pref={pref} userPref={userPref} />}
+        {activeTab === 'secrets' && <PrefsSecrets pref={pref} userPref={userPref} />}
+        {activeTab === 'ai' && <PrefsAI pref={pref} userPref={userPref} />}
         {activeTab === 'qdrant' && <PrefsQdrant pref={pref} />}
         {activeTab === 'commands' && <PrefsCommands />}
         {activeTab === 'debug' && <PrefsDebug />}

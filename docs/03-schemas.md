@@ -3,28 +3,59 @@
 This document lists the application's data collections and their key fields.
 It is a high‑level reference; see code for full details and validation.
 
-## Core Collections
+## Multi-tenancy
+
+Since Phase 2 (Feb 2026), all **remote collections** have a `userId` field for multi-user isolation. Every insert adds `userId`, every publication filters by `userId`, and every update/remove verifies ownership via `ensureOwner()`.
+
+**Auth helpers** (`imports/api/_shared/auth.js`):
+- `ensureLoggedIn(userId)` — throws `not-authorized` if falsy
+- `ensureOwner(collection, docId, userId)` — throws `not-found` if doc doesn't belong to user
+- `ensureLocalOnly()` — throws `local-only` if `PANORAMA_MODE === 'remote'`
+
+**Remote collections** (have `userId`): projects, tasks, notes, noteSessions, noteLines, links, files, userPreferences.
+
+**Local-only collections** (have `ensureLocalOnly()` guard): all others (situations, budget, calendar, chats, userLogs, emails, claude*, mcpServers, alarms, people, teams, errors, notionIntegrations, notionTickets).
+
+## Core Collections (Remote)
 
 - Projects (`projects`)
-  - `_id`, `name`, `description`, `status`, `targetDate`, `progressPercent`,
+  - `_id`, `userId`, `name`, `description`, `status`, `targetDate`, `progressPercent`,
     `riskLevel`, `createdAt`, `updatedAt`.
+  - Index: `{ userId: 1 }`
 - Tasks (`tasks`)
-  - `_id`, `projectId`, `title`, `status`, `deadline`, `estimate`, `actual`,
+  - `_id`, `userId`, `projectId`, `title`, `status`, `deadline`, `estimate`, `actual`,
     `progressPercent`, `statusChangedAt`, `updatedAt`.
+  - Indexes: `{ userId: 1, projectId: 1 }`, `{ userId: 1, done: 1 }`
 - Notes (`notes`)
-  - `_id`, `projectId`, `title`, `content`, `createdAt`.
+  - `_id`, `userId`, `projectId`, `title`, `content`, `createdAt`.
+  - Index: `{ userId: 1, projectId: 1 }`
 - Note Sessions (`noteSessions`) and Lines (`noteLines`)
-  - Session: `_id`, `projectId?`, `createdAt`.
-  - Line: `_id`, `sessionId`, `content`, `createdAt`.
+  - Session: `_id`, `userId`, `projectId?`, `createdAt`.
+  - Line: `_id`, `userId` (denormalized), `sessionId`, `content`, `createdAt`.
+  - Indexes: `{ userId: 1, projectId: 1 }` (sessions), `{ userId: 1, sessionId: 1 }` (lines)
 - Links (`links`)
-  - Link/bookmark entities used across the app.
+  - `_id`, `userId`, `projectId`, `name`, `url`, `clicks`, `createdAt`.
+  - Index: `{ userId: 1, projectId: 1 }`
+- Files (`files`)
+  - `_id`, `userId`, `projectId`, `name`, `storedFileName`, `createdAt`.
+  - Index: `{ userId: 1, projectId: 1 }`
+- User Preferences (`userPreferences`)
+  - `_id`, `userId`, `theme`, `openaiApiKey`, `anthropicApiKey`, `perplexityApiKey`, `ai` (mode, fallback, timeoutMs, maxTokens, temperature, local, remote), `createdAt`, `updatedAt`.
+  - Index: `{ userId: 1 }` (unique)
+  - Per-user settings. See also `appPreferences` for instance-level config.
+
+## Local-Only Collections
+
 - Alarms (`alarms`)
   - In‑app client‑scheduled alarms.
 - Budget (multiple `budget*` collections)
   - Import and analytics entities for the Budget module.
+- App Preferences (`appPreferences`)
+  - Instance-level config (singleton): `filesDir`, `qdrantUrl`, `devUrlMode`, `localUserId`, `pennylaneBaseUrl`, `pennylaneToken`, `slack`, `googleCalendar`, `calendarIcsUrl`, `cta`.
 - Search (external)
   - Qdrant collection `panorama` (vectors); see the Search section in
     `02-tech-notes.md` for configuration.
+  - **Note**: Qdrant index is currently global (no userId in payloads). Phase 7 will add per-user isolation.
 
 ## Situation Analyzer
 

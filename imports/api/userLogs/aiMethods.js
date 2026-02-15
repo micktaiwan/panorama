@@ -3,13 +3,15 @@ import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine, formatAnchors, buildEntriesBlock, buildProjectsBlock } from '/imports/api/_shared/aiCore';
+import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'ai.cleanUserLog'(logId) {
     check(logId, String);
+    ensureLoggedIn(this.userId);
 
     const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
-    const entry = await UserLogsCollection.findOneAsync({ _id: logId });
+    const entry = await UserLogsCollection.findOneAsync({ _id: logId, userId: this.userId });
     if (!entry) throw new Meteor.Error('not-found', 'UserLog entry not found');
 
     const original = typeof entry.content === 'string' ? entry.content : '';
@@ -44,6 +46,7 @@ Meteor.methods({
 
   async 'userLogs.summarizeWindow'(windowKey, hours, options) {
     check(windowKey, String);
+    ensureLoggedIn(this.userId);
     const n = Number(hours);
     let promptOverride = '';
     if (typeof options === 'string') {
@@ -57,10 +60,10 @@ Meteor.methods({
     const since = new Date(now.getTime() - rangeHours * 3600 * 1000);
 
     const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
-    const logs = await UserLogsCollection.find({ createdAt: { $gte: since } }, { sort: { createdAt: 1 } }).fetchAsync();
+    const logs = await UserLogsCollection.find({ userId: this.userId, createdAt: { $gte: since } }, { sort: { createdAt: 1 } }).fetchAsync();
 
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const projects = await ProjectsCollection.find({}, { fields: { name: 1, description: 1 } }).fetchAsync();
+    const projects = await ProjectsCollection.find({ userId: this.userId }, { fields: { name: 1, description: 1 } }).fetchAsync();
 
     const catalog = projects
       .filter(p => !!p.name)
