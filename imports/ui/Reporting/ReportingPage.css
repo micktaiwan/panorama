@@ -1,14 +1,337 @@
-.reportingPage { }
-.reportingToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.reportingContent { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--panel); }
-.reportingSection + .reportingSection { margin-top: 16px; }
-.reportingList { list-style: none; padding: 0; margin: 0; }
-.reportingList li { display: grid; grid-template-columns: 220px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
-.reportingList li:last-child { border-bottom: none; }
-.reportingList .when { color: var(--muted); }
-.reportingList .title { }
-.reportingActions { margin-top: 12px; }
+/* ── ReportingPage Dashboard ── */
 
-.aiSummaryActions { display: flex; justify-content: flex-end; margin: 8px 0; }
-.aiSummary { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--panel); white-space: pre-wrap; max-height: 360px; margin-top: 12px; }
+.rp-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
 
+/* Accent bar */
+.rp-accent {
+  height: 4px;
+  background: var(--primary);
+  border-radius: 0 0 2px 2px;
+  margin-bottom: 24px;
+}
+
+/* Header */
+.rp-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.rp-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.rp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rp-select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-size: 0.875rem;
+}
+
+.rp-dateRange {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* ── Stat cards ── */
+.rp-statsRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.rp-statCard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  border-left: 4px solid var(--stat-color, var(--primary));
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rp-statNumber {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+}
+
+.rp-statLabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Filters ── */
+.rp-filters {
+  margin-bottom: 24px;
+}
+
+/* ── Body: 2-column layout ── */
+.rp-body {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ── Activity column ── */
+.rp-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rp-empty {
+  color: var(--muted);
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* Section accent bar on collapsible header */
+.rp-section .collapsibleHeader {
+  position: relative;
+  padding-left: 12px;
+}
+
+.rp-section .collapsibleHeader::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 1.1em;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+/* Event list */
+.rp-eventList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.rp-eventItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rp-eventItem:last-child {
+  border-bottom: none;
+}
+
+.rp-eventDot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-color, var(--muted));
+}
+
+.rp-eventContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rp-eventTitle {
+  color: var(--text);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-eventProject {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rp-eventTime {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Clickable links */
+.rp-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rp-link:hover {
+  text-decoration: underline;
+  color: var(--primary);
+}
+
+.rp-eventProject.rp-link:hover {
+  color: var(--primary);
+}
+
+/* ── AI Sidebar ── */
+.rp-sidebar {
+  position: sticky;
+  top: 24px;
+}
+
+.rp-aiOutput {
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+  padding: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.rp-aiActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.rp-aiError {
+  color: var(--danger, #f66);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+/* AI config form */
+.rp-aiConfig {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.rp-aiConfigRow {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.rp-aiConfigRow label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.rp-aiConfigRow select,
+.rp-aiConfigRow textarea {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.rp-aiConfigRow textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.rp-aiConfigRow--full {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+/* ── Responsive: tablet ── */
+@media (max-width: 768px) {
+  .rp-page {
+    padding: 0 16px 32px;
+  }
+
+  .rp-statsRow {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .rp-body {
+    grid-template-columns: 1fr;
+  }
+
+  .rp-sidebar {
+    position: static;
+  }
+
+  .rp-eventContent {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rp-eventTime {
+    margin-left: 0;
+    font-size: 0.7rem;
+  }
+
+  .rp-eventDot {
+    display: none;
+  }
+
+  .rp-eventItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+/* ── Responsive: small mobile ── */
+@media (max-width: 400px) {
+  .rp-statsRow {
+    grid-template-columns: 1fr;
+  }
+
+  .rp-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .rp-toolbar {
+    width: 100%;
+  }
+
+  .rp-toolbar .btn {
+    flex: 1;
+  }
+}

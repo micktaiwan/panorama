@@ -7,7 +7,7 @@ import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
 import { LinksCollection } from '/imports/api/links/collections';
 import { FilesCollection } from '/imports/api/files/collections';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
 const sanitizeProjectDoc = (input) => {
@@ -52,7 +52,7 @@ Meteor.methods({
     check(projectId, String);
     check(modifier, Object);
     ensureLoggedIn(this.userId);
-    await ensureOwner(ProjectsCollection, projectId, this.userId);
+    await ensureProjectAccess(projectId, this.userId);
     const sanitized = sanitizeProjectDoc(modifier);
     if (Object.prototype.hasOwnProperty.call(modifier, 'panoramaStatus')) {
       const allowed = new Set(['red','orange','green', null, '']);

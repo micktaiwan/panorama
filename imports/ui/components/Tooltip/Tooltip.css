@@ -9,8 +9,9 @@
   position: absolute;
   z-index: 1000;
   background: var(--tooltip-bg);
-  color: var(--text);
+  color: var(--tooltip-color, var(--text));
   border: 1px solid var(--border);
+  box-shadow: var(--tooltip-shadow, none);
   padding: 6px 8px;
   border-radius: 6px;
   font-size: 12px;

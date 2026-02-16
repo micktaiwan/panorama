@@ -8,31 +8,47 @@
 
 .projectHeaderCard {
   margin-bottom: 24px;
-  background: var(--surface);
   border-radius: 12px;
   overflow: hidden;
   padding: 0 !important; /* override Card base padding */
-}
-
-.pd-accent {
-  height: 4px;
-  background: var(--primary);
+  background: transparent;
+  border: none;
 }
 
 .pd-hero {
-  padding: 20px 24px 24px;
+  padding: 16px 24px 16px;
+  background: var(--project-color, var(--surface));
+  border-radius: 12px;
+  color: #000;
+}
+
+:root[data-theme="dark"] .pd-hero {
+  color: #fff;
+}
+
+.pd-hero,
+.pd-hero *:not(.starBtn):not(.starIcon):not(.colorPickerInput) {
+  color: inherit !important;
+}
+
+.pd-hero .pd-meta-badge {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root[data-theme="dark"] .pd-hero .pd-meta-badge {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .projectHeaderRow {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .projectTitle {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--text-heading);
   letter-spacing: -0.02em;
@@ -90,23 +106,53 @@
 /* Description */
 
 .projectDescription {
-  margin: 0 0 20px;
+  margin: 4px 0 12px;
   font-style: normal;
   color: var(--muted);
-  font-size: 0.95rem;
-  line-height: 1.6;
-  padding: 12px 16px;
-  background: var(--surface-sunken);
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0;
+  max-height: 3em;
+  overflow: hidden;
+  position: relative;
+  transition: max-height 0.3s ease 0s;
+}
+
+.projectDescription:hover,
+.projectDescription:focus-within {
+  max-height: 40em;
+  transition: max-height 0.3s ease 500ms;
+}
+
+.projectDescription::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1.2em;
+  background: transparent;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.2s ease 0s;
+}
+
+.projectDescription:hover::after,
+.projectDescription:focus-within::after {
+  opacity: 0;
+  transition: opacity 0.2s ease 500ms;
 }
 
 .projectDescription .inlineEditable {
-  color: var(--muted);
+  color: inherit;
 }
 
 .projectDescription .inlineEditableContent {
   white-space: pre-wrap;
+}
+
+.projectDescription .inlineEditableInput {
+  background: transparent;
 }
 
 /* ---- Meta Badges ---- */
@@ -115,8 +161,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 0;
+  gap: 6px;
 }
 
 .pd-meta-badge {
@@ -124,7 +169,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  background: var(--surface-sunken);
+  background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
   font-size: 13px;
@@ -182,13 +227,17 @@
   text-decoration: none;
 }
 
-/* ---- Tab Bar ---- */
+/* ---- Tab Bar (segmented pills) ---- */
 
 .pd-tabs {
   display: flex;
+  align-items: center;
   gap: 4px;
   margin: 0 0 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 4px;
+  background: var(--surface-sunken);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
 }
 
 .pd-tabs__tab {
@@ -196,34 +245,65 @@
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 10px 16px;
+  padding: 8px 14px;
   cursor: pointer;
   position: relative;
-  border-radius: 8px 8px 0 0;
-  transition: background 120ms ease, color 120ms ease;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .pd-tabs__tab:hover {
-  background: var(--bg-deep);
+  background: var(--surface);
   color: var(--text);
 }
 
 .pd-tabs__tab--active {
   color: var(--text);
-  background: var(--surface-sunken);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(var(--black-rgb), 0.08), 0 1px 2px rgba(var(--black-rgb), 0.04);
 }
 
-.pd-tabs__tab--active::after {
-  content: "";
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--primary);
+.pd-tabs__icon {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+.pd-tabs__tab--active .pd-tabs__icon {
+  opacity: 1;
+}
+
+.pd-tabs__count {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  padding: 0 5px;
+  background: var(--border-subtle);
+  color: var(--muted);
+  line-height: 1;
+}
+
+.pd-tabs__tab--active .pd-tabs__count {
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--primary);
+}
+
+.pd-tabs__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-right: 4px;
 }
 
 .pd-tab-content {
@@ -260,18 +340,7 @@
   flex-shrink: 0;
 }
 
-/* ---- Actions bar ---- */
-
-.projectActions {
-  margin-top: 0;
-  margin-bottom: 16px;
-  display: flex;
-  gap: 8px;
-}
-
-.projectActions button + button {
-  margin-left: 0; /* gap handles spacing */
-}
+/* ---- Actions bar (integrated into pd-tabs__actions) ---- */
 
 /* ---- Resources (links, files) ---- */
 
@@ -935,17 +1004,23 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    padding: 4px;
   }
   .pd-tabs::-webkit-scrollbar { display: none; }
 
   .pd-tabs__tab {
-    min-height: 44px;
-    min-width: 44px;
-    padding: 10px 14px;
-    font-size: 13px;
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 12px;
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  .pd-tabs__actions {
+    flex-basis: 100%;
+    padding: 4px 0 2px;
+    justify-content: flex-start;
   }
 
   .pd-tab-content { min-height: 120px; }
@@ -958,19 +1033,7 @@
     font-size: 1rem;
   }
 
-  /* ---- Actions bar ---- */
-
-  .projectActions {
-    margin-bottom: 12px;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .projectActions .btn,
-  .projectActions .btn-primary {
-    padding: 6px 10px;
-    font-size: 13px;
-  }
+  /* ---- Actions bar (integrated into pd-tabs__actions) ---- */
 
   /* ---- Resources (links, files) ---- */
 
@@ -1111,7 +1174,9 @@
     font-size: 9px;
   }
 
-  .pd-tabs__tab { padding: 10px 10px; font-size: 12px; }
+  .pd-tabs__tab { padding: 6px 8px; font-size: 11px; }
+  .pd-tabs__icon { font-size: 12px; }
+  .pd-tabs__count { font-size: 10px; min-width: 16px; height: 16px; }
 
   .projectLinksRow {
     padding: 8px 10px;
