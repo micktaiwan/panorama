@@ -99,21 +99,35 @@ export const ensureProjectAccess = async (projectId, userId) => {
 return Collection.find({ userId: this.userId });
 ```
 
+### Réactivité : `nachocodoner:reactive-publish`
+
+Le pattern naïf (fetch `projectIds` une seule fois, retourner un curseur) **ne serait pas réactif** : si un user est ajouté à un projet pendant qu'il est connecté, la publication ne se mettrait pas à jour.
+
+Le package [`nachocodoner:reactive-publish`](https://github.com/nachocodoner/meteor-reactive-publish) (v1.1.0, conçu pour Meteor 3) résout ce problème avec `this.autorun()` dans les publications. Quand les données réactives changent (ex: `memberIds`), l'autorun re-run et la publication se met à jour automatiquement. **Package validé** : stable depuis décembre 2025, 0 issues ouvertes, utilisé en production, support async/await natif, pattern `this.autorun(async () => ...)` testé et documenté.
+
+```bash
+meteor add nachocodoner:reactive-publish
+```
+
 ### Nouveau pattern pour les collections liées à un projet
 
 ```js
-// Récupérer les IDs des projets dont l'user est membre
-const memberProjects = await ProjectsCollection.find(
-  { memberIds: this.userId },
-  { fields: { _id: 1 } }
-).fetchAsync();
-const projectIds = memberProjects.map(p => p._id);
+Meteor.publish('collectionName', function () {
+  this.autorun(async () => {
+    // Réactif : si memberIds change, l'autorun re-run
+    const memberProjects = await ProjectsCollection.find(
+      { memberIds: this.userId },
+      { fields: { _id: 1 } }
+    ).fetchAsync();
+    const projectIds = memberProjects.map(p => p._id);
 
-return Collection.find({
-  $or: [
-    { userId: this.userId },                    // Docs perso (dont orphelins)
-    { projectId: { $in: projectIds } },         // Docs de projets partagés
-  ]
+    return Collection.find({
+      $or: [
+        { userId: this.userId },                    // Docs perso (dont orphelins)
+        { projectId: { $in: projectIds } },         // Docs de projets partagés
+      ]
+    });
+  });
 });
 ```
 
@@ -239,6 +253,7 @@ Ajouter `projectId` aux noteLines, dénormalisé depuis la session parente.
 ### Migration
 
 ```js
+// 1. Sessions avec projectId → propager aux noteLines
 const sessions = await NoteSessionsCollection.find(
   { projectId: { $exists: true, $ne: null } },
   { fields: { _id: 1, projectId: 1 } }
@@ -248,6 +263,19 @@ for (const session of sessions) {
   await NoteLinesCollection.rawCollection().updateMany(
     { sessionId: session._id, projectId: { $exists: false } },
     { $set: { projectId: session.projectId } }
+  );
+}
+
+// 2. Sessions orphelines (sans projectId) → marquer explicitement les noteLines
+const orphanSessionIds = (await NoteSessionsCollection.find(
+  { $or: [{ projectId: { $exists: false } }, { projectId: null }] },
+  { fields: { _id: 1 } }
+).fetchAsync()).map(s => s._id);
+
+if (orphanSessionIds.length) {
+  await NoteLinesCollection.rawCollection().updateMany(
+    { sessionId: { $in: orphanSessionIds }, projectId: { $exists: false } },
+    { $set: { projectId: null } }
   );
 }
 ```
@@ -311,12 +339,7 @@ async 'projects.removeMember'(projectId, memberId) {
     $pull: { memberIds: memberId }
   });
 
-  // Nettoyer les tasks assignées au membre retiré
-  await TasksCollection.updateAsync(
-    { projectId, assigneeId: memberId },
-    { $set: { assigneeId: null } },
-    { multi: true }
-  );
+  // Note : le nettoyage des tasks assignées (assigneeId) sera ajouté en phase 2
 }
 ```
 
@@ -402,22 +425,26 @@ Rebuild complet des vecteurs nécessaire (Preferences > Qdrant > Rebuild).
 
 ## 10. Cycle de vie
 
+### Suppression d'un projet (cascade)
+
+Quand le owner supprime un projet, **tous les docs enfants sont supprimés** (tasks, notes, noteSessions, noteLines, links, files) — y compris ceux créés par d'autres membres. Les vecteurs Qdrant associés doivent aussi être supprimés (`deleteDoc` pour chaque doc indexé).
+
 ### Retrait d'un membre
 
 Quand le owner retire un membre d'un projet :
 
 - **Les docs créés par le membre restent** dans le projet (tasks, notes, etc.)
-- **Les tasks assignées** au membre retiré : `assigneeId` est remis à `null` (fait dans `projects.removeMember`)
 - Le membre perd immédiatement l'accès via la publication (réactivité Meteor)
+- Le nettoyage de `assigneeId` sera ajouté en phase 2
 
 ### Suppression d'un user
 
 Quand un compte utilisateur est supprimé :
 
-- **Projets personnels** (non-partagés, `memberIds.length === 1`) → supprimés en cascade (comme `projects.remove`)
+- **Projets personnels** (non-partagés, `memberIds.length === 1`) → supprimés en cascade (comme `projects.remove`), y compris vecteurs Qdrant
 - **Projets partagés dont il est owner** → ownership transféré au premier autre membre, userId retiré de `memberIds`
 - **Projets partagés dont il est membre** (pas owner) → retiré de `memberIds`, ses docs restent
-- **Tasks assignées** à cet user → `assigneeId` remis à `null`
+- Le nettoyage de `assigneeId` sera ajouté en phase 2
 
 ---
 
@@ -428,8 +455,9 @@ Quand un compte utilisateur est supprimé :
 - **Membres** peuvent : lire et modifier tous les docs du projet (tasks, notes, etc.)
 - **Docs orphelins** : accessibles uniquement par leur `userId` (créateur)
 - **Cascade suppression** : quand le owner supprime un projet, tous les docs enfants sont supprimés — y compris ceux créés par d'autres membres
-- **Retrait d'un membre** : ses docs restent dans le projet, ses tasks assignées passent à `null`
-- **Suppression d'un user** : projets perso supprimés en cascade, retiré des projets partagés, ownership transféré si nécessaire
+- **Retrait d'un membre** : ses docs restent dans le projet (nettoyage `assigneeId` en phase 2)
+- **Suppression de projet** : cascade delete inclut le nettoyage des vecteurs Qdrant
+- **Suppression d'un user** : projets perso supprimés en cascade (y compris Qdrant), retiré des projets partagés, ownership transféré si nécessaire
 - **Route fichiers** : vérifie `memberIds` du projet avant de servir le fichier
 
 ---
@@ -443,6 +471,7 @@ Quand un compte utilisateur est supprimé :
 | Pas de rôles → un membre peut tout modifier | OK pour l'usage actuel (confiance entre membres), évolutif plus tard |
 | MCP `localUserId` ne voit pas les projets partagés | Différé — à traiter quand le MCP sera multi-user |
 | Qdrant rebuild nécessaire | One-shot, déjà un mécanisme en place |
+| Réactivité publications (ajout/retrait membre) | Résolu par `nachocodoner:reactive-publish` (`this.autorun`) |
 
 ---
 
@@ -450,15 +479,18 @@ Quand un compte utilisateur est supprimé :
 
 ### Phase 1 — Partage de projets (MVP)
 
-- [ ] Migration schema : `memberIds` sur les projets, `projectId` sur les noteLines
+- [ ] Installer `nachocodoner:reactive-publish`
+- [ ] Migration schema : `memberIds` sur les projets, `projectId` sur les noteLines (y compris sessions orphelines → `projectId: null`)
 - [ ] Index MongoDB (`memberIds`, `projectId` noteLines)
 - [ ] `ensureProjectAccess` helper
 - [ ] `projects.insert` : init `memberIds: [this.userId]`
-- [ ] `projects.addMember` / `projects.removeMember` (avec cleanup `assigneeId`)
-- [ ] Publications avec `$or` (projects, tasks, notes, noteSessions, noteLines, links, files)
+- [ ] `projects.addMember` / `projects.removeMember` (sans cleanup `assigneeId` — phase 2)
+- [ ] Publications réactives avec `this.autorun()` (projects, tasks, notes, noteSessions, noteLines, links, files)
 - [ ] Methods enfants : `ensureProjectAccess` au lieu de `ensureOwner`
 - [ ] `noteLines.insert` : copier `projectId` depuis la session
+- [ ] `noteSessions.update` (changement de projet) : propager `projectId` aux noteLines de la session
 - [ ] Sécurisation route fichiers (`memberIds`)
+- [ ] Cascade delete projet : inclure nettoyage vecteurs Qdrant
 - [ ] UI : section "Members" dans les settings du projet
 - [ ] Tests
 
@@ -466,6 +498,7 @@ Quand un compte utilisateur est supprimé :
 
 - [ ] Migration schema : `assigneeId` sur les tasks + index MongoDB
 - [ ] Méthode `tasks.assign` (validation membership)
+- [ ] Ajouter cleanup `assigneeId` dans `projects.removeMember`
 - [ ] Publication des membres du projet (noms/emails pour le dropdown)
 - [ ] UI : sélecteur d'assignation dans les tasks
 - [ ] Filtrage des tasks par assignee
