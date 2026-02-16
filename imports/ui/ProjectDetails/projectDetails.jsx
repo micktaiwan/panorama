@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -26,6 +26,18 @@ import { ClaudeProjectsCollection } from '../../api/claudeProjects/collections';
 import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { ActivitySummary } from '../components/ActivitySummary/ActivitySummary.jsx';
+
+/** Return '#000' or '#fff' depending on which has better contrast against hex color */
+function contrastText(hex) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return null;
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  // sRGB relative luminance (WCAG formula)
+  const toLinear = (c) => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.4 ? '#000' : '#fff';
+}
 
 export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateTaskViaPalette }) => {
   const loadProjects = useSubscribe('projects');
@@ -106,6 +118,21 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cleaningNoteIds, setCleaningNoteIds] = useState({});
   const [undoAvailable, setUndoAvailable] = useState({});
+
+  // Color picker: local state + debounced save
+  const [localColor, setLocalColor] = useState(null);
+  const colorTimerRef = useRef(null);
+  const displayColor = localColor ?? project?.colorLabel ?? null;
+  const onColorChange = useCallback((e) => {
+    const val = e.target.value;
+    if (typeof val !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(val)) return;
+    setLocalColor(val);
+    if (colorTimerRef.current) clearTimeout(colorTimerRef.current);
+    colorTimerRef.current = setTimeout(() => {
+      Meteor.call('projects.update', projectId, { colorLabel: val });
+      setLocalColor(null);
+    }, 600);
+  }, [projectId]);
 
   // Members state
   const [memberEmail, setMemberEmail] = useState('');
@@ -235,7 +262,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   return (
     <div>
       <Card className="projectHeaderCard" title={null} actions={null}>
-        <div className="pd-hero" style={project.colorLabel ? { '--project-color': project.colorLabel } : undefined}>
+        <div className="pd-hero" style={displayColor ? { '--project-color': displayColor, '--project-text': contrastText(displayColor) } : undefined}>
         <div className="projectHeaderRow">
           <button
             className={`starBtn${project.isFavorite ? ' active' : ''}`}
@@ -287,23 +314,13 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
             </span>
             <span className="pd-meta-badge">
               <span className="pd-meta-label">Color</span>
-              {(() => {
-                const safeColor = (typeof project.colorLabel === 'string' && /^#[0-9a-fA-F]{6}$/.test(project.colorLabel)) ? project.colorLabel : '#6b7280';
-                return (
-                  <input
-                    type="color"
-                    className="colorPickerInput"
-                    value={safeColor}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (typeof val === 'string' && /^#[0-9a-fA-F]{6}$/.test(val)) {
-                        Meteor.call('projects.update', projectId, { colorLabel: val });
-                      }
-                    }}
-                    title="Pick a label color"
-                  />
-                );
-              })()}
+              <input
+                type="color"
+                className="colorPickerInput"
+                value={displayColor || '#6b7280'}
+                onInput={onColorChange}
+                title="Pick a label color"
+              />
             </span>
             {linkedClaudeProjects.length > 0 && linkedClaudeProjects.map((cp) => (
               <a
