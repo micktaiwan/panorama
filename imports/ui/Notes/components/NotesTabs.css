@@ -249,3 +249,27 @@
   font-weight: 700;
   color: var(--info) !important;
 }
+
+/* Back button (mobile only) */
+.notes-back-button {
+  display: none;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--notes-surface);
+  border: none;
+  border-right: 1px solid var(--notes-border-strong);
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.notes-back-button:hover {
+  background: var(--notes-surface-hover);
+}
+
+@media (max-width: 768px) {
+  .notes-back-button { display: flex; }
+  .note-tab { min-width: 80px; max-width: 150px; }
+  .tab-title { font-size: 12px; }
+}

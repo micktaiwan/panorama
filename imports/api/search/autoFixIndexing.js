@@ -2,7 +2,7 @@
 // This script identifies missing documents and reindexes them
 
 import { Meteor } from 'meteor/meteor';
-import { getQdrantClient, COLLECTION, toPointId, embedText, splitIntoChunks } from './vectorStore';
+import { getQdrantClient, COLLECTION, toPointId, upsertDoc, upsertDocChunks } from './vectorStore';
 
 /**
  * Auto-fix indexing issues by checking which documents are missing from Qdrant
@@ -104,14 +104,14 @@ export const autoFixIndexing = async (opts = {}) => {
           continue; // Skip empty documents
         }
 
-        // For chunked documents (notes), check first chunk
-        // We assume if first chunk is missing, all chunks are missing
+        // For chunked documents, check first chunk (id#0); for others, check id directly
         const docId = doc[idField];
-        const pointId = toPointId(kind, docId);
+        const pointId = chunked ? toPointId(kind, `${docId}#0`) : toPointId(kind, docId);
 
         try {
-          const points = await client.retrieve(collectionName, { ids: [pointId], with_payload: false, with_vector: false });
-          if (!points || points.length === 0) {
+          const res = await client.retrieve(collectionName, { ids: [pointId], with_payload: false, with_vector: false });
+          const points = Array.isArray(res) ? res : (res?.result || []);
+          if (points.length === 0) {
             missing.push(doc);
           }
         } catch (e) {
@@ -122,56 +122,33 @@ export const autoFixIndexing = async (opts = {}) => {
 
       report.missing[kind] = missing.length;
 
-      // If not dry run, reindex missing documents
+      // If not dry run, reindex missing documents using shared upsert helpers
       if (!dryRun && missing.length > 0) {
-        const fixed = [];
+        let fixedCount = 0;
         const errors = [];
 
         for (const doc of missing) {
           try {
             const text = getText(doc);
-            const chunks = chunked ? splitIntoChunks(text) : [text];
             const docId = doc[idField];
+            const extraPayload = doc.threadId ? { threadId: doc.threadId } : {};
 
-            for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-              const chunkText = chunks[chunkIndex];
-              if (!chunkText || !chunkText.trim()) continue;
-
-              // Generate embedding
-              const vector = await embedText(chunkText, { userId });
-
-              // Create point ID
-              const pointId = toPointId(kind, docId);
-
-              // Upsert to Qdrant
-              await client.upsert(collectionName, {
-                points: [{
-                  id: pointId,
-                  vector,
-                  payload: {
-                    kind,
-                    id: docId,
-                    projectId: doc.projectId || null,
-                    threadId: doc.threadId || null, // For emails
-                    chunkIndex: chunked ? chunkIndex : undefined,
-                    indexedAtMs: Date.now()
-                  }
-                }]
-              });
-
-              fixed.push({ kind, id: docId, chunkIndex });
+            if (chunked) {
+              await upsertDocChunks({ kind, id: docId, text, projectId: doc.projectId || null, userId, extraPayload });
+            } else {
+              await upsertDoc({ kind, id: docId, text, projectId: doc.projectId || null, userId, extraPayload });
             }
+            fixedCount++;
           } catch (e) {
-            const docId = doc[idField];
             errors.push({
               kind,
-              id: docId,
+              id: doc[idField],
               error: e.message
             });
           }
         }
 
-        report.fixed[kind] = fixed.length;
+        report.fixed[kind] = fixedCount;
         if (errors.length > 0) {
           report.errors.push(...errors);
         }

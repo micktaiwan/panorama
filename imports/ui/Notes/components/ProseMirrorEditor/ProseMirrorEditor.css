@@ -220,3 +220,7 @@
 .prosemirror-editor span.text-color-blue { color: var(--text-color-blue); }
 .prosemirror-editor span.text-color-purple { color: var(--text-color-purple); }
 .prosemirror-editor span.text-color-orange { color: var(--text-color-orange); }
+
+@media (max-width: 768px) {
+  .prosemirror-editor .ProseMirror { padding: 12px; }
+}

@@ -138,8 +138,8 @@ body.chatWide .container {
 }
 
 /* Go to screen palette */
-.goList { list-style: none; margin: 0; padding: 0; }
-.goList li { margin: 2px 0; }
+.goList { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+.goList li { margin: 0; }
 .goItem {
   display: flex;
   align-items: center;
@@ -150,8 +150,8 @@ body.chatWide .container {
   color: var(--text-bright);
   text-decoration: none;
 }
-.goItem:hover { background: rgba(var(--white-rgb),0.06); }
-.goItem.active { background: rgba(var(--white-rgb),0.12); }
+.goItem:hover { background: var(--surface); }
+.goItem.active { background: var(--border); }
 .goKey {
   display: inline-flex;
   align-items: center;
