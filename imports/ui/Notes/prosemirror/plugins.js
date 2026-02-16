@@ -127,6 +127,25 @@ function placeholderPlugin() {
 }
 
 /**
+ * Create a minimal plugin array for lightweight/inline ProseMirror editors.
+ * Includes formatting, input rules, history, link clicks — no slash menu, bubble menu, or AI.
+ * @returns {Plugin[]}
+ */
+export function createLitePlugins() {
+  return [
+    createFormattingKeymap(),
+    createInputRules(),
+    createBaseKeymap(),
+    history(),
+    dropCursor(),
+    gapCursor(),
+    autoJoinAdjacentLists(),
+    placeholderPlugin(),
+    linkClickPlugin(),
+  ];
+}
+
+/**
  * Create the full plugin array for the ProseMirror editor.
  * @param {{ onSave: () => void, onClose: () => void }} opts
  * @returns {Plugin[]}

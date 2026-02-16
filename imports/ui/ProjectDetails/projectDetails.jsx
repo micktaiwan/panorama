@@ -26,6 +26,7 @@ import { ClaudeProjectsCollection } from '../../api/claudeProjects/collections';
 import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { ActivitySummary } from '../components/ActivitySummary/ActivitySummary.jsx';
+import { ProseMirrorLite } from '../components/ProseMirrorLite/ProseMirrorLite.jsx';
 
 /** Return '#000' or '#fff' depending on which has better contrast against hex color */
 function contrastText(hex) {
@@ -118,6 +119,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cleaningNoteIds, setCleaningNoteIds] = useState({});
   const [undoAvailable, setUndoAvailable] = useState({});
+  const [noteRefreshKeys, setNoteRefreshKeys] = useState({});
+  const [selectedNoteId, setSelectedNoteId] = useState(null);
 
   // Color picker: local state + debounced save
   const [localColor, setLocalColor] = useState(null);
@@ -153,6 +156,14 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [improveError, setImproveError] = useState('');
   const [answersText, setAnswersText] = useState('');
   const [isApplyingImprove, setIsApplyingImprove] = useState(false);
+
+  // Auto-select first note if none selected or selected note was removed
+  const selectedNote = notes.find(n => n._id === selectedNoteId);
+  React.useEffect(() => {
+    if (notes.length > 0 && !selectedNote) {
+      setSelectedNoteId(notes[0]._id);
+    }
+  }, [notes, selectedNote]);
 
   // Avoid brief loading flicker when switching projects; render with reactive data
 
@@ -349,7 +360,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
       <div className="pd-tabs" role="tablist">
         {[
           { key: 'tasks', label: 'Tasks', icon: '\u2713', count: activeTasks.length },
-          { key: 'notes', label: 'Notes', icon: '\u270E', count: notes.length + sessions.length },
+          { key: 'notes', label: 'Notes', icon: '\u270E', count: notes.length },
+          { key: 'sessions', label: 'Sessions', icon: '\u{1F4CB}', count: sessions.length },
           { key: 'resources', label: 'Resources', icon: '\u{1F517}', count: links.length + files.length },
           { key: 'settings', label: 'Settings', icon: '\u2699' },
         ].map(tab => (
@@ -367,12 +379,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         ))}
         <div className="pd-tabs__actions">
           {activeTab === 'tasks' && <button className="btn btn-primary btn-sm" onClick={createTask}>Add Task</button>}
-          {activeTab === 'notes' && (
-            <>
-              <button className="btn btn-primary btn-sm" onClick={createNote}>Add Note</button>
-              <button className="btn btn-sm" onClick={() => onOpenNoteSession(projectId)}>New Session</button>
-            </>
-          )}
+          {activeTab === 'notes' && <button className="btn btn-primary btn-sm" onClick={createNote}>Add Note</button>}
+          {activeTab === 'sessions' && <button className="btn btn-primary btn-sm" onClick={() => onOpenNoteSession(projectId)}>New Session</button>}
           {activeTab === 'resources' && (
             <>
               <button className="btn btn-primary btn-sm" onClick={() => createNewLink(projectId)}>Add Link</button>
@@ -480,121 +488,116 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         )}
 
         {activeTab === 'notes' && (
-          <>
-            {notes.length === 0 ? (
-              <div>No notes yet.</div>
-            ) : (
-              <ul>
-                {notes.map(n => {
-                  const headerTitleNode = (
+          <div className="pd-notes-pane">
+            <div className="pd-notes-list">
+              {notes.length === 0 ? (
+                <div className="pd-notes-list-empty">No notes yet.</div>
+              ) : (
+                notes.map(n => (
+                  <button
+                    key={n._id}
+                    className={`pd-notes-list-item${selectedNoteId === n._id ? ' active' : ''}`}
+                    onClick={() => setSelectedNoteId(n._id)}
+                  >
+                    <span className="pd-notes-list-item-title">{n.title || '(untitled)'}</span>
+                    <span className="pd-notes-list-item-date">{timeAgo(n.createdAt)}</span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="pd-notes-editor">
+              {selectedNote ? (
+                <>
+                  <div className="pd-notes-editor-header">
                     <InlineEditable
-                      value={n.title || ''}
+                      value={selectedNote.title || ''}
                       placeholder="(untitled note)"
                       onSubmit={(next) => {
                         const title = String(next || '').trim();
-                        Meteor.call('notes.update', n._id, { title });
+                        Meteor.call('notes.update', selectedNote._id, { title });
                       }}
                       fullWidth
                     />
-                  );
-                  return (
-                  <li key={n._id}>
-                    <div className="noteBlock">
-                      <Collapsible title={headerTitleNode}>
-                        <div className="noteBlockHeader">
-                          <div className="noteMeta">Created {timeAgo(n.createdAt)} · {new Date(n.createdAt).toLocaleString()}</div>
-                          <div className="noteActions" title="Actions">
-                            <Tooltip content="Clean note (AI)">
-                              <button
-                                className="btn"
-                                disabled={!!cleaningNoteIds[n._id]}
-                                onClick={() => {
-                                  const key = `note:original:${n._id}`;
-                                  const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
-                                  const hadBackup = !!has;
-                                  if (!hadBackup && typeof window !== 'undefined') {
-                                    sessionStorage.setItem(key, n.content || '');
-                                  }
-                                  setCleaningNoteIds(prev => ({ ...prev, [n._id]: true }));
-                                  Meteor.call('ai.cleanNote', n._id, (err) => {
-                                    setCleaningNoteIds(prev => ({ ...prev, [n._id]: false }));
-                                    if (err) {
-                                      console.error('ai.cleanNote failed', err);
-                                      if (!hadBackup && typeof window !== 'undefined') {
-                                        sessionStorage.removeItem(key);
-                                      }
-                                      setUndoAvailable(prev => ({ ...prev, [n._id]: false }));
-                                      return;
-                                    }
-                                    setUndoAvailable(prev => ({ ...prev, [n._id]: true }));
-                                  });
-                                }}
-                              >{cleaningNoteIds[n._id] ? 'Cleaning…' : 'Clean'}</button>
-                            </Tooltip>
-                            <Tooltip content="Open in note editor">
-                              <button
-                                className="btn ml8"
-                                onClick={() => navigateTo({ name: 'notes', noteId: n._id })}
-                              >Open in note editor</button>
-                            </Tooltip>
-                            <Tooltip content="Undo last clean">
-                              <button
-                                className="btn ml8"
-                                disabled={!undoAvailable[n._id]}
-                                onClick={() => {
-                                  const key = `note:original:${n._id}`;
-                                  const original = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
-                                  if (!original) {
-                                    setUndoAvailable(prev => ({ ...prev, [n._id]: false }));
-                                    return;
-                                  }
-                                  Meteor.call('notes.update', n._id, { content: original }, () => {
-                                    if (typeof window !== 'undefined') sessionStorage.removeItem(key);
-                                    setUndoAvailable(prev => ({ ...prev, [n._id]: false }));
-                                  });
-                                }}
-                              >Undo</button>
-                            </Tooltip>
-                            <Tooltip content="Delete note">
-                              <button className="iconButton" onClick={() => setNoteToDeleteId(n._id)}>🗑</button>
-                            </Tooltip>
-                          </div>
-                        </div>
-                        {n.kind === 'aiSummary' ? (
-                          <InlineEditable
-                            as="textarea"
-                            value={n.content}
-                            placeholder="(empty)"
-                            startEditing={n.content === ''}
-                            selectAllOnFocus
-                            rows={12}
-                            inputClassName="projectNoteTextarea"
-                            onSubmit={(next) => {
-                              Meteor.call('notes.update', n._id, { content: next });
-                            }}
-                          />
-                        ) : (
-                          <InlineEditable
-                            as="textarea"
-                            value={n.content}
-                            placeholder="(empty)"
-                            startEditing={n.content === ''}
-                            selectAllOnFocus
-                            rows={12}
-                            inputClassName="projectNoteTextarea"
-                            onSubmit={(next) => {
-                              Meteor.call('notes.update', n._id, { content: next });
-                            }}
-                          />
-                        )}
-                      </Collapsible>
+                    <div className="pd-notes-editor-actions">
+                      <Tooltip content="Clean note (AI)">
+                        <button
+                          className="btn btn-sm"
+                          disabled={!!cleaningNoteIds[selectedNote._id]}
+                          onClick={() => {
+                            const key = `note:original:${selectedNote._id}`;
+                            const has = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
+                            const hadBackup = !!has;
+                            if (!hadBackup && typeof window !== 'undefined') {
+                              sessionStorage.setItem(key, selectedNote.content || '');
+                            }
+                            setCleaningNoteIds(prev => ({ ...prev, [selectedNote._id]: true }));
+                            Meteor.call('ai.cleanNote', selectedNote._id, (err) => {
+                              setCleaningNoteIds(prev => ({ ...prev, [selectedNote._id]: false }));
+                              if (err) {
+                                console.error('ai.cleanNote failed', err);
+                                if (!hadBackup && typeof window !== 'undefined') {
+                                  sessionStorage.removeItem(key);
+                                }
+                                setUndoAvailable(prev => ({ ...prev, [selectedNote._id]: false }));
+                                return;
+                              }
+                              setUndoAvailable(prev => ({ ...prev, [selectedNote._id]: true }));
+                              setNoteRefreshKeys(prev => ({ ...prev, [selectedNote._id]: (prev[selectedNote._id] || 0) + 1 }));
+                            });
+                          }}
+                        >{cleaningNoteIds[selectedNote._id] ? 'Cleaning…' : 'Clean'}</button>
+                      </Tooltip>
+                      <Tooltip content="Undo last clean">
+                        <button
+                          className="btn btn-sm"
+                          disabled={!undoAvailable[selectedNote._id]}
+                          onClick={() => {
+                            const key = `note:original:${selectedNote._id}`;
+                            const original = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
+                            if (!original) {
+                              setUndoAvailable(prev => ({ ...prev, [selectedNote._id]: false }));
+                              return;
+                            }
+                            Meteor.call('notes.update', selectedNote._id, { content: original }, () => {
+                              if (typeof window !== 'undefined') sessionStorage.removeItem(key);
+                              setUndoAvailable(prev => ({ ...prev, [selectedNote._id]: false }));
+                              setNoteRefreshKeys(prev => ({ ...prev, [selectedNote._id]: (prev[selectedNote._id] || 0) + 1 }));
+                            });
+                          }}
+                        >Undo</button>
+                      </Tooltip>
+                      <Tooltip content="Open in note editor">
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => navigateTo({ name: 'notes', noteId: selectedNote._id })}
+                        >Open</button>
+                      </Tooltip>
+                      <Tooltip content="Delete note">
+                        <button className="iconButton" onClick={() => setNoteToDeleteId(selectedNote._id)}>🗑</button>
+                      </Tooltip>
                     </div>
-                  </li>
-                );})}
-              </ul>
-            )}
+                  </div>
+                  <div className="pd-notes-editor-body">
+                    <ProseMirrorLite
+                      key={selectedNote._id + '-' + (noteRefreshKeys[selectedNote._id] || 0)}
+                      content={selectedNote.content}
+                      onChange={(md) => {
+                        Meteor.call('notes.update', selectedNote._id, { content: md });
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="pd-notes-editor-empty">
+                  {notes.length === 0 ? 'Create a note to get started.' : 'Select a note'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-            <h4 className="pd-tab-subheader">Sessions</h4>
+        {activeTab === 'sessions' && (
+          <>
             {sessions.length === 0 ? (
               <div>No sessions yet.</div>
             ) : (
@@ -810,10 +813,14 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
             const id = noteToDeleteId;
             if (!id) return;
             Meteor.call('notes.remove', id, (err) => {
-              setNoteToDeleteId(null);
               if (err) {
                 console.error('notes.remove failed', err);
+              } else if (selectedNoteId === id) {
+                const idx = notes.findIndex(n => n._id === id);
+                const remaining = notes.filter(n => n._id !== id);
+                setSelectedNoteId(remaining.length > 0 ? remaining[Math.min(idx, remaining.length - 1)]._id : null);
               }
+              setNoteToDeleteId(null);
             });
           }}>Delete</button>
         ]}

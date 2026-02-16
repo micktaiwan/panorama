@@ -1,0 +1,12 @@
+.prosemirror-editor.pm-lite {
+  flex: none;
+  min-height: 0;
+  max-height: 500px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.prosemirror-editor.pm-lite .ProseMirror {
+  padding: 12px 16px;
+  min-height: 60px;
+}

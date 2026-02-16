@@ -18,6 +18,9 @@ import { ReportingPage } from '/imports/ui/Reporting/ReportingPage.jsx';
 import { SituationAnalyzer } from '/imports/ui/SituationAnalyzer/SituationAnalyzer.jsx';
 import { PeoplePage } from '/imports/ui/People/PeoplePage.jsx';
 import { useAlarmScheduler } from '/imports/ui/hooks/useAlarmScheduler.js';
+import { useIdleDetection } from '/imports/ui/hooks/useIdleDetection.js';
+import { PresenceBar } from '/imports/ui/components/PresenceBar/PresenceBar.jsx';
+import { UserMenu } from '/imports/ui/components/UserMenu/UserMenu.jsx';
 import { useTracker, useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
@@ -90,6 +93,7 @@ SortableChip.propTypes = {
 function App() {
   const [route, setRoute] = useState(parseHashRoute());
   useAlarmScheduler();
+  useIdleDetection();
   // Play a short beep at app startup
   useEffect(() => { playBeep(0.4); }, []);
   const user = useTracker(() => Meteor.user(), []);
@@ -668,14 +672,14 @@ function App() {
             <img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />
             Panorama
           </a>
+          <PresenceBar />
           <span className="headerUser">
             <ThemeToggle
               theme={userPrefs?.theme || 'dark'}
               onToggle={(next) => Meteor.call('userPreferences.update', { theme: next })}
             />
             <NotificationBell />
-            <span className="headerEmail">{user?.emails?.[0]?.address}</span>
-            <button className="btn-link headerLogout" onClick={() => Meteor.logout()}>Logout</button>
+            <UserMenu />
           </span>
         </h1>
       )}

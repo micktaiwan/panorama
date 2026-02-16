@@ -12,8 +12,10 @@ import { PrefsAI } from './PrefsAI.jsx';
 import { PrefsQdrant } from './PrefsQdrant.jsx';
 import { PrefsCommands } from './PrefsCommands.jsx';
 import { PrefsDebug } from './PrefsDebug.jsx';
+import { PrefsProfile } from './PrefsProfile.jsx';
 
 const TABS = [
+  { id: 'profile', label: 'Profile' },
   { id: 'general', label: 'General' },
   { id: 'secrets', label: 'Secrets' },
   { id: 'ai', label: 'AI' },
@@ -23,7 +25,7 @@ const TABS = [
 ];
 
 export const Preferences = ({ tab }) => {
-  const activeTab = TABS.find(t => t.id === tab) ? tab : 'general';
+  const activeTab = TABS.find(t => t.id === tab) ? tab : 'profile';
 
   const sub = useSubscribe('appPreferences');
   const subUser = useSubscribe('userPreferences');
@@ -63,6 +65,7 @@ export const Preferences = ({ tab }) => {
         </div>
       </nav>
       <div className="prefsContent">
+        {activeTab === 'profile' && <PrefsProfile />}
         {activeTab === 'general' && <PrefsGeneral pref={pref} userPref={userPref} />}
         {activeTab === 'secrets' && <PrefsSecrets pref={pref} userPref={userPref} />}
         {activeTab === 'ai' && <PrefsAI pref={pref} userPref={userPref} />}

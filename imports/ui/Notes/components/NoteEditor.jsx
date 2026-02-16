@@ -150,6 +150,16 @@ export const NoteEditor = ({
               />
             )}
 
+            {activeNote?.projectId && (
+              <button
+                className="action-button go-to-project-button"
+                onClick={() => navigateTo({ name: 'project', projectId: activeNote.projectId })}
+                title="Go to project"
+              >
+                Go to project
+              </button>
+            )}
+
             <NoteAIActions
               noteId={activeTabId}
               isDirty={dirtySet.has(activeTabId)}

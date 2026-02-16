@@ -1,0 +1,43 @@
+.presenceBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.presenceItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.presenceDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.presenceName {
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.presence-online .presenceDot {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.presence-away .presenceDot {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
+}
+
+.presence-offline .presenceDot {
+  background: var(--danger);
+  opacity: 0.5;
+}
+
+.presence-offline .presenceName {
+  opacity: 0.5;
+}
