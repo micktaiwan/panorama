@@ -98,13 +98,15 @@ const generateQueriesForDoc = ({ kind, title, content }) => {
 };
 
 // Generate test dataset from real database content
-export const generateTestDataset = async () => {
+export const generateTestDataset = async ({ userId } = {}) => {
   const tests = [];
+  const userFilter = userId ? { userId } : {};
 
   // 1. Sample notes (most recent with content)
   const { NotesCollection } = await import('/imports/api/notes/collections');
   const notes = await NotesCollection.find(
     {
+      ...userFilter,
       $and: [
         { $or: [{ title: { $exists: true } }, { content: { $exists: true } }] },
         { $or: [{ title: { $ne: '' } }, { content: { $ne: '' } }] }
@@ -142,6 +144,7 @@ export const generateTestDataset = async () => {
   const { TasksCollection } = await import('/imports/api/tasks/collections');
   const tasks = await TasksCollection.find(
     {
+      ...userFilter,
       title: { $exists: true, $ne: '' }
     },
     {
@@ -175,6 +178,7 @@ export const generateTestDataset = async () => {
   const { ProjectsCollection } = await import('/imports/api/projects/collections');
   const projects = await ProjectsCollection.find(
     {
+      ...userFilter,
       name: { $exists: true, $ne: '' }
     },
     {
@@ -208,6 +212,7 @@ export const generateTestDataset = async () => {
   const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
   const emails = await GmailMessagesCollection.find(
     {
+      ...userFilter,
       $and: [
         { subject: { $exists: true, $ne: '' } },
         { body: { $exists: true, $ne: '' } }

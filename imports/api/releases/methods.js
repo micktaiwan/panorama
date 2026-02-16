@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { ReleasesCollection } from './collections';
-import { ensureLoggedIn } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureAdmin } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'releases.insert'({ version, title, content }) {
@@ -30,7 +30,7 @@ Meteor.methods({
       throw new Meteor.Error('not-found', 'Release not found');
     }
     if (doc.createdBy !== this.userId) {
-      throw new Meteor.Error('not-authorized', 'You can only delete your own releases');
+      await ensureAdmin(this.userId);
     }
     return ReleasesCollection.removeAsync(id);
   },

@@ -78,8 +78,9 @@ export const diagnoseIndexing = async () => {
           const docId = doc[idField];
           const pointId = toPointId(kind, docId);
           try {
-            const point = await client.retrieve(collectionName, { ids: [pointId] });
-            if (!point || point.length === 0) {
+            const res = await client.retrieve(collectionName, { ids: [pointId] });
+            const point = Array.isArray(res) ? res : (res?.result || []);
+            if (point.length === 0) {
               notFound.push(docId);
             }
           } catch (e) {

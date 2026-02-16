@@ -727,9 +727,10 @@ export const NotesPage = () => {
 
   const activeTab = openTabs.find(t => t.id === activeTabId);
   const isFileTab = activeTab?.type === 'file';
+  const handleBackToList = () => setActiveTabId(null);
 
   return (
-    <div className="notes-page">
+    <div className={`notes-page${activeTabId ? ' mobile-editor-active' : ''}`}>
       <div className="notes-sidebar">
         <NotesSearch
           searchTerm={searchTerm}
@@ -767,6 +768,7 @@ export const NotesPage = () => {
               onCreateNote={handleCreateNote}
               isCreatingNote={isCreatingNote}
               onOpenFile={openFile}
+              onBackToList={handleBackToList}
             />
 
             <div className="notes-content">

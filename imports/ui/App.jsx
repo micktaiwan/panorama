@@ -430,15 +430,25 @@ function App() {
         setGoOpen(false); 
         return; 
       }
-      if (key === 'arrowdown') { 
-        e.preventDefault(); 
-        setGoActiveIdx((i) => (i + 1) % goItems.length); 
-        return; 
+      if (key === 'arrowdown') {
+        e.preventDefault();
+        setGoActiveIdx((i) => (i + 2) % goItems.length);
+        return;
       }
-      if (key === 'arrowup') { 
-        e.preventDefault(); 
-        setGoActiveIdx((i) => (i - 1 + goItems.length) % goItems.length); 
-        return; 
+      if (key === 'arrowup') {
+        e.preventDefault();
+        setGoActiveIdx((i) => (i - 2 + goItems.length) % goItems.length);
+        return;
+      }
+      if (key === 'arrowright') {
+        e.preventDefault();
+        setGoActiveIdx((i) => (i + 1) % goItems.length);
+        return;
+      }
+      if (key === 'arrowleft') {
+        e.preventDefault();
+        setGoActiveIdx((i) => (i - 1 + goItems.length) % goItems.length);
+        return;
       }
       if (key === 'enter') {
         e.preventDefault();
@@ -867,6 +877,7 @@ function App() {
         open={goOpen}
         onClose={() => setGoOpen(false)}
         title="Go to screen"
+        panelClassName="wide"
         actions={[
           <button key="close" className="btn" onClick={() => setGoOpen(false)}>Close</button>
         ]}

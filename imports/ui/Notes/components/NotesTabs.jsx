@@ -119,7 +119,7 @@ SortableTab.propTypes = {
   onKeyDown: PropTypes.func.isRequired,
 };
 
-export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false, onOpenFile }) => {
+export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false, onOpenFile, onBackToList }) => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
   const [editingTab, setEditingTab] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -243,6 +243,11 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order} strategy={horizontalListSortingStrategy}>
           <div className="notes-tabs">
+            {onBackToList && (
+              <button className="notes-back-button" onClick={onBackToList} title="Back to notes list" type="button">
+                &#x2190;
+              </button>
+            )}
             {openTabs.map(tab => (
               <SortableTab
                 key={tab.id}
@@ -357,4 +362,5 @@ NotesTabs.propTypes = {
   onCreateNote: PropTypes.func,
   isCreatingNote: PropTypes.bool,
   onOpenFile: PropTypes.func,
+  onBackToList: PropTypes.func,
 };

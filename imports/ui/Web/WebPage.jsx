@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useFind } from 'meteor/react-meteor-data';
-import { AppPreferencesCollection } from '../../api/appPreferences/collections';
+import { UserPreferencesCollection } from '../../api/userPreferences/collections';
 import { notify } from '../utils/notify.js';
 import './WebPage.css';
 import { marked } from 'marked';
@@ -13,8 +13,8 @@ export const WebPage = () => {
   const [results, setResults] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
 
-  const prefs = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
-  const hasApiKey = !!(prefs?.perplexityApiKey);
+  const userPref = useFind(() => UserPreferencesCollection.find({}, { limit: 1 }))[0];
+  const hasApiKey = !!(userPref?.perplexityApiKey);
 
   const handleSearch = async () => {
     const trimmedQuery = query.trim();
@@ -44,7 +44,7 @@ export const WebPage = () => {
       const response = await fetch('https://api.perplexity.ai/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${prefs.perplexityApiKey}`,
+          'Authorization': `Bearer ${userPref.perplexityApiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

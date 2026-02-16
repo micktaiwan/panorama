@@ -4,11 +4,13 @@ import { useTracker } from 'meteor/react-meteor-data';
 import { navigateTo } from '/imports/ui/router.js';
 import { AdminUsers } from './AdminUsers.jsx';
 import { AdminStats } from './AdminStats.jsx';
+import { AdminReleases } from './AdminReleases.jsx';
 import './Admin.css';
 
 const TABS = [
   { id: 'users', label: 'Users' },
   { id: 'monitoring', label: 'Monitoring' },
+  { id: 'releases', label: 'Releases' },
 ];
 
 export const Admin = ({ tab }) => {
@@ -50,6 +52,7 @@ export const Admin = ({ tab }) => {
       <div className="prefsContent">
         {activeTab === 'users' && <AdminUsers />}
         {activeTab === 'monitoring' && <AdminStats />}
+        {activeTab === 'releases' && <AdminReleases />}
       </div>
     </div>
   );

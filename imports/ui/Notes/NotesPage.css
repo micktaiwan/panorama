@@ -68,3 +68,33 @@
   max-height: 100%;
   margin: 0;
 }
+
+/* Mobile responsive: single-view toggle */
+@media (max-width: 768px) {
+  .notes-page {
+    height: calc(100vh - 100px);
+    max-height: calc(100vh - 60px);
+    min-height: 200px;
+  }
+
+  .notes-sidebar {
+    width: 100%;
+    border-right: none;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .notes-editor { display: none; }
+
+  .notes-page.mobile-editor-active .notes-sidebar { display: none; }
+  .notes-page.mobile-editor-active .notes-editor {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .container.focusMode .notes-page {
+    height: 100vh;
+    max-height: 100vh;
+  }
+}

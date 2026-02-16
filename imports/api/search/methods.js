@@ -90,7 +90,7 @@ const collectDocs = async (userId) => {
   const userLogs = await UserLogsCollection.find(sel, { fields: { content: 1 } }).fetchAsync();
   userLogs.forEach(ul => pushDoc(ul._id, null, 'userlog', ul.content || ''));
   // Gmail messages
-  const emails = await GmailMessagesCollection.find(sel, { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1 } }).fetchAsync();
+  const emails = await GmailMessagesCollection.find(sel, { fields: { id: 1, from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 } }).fetchAsync();
   emails.forEach(e => {
     const base = `${e.from || ''} ${e.to || ''} ${e.subject || ''} ${e.snippet || ''} ${e.body || ''}`;
     const chunks = splitIntoChunks(base);
@@ -163,7 +163,7 @@ const collectDocsByKind = async (kind, userId) => {
     }
     case 'email': {
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
-      const items = await GmailMessagesCollection.find(sel, { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 } }).fetchAsync();
+      const items = await GmailMessagesCollection.find(sel, { fields: { id: 1, from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 } }).fetchAsync();
       items.forEach(e => {
         const base = `${e.from || ''} ${e.to || ''} ${e.subject || ''} ${e.snippet || ''} ${e.body || ''}`;
         const chunks = splitIntoChunks(base);
@@ -695,7 +695,7 @@ Meteor.methods({
       for (const it of items) { await upsertDoc({ kind: 'userlog', id: it._id, text: it.content || '', userId }); processed += 1; }
     } else if (kind === 'email') {
       const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
-      const items = await GmailMessagesCollection.find(sel, { fields: { from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 } }).fetchAsync();
+      const items = await GmailMessagesCollection.find(sel, { fields: { id: 1, from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 } }).fetchAsync();
       const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       for (const it of items) {
         const text = `${it.from || ''} ${it.to || ''} ${it.subject || ''} ${it.snippet || ''} ${it.body || ''}`;
@@ -857,7 +857,7 @@ Meteor.methods({
 
     // Generate test dataset from real data
     const { generateTestDataset } = await import('./generateQualityTests');
-    const dataset = await generateTestDataset();
+    const dataset = await generateTestDataset({ userId: this.userId });
 
     if (dataset.length === 0) {
       return {

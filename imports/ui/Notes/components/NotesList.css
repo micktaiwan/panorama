@@ -162,3 +162,8 @@
   margin: 8px 0;
   font-size: 14px;
 }
+
+@media (max-width: 768px) {
+  .note-item { padding: 16px 12px; }
+  .note-item-row .note-delete-btn { opacity: 0.6; }
+}
