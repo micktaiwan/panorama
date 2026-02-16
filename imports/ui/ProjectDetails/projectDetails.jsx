@@ -111,6 +111,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [memberEmail, setMemberEmail] = useState('');
   const [memberError, setMemberError] = useState('');
   const [addingMember, setAddingMember] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const currentUserId = useTracker(() => Meteor.userId(), []);
   const isOwner = project?.userId === currentUserId;
   const members = useTracker(() => {
@@ -342,6 +343,34 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         </div>
         </div>
       </Card>
+      {/* Team panel (owner only) */}
+      {isOwner && (
+        <div className="projectMembersSection">
+          <div className="pd-members__header">
+            <h3 className="pd-members__title">Team</h3>
+            <span className="pd-members__count">{members.length}</span>
+            <button className="pd-members__manage-btn" onClick={() => setShowTeamModal(true)}>
+              Manage
+            </button>
+          </div>
+          <div className="pd-members__preview">
+            {members.slice(0, 5).map(m => {
+              const displayName = m.username || m.profile?.name || m.emails?.[0]?.address || '?';
+              const initials = displayName.split(/[\s@]/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase() || '?';
+              const hue = displayName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 6;
+              return (
+                <div key={m._id} className="pd-member__avatar pd-member__avatar--stacked" data-hue={hue} title={displayName}>
+                  {initials}
+                </div>
+              );
+            })}
+            {members.length > 5 && (
+              <span className="pd-members__overflow">+{members.length - 5}</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Links section */}
       <div className="projectLinksRow">
         <div className="projectLinksList">
@@ -401,91 +430,6 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
           />
         </Collapsible>
       </div>
-
-      {/* Team panel (owner only) */}
-      {isOwner && (
-        <div className="projectMembersSection">
-          <div className="pd-members__header">
-            <h3 className="pd-members__title">Team</h3>
-            <span className="pd-members__count">{members.length}</span>
-          </div>
-          <div className="pd-members__list">
-            {members.map(m => {
-              const email = m.emails?.[0]?.address || '';
-              const displayName = m.username || m.profile?.name || email;
-              const isSelf = m._id === project.userId;
-              const initials = displayName.split(/[\s@]/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase() || '?';
-              const hue = displayName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 6;
-              return (
-                <div key={m._id} className="pd-member">
-                  <div className="pd-member__avatar" data-hue={hue}>
-                    {initials}
-                  </div>
-                  <div className="pd-member__info">
-                    <span className="pd-member__name">
-                      {displayName}
-                      {isSelf && <span className="pd-member__role">Owner</span>}
-                    </span>
-                    {email && <span className="pd-member__email">{email}</span>}
-                  </div>
-                  {!isSelf && (
-                    <button
-                      className="pd-member__remove"
-                      title="Remove member"
-                      onClick={() => {
-                        Meteor.call('projects.removeMember', projectId, m._id, (err) => {
-                          if (err) setMemberError(err.reason || err.message);
-                        });
-                      }}
-                    >Remove</button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="pd-invite">
-            <input
-              type="email"
-              className="pd-invite__input"
-              placeholder="Invite by email..."
-              value={memberEmail}
-              onChange={(e) => { setMemberEmail(e.target.value); setMemberError(''); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && memberEmail.trim()) {
-                  e.preventDefault();
-                  setAddingMember(true);
-                  setMemberError('');
-                  Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
-                    setAddingMember(false);
-                    if (err) {
-                      setMemberError(err.reason || err.message);
-                    } else {
-                      setMemberEmail('');
-                    }
-                  });
-                }
-              }}
-            />
-            <button
-              className="btn btn-primary"
-              disabled={addingMember || !memberEmail.trim()}
-              onClick={() => {
-                setAddingMember(true);
-                setMemberError('');
-                Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
-                  setAddingMember(false);
-                  if (err) {
-                    setMemberError(err.reason || err.message);
-                  } else {
-                    setMemberEmail('');
-                  }
-                });
-              }}
-            >{addingMember ? 'Inviting...' : 'Invite'}</button>
-          </div>
-          {memberError && <div className="pd-invite__error">{memberError}</div>}
-        </div>
-      )}
 
       <h3 className="tasksHeader">Tasks</h3>
       <div className="projectActions">
@@ -778,6 +722,94 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         ]}
       >
         <div>This will permanently delete this note from the project.</div>
+      </Modal>
+
+      {/* Team Management Modal */}
+      <Modal
+        open={showTeamModal}
+        onClose={() => { setShowTeamModal(false); setMemberError(''); }}
+        title="Team"
+        icon="◈"
+        panelClassName="pd-team-modal-panel"
+      >
+        <div className="pd-team-modal__list">
+          {members.map(m => {
+            const email = m.emails?.[0]?.address || '';
+            const displayName = m.username || m.profile?.name || email;
+            const isSelf = m._id === project.userId;
+            const initials = displayName.split(/[\s@]/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase() || '?';
+            const hue = displayName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 6;
+            return (
+              <div key={m._id} className="pd-member">
+                <div className="pd-member__avatar" data-hue={hue}>
+                  {initials}
+                </div>
+                <div className="pd-member__info">
+                  <span className="pd-member__name">
+                    {displayName}
+                    {isSelf && <span className="pd-member__role">Owner</span>}
+                  </span>
+                  {email && <span className="pd-member__email">{email}</span>}
+                </div>
+                {!isSelf && (
+                  <button
+                    className="pd-member__remove"
+                    title="Remove member"
+                    onClick={() => {
+                      Meteor.call('projects.removeMember', projectId, m._id, (err) => {
+                        if (err) setMemberError(err.reason || err.message);
+                      });
+                    }}
+                  >Remove</button>
+                )}
+              </div>
+            );
+          })}
+          {members.length === 0 && <div className="pd-team-modal__empty">No members yet</div>}
+        </div>
+        <div className="pd-team-modal__invite">
+          <div className="pd-team-modal__invite-row">
+            <input
+              type="email"
+              className="pd-invite__input"
+              placeholder="Invite by email..."
+              value={memberEmail}
+              onChange={(e) => { setMemberEmail(e.target.value); setMemberError(''); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && memberEmail.trim()) {
+                  e.preventDefault();
+                  setAddingMember(true);
+                  setMemberError('');
+                  Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
+                    setAddingMember(false);
+                    if (err) {
+                      setMemberError(err.reason || err.message);
+                    } else {
+                      setMemberEmail('');
+                    }
+                  });
+                }
+              }}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={addingMember || !memberEmail.trim()}
+              onClick={() => {
+                setAddingMember(true);
+                setMemberError('');
+                Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
+                  setAddingMember(false);
+                  if (err) {
+                    setMemberError(err.reason || err.message);
+                  } else {
+                    setMemberEmail('');
+                  }
+                });
+              }}
+            >{addingMember ? 'Inviting...' : 'Invite'}</button>
+          </div>
+          {memberError && <div className="pd-invite__error">{memberError}</div>}
+        </div>
       </Modal>
     </div>
   );
