@@ -19,24 +19,20 @@
   padding: 16px 24px 16px;
   background: var(--project-color, var(--surface));
   border-radius: 12px;
-  color: #000;
+  color: var(--project-text, var(--text)) !important;
 }
 
-:root[data-theme="dark"] .pd-hero {
-  color: #fff;
-}
-
-.pd-hero,
 .pd-hero *:not(.starBtn):not(.starIcon):not(.colorPickerInput) {
   color: inherit !important;
 }
 
 .pd-hero .pd-meta-badge {
-  border-color: rgba(0, 0, 0, 0.15);
+  border-color: currentColor;
+  opacity: 0.6;
 }
 
-:root[data-theme="dark"] .pd-hero .pd-meta-badge {
-  border-color: rgba(255, 255, 255, 0.2);
+.pd-hero .pd-meta-badge:hover {
+  opacity: 0.8;
 }
 
 .projectHeaderRow {
