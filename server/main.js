@@ -1,6 +1,17 @@
 import { Meteor } from 'meteor/meteor';
 import { WebApp } from 'meteor/webapp';
 
+// Inject data-theme on <html> from cookie — MUST be top-level (before Meteor.startup)
+// so it's registered before the first HTTP response is sent.
+WebApp.addHtmlAttributeHook((request) => {
+  const cookieHeader = request.headers?.cookie || '';
+  const match = cookieHeader.match(/(?:^|;\s*)panorama-theme=([^;]+)/);
+  if (match?.[1] === 'light') {
+    return { 'data-theme': 'light' };
+  }
+  return {};
+});
+
 // --- Transient MongoDB error handler ---
 // When the Mac sleeps, TCP connections to the remote MongoDB die.
 // On wake, the driver throws PoolClearedOnNetworkError / MongoNetworkTimeoutError

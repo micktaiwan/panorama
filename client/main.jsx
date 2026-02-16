@@ -3,12 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { Meteor } from 'meteor/meteor';
 import '/imports/ui/utils/globalErrors.js';
 
-// Apply cached theme before React renders to prevent flash
-const cachedTheme = localStorage.getItem('panorama-theme');
-if (cachedTheme === 'light') {
-  document.documentElement.setAttribute('data-theme', 'light');
-}
-
 Meteor.startup(() => {
   const container = document.getElementById('react-target');
   const root = createRoot(container);

@@ -170,15 +170,18 @@ function App() {
     prevUnseenIdsRef.current = currentIds;
   }, [unseenSessions, claudeProjects]);
 
-  // Sync theme preference to document + localStorage
+  // Sync theme preference to document, localStorage, and cookie
+  // Skip until subscription is ready to avoid clobbering the server-rendered theme
   useEffect(() => {
-    const theme = userPrefs?.theme || 'dark';
+    if (!userPrefs) return;
+    const theme = userPrefs.theme || 'dark';
     if (theme === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
     } else {
       document.documentElement.removeAttribute('data-theme');
     }
     localStorage.setItem('panorama-theme', theme);
+    document.cookie = `panorama-theme=${theme};path=/;max-age=31536000;SameSite=Lax`;
   }, [userPrefs?.theme]);
 
   const suppressModalFor = (alarmId, ms = 3000) => {
@@ -651,6 +654,10 @@ function App() {
       navigateTo({ name: 'onboarding' });
     }
   }, [subPrefs(), appPrefs?._id, route?.name]);
+
+  if (subPrefs() || subUserPrefs() || !projectsReady) {
+    return <div className="appLoading">Loading…</div>;
+  }
 
   return (
     <div className={`container${focusMode ? ' focusMode' : ''}`}>
