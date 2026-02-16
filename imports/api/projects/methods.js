@@ -45,7 +45,10 @@ Meteor.methods({
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'project', id: _id, text: `${sanitized.name || ''} ${sanitized.description || ''}`.trim(), projectId: _id, userId: this.userId });
-    } catch (e) { console.error('[search][projects.insert] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][projects.insert] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your project was saved.', { insertedId: _id });
+    }
     return _id;
   },
   async 'projects.update'(projectId, modifier) {
@@ -65,7 +68,10 @@ Meteor.methods({
       const next = await ProjectsCollection.findOneAsync(projectId, { fields: { name: 1, description: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'project', id: projectId, text: `${next?.name || ''} ${next?.description || ''}`.trim(), projectId, userId: this.userId });
-    } catch (e) { console.error('[search][projects.update] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][projects.update] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+    }
     return res;
   },
   async 'projects.remove'(projectId) {

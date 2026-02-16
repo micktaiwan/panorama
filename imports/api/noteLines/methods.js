@@ -20,7 +20,7 @@ Meteor.methods({
       await upsertDoc({ kind: 'line', id: _id, text: doc.content || '', sessionId: doc.sessionId || null, userId: this.userId });
     } catch (e) {
       console.error('[search][noteLines.insert] upsert failed', e);
-      throw new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
     }
     return { _id };
   },
@@ -40,7 +40,10 @@ Meteor.methods({
       const next = await NoteLinesCollection.findOneAsync(lineId, { fields: { content: 1, sessionId: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'line', id: lineId, text: next?.content || '', sessionId: next?.sessionId || null, userId: this.userId });
-    } catch (e) { console.error('[search][noteLines.update] upsert failed', e); throw new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.', { lineId }); }
+    } catch (e) {
+      console.error('[search][noteLines.update] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+    }
     return { modifiedCount: res };
   },
   async 'noteLines.remove'(lineId) {

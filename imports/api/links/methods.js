@@ -41,7 +41,10 @@ Meteor.methods({
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${clean.name || ''} ${clean.url || ''}`.trim();
       await upsertDoc({ kind: 'link', id: _id, text, projectId: clean.projectId || null, userId: this.userId });
-    } catch (e) { console.error('[search][links.insert] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][links.insert] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your link was saved.', { insertedId: _id });
+    }
     return _id;
   },
   async 'links.update'(linkId, modifier) {
@@ -63,7 +66,10 @@ Meteor.methods({
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${next?.name || ''} ${next?.url || ''}`.trim();
       await upsertDoc({ kind: 'link', id: linkId, text, projectId: next?.projectId || null, userId: this.userId });
-    } catch (e) { console.error('[search][links.update] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][links.update] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+    }
     return res;
   },
   async 'links.remove'(linkId) {
