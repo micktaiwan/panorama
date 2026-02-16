@@ -198,9 +198,9 @@ Meteor.methods({
     const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
     const userId = this.userId;
 
-    // Fetch projects (scoped to user)
+    // Fetch projects (scoped to user — includes shared projects via memberIds)
     const projFields = { fields: { name: 1, tags: 1, updatedAt: 1, panoramaUpdatedAt: 1, targetDate: 1, status: 1, createdAt: 1, panoramaRank: 1, panoramaStatus: 1 } };
-    const projects = await ProjectsCollection.find({ userId }, projFields).fetchAsync();
+    const projects = await ProjectsCollection.find({ memberIds: userId }, projFields).fetchAsync();
     const projectIds = projects.map(p => p._id);
 
     // Early return if no projects
@@ -208,22 +208,22 @@ Meteor.methods({
       return [];
     }
 
-    // Fetch and process tasks (userId already implied by projectIds, but filter for safety)
+    // Fetch and process tasks (security ensured by projectIds scoped to member projects)
     const taskFields = { fields: { projectId: 1, status: 1, deadline: 1, updatedAt: 1, title: 1, statusChangedAt: 1, createdAt: 1, priorityRank: 1 } };
-    const allTasks = await TasksCollection.find({ userId, projectId: { $in: projectIds } }, taskFields).fetchAsync();
+    const allTasks = await TasksCollection.find({ projectId: { $in: projectIds } }, taskFields).fetchAsync();
     const tasksByProject = processTasks(allTasks, projectIds, since);
 
     // Fetch and process notes
     const noteFields = { fields: { projectId: 1, createdAt: 1, updatedAt: 1 } };
-    const notesAll = await NotesCollection.find({ userId, projectId: { $in: projectIds } }, noteFields).fetchAsync();
+    const notesAll = await NotesCollection.find({ projectId: { $in: projectIds } }, noteFields).fetchAsync();
     const notesData = processNotes(notesAll, projectIds, since);
 
     // Fetch counts for notes, links, files, and sessions in parallel
     const countsByProject = new Map();
     const [allLinks, allFiles, allSessions] = await Promise.all([
-      LinksCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync(),
-      import('/imports/api/files/collections').then(m => m.FilesCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()).catch(() => []),
-      NoteSessionsCollection.find({ userId, projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()
+      LinksCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync(),
+      import('/imports/api/files/collections').then(m => m.FilesCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()).catch(() => []),
+      NoteSessionsCollection.find({ projectId: { $in: projectIds } }, { fields: { projectId: 1 } }).fetchAsync()
     ]);
 
     // Initialize counts for all projects

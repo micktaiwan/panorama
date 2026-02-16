@@ -11,7 +11,7 @@ Meteor.methods({
     ensureLoggedIn(this.userId);
 
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const projects = await ProjectsCollection.find({ userId: this.userId }, { fields: { name: 1, description: 1 } }).fetchAsync();
+    const projects = await ProjectsCollection.find({ memberIds: this.userId }, { fields: { name: 1, description: 1 } }).fetchAsync();
 
     const catalog = projects
       .filter(p => !!p.name)

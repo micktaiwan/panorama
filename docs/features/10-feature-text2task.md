@@ -90,9 +90,9 @@ Notes:
 Current model (from `00-context.md` and `imports/api/*`):
 
 - **Project**: `name`, `description`, `status`, `startDate`, `targetDate`,
-  `progressPercent`, `riskLevel`, `links`, `createdAt`, `updatedAt`.
+  `riskLevel`, `links`, `createdAt`, `updatedAt`.
 - **Task**: `projectId`, `title`, `status`, `dueDate`, `estimate`, `actual`,
-  `progressPercent`, `notes`, `createdAt`, `updatedAt`. Task completion is tracked with `status='done'` and `statusChangedAt`.
+  `notes`, `createdAt`, `updatedAt`. Task completion is tracked with `status='done'` and `statusChangedAt`.
   existing methods.
 
 For this feature we will populate: `Project.name`, `Project.description`

@@ -127,13 +127,6 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [answersText, setAnswersText] = useState('');
   const [isApplyingImprove, setIsApplyingImprove] = useState(false);
 
-  const progress = useMemo(() => {
-    if (!tasks || tasks.length === 0) return 0;
-    const withProgress = tasks.filter(t => typeof t.progressPercent === 'number');
-    if (withProgress.length === 0) return 0;
-    return Math.round(withProgress.reduce((a, t) => a + t.progressPercent, 0) / withProgress.length);
-  }, [tasks]);
-
   // Avoid brief loading flicker when switching projects; render with reactive data
 
   if (!project) {
@@ -305,13 +298,6 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
               <span className="muted"> · {timeAgo(project.targetDate)}</span>
             ) : null}
           </span>
-          <div className="pd-progress">
-            <span className="pd-meta-label">Progress</span>
-            <div className="pd-progress__track">
-              <div className="pd-progress__fill" style={{ width: `${progress}%` }} />
-            </div>
-            <span className="pd-progress__label">{progress}%</span>
-          </div>
           <span className="pd-meta-badge">
             <span className="pd-meta-label">Color</span>
             {(() => {
@@ -722,6 +708,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                   projectFilters={{ [projectId]: 1 }}
                   windowKey="7d"
                   showProjectFilter={false}
+                  excludeTypes={['project_created']}
                   title={`Activity for ${project.name || '(untitled project)'}`}
                 />
               </Collapsible>

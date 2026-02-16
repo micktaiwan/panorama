@@ -144,41 +144,6 @@
   font-weight: 600;
 }
 
-/* Progress bar */
-
-.pd-progress {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 120px;
-  max-width: 260px;
-}
-
-.pd-progress__track {
-  flex: 1;
-  height: 6px;
-  background: var(--surface-sunken);
-  border-radius: 3px;
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-}
-
-.pd-progress__fill {
-  height: 100%;
-  background: var(--success);
-  border-radius: 3px;
-  transition: width 0.4s ease;
-  min-width: 2px;
-}
-
-.pd-progress__label {
-  font-size: 13px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  min-width: 32px;
-}
-
 /* Color picker */
 
 .colorPickerInput {
@@ -952,13 +917,6 @@
   .pd-meta-label {
     font-size: 10px;
     flex-shrink: 0;
-  }
-
-  /* Progress takes full row on mobile */
-  .pd-progress {
-    flex-basis: 100%;
-    max-width: none;
-    min-width: 0;
   }
 
   .claudeCodeLink {

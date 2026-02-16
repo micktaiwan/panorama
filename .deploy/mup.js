@@ -33,6 +33,7 @@ module.exports = {
     path: '../',
     docker: {
       image: 'zodern/meteor:root',
+      stopAppDuringPrepareBundle: false,
       args: [
         '--network=server_organizer-network',
         '-v', '/var/www/panorama/files:/var/www/panorama/files',

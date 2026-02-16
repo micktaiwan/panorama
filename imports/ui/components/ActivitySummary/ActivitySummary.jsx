@@ -18,7 +18,8 @@ export const ActivitySummary = ({
   showProjectFilter = true,
   title = 'Activity Summary',
   onFiltersChange,
-  className = ''
+  className = '',
+  excludeTypes = []
 }) => {
   const [windowKey, setWindowKey] = useState(initialWindowKey);
   const [loading, setLoading] = useState(false);
@@ -119,7 +120,7 @@ export const ActivitySummary = ({
     const projectName = e.projectId && projectsById.get(e.projectId) ? projectsById.get(e.projectId).name : '';
     const projectSuffix = projectName ? ` — ${projectName}` : '';
     
-    if (e.type === 'project_created') return `New project: ${e.title}`;
+    if (e.type === 'project_created') return `New project: ${e.title}${e.createdBy ? ` (by ${e.createdBy})` : ''}`;
     if (e.type === 'task_done') return `Task done: ${e.title}${projectSuffix}`;
     if (e.type === 'note_created') return `Note added: ${e.title}${projectSuffix}`;
     return e.title || '';
@@ -162,7 +163,7 @@ export const ActivitySummary = ({
         {!loading && (data?.events || []).length === 0 ? (
           <div className="muted">No activity in this window.</div>
         ) : null}
-        {['project_created', 'task_done', 'note_created'].map(section => (
+        {['project_created', 'task_done', 'note_created'].filter(s => !excludeTypes.includes(s)).map(section => (
           <div key={section} className="activitySummarySection">
             <h3>
               {(() => {
@@ -296,4 +297,5 @@ ActivitySummary.propTypes = {
   title: PropTypes.string,
   onFiltersChange: PropTypes.func,
   className: PropTypes.string,
+  excludeTypes: PropTypes.arrayOf(PropTypes.string),
 };

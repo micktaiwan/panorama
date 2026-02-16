@@ -35,23 +35,39 @@ Meteor.methods({
     const includeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === 1).map(([k]) => k));
     const excludeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === -1).map(([k]) => k));
 
-    const projectSelector = { userId, createdAt: { $gte: since } };
-    const taskSelector = { userId, status: 'done', statusChangedAt: { $gte: since } };
-    const noteSelector = { userId, createdAt: { $gte: since } };
-    if (excludeIds.size > 0 || includeIds.size > 0) {
-      const idCond = includeIds.size > 0 ? { $in: Array.from(includeIds) } : { $nin: Array.from(excludeIds) };
-      // For projects: filter by _id
-      projectSelector._id = idCond;
-      // For tasks/notes: filter by projectId
-      taskSelector.projectId = idCond;
-      noteSelector.projectId = idCond;
+    // Fetch all project IDs the user has access to (owner or member)
+    const accessibleProjects = await ProjectsCollection.find(
+      { memberIds: userId },
+      { fields: { _id: 1 } }
+    ).fetchAsync();
+    let accessibleIds = accessibleProjects.map(p => p._id);
+
+    // Apply project filters
+    if (includeIds.size > 0) {
+      accessibleIds = accessibleIds.filter(id => includeIds.has(id));
+    } else if (excludeIds.size > 0) {
+      accessibleIds = accessibleIds.filter(id => !excludeIds.has(id));
     }
 
+    const projectSelector = { _id: { $in: accessibleIds }, createdAt: { $gte: since } };
+    const taskSelector = { projectId: { $in: accessibleIds }, status: 'done', statusChangedAt: { $gte: since } };
+    const noteSelector = { projectId: { $in: accessibleIds }, createdAt: { $gte: since } };
+
     const [projects, tasksDone, notes] = await Promise.all([
-      ProjectsCollection.find(projectSelector, { fields: { name: 1, createdAt: 1 } }).fetchAsync(),
+      ProjectsCollection.find(projectSelector, { fields: { name: 1, userId: 1, createdAt: 1 } }).fetchAsync(),
       TasksCollection.find(taskSelector, { fields: { title: 1, projectId: 1, statusChangedAt: 1, updatedAt: 1 } }).fetchAsync(),
       NotesCollection.find(noteSelector, { fields: { title: 1, projectId: 1, createdAt: 1 } }).fetchAsync()
     ]);
+
+    // Resolve creator display names for projects
+    const creatorIds = [...new Set(projects.map(p => p.userId).filter(Boolean))];
+    const creators = creatorIds.length > 0
+      ? await Meteor.users.find({ _id: { $in: creatorIds } }, { fields: { username: 1, 'profile.name': 1, 'emails.address': 1 } }).fetchAsync()
+      : [];
+    const creatorMap = new Map();
+    for (const u of creators) {
+      creatorMap.set(u._id, u.username || u.profile?.name || u.emails?.[0]?.address || '');
+    }
 
     const events = [];
     for (const p of projects) {
@@ -60,7 +76,8 @@ Meteor.methods({
         id: p._id,
         projectId: p._id,
         title: p.name || '(untitled project)',
-        when: p.createdAt
+        when: p.createdAt,
+        createdBy: creatorMap.get(p.userId) || ''
       });
     }
     for (const t of tasksDone) {
