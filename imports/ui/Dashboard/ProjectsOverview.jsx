@@ -71,7 +71,6 @@ export const ProjectsOverview = () => {
           <tr>
             <th>Project</th>
             <th>Status</th>
-            <th>Progress</th>
             <th>Target</th>
             <th>Risk</th>
             <th className="alignCenter">Open tasks</th>
@@ -112,7 +111,6 @@ export const ProjectsOverview = () => {
                   </a>
                 </td>
                 <td><span className={`statusBadge ${status}`}>{p.status || 'n/a'}</span></td>
-                <td className="alignRight">{typeof p.progressPercent === 'number' ? `${p.progressPercent}%` : '—'}</td>
                 <td className={sev} title={p.targetDate ? new Date(p.targetDate).toLocaleString() : ''}>
                   {p.targetDate ? (
                     <>

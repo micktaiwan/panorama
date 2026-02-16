@@ -19,12 +19,12 @@ Since Phase 2 (Feb 2026), all **remote collections** have a `userId` field for m
 ## Core Collections (Remote)
 
 - Projects (`projects`)
-  - `_id`, `userId`, `name`, `description`, `status`, `targetDate`, `progressPercent`,
+  - `_id`, `userId`, `name`, `description`, `status`, `targetDate`,
     `riskLevel`, `createdAt`, `updatedAt`.
   - Index: `{ userId: 1 }`
 - Tasks (`tasks`)
   - `_id`, `userId`, `projectId`, `title`, `status`, `deadline`, `estimate`, `actual`,
-    `progressPercent`, `statusChangedAt`, `updatedAt`.
+    `statusChangedAt`, `updatedAt`.
   - Indexes: `{ userId: 1, projectId: 1 }`, `{ userId: 1, done: 1 }`
 - Notes (`notes`)
   - `_id`, `userId`, `projectId`, `title`, `content`, `createdAt`.
