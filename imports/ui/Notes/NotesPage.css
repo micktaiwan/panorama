@@ -71,10 +71,33 @@
 
 /* Mobile responsive: single-view toggle */
 @media (max-width: 768px) {
+  /* Flex column on container so compact header keeps natural size,
+     panel fills the rest — no magic-number height on .notes-page */
+  .container:has(.notes-page) {
+    box-sizing: border-box;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .container:has(.notes-page) > .panel {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+  }
+
   .notes-page {
-    height: calc(100vh - 100px);
-    max-height: calc(100vh - 60px);
-    min-height: 200px;
+    flex: 1;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    margin: 0;
   }
 
   .notes-sidebar {
@@ -94,7 +117,8 @@
   }
 
   .container.focusMode .notes-page {
-    height: 100vh;
-    max-height: 100vh;
+    margin: 0;
+    height: 100dvh;
+    max-height: 100dvh;
   }
 }

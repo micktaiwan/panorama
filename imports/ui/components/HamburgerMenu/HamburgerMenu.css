@@ -118,8 +118,11 @@
 
 @media (max-width: 768px) {
   .hamburgerBtn {
-    display: block;
-    margin-left: auto;
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 6px 12px;
+    flex-shrink: 0;
   }
   .hamburgerDrawer {
     width: 100vw;

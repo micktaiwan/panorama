@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
-import { navigateTo } from '/imports/ui/router.js';
+import { navigateTo, ADMIN_ROUTES } from '/imports/ui/router.js';
 import './HamburgerMenu.css';
 
 export const HamburgerMenu = ({ user, onNewSession, onExport }) => {
@@ -69,10 +69,10 @@ export const HamburgerMenu = ({ user, onNewSession, onExport }) => {
     'separator',
     { label: 'Help', route: { name: 'help' } },
     { label: 'Preferences', route: { name: 'preferences' } },
-    ...(user?.isAdmin ? [{ label: 'Admin', route: { name: 'admin' } }] : []),
+    { label: 'Admin', route: { name: 'admin' } },
     'separator',
     { label: 'Logout', action: () => Meteor.logout() },
-  ];
+  ].filter(item => typeof item === 'string' || !item.route || !ADMIN_ROUTES.has(item.route.name) || user?.isAdmin);
 
   return (
     <>

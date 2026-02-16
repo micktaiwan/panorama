@@ -7,7 +7,7 @@ import { ProjectDetails } from '/imports/ui/ProjectDetails/projectDetails.jsx';
 import { NoteSession } from '/imports/ui/NoteSession/NoteSession.jsx';
 import { ProjectDelete } from '/imports/ui/ProjectDelete/ProjectDelete.jsx';
 import './App.css';
-import { parseHashRoute, navigateTo } from '/imports/ui/router.js';
+import { parseHashRoute, navigateTo, ADMIN_ROUTES } from '/imports/ui/router.js';
 import { ImportTasks } from '/imports/ui/ImportTasks/ImportTasks.jsx';
 import { Alarms } from '/imports/ui/Alarms/Alarms.jsx';
 import { LinksPage } from '/imports/ui/Links/LinksPage.jsx';
@@ -130,8 +130,9 @@ function App() {
     { key: 'n', label: 'New Note Session', action: 'newSession' },
     { key: 'h', label: 'Help', route: { name: 'help' } },
     { key: 'g', label: 'Preferences', route: { name: 'preferences' } },
-    ...(user?.isAdmin ? [{ key: 'd', label: 'Admin', route: { name: 'admin' } }] : []),
-  ];
+    { key: 'd', label: 'Admin', route: { name: 'admin' } },
+    { key: 'q', label: 'Search Quality', route: { name: 'searchQuality' } },
+  ].filter(item => !item.route || !ADMIN_ROUTES.has(item.route.name) || user?.isAdmin);
   const [goActiveIdx, setGoActiveIdx] = useState(0);
   // (removed local search states)
   const suppressRef = useRef(new Set());
@@ -659,17 +660,19 @@ function App() {
             <img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />
             Panorama
           </a>
-          <HamburgerMenu
-            user={user}
-            onNewSession={() => handleNewSession()}
-            onExport={() => setExportOpen(true)}
-          />
           <span className="headerUser">
             <NotificationBell />
             <span className="headerEmail">{user?.emails?.[0]?.address}</span>
             <button className="btn-link headerLogout" onClick={() => Meteor.logout()}>Logout</button>
           </span>
         </h1>
+      )}
+      {!focusMode && (
+        <HamburgerMenu
+          user={user}
+          onNewSession={() => handleNewSession()}
+          onExport={() => setExportOpen(true)}
+        />
       )}
       {!focusMode && favoriteProjects.length > 0 && (
         <div className="favoritesBar">
@@ -842,7 +845,15 @@ function App() {
           <ReleasesPage releaseId={route.releaseId} />
         </div>
       )}
-      {route?.name === 'admin' && (
+      {ADMIN_ROUTES.has(route?.name) && !user?.isAdmin && (
+        <div className="panel">
+          <div className="prefs"><div className="prefsContent">
+            <h2>Access denied</h2>
+            <p>Admin privileges required.</p>
+          </div></div>
+        </div>
+      )}
+      {route?.name === 'admin' && user?.isAdmin && (
         <div className="panel">
           <Admin tab={route.tab} />
         </div>
@@ -852,7 +863,7 @@ function App() {
           <Preferences tab={route.tab} />
         </div>
       )}
-      {route?.name === 'searchQuality' && (
+      {route?.name === 'searchQuality' && user?.isAdmin && (
         <div className="panel">
           <SearchQuality />
         </div>

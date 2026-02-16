@@ -1,3 +1,8 @@
+export const ADMIN_ROUTES = new Set([
+  'admin',
+  'searchQuality',
+]);
+
 export const parseHashRoute = () => {
   const hash = window.location.hash || '#/';
   const path = hash.replace(/^#/, '');
