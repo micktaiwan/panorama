@@ -17,6 +17,10 @@ Permettre de **partager un projet** avec d'autres utilisateurs. Tous les documen
 | Docs orphelins (sans projectId) | **Restent privés** au créateur |
 | Invitation | **Par email** — lookup en base, ajout immédiat si l'utilisateur existe |
 | Envoi d'email | **Non** — pas d'EMAIL_URL configuré, tout se fait en UI |
+| Quitter un projet | **Non** — un membre ne peut pas quitter un projet, seul le owner peut retirer un membre |
+| Retrait d'un membre | **Les données restent** — les docs créés par le membre restent dans le projet |
+| Suppression de projet | **Cascade** — seul le owner peut supprimer, tous les docs enfants sont supprimés |
+| Suppression d'un user | **Cascade partielle** — ses projets non-partagés sont supprimés en cascade ; il est retiré des `memberIds` des projets partagés |
 | MCP | **Différé** — `localUserId` reste mono-user pour l'instant |
 
 ---
@@ -121,7 +125,7 @@ return Collection.find({
 | `tasks` | `tasks`, `tasks.calendar.*` | Ajouter `$or` avec projectIds |
 | `notes` | `notes`, `notes.byClaudeProject` | idem |
 | `noteSessions` | `noteSessions` | idem |
-| `noteLines` | `noteLines` | Via sessionId → besoin de résoudre les sessions accessibles |
+| `noteLines` | `noteLines` | Ajouter `projectId` (migration) — même pattern `$or` que les autres |
 | `links` | `links` | idem |
 | `files` | `files` | idem |
 
@@ -165,6 +169,7 @@ if (task.projectId) {
 
 - `projects.remove` — seul le owner peut supprimer
 - `projects.addMember` / `projects.removeMember` — seul le owner gère les membres
+- Un membre **ne peut pas quitter** un projet de lui-même
 
 ---
 
@@ -211,7 +216,56 @@ TasksCollection.rawCollection().createIndex({ assigneeId: 1 });
 
 ---
 
-## 6. Invitation par email
+## 6. NoteLines : ajout de `projectId`
+
+### Problème
+
+Les `noteLines` sont liées aux `noteSessions` via `sessionId`, mais n'ont pas de `projectId` direct. Sans `projectId`, impossible d'utiliser le pattern `$or` standard dans les publications.
+
+### Solution
+
+Ajouter `projectId` aux noteLines, dénormalisé depuis la session parente.
+
+### Schéma après
+
+```js
+{
+  _id, sessionId, content, userId,
+  projectId,  // Nouveau — copié depuis la noteSession parente
+  createdAt
+}
+```
+
+### Migration
+
+```js
+const sessions = await NoteSessionsCollection.find(
+  { projectId: { $exists: true, $ne: null } },
+  { fields: { _id: 1, projectId: 1 } }
+).fetchAsync();
+
+for (const session of sessions) {
+  await NoteLinesCollection.rawCollection().updateMany(
+    { sessionId: session._id, projectId: { $exists: false } },
+    { $set: { projectId: session.projectId } }
+  );
+}
+```
+
+### A maintenir
+
+- `noteLines.insert` : copier `projectId` depuis la session parente
+- `noteSessions.update` (changement de projet) : propager le nouveau `projectId` à toutes les noteLines de la session
+
+### Index
+
+```js
+NoteLinesCollection.rawCollection().createIndex({ projectId: 1 });
+```
+
+---
+
+## 7. Gestion des membres
 
 ### Nouvelle méthode `projects.addMember`
 
@@ -256,6 +310,13 @@ async 'projects.removeMember'(projectId, memberId) {
   await ProjectsCollection.updateAsync(projectId, {
     $pull: { memberIds: memberId }
   });
+
+  // Nettoyer les tasks assignées au membre retiré
+  await TasksCollection.updateAsync(
+    { projectId, assigneeId: memberId },
+    { $set: { assigneeId: null } },
+    { multi: true }
+  );
 }
 ```
 
@@ -269,7 +330,41 @@ Dans les settings du projet, ajouter une section "Members" :
 
 ---
 
-## 7. Qdrant / Recherche sémantique
+## 8. Sécurisation des fichiers
+
+### Problème
+
+La route `/files/:storedFileName` vérifie aujourd'hui l'authentification par session mais pas l'appartenance au projet.
+
+### Solution
+
+Vérifier que l'utilisateur connecté est membre du projet auquel le fichier appartient :
+
+```js
+// Dans la route de serving des fichiers
+const file = await FilesCollection.findOneAsync({ storedFileName });
+if (!file) return res.status(404).end();
+
+if (file.projectId && file.projectId !== '__none__') {
+  // Fichier lié à un projet → vérifier membership
+  const project = await ProjectsCollection.findOneAsync({
+    _id: file.projectId,
+    memberIds: req.userId,
+  });
+  if (!project) return res.status(404).end();
+} else {
+  // Fichier orphelin → seul le créateur y a accès
+  if (file.userId !== req.userId) return res.status(404).end();
+}
+```
+
+### Route interne (VPS → local)
+
+La route interne `/api/files/*` (protégée par `X-API-Key`) reste inchangée — elle sert les fichiers bruts pour l'instance locale. La vérification d'accès se fait côté Meteor avant d'appeler cette route.
+
+---
+
+## 9. Qdrant / Recherche sémantique
 
 ### Problème
 
@@ -305,32 +400,41 @@ Rebuild complet des vecteurs nécessaire (Preferences > Qdrant > Rebuild).
 
 ---
 
-## 8. Sécurité — points d'attention
+## 10. Cycle de vie
+
+### Retrait d'un membre
+
+Quand le owner retire un membre d'un projet :
+
+- **Les docs créés par le membre restent** dans le projet (tasks, notes, etc.)
+- **Les tasks assignées** au membre retiré : `assigneeId` est remis à `null` (fait dans `projects.removeMember`)
+- Le membre perd immédiatement l'accès via la publication (réactivité Meteor)
+
+### Suppression d'un user
+
+Quand un compte utilisateur est supprimé :
+
+- **Projets personnels** (non-partagés, `memberIds.length === 1`) → supprimés en cascade (comme `projects.remove`)
+- **Projets partagés dont il est owner** → ownership transféré au premier autre membre, userId retiré de `memberIds`
+- **Projets partagés dont il est membre** (pas owner) → retiré de `memberIds`, ses docs restent
+- **Tasks assignées** à cet user → `assigneeId` remis à `null`
+
+---
+
+## 11. Sécurité — points d'attention
 
 - **Pas de fuite d'information** : les erreurs restent `'not-found'` (pas `'not-authorized'`)
 - **Owner seul** peut : supprimer le projet, ajouter/retirer des membres
 - **Membres** peuvent : lire et modifier tous les docs du projet (tasks, notes, etc.)
 - **Docs orphelins** : accessibles uniquement par leur `userId` (créateur)
 - **Cascade suppression** : quand le owner supprime un projet, tous les docs enfants sont supprimés — y compris ceux créés par d'autres membres
+- **Retrait d'un membre** : ses docs restent dans le projet, ses tasks assignées passent à `null`
+- **Suppression d'un user** : projets perso supprimés en cascade, retiré des projets partagés, ownership transféré si nécessaire
+- **Route fichiers** : vérifie `memberIds` du projet avant de servir le fichier
 
 ---
 
-## 9. Ordre d'implémentation
-
-1. **Migration schema** : ajouter `memberIds` aux projets existants, index MongoDB
-2. **Auth helper** : `ensureProjectAccess`
-3. **Methods projets** : `projects.insert` (init `memberIds`), `projects.addMember`, `projects.removeMember`
-4. **Publications** : modifier pour utiliser `$or` avec les projectIds accessibles
-5. **Methods enfants** : adapter tasks, notes, noteSessions, noteLines, links, files pour utiliser `ensureProjectAccess`
-6. **Tasks `assigneeId`** : migration + méthode `tasks.assign`
-7. **UI Members** : section dans les settings du projet
-8. **UI Tasks** : sélecteur d'assignation (dropdown des membres du projet)
-9. **Qdrant** : adapter payloads et filtres, rebuild
-10. **Tests**
-
----
-
-## 10. Risques et compromis
+## 12. Risques et compromis
 
 | Risque | Mitigation |
 |---|---|
@@ -339,3 +443,58 @@ Rebuild complet des vecteurs nécessaire (Preferences > Qdrant > Rebuild).
 | Pas de rôles → un membre peut tout modifier | OK pour l'usage actuel (confiance entre membres), évolutif plus tard |
 | MCP `localUserId` ne voit pas les projets partagés | Différé — à traiter quand le MCP sera multi-user |
 | Qdrant rebuild nécessaire | One-shot, déjà un mécanisme en place |
+
+---
+
+## 13. Roadmap
+
+### Phase 1 — Partage de projets (MVP)
+
+- [ ] Migration schema : `memberIds` sur les projets, `projectId` sur les noteLines
+- [ ] Index MongoDB (`memberIds`, `projectId` noteLines)
+- [ ] `ensureProjectAccess` helper
+- [ ] `projects.insert` : init `memberIds: [this.userId]`
+- [ ] `projects.addMember` / `projects.removeMember` (avec cleanup `assigneeId`)
+- [ ] Publications avec `$or` (projects, tasks, notes, noteSessions, noteLines, links, files)
+- [ ] Methods enfants : `ensureProjectAccess` au lieu de `ensureOwner`
+- [ ] `noteLines.insert` : copier `projectId` depuis la session
+- [ ] Sécurisation route fichiers (`memberIds`)
+- [ ] UI : section "Members" dans les settings du projet
+- [ ] Tests
+
+### Phase 2 — Assignation des tasks
+
+- [ ] Migration schema : `assigneeId` sur les tasks + index MongoDB
+- [ ] Méthode `tasks.assign` (validation membership)
+- [ ] Publication des membres du projet (noms/emails pour le dropdown)
+- [ ] UI : sélecteur d'assignation dans les tasks
+- [ ] Filtrage des tasks par assignee
+
+### Phase 3 — Qdrant multi-user
+
+- [ ] Adapter les payloads (`memberIds` au lieu de `userId`)
+- [ ] Adapter les filtres de recherche
+- [ ] Rebuild complet des vecteurs
+
+### Phase 4 — Gestion du cycle de vie
+
+- [ ] Suppression d'un user : cascade projets perso, transfert ownership, nettoyage `assigneeId`
+- [ ] Retrait d'un membre : nettoyage `assigneeId`
+
+### Phase 5 — Invitations par email
+
+Aujourd'hui, on ne peut ajouter que des users déjà inscrits (lookup par email en base). Pour inviter des personnes sans compte :
+
+- [ ] Intégrer Resend (ou équivalent) pour l'envoi d'emails transactionnels
+- [ ] Collection `pendingInvitations` : `{ projectId, email, invitedBy, token, createdAt, expiresAt }`
+- [ ] Envoi d'un email d'invitation avec lien d'inscription contenant le token
+- [ ] A l'inscription, résolution automatique des invitations en attente (ajout aux `memberIds`)
+- [ ] UI : afficher les invitations en attente dans la section Members (avec option d'annulation)
+- [ ] Expiration des invitations (ex: 7 jours)
+
+### Phase 6 — Evolutions futures
+
+- [ ] Rôles (owner / editor / viewer)
+- [ ] MCP multi-user (remplacer `localUserId` unique)
+- [ ] Notifications in-app quand on est ajouté à un projet
+- [ ] Historique d'activité par projet (qui a modifié quoi)
