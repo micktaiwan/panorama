@@ -199,6 +199,15 @@ import '/imports/api/claudeCommands/collections';
 import '/imports/api/claudeCommands/publications';
 import '/imports/api/claudeCommands/methods';
 
+// Users
+import '/imports/api/users/methods';
+
+// User Presence
+import '/imports/api/userPresence/collections';
+import '/imports/api/userPresence/methods';
+import '/imports/api/userPresence/publications';
+import { startConnectionTracker } from '/imports/api/userPresence/server/connectionTracker';
+
 // Releases (global announcements)
 import '/imports/api/releases/collections';
 import '/imports/api/releases/publications';
@@ -209,6 +218,16 @@ import '/imports/api/admin/methods';
 import '/imports/api/admin/publications';
 
 Meteor.startup(async () => {
+  // --- User Presence: reset all to offline on startup (DDP connections are lost on restart) ---
+  const { UserPresenceCollection } = await import('/imports/api/userPresence/collections');
+  await UserPresenceCollection.rawCollection().updateMany(
+    {},
+    { $set: { status: 'offline', connections: 0, updatedAt: new Date() } }
+  );
+  UserPresenceCollection.rawCollection().createIndex({ userId: 1 }, { unique: true }).catch(() => {});
+  startConnectionTracker();
+  console.log('[startup] User presence reset and connection tracker started');
+
   // Mark any Claude sessions stuck in "running" as interrupted (processes died on restart)
   const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
   const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');

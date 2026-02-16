@@ -1,0 +1,61 @@
+.userMenu {
+  position: relative;
+  display: inline-block;
+}
+
+.userMenuTrigger {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.userMenuTrigger:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.userMenuDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 160px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.userMenuItem {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.userMenuItem:hover {
+  background: var(--surface);
+}
+
+.userMenuLogout:hover {
+  color: var(--danger);
+}
+
+.userMenuSeparator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}

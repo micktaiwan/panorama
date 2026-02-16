@@ -135,6 +135,17 @@
   border-color: var(--purple-600);
 }
 
+/* Go to project button */
+.go-to-project-button {
+  background: rgba(var(--info-rgb), 0.15);
+  color: var(--info);
+  border-color: rgba(var(--info-rgb), 0.3);
+}
+
+.go-to-project-button:hover:not(:disabled) {
+  background: rgba(var(--info-rgb), 0.25);
+}
+
 /* Claude Code project button */
 .claude-project-button {
   background: rgba(var(--purple-rgb), 0.15);
