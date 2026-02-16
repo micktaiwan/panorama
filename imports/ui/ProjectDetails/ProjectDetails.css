@@ -1,21 +1,320 @@
+/* ================================================
+   ProjectDetails — Utilitarian Luxe
+   Refined structure with purposeful accents.
+   The project color is the visual signature.
+   ================================================ */
+
+/* ---- Hero Header ---- */
+
 .projectHeaderCard {
-  margin-bottom: 16px;
-  background: var(--notes-surface);
+  margin-bottom: 24px;
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0 !important; /* override Card base padding */
+}
+
+.pd-accent {
+  height: 4px;
+  background: var(--primary);
+}
+
+.pd-hero {
+  padding: 20px 24px 24px;
 }
 
 .projectHeaderRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
-.projectTitle { margin: 0; }
-.projectHeaderRight { margin-left: auto; }
-.toggleBtn { padding: 4px 8px; font-size: 12px; }
-.doneSection { margin-top: 32px; }
-.doneHeader { cursor: pointer; user-select: none; }
-.backBtn { padding: 4px 10px; font-size: 12px; }
+.projectTitle {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  flex: 1;
+}
+
+.projectTitle .inlineEditable {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.projectHeaderRight {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Star */
+
+.starBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted-2);
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.starBtn .starIcon {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  transition: transform 0.2s ease;
+}
+
+.starBtn:hover {
+  color: var(--warning);
+  background: rgba(var(--warning-rgb), 0.1);
+}
+
+.starBtn:hover .starIcon {
+  transform: scale(1.12);
+}
+
+.starBtn.active {
+  color: var(--warning);
+}
+
+.starBtn.active .starIcon {
+  filter: drop-shadow(0 0 4px rgba(var(--warning-rgb), 0.4));
+}
+
+/* Description */
+
+.projectDescription {
+  margin: 0 0 20px;
+  font-style: normal;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  padding: 12px 16px;
+  background: var(--surface-sunken);
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+
+.projectDescription .inlineEditable {
+  color: var(--muted);
+}
+
+.projectDescription .inlineEditableContent {
+  white-space: pre-wrap;
+}
+
+/* ---- Meta Badges ---- */
+
+.projectMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 0;
+}
+
+.pd-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.2s ease;
+}
+
+.pd-meta-badge:hover {
+  border-color: var(--border);
+}
+
+.pd-meta-label {
+  color: var(--muted-2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+/* Progress bar */
+
+.pd-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 120px;
+  max-width: 260px;
+}
+
+.pd-progress__track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.pd-progress__fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.pd-progress__label {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+}
+
+/* Color picker */
+
+.colorPickerInput {
+  vertical-align: middle;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.colorPickerInput:hover {
+  border-color: var(--muted);
+  transform: scale(1.1);
+}
+
+/* Claude Code link as pill */
+
+.claudeCodeLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--purple);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 4px 12px;
+  background: rgba(var(--purple-rgb), 0.1);
+  border-radius: 20px;
+  border: 1px solid rgba(var(--purple-rgb), 0.2);
+  transition: background 0.2s ease;
+}
+
+.claudeCodeLink:hover {
+  background: rgba(var(--purple-rgb), 0.18);
+  text-decoration: none;
+}
+
+/* ---- Section Headers ---- */
+
+.tasksHeader {
+  margin-top: 32px;
+  margin-bottom: 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tasksHeader::before {
+  content: '';
+  width: 3px;
+  height: 1.1em;
+  background: var(--primary);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ---- Actions bar ---- */
+
+.projectActions {
+  margin-top: 0;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.projectActions button + button {
+  margin-left: 0; /* gap handles spacing */
+}
+
+/* ---- Resources (links, files) ---- */
+
+.projectLinksRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 8px;
+  background: var(--surface);
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.2s ease;
+}
+
+.projectLinksRow:hover {
+  border-color: var(--border);
+}
+
+.projectLinksList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  align-items: center;
+}
+
+.projectLinkItem {
+  display: inline-flex;
+  align-items: center;
+}
+
+.projectLinkItem + .projectLinkItem::before {
+  content: '\00b7';
+  color: var(--muted-2);
+  margin: 0 4px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.projectFileItem {
+  display: inline-flex;
+  align-items: center;
+}
+
+.projectFileItem + .projectFileItem::before {
+  content: '\00b7';
+  color: var(--muted-2);
+  margin: 0 4px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.projectLinksActions {
+  text-align: right;
+}
+
+/* ---- Task list ---- */
+
 .tasksList {
   list-style: none;
   padding: 0;
@@ -23,153 +322,187 @@
 }
 
 .tasksList > li {
-  border-bottom: 1px solid var(--border);
-  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 6px 0;
+  margin-top: 0; /* override global li + li margin */
+  transition: background 0.15s ease;
+}
+
+.tasksList > li:hover {
+  background: rgba(var(--white-rgb), 0.015);
 }
 
 .tasksList > li:last-child {
   border-bottom: none;
 }
-.projectMeta {
-  margin-top: 12px;
-}
-
-.claudeCodeLink {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.claudeCodeLink:hover {
-  text-decoration: underline;
-}
-
-.colorPickerInput {
-  vertical-align: middle;
-  margin-left: 6px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-
-.projectActions {
-  margin-top: 12px;
-  margin-bottom: 8px;
-}
-
-.projectActions button + button {
-  margin-left: 8px;
-}
-
-.tasksHeader {
-  margin-top: 24px;
-  margin-bottom: 8px;
-}
-
-.projectTitleRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.starBtn {
-  appearance: none;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--muted);
-  padding: 2px;
-}
-
-.starBtn .starIcon { width: 20px; height: 20px; fill: currentColor; }
-.starBtn.active { color: var(--warning); }
-.starBtn:hover { color: var(--warning); }
-
-.projectDescription {
-  margin: 0 0 24px;
-  font-style: italic;
-  color: var(--muted);
-}
 
 .taskRow {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr); /* drag | content */
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
   column-gap: 12px;
   width: 100%;
 }
 
-.dragHandle { cursor: grab; color: var(--muted); user-select: none; }
-.dragHandle:active { cursor: grabbing; }
+.dragHandle {
+  cursor: grab;
+  color: var(--muted-2);
+  user-select: none;
+  font-size: 16px;
+  opacity: 0.35;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.tasksList > li:hover .dragHandle {
+  opacity: 0.8;
+  color: var(--muted);
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
 
 .taskRow.inProgress .inlineEditable[data-as="select"],
 .taskRow.inProgress .inlineEditableSelect {
   color: var(--success);
 }
 
-.taskRow .taskActions { opacity: 1; position: relative; z-index: 1; }
+.taskRow .taskActions {
+  opacity: 1;
+  position: relative;
+  z-index: 1;
+}
 
-/* Deadline clickable display */
+/* Cells */
+
+.titleCell {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.titleCell .inlineEditable {
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+}
+
+.titleCell .inlineEditableContent {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+}
+
+.titleCell .inlineEditableInput {
+  width: 100%;
+}
+
+.dragPlaceholder {
+  visibility: hidden;
+}
+
+.taskRow input[type="checkbox"] {
+  margin: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.taskDndRow {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.taskActions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* Deadline */
+
 .deadlineDisplay {
   color: var(--muted);
   cursor: pointer;
   min-width: 160px;
+  transition: color 0.15s ease;
 }
-.deadlineDisplay:hover { text-decoration: underline; }
-.deadlineDisplay.dueSoon { color: var(--warning); }
-.deadlineDisplay.dueNow { color: var(--danger); }
-.deadlineDisplay.dueLater { color: var(--success-text); }
 
-/* Compact icon buttons for row actions */
-.iconButton {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  padding: 4px 6px;
-  border-radius: 4px;
-  cursor: pointer;
+.deadlineDisplay:hover {
+  text-decoration: underline;
 }
-.iconButton:hover { color: var(--text); background: var(--surface); }
 
-/* Done state */
-.taskDone .titleCell { text-decoration: line-through; color: var(--muted); }
+.deadlineDisplay.dueSoon {
+  color: var(--warning);
+}
 
-/* Cells */
-.titleCell { overflow-wrap: anywhere; min-width: 0; }
-.titleCell .inlineEditable { display: block; white-space: normal; overflow: visible; text-overflow: initial; }
-/* Override global InlineEditable ellipsis inside project page titles */
-.titleCell .inlineEditableContent { white-space: normal; overflow: visible; text-overflow: initial; }
-.titleCell .inlineEditableInput { width: 100%; }
-.dragPlaceholder { visibility: hidden; }
-.taskRow input[type="checkbox"] { margin: 0; width: 16px; height: 16px; }
-.taskDndRow { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; column-gap: 12px; }
-.taskActions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.deadlineDisplay.dueNow {
+  color: var(--danger);
+}
 
-/* Eisenhower toggles use global styles from client/main.css */
-
-.doneMeta { color: var(--muted); font-size: 12px; }
+.deadlineDisplay.dueLater {
+  color: var(--success-text);
+}
 
 .deadlineInput {
   width: auto;
 }
 
-/* uses global utilities in client/main.css */
+/* Done state */
 
-/* Notes list */
-.noteBlock {
-  border: 1px solid var(--border);
+.taskDone .titleCell {
+  text-decoration: line-through;
+  color: var(--muted-2);
+}
+
+.doneMeta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Icon buttons */
+
+.iconButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted-2);
+  padding: 4px 6px;
   border-radius: 6px;
-  padding: 10px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.iconButton:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+/* ---- Notes ---- */
+
+.noteBlock {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 16px;
   background: var(--surface);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.noteBlock:hover {
+  border-color: var(--border);
+  box-shadow: 0 2px 12px rgba(var(--black-rgb), 0.15);
+}
+
+.noteBlock + .noteBlock {
+  margin-top: 12px;
 }
 
 .noteBlockHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 
 .noteTitle {
@@ -203,32 +536,40 @@
   user-select: none;
 }
 
-.noteTitleCollapsed .caret { color: var(--muted); margin-right: 6px; }
+.noteTitleCollapsed .caret {
+  color: var(--muted);
+  margin-right: 6px;
+}
 
 .caretButton {
   padding: 0 4px;
 }
 
-.noteActions { display: inline-flex; gap: 6px; }
+.noteActions {
+  display: inline-flex;
+  gap: 6px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
 
-.noteBlock + .noteBlock {
-  margin-top: 12px;
+.noteBlock:hover .noteActions {
+  opacity: 1;
 }
 
 .noteMeta {
-  color: var(--muted);
+  color: var(--muted-2);
   font-size: 12px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
-/* Larger textarea for editing project notes */
 .projectNoteTextarea.inlineEditableInput {
-  min-height: 220px;
+  min-height: 200px;
+  border-radius: 8px;
 }
 
-/* Full-width textarea in Improve description modal */
 .projectNoteTextarea {
   width: 100%;
+  border-radius: 8px;
 }
 
 .notePre {
@@ -236,133 +577,558 @@
   margin: 0;
 }
 
-/* Compact done tasks header so it doesn't dominate the page */
+/* ---- Activity Summary ---- */
+
+.projectActivitySummary {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Remove inner border — outer card provides the frame */
+.projectActivitySummary .activitySummaryContent {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+/* ---- Members (Team panel) ---- */
+
+.projectMembersSection {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.pd-members__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pd-members__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pd-members__title::before {
+  content: '';
+  width: 3px;
+  height: 1em;
+  background: var(--primary);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.pd-members__count {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface-sunken);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.pd-members__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pd-member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pd-member:last-child {
+  border-bottom: none;
+}
+
+.pd-member__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.pd-member__avatar[data-hue="0"] { background: rgba(var(--info-rgb), 0.15); color: var(--info); }
+.pd-member__avatar[data-hue="1"] { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.pd-member__avatar[data-hue="2"] { background: rgba(var(--purple-rgb), 0.15); color: var(--purple); }
+.pd-member__avatar[data-hue="3"] { background: rgba(var(--warning-rgb), 0.15); color: var(--warning); }
+.pd-member__avatar[data-hue="4"] { background: rgba(var(--danger-rgb), 0.15); color: var(--danger-400); }
+.pd-member__avatar[data-hue="5"] { background: rgba(var(--primary-rgb), 0.15); color: var(--primary); }
+
+.pd-member__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.pd-member__name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pd-member__role {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--surface-sunken);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pd-member__email {
+  font-size: 12px;
+  color: var(--muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pd-member__remove {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.pd-member:hover .pd-member__remove {
+  opacity: 1;
+}
+
+.pd-member__remove:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Invite row */
+
+.pd-invite {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pd-invite__input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.pd-invite__input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.pd-invite__error {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* ---- Done section ---- */
+
+.doneSection {
+  margin-top: 32px;
+}
+
 .doneSection .doneHeader {
   margin-top: 8px;
   margin-bottom: 4px;
   font-size: 0.95rem;
 }
 
-/* Bottom-right delete placement */
+/* No left accent bar on the done toggle header */
+.doneSection .doneHeader::before {
+  display: none;
+}
+
+/* ---- Delete footer ---- */
+
 .projectDeleteFooter {
-  margin-top: 24px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   justify-content: flex-end;
 }
 
-.btnSmall { padding: 4px 8px; font-size: 12px; }
-
-/* Project links inline row */
-.projectLinksRow { 
-  display: grid; 
-  grid-template-columns: minmax(0, 1fr) auto; 
-  align-items: center; 
-  gap: 8px; 
-  margin: 8px 0 12px; 
-  background: var(--surface);
-  padding: 12px;
-}
-
-.projectLinksList { 
-  list-style: none; 
-  padding: 0; 
-  margin: 0; 
-  display: inline-flex; 
-  gap: 6px; 
-  flex-wrap: nowrap; 
-  overflow-x: auto; 
-  align-items: center; 
-}
-
-.projectLinkItem { 
-  display: inline-flex; 
-  align-items: center; 
-}
-
-/* Visual separator between inline project links */
-.projectLinkItem + .projectLinkItem::before {
-  content: '|';
-  color: var(--muted);
-  margin: 0 6px;
-}
-
-/* Keep spacing consistent if files are interleaved or styled differently */
-.projectFileItem { 
-  display: inline-flex; 
-  align-items: center; 
-}
-.projectFileItem + .projectFileItem::before {
-  content: '|';
-  color: var(--muted);
-  margin: 0 6px;
-}
-
-.projectLinksActions { 
-  text-align: right; 
-}
-
-/* Activity Summary section */
-.projectActivitySummary {
-  margin-top: 32px;
-  margin-bottom: 16px;
-}
-
-/* Members section */
-.projectMembersSection {
-  margin-top: 16px;
-  margin-bottom: 16px;
-}
-
-.membersList {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 12px;
-}
-
-.memberItem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.memberItem:last-child {
-  border-bottom: none;
-}
-
-.memberName {
-  font-weight: 500;
-}
-
-.memberBadge {
-  font-size: 12px;
-  color: var(--muted);
-  background: var(--surface);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.addMemberRow {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.addMemberInput {
-  flex: 1;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 14px;
-}
-
-.memberError {
-  color: var(--danger);
+.projectDeleteFooter .btn-link {
+  color: var(--muted-2);
   font-size: 13px;
-  margin-top: 6px;
+  transition: color 0.2s ease;
 }
 
+.projectDeleteFooter .btn-link:hover {
+  color: var(--danger);
+}
 
+/* ---- Misc ---- */
+
+.btnSmall {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.backBtn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.toggleBtn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* ---- Upload label as button (match <button> sizing) ---- */
+
+.projectLinksActions label.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  line-height: 1;
+}
+
+/* ================================================
+   Mobile — compact, touch-friendly, no hover
+   ================================================ */
+
+@media (max-width: 768px) {
+
+  /* ---- Overflow containment ---- */
+
+  .projectHeaderCard,
+  .pd-hero,
+  .projectMeta,
+  .projectLinksRow,
+  .noteBlock {
+    overflow: hidden;
+    max-width: 100%;
+  }
+
+  .projectDescription,
+  .pd-meta-badge {
+    overflow: hidden;
+    word-break: break-word;
+  }
+
+  /* Override component min-widths that cause overflow */
+  .deadlineDisplay {
+    min-width: 0;
+  }
+
+  /* ---- Hero ---- */
+
+  .projectHeaderCard {
+    margin-bottom: 16px;
+    border-radius: 8px;
+  }
+
+  .pd-hero {
+    padding: 14px 14px 16px;
+  }
+
+  .projectHeaderRow {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .projectTitle {
+    font-size: 1.25rem;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .projectTitle .inlineEditable {
+    min-width: 0;
+  }
+
+  .projectHeaderRight {
+    flex-basis: 100%;
+    text-align: right;
+    margin-left: 0;
+  }
+
+  /* Description */
+
+  .projectDescription {
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-size: 0.9rem;
+  }
+
+  /* ---- Meta Badges ---- */
+
+  .projectMeta {
+    gap: 8px;
+  }
+
+  .pd-meta-badge {
+    padding: 4px 10px;
+    font-size: 12px;
+    min-width: 0;
+  }
+
+  .pd-meta-label {
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Progress takes full row on mobile */
+  .pd-progress {
+    flex-basis: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .claudeCodeLink {
+    font-size: 12px;
+    padding: 3px 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  /* ---- Section Headers ---- */
+
+  .tasksHeader {
+    margin-top: 24px;
+    margin-bottom: 8px;
+    font-size: 1rem;
+  }
+
+  /* ---- Actions bar ---- */
+
+  .projectActions {
+    margin-bottom: 12px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .projectActions .btn,
+  .projectActions .btn-primary {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  /* ---- Resources (links, files) ---- */
+
+  .projectLinksRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin: 4px 0 6px;
+  }
+
+  .projectLinksActions {
+    text-align: left;
+  }
+
+  .projectLinksList {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  /* ---- Task list ---- */
+
+  .tasksList > li {
+    padding: 8px 0;
+    overflow: hidden;
+  }
+
+  /* Drag handles: always visible on touch (no hover), but subtle */
+  .dragHandle {
+    opacity: 0.5;
+  }
+
+  .taskRow {
+    column-gap: 8px;
+    overflow: hidden;
+  }
+
+  /* ---- Notes ---- */
+
+  .noteBlock {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .noteBlock + .noteBlock {
+    margin-top: 10px;
+  }
+
+  /* Note header: stack meta above actions on narrow screens */
+  .noteBlockHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  /* Always visible on touch — no hover paradigm */
+  .noteActions {
+    opacity: 1;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .noteActions .btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .projectNoteTextarea.inlineEditableInput {
+    min-height: 160px;
+  }
+
+  /* ---- Members (Team panel) ---- */
+
+  .projectMembersSection {
+    padding: 12px;
+  }
+
+  .pd-member {
+    gap: 10px;
+    padding: 8px 0;
+  }
+
+  .pd-member__avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  /* Always show remove on touch (no hover) */
+  .pd-member__remove {
+    opacity: 1;
+  }
+
+  .pd-invite {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  /* ---- Activity Summary ---- */
+
+  .projectActivitySummary {
+    margin-top: 16px;
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+
+  /* Stack activity list items on mobile */
+  .projectActivitySummary .activitySummaryList li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  /* ---- Done section ---- */
+
+  .doneSection {
+    margin-top: 24px;
+  }
+
+  /* ---- Delete footer ---- */
+
+  .projectDeleteFooter {
+    margin-top: 28px;
+    padding-top: 16px;
+    justify-content: center;
+  }
+}
+
+/* ================================================
+   Small mobile (< 400px) — even tighter
+   ================================================ */
+
+@media (max-width: 400px) {
+
+  .pd-hero {
+    padding: 10px 10px 14px;
+  }
+
+  .projectTitle {
+    font-size: 1.1rem;
+  }
+
+  .projectDescription {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+
+  .pd-meta-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .pd-meta-label {
+    font-size: 9px;
+  }
+
+  .projectLinksRow {
+    padding: 8px 10px;
+  }
+
+  .noteBlock {
+    padding: 10px;
+  }
+
+  /* Stack note action buttons vertically */
+  .noteActions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .noteActions .btn {
+    width: 100%;
+    text-align: center;
+  }
+}

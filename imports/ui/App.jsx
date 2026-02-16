@@ -48,6 +48,7 @@ import { MCPServers } from '/imports/ui/MCPServers/MCPServers.jsx';
 import { ClaudeCodePage } from '/imports/ui/ClaudeCode/ClaudeCodePage.jsx';
 import { Admin } from '/imports/ui/Admin/Admin.jsx';
 import { NotificationBell } from '/imports/ui/Releases/NotificationBell.jsx';
+import { ThemeToggle } from '/imports/ui/components/ThemeToggle/ThemeToggle.jsx';
 import { ReleasesPage } from '/imports/ui/Releases/ReleasesPage.jsx';
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
 import { ClaudeProjectsCollection } from '/imports/api/claudeProjects/collections';
@@ -668,6 +669,10 @@ function App() {
             Panorama
           </a>
           <span className="headerUser">
+            <ThemeToggle
+              theme={userPrefs?.theme || 'dark'}
+              onToggle={(next) => Meteor.call('userPreferences.update', { theme: next })}
+            />
             <NotificationBell />
             <span className="headerEmail">{user?.emails?.[0]?.address}</span>
             <button className="btn-link headerLogout" onClick={() => Meteor.logout()}>Logout</button>

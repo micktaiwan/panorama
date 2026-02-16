@@ -39,35 +39,35 @@ const useLocalStorage = (key, defaultValue, validator = null) => {
     if (typeof localStorage === 'undefined') return defaultValue;
     const stored = localStorage.getItem(key);
     if (stored === null) return defaultValue;
-    
+
     if (validator) {
       return validator(stored) ? stored : defaultValue;
     }
-    
+
     return stored;
   });
-  
+
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, String(value));
     }
   }, [key, value]);
-  
+
   return [value, setValue];
 };
 
 // Utility functions for filtering
 const filterByQuery = (projects, query) => {
   const q = query.trim().toLowerCase();
-  return projects.filter(p => 
-    (p.name || '').toLowerCase().includes(q) || 
+  return projects.filter(p =>
+    (p.name || '').toLowerCase().includes(q) ||
     (p.tags || []).some(t => t.toLowerCase().includes(q))
   );
 };
 
 const filterByActivity = (projects, activityFilter) => {
   if (activityFilter === 'all') return projects;
-  return projects.filter(p => 
+  return projects.filter(p =>
     activityFilter === 'active' ? !p.isInactive : p.isInactive
   );
 };
@@ -79,6 +79,8 @@ const calculateHotspots = (projects) => {
     inactive: projects.filter(p => p?.isInactive)
   };
 };
+
+const STATUS_CYCLE = ['', 'red', 'orange', 'green'];
 
 export const PanoramaPage = () => {
   const [periodDays, setPeriodDays] = useLocalStorage('panorama_period_days', 14, (value) => {
@@ -116,7 +118,7 @@ export const PanoramaPage = () => {
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    
+
     // Define sort functions for each mode
     const sortFunctions = {
       createdAtAsc: (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
@@ -132,14 +134,14 @@ export const PanoramaPage = () => {
         return String(a.name || '').localeCompare(String(b.name || ''));
       }
     };
-    
+
     const primarySort = sortFunctions[sortMode] || sortFunctions.custom;
     const shouldSortInactiveLast = ['activityDesc', 'heatDesc', 'healthDesc'].includes(sortMode);
-    
+
     if (shouldSortInactiveLast) {
       return arr.sort(createSortFunction(primarySort));
     }
-    
+
     return arr.sort(primarySort);
   }, [filtered, sortMode]);
 
@@ -154,15 +156,12 @@ export const PanoramaPage = () => {
     const oldIndex = ids.indexOf(active.id);
     const newIndex = ids.indexOf(over.id);
     const nextOrder = arrayMove(ids, oldIndex, newIndex);
-    
-    // Bug 4 fix: Prevent race conditions with optimistic updates
+
     const rankMap = new Map(nextOrder.map((id, idx) => [id, idx * 10]));
-    
-    // Update local state first (optimistic update)
+
     setData(prev => prev.map(p => (rankMap.has(p._id) ? { ...p, panoramaRank: rankMap.get(p._id) } : p)));
-    
-    // Then update server with error handling
-    const updatePromises = nextOrder.map((id, idx) => 
+
+    const updatePromises = nextOrder.map((id, idx) =>
       new Promise((resolve, reject) => {
         Meteor.call('panorama.setRank', id, idx * 10, (error) => {
           if (error) {
@@ -174,13 +173,11 @@ export const PanoramaPage = () => {
         });
       })
     );
-    
-    // Handle any failures by reverting the optimistic update
+
     Promise.allSettled(updatePromises).then((results) => {
       const failures = results.filter(result => result.status === 'rejected');
       if (failures.length > 0) {
         console.error('Some rank updates failed, reverting optimistic update');
-        // Revert to previous state by refetching data
         Meteor.call('panorama.getOverview', { periodDays }, (err, res) => {
           if (!err && Array.isArray(res)) {
             setData(res);
@@ -190,11 +187,24 @@ export const PanoramaPage = () => {
     });
   };
 
-  const ProjectCardItem = ({ p }) => {
+  const ProjectCardItem = ({ p, index }) => {
     const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: p._id, disabled: sortMode !== 'custom' });
-    const style = { transform: CSS.Transform.toString(transform), transition };
+    const style = { transform: CSS.Transform.toString(transform), transition, '--i': Math.min(index, 15) };
     const status = p?.panoramaStatus || '';
     const statusClass = status ? ` status-${status}` : '';
+    const healthScore = p?.health?.score;
+    const healthColor = typeof healthScore === 'number'
+      ? (healthScore >= 60 ? 'good' : healthScore >= 30 ? 'warn' : 'bad')
+      : '';
+
+    const cycleStatus = (e) => {
+      e.stopPropagation();
+      const idx = STATUS_CYCLE.indexOf(status);
+      const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+      setData(prev => prev.map(x => x._id === p._id ? { ...x, panoramaStatus: next || null } : x));
+      Meteor.call('projects.update', p._id, { panoramaStatus: next || null });
+    };
+
     return (
       <div ref={setNodeRef} style={style} className={`ProjectCard${statusClass}${isDragging ? ' dragging' : ''}`}>
         <div className="header">
@@ -211,41 +221,53 @@ export const PanoramaPage = () => {
             </button>
           </div>
           <div className="badges">
-            <select
-              className="statusSelect"
-              value={status}
-              onChange={(e) => {
-                const v = e.target.value;
-                setData(prev => prev.map(x => x._id === p._id ? { ...x, panoramaStatus: v || null } : x));
-                Meteor.call('projects.update', p._id, { panoramaStatus: v || null });
-              }}
+            <button
+              type="button"
+              className={`statusDot${status ? ` s-${status}` : ''}`}
               title={
-                status === 'red' ? 'Important: immediate attention required' :
-                status === 'orange' ? 'Attention: watch closely' :
-                status === 'green' ? 'All good / personal' : 'No status'
+                status === 'red' ? 'Important — click for Orange' :
+                status === 'orange' ? 'Attention — click for Green' :
+                status === 'green' ? 'All good — click to clear' :
+                'No status — click for Red'
               }
-            >
-              <option value="">—</option>
-              <option value="red">Red</option>
-              <option value="orange">Orange</option>
-              <option value="green">Green</option>
-            </select>
+              onClick={cycleStatus}
+            />
             {!!p?.tasks?.overdue && <span className="chip danger">{p.tasks.overdue} overdue</span>}
             {p.isInactive && <span className="chip idle">Inactive</span>}
           </div>
         </div>
-        <div className="meta">
-          <span>Last activity: {p.lastActivityAt ? formatDate(p.lastActivityAt) : '—'}</span>
-          <span>Health: {p?.health?.score ?? '-'}</span>
-          <span>Heat: {p?.heat?.notes || 0}n / {p?.heat?.tasksChanged || 0}t</span>
+
+        <div className="metrics">
+          <div className="metric">
+            <span className="metricLabel">Last</span>
+            <span className="metricValue">{p.lastActivityAt ? formatDate(p.lastActivityAt) : '—'}</span>
+          </div>
+          {typeof healthScore === 'number' && (
+            <div className="metric metricHealth">
+              <span className="metricLabel">Health</span>
+              <span className="healthBar">
+                <span className={`healthFill ${healthColor}`} style={{ width: `${Math.min(100, healthScore)}%` }} />
+              </span>
+              <span className="metricValue">{healthScore}</span>
+            </div>
+          )}
+          <div className="metric">
+            <span className="metricLabel">Heat</span>
+            <span className="metricValue heatValue">
+              <span className="heatN">{p?.heat?.notes || 0}n</span>
+              <span className="heatT">{p?.heat?.tasksChanged || 0}t</span>
+            </span>
+          </div>
         </div>
-        <div className="next">
-          <div className="sectionTitle">Next actions</div>
-          {(p?.tasks?.next || []).slice(0, 5).map(t => (
-            <div key={t._id} className="taskRow">{t.title}</div>
-          ))}
-        </div>
-        {/* Notes summary removed per request */}
+
+        {(p?.tasks?.next || []).length > 0 && (
+          <div className="next">
+            <div className="sectionTitle">Next actions</div>
+            {(p.tasks.next).slice(0, 5).map(t => (
+              <div key={t._id} className="taskRow">{t.title}</div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -261,70 +283,106 @@ export const PanoramaPage = () => {
         overdue: PropTypes.number,
         next: PropTypes.arrayOf(PropTypes.shape({ _id: PropTypes.string.isRequired, title: PropTypes.string }))
       }),
-      notes: PropTypes.shape({ lastStatusAt: PropTypes.any, decisions7d: PropTypes.number, risks7d: PropTypes.number })
-    }).isRequired
+      panoramaStatus: PropTypes.string,
+    }).isRequired,
+    index: PropTypes.number.isRequired,
   };
 
   return (
     <div className="PanoramaPage">
       <div className="panoramaToolbar">
-        <div className="left">
+        <div className="searchWrap">
+          <svg className="searchIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+          </svg>
           <input
-            className="input"
-            placeholder="Filter by name or tag…"
+            className="input searchInput"
+            placeholder="Filter by name or tag..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="right">
-          <label className="label" htmlFor="panorama_sort">Sort</label>
-          <select id="panorama_sort" className="select" value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
-            <option value="custom">Custom (drag & drop)</option>
-            <option value="createdAtAsc">Created ↑</option>
-            <option value="createdAtDesc">Created ↓</option>
-            <option value="overdueDesc">Overdue ↓</option>
-            <option value="activityDesc">Activity ↓</option>
-            <option value="heatDesc">Heat ↓</option>
-            <option value="healthDesc">Health ↓</option>
+
+        <div className="toolbarSep" />
+
+        <div className="toolbarGroup">
+          <select className="select" value={sortMode} onChange={(e) => setSortMode(e.target.value)} title="Sort projects">
+            <option value="custom">Custom</option>
+            <option value="createdAtAsc">Created &#8593;</option>
+            <option value="createdAtDesc">Created &#8595;</option>
+            <option value="overdueDesc">Overdue &#8595;</option>
+            <option value="activityDesc">Activity &#8595;</option>
+            <option value="heatDesc">Heat &#8595;</option>
+            <option value="healthDesc">Health &#8595;</option>
           </select>
-          <label className="label" htmlFor="panorama_activity">Activity</label>
-          <select id="panorama_activity" className="select" value={activityFilter} onChange={(e) => setActivityFilter(e.target.value)}>
-            <option value="all">All</option>
-            <option value="active">Active in period</option>
-            <option value="inactive">Inactive in period</option>
-          </select>
-          <label className="label" htmlFor="panorama_period">Period</label>
-          <select id="panorama_period" className="select" value={periodDays} onChange={(e) => setPeriodDays(Number(e.target.value) || 14)}>
-            <option value={1}>1 day</option>
-            <option value={7}>7 days</option>
-            <option value={14}>14 days</option>
-            <option value={30}>30 days</option>
-          </select>
+        </div>
+
+        <div className="pillGroup" role="radiogroup" aria-label="Activity filter">
+          {[['all', 'All'], ['active', 'Active'], ['inactive', 'Inactive']].map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={activityFilter === v}
+              className={`pill${activityFilter === v ? ' active' : ''}`}
+              onClick={() => setActivityFilter(v)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="pillGroup" role="radiogroup" aria-label="Period">
+          {[1, 7, 14, 30].map(d => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={Number(periodDays) === d}
+              className={`pill${Number(periodDays) === d ? ' active' : ''}`}
+              onClick={() => setPeriodDays(d)}
+            >
+              {d}d
+            </button>
+          ))}
         </div>
       </div>
 
-      {loading ? (
-        <div>Loading…</div>
-      ) : null}
-
-      <div className="hotspots">
-        <span className={`chip${hotspots.overdue.length ? ' danger' : ''}`}>Overdue: {hotspots.overdue.length}</span>
-        <span className={`chip${hotspots.inactive.length ? ' idle' : ''}`}>Inactive: {hotspots.inactive.length}</span>
+      <div className="signalStrip">
+        <span className="signalItem">
+          <span className="signalCount">{filtered.length}</span> project{filtered.length !== 1 ? 's' : ''}
+        </span>
+        {hotspots.overdue.length > 0 && (
+          <span className="signalItem signalDanger">
+            <span className="signalDot" />
+            {hotspots.overdue.length} overdue
+          </span>
+        )}
+        {hotspots.inactive.length > 0 && (
+          <span className="signalItem signalIdle">
+            <span className="signalDot" />
+            {hotspots.inactive.length} inactive
+          </span>
+        )}
       </div>
+
+      {loading && <div className="loadingBar"><div className="loadingProgress" /></div>}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-      <div className="ProjectGrid">
-        {sorted.map((p) => (
-          <ProjectCardItem key={p._id} p={p} />
-        ))}
-      </div>
+          <div className="ProjectGrid">
+            {sorted.map((p, i) => (
+              <ProjectCardItem key={p._id} p={p} index={i} />
+            ))}
+          </div>
         </SortableContext>
       </DndContext>
+
+      {!loading && sorted.length === 0 && (
+        <div className="emptyState">No projects match your filters</div>
+      )}
     </div>
   );
 };
 
 export default PanoramaPage;
-
-

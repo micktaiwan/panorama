@@ -1,0 +1,56 @@
+.themeToggle-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  position: relative;
+  margin-right: 8px;
+}
+
+.themeToggle-btn:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+/* Icon container — stacks both icons */
+.themeToggle-iconWrap {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.themeToggle-icon {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.35s ease, transform 0.45s ease;
+}
+
+/* Dark mode (default): show sun, hide moon */
+.themeToggle-icon--sun {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+.themeToggle-icon--moon {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.6);
+}
+
+/* Light mode: show moon, hide sun */
+.themeToggle-btn--light .themeToggle-icon--sun {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.6);
+}
+
+.themeToggle-btn--light .themeToggle-icon--moon {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}

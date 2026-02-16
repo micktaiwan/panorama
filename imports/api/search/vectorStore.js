@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getQdrantUrl } from '/imports/api/_shared/config';
+import { getQdrantUrl, getAIConfigAsync, getOpenAiApiKeyAsync } from '/imports/api/_shared/config';
 import { embed as llmEmbed } from '/imports/api/_shared/llmProxy';
 import { ErrorsCollection } from '/imports/api/errors/collections';
 import crypto from 'crypto';
@@ -86,6 +86,14 @@ export const makePreview = (text, max = 180) => {
   return chars.slice(0, max - 1).join('') + '…';
 };
 
+export const isEmbeddingConfigured = async (userId) => {
+  const config = await getAIConfigAsync(userId);
+  if (config.mode === 'remote') {
+    return !!(await getOpenAiApiKeyAsync(userId));
+  }
+  return true; // local (Ollama) doesn't need an API key
+};
+
 export const embedText = async (text, { userId } = {}) => {
   const normalizedText = String(text || '').trim();
 
@@ -94,9 +102,14 @@ export const embedText = async (text, { userId } = {}) => {
     return null;
   }
 
+  // Skip if embedding provider is not configured for this user
+  if (!(await isEmbeddingConfigured(userId))) {
+    return null;
+  }
+
   const result = await llmEmbed([normalizedText], { userId });
   const vec = result.vectors?.[0];
-  
+
   if (!Array.isArray(vec)) {
     console.error('[embedText] Invalid embedding response:', {
       result,
@@ -106,7 +119,7 @@ export const embedText = async (text, { userId } = {}) => {
     });
     throw new Meteor.Error('embedding-invalid', `Invalid embedding response from LLM proxy. Got: ${typeof vec}, expected: Array`);
   }
-  
+
   // Note: We don't validate vector length here anymore since different models have different dimensions
   // The VECTOR_SIZE() check should be done at the collection level or when upserting
   return vec;

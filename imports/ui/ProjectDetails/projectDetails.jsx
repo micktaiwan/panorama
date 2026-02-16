@@ -241,6 +241,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   return (
     <div>
       <Card className="projectHeaderCard" title={null} actions={null}>
+        <div className="pd-accent" style={{ background: project.colorLabel || undefined }} />
+        <div className="pd-hero">
         <div className="projectHeaderRow">
           <button
             className={`starBtn${project.isFavorite ? ' active' : ''}`}
@@ -277,7 +279,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
           />
         </div>
         <div className="projectMeta">
-          Status: {
+          <span className="pd-meta-badge">
+            <span className="pd-meta-label">Status</span>
             <InlineEditable
               as="select"
               value={project.status || ''}
@@ -286,10 +289,9 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                 Meteor.call('projects.update', projectId, { status: next || null });
               }}
             />
-          }
-          {" | "}
-          {project.targetDate ? 'Target: ' : null}
-          {
+          </span>
+          <span className="pd-meta-badge">
+            <span className="pd-meta-label">Target</span>
             <InlineDate
               value={project.targetDate}
               onSubmit={(next) => {
@@ -298,15 +300,20 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
               }}
               placeholder="No target"
             />
-          }
-          {project.targetDate ? (
-            <span className="muted"> · {timeAgo(project.targetDate)}</span>
-          ) : null}
-          {" | "}
-          Progress: {progress}%
-          {" | "}
-          Color: {
-            (() => {
+            {project.targetDate ? (
+              <span className="muted"> · {timeAgo(project.targetDate)}</span>
+            ) : null}
+          </span>
+          <div className="pd-progress">
+            <span className="pd-meta-label">Progress</span>
+            <div className="pd-progress__track">
+              <div className="pd-progress__fill" style={{ width: `${progress}%` }} />
+            </div>
+            <span className="pd-progress__label">{progress}%</span>
+          </div>
+          <span className="pd-meta-badge">
+            <span className="pd-meta-label">Color</span>
+            {(() => {
               const safeColor = (typeof project.colorLabel === 'string' && /^#[0-9a-fA-F]{6}$/.test(project.colorLabel)) ? project.colorLabel : '#6b7280';
               return (
                 <input
@@ -322,23 +329,17 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                   title="Pick a label color"
                 />
               );
-            })()
-          }
-          {linkedClaudeProjects.length > 0 && (
-            <>
-              {" | "}
-              {linkedClaudeProjects.map((cp, i) => (
-                <span key={cp._id}>
-                  {i > 0 && ', '}
-                  <a
-                    href={`#/claude/${cp._id}`}
-                    className="claudeCodeLink"
-                    title={`Open Claude project: ${cp.name}`}
-                  >Claude Code: {cp.name}</a>
-                </span>
-              ))}
-            </>
-          )}
+            })()}
+          </span>
+          {linkedClaudeProjects.length > 0 && linkedClaudeProjects.map((cp) => (
+            <a
+              key={cp._id}
+              href={`#/claude/${cp._id}`}
+              className="claudeCodeLink"
+              title={`Open Claude project: ${cp.name}`}
+            >Claude Code: {cp.name}</a>
+          ))}
+        </div>
         </div>
       </Card>
       {/* Links section */}
@@ -401,62 +402,57 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         </Collapsible>
       </div>
 
-      {/* Members section (owner only) */}
+      {/* Team panel (owner only) */}
       {isOwner && (
         <div className="projectMembersSection">
-          <Collapsible title={`Members (${members.length})`} defaultOpen={false}>
-            <ul className="membersList">
-              {members.map(m => {
-                const email = m.emails?.[0]?.address || '';
-                const displayName = m.username || m.profile?.name || email;
-                const isSelf = m._id === project.userId;
-                return (
-                  <li key={m._id} className="memberItem">
-                    <span className="memberName">{displayName}</span>
-                    {email && <span className="memberEmail muted"> ({email})</span>}
-                    {isSelf ? (
-                      <span className="memberBadge">Owner</span>
-                    ) : (
-                      <button
-                        className="btn btn-small"
-                        onClick={() => {
-                          Meteor.call('projects.removeMember', projectId, m._id, (err) => {
-                            if (err) setMemberError(err.reason || err.message);
-                          });
-                        }}
-                      >Remove</button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="addMemberRow">
-              <input
-                type="email"
-                className="addMemberInput"
-                placeholder="Email address"
-                value={memberEmail}
-                onChange={(e) => { setMemberEmail(e.target.value); setMemberError(''); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && memberEmail.trim()) {
-                    e.preventDefault();
-                    setAddingMember(true);
-                    setMemberError('');
-                    Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
-                      setAddingMember(false);
-                      if (err) {
-                        setMemberError(err.reason || err.message);
-                      } else {
-                        setMemberEmail('');
-                      }
-                    });
-                  }
-                }}
-              />
-              <button
-                className="btn btn-primary"
-                disabled={addingMember || !memberEmail.trim()}
-                onClick={() => {
+          <div className="pd-members__header">
+            <h3 className="pd-members__title">Team</h3>
+            <span className="pd-members__count">{members.length}</span>
+          </div>
+          <div className="pd-members__list">
+            {members.map(m => {
+              const email = m.emails?.[0]?.address || '';
+              const displayName = m.username || m.profile?.name || email;
+              const isSelf = m._id === project.userId;
+              const initials = displayName.split(/[\s@]/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase() || '?';
+              const hue = displayName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 6;
+              return (
+                <div key={m._id} className="pd-member">
+                  <div className="pd-member__avatar" data-hue={hue}>
+                    {initials}
+                  </div>
+                  <div className="pd-member__info">
+                    <span className="pd-member__name">
+                      {displayName}
+                      {isSelf && <span className="pd-member__role">Owner</span>}
+                    </span>
+                    {email && <span className="pd-member__email">{email}</span>}
+                  </div>
+                  {!isSelf && (
+                    <button
+                      className="pd-member__remove"
+                      title="Remove member"
+                      onClick={() => {
+                        Meteor.call('projects.removeMember', projectId, m._id, (err) => {
+                          if (err) setMemberError(err.reason || err.message);
+                        });
+                      }}
+                    >Remove</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="pd-invite">
+            <input
+              type="email"
+              className="pd-invite__input"
+              placeholder="Invite by email..."
+              value={memberEmail}
+              onChange={(e) => { setMemberEmail(e.target.value); setMemberError(''); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && memberEmail.trim()) {
+                  e.preventDefault();
                   setAddingMember(true);
                   setMemberError('');
                   Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
@@ -467,11 +463,27 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                       setMemberEmail('');
                     }
                   });
-                }}
-              >{addingMember ? 'Adding...' : 'Add'}</button>
-            </div>
-            {memberError && <div className="memberError">{memberError}</div>}
-          </Collapsible>
+                }
+              }}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={addingMember || !memberEmail.trim()}
+              onClick={() => {
+                setAddingMember(true);
+                setMemberError('');
+                Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
+                  setAddingMember(false);
+                  if (err) {
+                    setMemberError(err.reason || err.message);
+                  } else {
+                    setMemberEmail('');
+                  }
+                });
+              }}
+            >{addingMember ? 'Inviting...' : 'Invite'}</button>
+          </div>
+          {memberError && <div className="pd-invite__error">{memberError}</div>}
         </div>
       )}
 

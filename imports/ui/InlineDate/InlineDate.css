@@ -23,3 +23,9 @@
   filter: invert(1);
   opacity: 0.9;
 }
+
+@media (max-width: 768px) {
+  .deadlineDisplay {
+    min-width: 0;
+  }
+}
