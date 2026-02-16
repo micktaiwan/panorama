@@ -235,8 +235,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   return (
     <div>
       <Card className="projectHeaderCard" title={null} actions={null}>
-        <div className="pd-accent" style={{ background: project.colorLabel || undefined }} />
-        <div className="pd-hero">
+        <div className="pd-hero" style={project.colorLabel ? { '--project-color': project.colorLabel } : undefined}>
         <div className="projectHeaderRow">
           <button
             className={`starBtn${project.isFavorite ? ' active' : ''}`}
@@ -260,6 +259,61 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
               onSubmit={updateProjectName}
             />
           </h2>
+          <div className="projectMeta">
+            <span className="pd-meta-badge">
+              <span className="pd-meta-label">Status</span>
+              <InlineEditable
+                as="select"
+                value={project.status || ''}
+                options={[{ value: '', label: 'n/a' }, 'planned', 'active', 'blocked', 'done']}
+                onSubmit={(next) => {
+                  Meteor.call('projects.update', projectId, { status: next || null });
+                }}
+              />
+            </span>
+            <span className="pd-meta-badge">
+              <span className="pd-meta-label">Target</span>
+              <InlineDate
+                value={project.targetDate}
+                onSubmit={(next) => {
+                  const parsed = next ? new Date(next) : null;
+                  Meteor.call('projects.update', projectId, { targetDate: parsed });
+                }}
+                placeholder="No target"
+              />
+              {project.targetDate ? (
+                <span className="muted"> · {timeAgo(project.targetDate)}</span>
+              ) : null}
+            </span>
+            <span className="pd-meta-badge">
+              <span className="pd-meta-label">Color</span>
+              {(() => {
+                const safeColor = (typeof project.colorLabel === 'string' && /^#[0-9a-fA-F]{6}$/.test(project.colorLabel)) ? project.colorLabel : '#6b7280';
+                return (
+                  <input
+                    type="color"
+                    className="colorPickerInput"
+                    value={safeColor}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (typeof val === 'string' && /^#[0-9a-fA-F]{6}$/.test(val)) {
+                        Meteor.call('projects.update', projectId, { colorLabel: val });
+                      }
+                    }}
+                    title="Pick a label color"
+                  />
+                );
+              })()}
+            </span>
+            {linkedClaudeProjects.length > 0 && linkedClaudeProjects.map((cp) => (
+              <a
+                key={cp._id}
+                href={`#/claude/${cp._id}`}
+                className="claudeCodeLink"
+                title={`Open Claude project: ${cp.name}`}
+              >Claude Code: {cp.name}</a>
+            ))}
+          </div>
           <div className="projectHeaderRight">
             <button className="btn-link" onClick={openImproveModal} title="Improve project description">Improve description</button>
           </div>
@@ -272,84 +326,62 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
             as="textarea"
           />
         </div>
-        <div className="projectMeta">
-          <span className="pd-meta-badge">
-            <span className="pd-meta-label">Status</span>
-            <InlineEditable
-              as="select"
-              value={project.status || ''}
-              options={[{ value: '', label: 'n/a' }, 'planned', 'active', 'blocked', 'done']}
-              onSubmit={(next) => {
-                Meteor.call('projects.update', projectId, { status: next || null });
-              }}
-            />
-          </span>
-          <span className="pd-meta-badge">
-            <span className="pd-meta-label">Target</span>
-            <InlineDate
-              value={project.targetDate}
-              onSubmit={(next) => {
-                const parsed = next ? new Date(next) : null;
-                Meteor.call('projects.update', projectId, { targetDate: parsed });
-              }}
-              placeholder="No target"
-            />
-            {project.targetDate ? (
-              <span className="muted"> · {timeAgo(project.targetDate)}</span>
-            ) : null}
-          </span>
-          <span className="pd-meta-badge">
-            <span className="pd-meta-label">Color</span>
-            {(() => {
-              const safeColor = (typeof project.colorLabel === 'string' && /^#[0-9a-fA-F]{6}$/.test(project.colorLabel)) ? project.colorLabel : '#6b7280';
-              return (
-                <input
-                  type="color"
-                  className="colorPickerInput"
-                  value={safeColor}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (typeof val === 'string' && /^#[0-9a-fA-F]{6}$/.test(val)) {
-                      Meteor.call('projects.update', projectId, { colorLabel: val });
-                    }
-                  }}
-                  title="Pick a label color"
-                />
-              );
-            })()}
-          </span>
-          {linkedClaudeProjects.length > 0 && linkedClaudeProjects.map((cp) => (
-            <a
-              key={cp._id}
-              href={`#/claude/${cp._id}`}
-              className="claudeCodeLink"
-              title={`Open Claude project: ${cp.name}`}
-            >Claude Code: {cp.name}</a>
-          ))}
-        </div>
         </div>
       </Card>
 
       <div className="pd-tabs" role="tablist">
-        {['tasks', 'notes', 'resources', 'settings'].map(tab => (
+        {[
+          { key: 'tasks', label: 'Tasks', icon: '\u2713', count: activeTasks.length },
+          { key: 'notes', label: 'Notes', icon: '\u270E', count: notes.length + sessions.length },
+          { key: 'resources', label: 'Resources', icon: '\u{1F517}', count: links.length + files.length },
+          { key: 'settings', label: 'Settings', icon: '\u2699' },
+        ].map(tab => (
           <button
-            key={tab}
+            key={tab.key}
             role="tab"
-            aria-selected={activeTab === tab}
-            className={`pd-tabs__tab${activeTab === tab ? ' pd-tabs__tab--active' : ''}`}
-            onClick={() => setActiveTab(tab)}
+            aria-selected={activeTab === tab.key}
+            className={`pd-tabs__tab${activeTab === tab.key ? ' pd-tabs__tab--active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            <span className="pd-tabs__icon">{tab.icon}</span>
+            {tab.label}
+            {tab.count != null && tab.count > 0 && <span className="pd-tabs__count">{tab.count}</span>}
           </button>
         ))}
+        <div className="pd-tabs__actions">
+          {activeTab === 'tasks' && <button className="btn btn-primary btn-sm" onClick={createTask}>Add Task</button>}
+          {activeTab === 'notes' && (
+            <>
+              <button className="btn btn-primary btn-sm" onClick={createNote}>Add Note</button>
+              <button className="btn btn-sm" onClick={() => onOpenNoteSession(projectId)}>New Session</button>
+            </>
+          )}
+          {activeTab === 'resources' && (
+            <>
+              <button className="btn btn-primary btn-sm" onClick={() => createNewLink(projectId)}>Add Link</button>
+              <label className="btn btn-sm">
+                Upload File
+                <input type="file" style={{ display: 'none' }} onChange={(e) => {
+                  const file = e.target.files && e.target.files[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const base64 = String(reader.result || '').split(',').pop() || '';
+                    const name = file.name.replace(/\.[^.]+$/, '');
+                    Meteor.call('files.insert', { projectId, name, originalName: file.name, contentBase64: base64, mimeType: file.type }, () => {});
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = '';
+                }} />
+              </label>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="pd-tab-content">
         {activeTab === 'tasks' && (
           <>
-            <div className="projectActions">
-              <button className="btn btn-primary" onClick={createTask}>Add Task</button>
-            </div>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
               <SortableContext items={order} strategy={verticalListSortingStrategy}>
                 <ul className="tasksList">
@@ -432,10 +464,6 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
 
         {activeTab === 'notes' && (
           <>
-            <div className="projectActions">
-              <button className="btn btn-primary" onClick={createNote}>Add Note</button>
-              <button className="btn btn-primary ml8" onClick={() => onOpenNoteSession(projectId)}>New Note Session</button>
-            </div>
             {notes.length === 0 ? (
               <div>No notes yet.</div>
             ) : (
@@ -568,51 +596,33 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
 
         {activeTab === 'resources' && (
           <>
-            <div className="projectLinksRow">
-              <div className="projectLinksList">
-                {links.map((l, idx) => (
-                  <span key={l._id} className="projectLinkItem">
-                    <LinkItem link={l} startEditing={idx === 0 && (l.name === 'New Link')} hoverActions />
-                  </span>
-                ))}
-                {links.length === 0 ? (
-                  <span className="muted">No links yet</span>
-                ) : null}
+            {links.length > 0 && (
+              <div className="projectLinksRow">
+                <div className="projectLinksList">
+                  {links.map((l, idx) => (
+                    <span key={l._id} className="projectLinkItem">
+                      <LinkItem link={l} startEditing={idx === 0 && (l.name === 'New Link')} hoverActions />
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="projectLinksActions">
-                <button className="btn btn-primary" onClick={() => createNewLink(projectId)}>Add Link</button>
-              </div>
-            </div>
+            )}
 
-            <div className="projectLinksRow">
-              <div className="projectLinksList">
-                {files.map((f, idx) => (
-                  <span key={f._id} className="projectFileItem">
-                    <FileItem file={f} startEditing={false} hoverActions />
-                  </span>
-                ))}
-                {files.length === 0 ? (
-                  <span className="muted">No files yet</span>
-                ) : null}
+            {files.length > 0 && (
+              <div className="projectLinksRow">
+                <div className="projectLinksList">
+                  {files.map((f) => (
+                    <span key={f._id} className="projectFileItem">
+                      <FileItem file={f} startEditing={false} hoverActions />
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="projectLinksActions">
-                <label className="btn btn-primary">
-                  Upload File
-                  <input type="file" style={{ display: 'none' }} onChange={(e) => {
-                    const file = e.target.files && e.target.files[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const base64 = String(reader.result || '').split(',').pop() || '';
-                      const name = file.name.replace(/\.[^.]+$/, '');
-                      Meteor.call('files.insert', { projectId, name, originalName: file.name, contentBase64: base64, mimeType: file.type }, () => {});
-                    };
-                    reader.readAsDataURL(file);
-                    e.target.value = '';
-                  }} />
-                </label>
-              </div>
-            </div>
+            )}
+
+            {links.length === 0 && files.length === 0 && (
+              <p className="muted">No resources yet. Use the buttons above to add links or upload files.</p>
+            )}
           </>
         )}
 

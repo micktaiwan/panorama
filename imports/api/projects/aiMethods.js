@@ -21,7 +21,7 @@ Meteor.methods({
     check(projectId, String);
     ensureLoggedIn(this.userId);
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const project = await ProjectsCollection.findOneAsync({ _id: projectId, userId: this.userId });
+    const project = await ProjectsCollection.findOneAsync({ _id: projectId, memberIds: this.userId });
     if (!project) throw new Meteor.Error('not-found', 'Project not found');
 
     const name = String(project.name || '').trim();
@@ -80,7 +80,7 @@ Meteor.methods({
     const freeText = typeof payload.freeText === 'string' ? payload.freeText : '';
 
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const project = await ProjectsCollection.findOneAsync({ _id: projectId, userId: this.userId });
+    const project = await ProjectsCollection.findOneAsync({ _id: projectId, memberIds: this.userId });
     if (!project) throw new Meteor.Error('not-found', 'Project not found');
 
     const name = String(project.name || '').trim();

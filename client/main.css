@@ -110,7 +110,8 @@ body {
 
   /* Misc */
   --radius: 8px;
-  --tooltip-bg: #1a1433;
+  --tooltip-bg: #3a3655;
+  --tooltip-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 
   /* Highlight colors (dark theme - lower opacity for readability) */
   --highlight-yellow: rgba(250, 204, 21, 0.35);
@@ -223,7 +224,9 @@ body {
   --notes-open-border: #93c5fd;
 
   /* Misc */
-  --tooltip-bg: #ffffff;
+  --tooltip-bg: #1a1a2e;
+  --tooltip-color: #f0f0f0;
+  --tooltip-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 
   /* Highlight colors (light theme - higher opacity for visibility) */
   --highlight-yellow: rgba(250, 204, 21, 0.5);
@@ -295,6 +298,12 @@ button { cursor: pointer; }
 
 .btn-primary:hover {
   background: var(--primary-600);
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
 }
 
 .btn-link {

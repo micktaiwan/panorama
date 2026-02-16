@@ -54,7 +54,7 @@ export const ProjectFilters = ({ projects, storageKey = 'dashboard_proj_filters'
         const state = filters[p._id];
         const cls = state === 1 ? ' include' : state === -1 ? ' exclude' : '';
         const fullName = p.name || '(untitled project)';
-        const label = fullName.length > 10 ? `${fullName.slice(0, 10)}` : fullName;
+        const label = fullName.length > 15 ? `${fullName.slice(0, 15)}` : fullName;
         return (
           <Tooltip key={p._id} content={fullName} placement="top">
             <button

@@ -1,5 +1,5 @@
 ---
-description: Analyse les changements git, génère les release notes, crée la release en base, commit + tag + push
+description: Analyse les changements git, génère les release notes, commit + tag + push, puis crée la release en base
 ---
 
 Tu es le gestionnaire de releases de Panorama. Suis ces étapes dans l'ordre :
@@ -34,7 +34,16 @@ Affiche :
 
 Demande confirmation avant de continuer (utilise AskUserQuestion).
 
-## 5. Insérer la release en base
+## 5. Commit + tag + push
+
+- `git add -A`
+- Commit avec les release notes dans le message (format : "release: v{version} — {title}")
+- `git tag v{version}`
+- `git push origin main --tags`
+
+IMPORTANT : demande confirmation avant le push.
+
+## 6. Insérer la release en base
 
 Utilise le MCP tool `tool_createRelease` avec :
 - `version` : la nouvelle version (sans le "v")
@@ -45,12 +54,3 @@ Si le MCP tool n'est pas disponible, utilise mongosh comme fallback :
 ```bash
 mongosh "$PANORAMA_MONGO_URI" --eval 'db.releases.insertOne({version:"...",title:"...",content:"...",createdBy:"...",createdAt:new Date()})'
 ```
-
-## 6. Commit + tag + push
-
-- `git add -A`
-- Commit avec les release notes dans le message (format : "release: v{version} — {title}")
-- `git tag v{version}`
-- `git push origin main --tags`
-
-IMPORTANT : demande confirmation avant le push.
