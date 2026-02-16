@@ -1,3 +1,11 @@
+.appLoading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  color: var(--muted);
+}
+
 .homeActions {
   margin-top: 16px;
 }
