@@ -25,7 +25,10 @@ Meteor.methods({
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'session', id: _id, text: `${sanitized.name || ''} ${sanitized.aiSummary || ''}`.trim(), projectId: sanitized.projectId || null, userId: this.userId });
-    } catch (e) { console.error('[search][noteSessions.insert] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][noteSessions.insert] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your session was saved.', { insertedId: _id });
+    }
     if (doc.projectId) {
       await ProjectsCollection.updateAsync(doc.projectId, { $set: { updatedAt: new Date() } });
     }
@@ -73,7 +76,10 @@ Meteor.methods({
       const next = await NoteSessionsCollection.findOneAsync(sessionId, { fields: { name: 1, aiSummary: 1, projectId: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'session', id: sessionId, text: `${next?.name || ''} ${next?.aiSummary || ''}`.trim(), projectId: next?.projectId || null, userId: this.userId });
-    } catch (e) { console.error('[search][noteSessions.update] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][noteSessions.update] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+    }
     if (ses && ses.projectId) {
       await ProjectsCollection.updateAsync(ses.projectId, { $set: { updatedAt: new Date() } });
     }

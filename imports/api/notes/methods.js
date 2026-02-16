@@ -22,7 +22,10 @@ Meteor.methods({
     try {
       const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       await upsertDocChunks({ kind: 'note', id: _id, text: `${sanitized.title || ''} ${sanitized.content || ''}`.trim(), projectId: sanitized.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
-    } catch (e) { console.error('[search][notes.insert] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][notes.insert] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
+    }
     if (doc.projectId) {
       await ProjectsCollection.updateAsync(doc.projectId, { $set: { updatedAt: new Date() } });
     }
@@ -62,7 +65,10 @@ Meteor.methods({
       const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       await deleteByDocId('note', noteId);
       await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
-    } catch (e) { console.error('[search][notes.update] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][notes.update] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+    }
 
     // Only update project timestamp if note content changed
     if (hasChanged && note?.projectId) {
@@ -111,7 +117,10 @@ Meteor.methods({
     try {
       const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       await upsertDocChunks({ kind: 'note', id: _id, text: `${sanitized.title || ''} ${sanitized.content || ''}`.trim(), projectId: sanitized.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
-    } catch (e) { console.error('[search][notes.duplicate] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][notes.duplicate] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
+    }
     
     if (duplicatedDoc.projectId) {
       await ProjectsCollection.updateAsync(duplicatedDoc.projectId, { $set: { updatedAt: new Date() } });

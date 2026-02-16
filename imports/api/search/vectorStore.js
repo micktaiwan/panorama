@@ -133,6 +133,9 @@ const ensureCollectionIfNeeded = async () => {
 };
 
 export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {} }) => {
+  if (!(await isEmbeddingConfigured(userId))) {
+    throw new Meteor.Error('embedding-not-configured', 'Embedding API key not configured. Set your OpenAI key in Preferences > AI.');
+  }
   const client = await getQdrantClient();
   await ensureCollectionIfNeeded();
   const vector = await embedText(text, { userId });
@@ -266,6 +269,9 @@ export const splitIntoChunks = (text, minChars = 800, maxChars = 1200, overlap =
 
 // Upsert multiple chunks for one logical document
 export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {}, minChars = 800, maxChars = 1200, overlap = 150 }) => {
+  if (!(await isEmbeddingConfigured(userId))) {
+    throw new Meteor.Error('embedding-not-configured', 'Embedding API key not configured. Set your OpenAI key in Preferences > AI.');
+  }
   const client = await getQdrantClient();
   await ensureCollectionIfNeeded();
   const normalizedText = String(text || '').trim();

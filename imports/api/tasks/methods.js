@@ -73,7 +73,10 @@ Meteor.methods({
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${sanitized.title || ''} ${sanitized.notes || ''}`.trim();
       await upsertDoc({ kind: 'task', id: _id, text, projectId: sanitized.projectId || null, userId: this.userId });
-    } catch (e) { console.error('[search][tasks.insert] upsert failed', e); }
+    } catch (e) {
+      console.error('[search][tasks.insert] upsert failed', e);
+      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your task was saved.', { insertedId: _id });
+    }
     return _id;
   },
   async 'tasks.update'(taskId, modifier) {
@@ -111,7 +114,10 @@ Meteor.methods({
         const text = `${next?.title || ''} ${next?.notes || ''}`.trim();
         const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
         await upsertDoc({ kind: 'task', id: taskId, text, projectId: next && next.projectId, userId: this.userId });
-      } catch (e) { console.error('[search][tasks.update] upsert failed', e); }
+      } catch (e) {
+        console.error('[search][tasks.update] upsert failed', e);
+        throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+      }
     }
     return res;
   },
