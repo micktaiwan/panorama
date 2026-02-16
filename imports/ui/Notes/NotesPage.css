@@ -1,6 +1,6 @@
 .notes-page {
   display: flex;
-  height: calc(100vh - 260px); /* reduce overall page height */
+  height: calc(100vh - 180px);
   max-height: calc(100vh - 140px);
   background: var(--notes-bg) !important;
   margin: -16px; /* Annuler le padding du panel */
