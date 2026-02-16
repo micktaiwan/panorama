@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { LinksCollection } from './collections';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 const ensureHttpUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
@@ -25,6 +25,7 @@ Meteor.methods({
       url: String,
     });
     ensureLoggedIn(this.userId);
+    if (doc.projectId) await ensureProjectAccess(doc.projectId, this.userId);
     const now = new Date();
     const clean = normalize(doc);
     const _id = await LinksCollection.insertAsync({
@@ -47,7 +48,13 @@ Meteor.methods({
     check(linkId, String);
     check(modifier, Object);
     ensureLoggedIn(this.userId);
-    await ensureOwner(LinksCollection, linkId, this.userId);
+    const link = await LinksCollection.findOneAsync(linkId);
+    if (!link) throw new Meteor.Error('not-found', 'Link not found');
+    if (link.projectId) {
+      await ensureProjectAccess(link.projectId, this.userId);
+    } else if (link.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Link not found');
+    }
     const clean = normalize(modifier);
     const res = await LinksCollection.updateAsync(linkId, { $set: { ...clean, updatedAt: new Date() } });
     // Live search upsert
@@ -62,7 +69,13 @@ Meteor.methods({
   async 'links.remove'(linkId) {
     check(linkId, String);
     ensureLoggedIn(this.userId);
-    await ensureOwner(LinksCollection, linkId, this.userId);
+    const link = await LinksCollection.findOneAsync(linkId);
+    if (!link) throw new Meteor.Error('not-found', 'Link not found');
+    if (link.projectId) {
+      await ensureProjectAccess(link.projectId, this.userId);
+    } else if (link.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Link not found');
+    }
     const res = await LinksCollection.removeAsync(linkId);
     try {
       const { deleteDoc } = await import('/imports/api/search/vectorStore.js');
@@ -73,14 +86,25 @@ Meteor.methods({
   async 'links.registerClick'(linkId) {
     check(linkId, String);
     ensureLoggedIn(this.userId);
-    await ensureOwner(LinksCollection, linkId, this.userId);
+    const link = await LinksCollection.findOneAsync(linkId);
+    if (!link) throw new Meteor.Error('not-found', 'Link not found');
+    if (link.projectId) {
+      await ensureProjectAccess(link.projectId, this.userId);
+    } else if (link.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Link not found');
+    }
     return LinksCollection.updateAsync(linkId, { $inc: { clicksCount: 1 }, $set: { lastClickedAt: new Date(), updatedAt: new Date() } });
   },
   async 'links.getUrl'(linkId, opts = {}) {
     check(linkId, String);
     ensureLoggedIn(this.userId);
-    await ensureOwner(LinksCollection, linkId, this.userId);
-    const l = await LinksCollection.findOneAsync({ _id: linkId }, { fields: { url: 1 } });
+    const l = await LinksCollection.findOneAsync(linkId);
+    if (!l) throw new Meteor.Error('not-found', 'Link not found');
+    if (l.projectId) {
+      await ensureProjectAccess(l.projectId, this.userId);
+    } else if (l.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Link not found');
+    }
     if (!l || !l.url) throw new Meteor.Error('not-found', 'Link not found');
     const url = ensureHttpUrl(l.url);
     if (registerClick) {

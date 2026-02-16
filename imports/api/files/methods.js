@@ -7,7 +7,8 @@ import { WebApp } from 'meteor/webapp';
 import { Random } from 'meteor/random';
 import { FilesCollection } from './collections';
 import { AppPreferencesCollection } from '../appPreferences/collections';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { ProjectsCollection } from '/imports/api/projects/collections';
 
 // The order of preference for determining the storage directory is:
 // 1. User-defined directory from AppPreferencesCollection
@@ -34,6 +35,7 @@ Meteor.methods({
     check(contentBase64, String);
     check(mimeType, Match.Maybe(String));
     ensureLoggedIn(this.userId);
+    if (projectId && projectId !== '__none__') await ensureProjectAccess(projectId, this.userId);
     const cleanName = sanitizeName(name);
     if (!cleanName) throw new Meteor.Error('invalid-name', 'File name is required');
     const uniqueId = Random.id();
@@ -67,7 +69,13 @@ Meteor.methods({
     check(fileId, String);
     check(modifier, Object);
     ensureLoggedIn(this.userId);
-    await ensureOwner(FilesCollection, fileId, this.userId);
+    const file = await FilesCollection.findOneAsync(fileId);
+    if (!file) throw new Meteor.Error('not-found', 'File not found');
+    if (file.projectId && file.projectId !== '__none__') {
+      await ensureProjectAccess(file.projectId, this.userId);
+    } else if (file.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'File not found');
+    }
     const updates = {};
     if (typeof modifier.name === 'string') updates.name = sanitizeName(modifier.name);
     if (typeof modifier.projectId === 'string') updates.projectId = modifier.projectId || '__none__';
@@ -78,7 +86,13 @@ Meteor.methods({
   async 'files.remove'(fileId) {
     check(fileId, String);
     ensureLoggedIn(this.userId);
-    const f = await ensureOwner(FilesCollection, fileId, this.userId);
+    const f = await FilesCollection.findOneAsync(fileId);
+    if (!f) throw new Meteor.Error('not-found', 'File not found');
+    if (f.projectId && f.projectId !== '__none__') {
+      await ensureProjectAccess(f.projectId, this.userId);
+    } else if (f.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'File not found');
+    }
     if (f?.storedFileName) {
       try {
         const { isRemoteFileStorage, remoteDeleteFile } = await import('./remoteFileClient');
@@ -99,7 +113,13 @@ Meteor.methods({
   async 'files.registerClick'(fileId) {
     check(fileId, String);
     ensureLoggedIn(this.userId);
-    await ensureOwner(FilesCollection, fileId, this.userId);
+    const file = await FilesCollection.findOneAsync(fileId);
+    if (!file) throw new Meteor.Error('not-found', 'File not found');
+    if (file.projectId && file.projectId !== '__none__') {
+      await ensureProjectAccess(file.projectId, this.userId);
+    } else if (file.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'File not found');
+    }
     await FilesCollection.updateAsync(fileId, { $set: { lastClickedAt: new Date() }, $inc: { clicksCount: 1 } });
     return true;
   }
@@ -113,8 +133,15 @@ WebApp.connectHandlers.use(async (req, res, next) => {
   if (!userId) { res.statusCode = 401; res.end('Unauthorized'); return; }
   const name = decodeURIComponent(req.url.replace('/files/', '').split('?')[0]);
   if (!name) { res.statusCode = 400; res.end('Bad request'); return; }
-  const fileDoc = await FilesCollection.findOneAsync({ storedFileName: name, userId });
+  const fileDoc = await FilesCollection.findOneAsync({ storedFileName: name });
   if (!fileDoc) { res.statusCode = 404; res.end('Not found'); return; }
+  // Check access: project membership or direct ownership
+  if (fileDoc.projectId && fileDoc.projectId !== '__none__') {
+    const project = await ProjectsCollection.findOneAsync({ _id: fileDoc.projectId, memberIds: userId });
+    if (!project) { res.statusCode = 404; res.end('Not found'); return; }
+  } else if (fileDoc.userId !== userId) {
+    res.statusCode = 404; res.end('Not found'); return;
+  }
   try {
     const { isRemoteFileStorage, remoteGetFileStream } = await import('./remoteFileClient');
     if (isRemoteFileStorage()) {

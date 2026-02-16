@@ -1,4 +1,5 @@
 import { Meteor } from 'meteor/meteor';
+import { ProjectsCollection } from '/imports/api/projects/collections';
 
 /**
  * Throw 'not-authorized' if userId is falsy.
@@ -21,6 +22,18 @@ export const ensureOwner = async (collection, docId, userId) => {
     throw new Meteor.Error('not-found', 'Document not found');
   }
   return doc;
+};
+
+/**
+ * Verify that `userId` is a member of the project `projectId`.
+ * Returns the project if found; throws 'not-found' otherwise.
+ */
+export const ensureProjectAccess = async (projectId, userId) => {
+  const project = await ProjectsCollection.findOneAsync({
+    _id: projectId, memberIds: userId,
+  });
+  if (!project) throw new Meteor.Error('not-found', 'Project not found');
+  return project;
 };
 
 /**

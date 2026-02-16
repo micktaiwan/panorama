@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useSubscribe, useFind } from 'meteor/react-meteor-data';
+import { useSubscribe, useFind, useTracker } from 'meteor/react-meteor-data';
 import { ProjectsCollection } from '../../api/projects/collections';
 import { TasksCollection } from '../../api/tasks/collections';
 import { NoteSessionsCollection } from '../../api/noteSessions/collections';
@@ -35,6 +35,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const loadLinks = useSubscribe('links.byProject', projectId);
   const loadFiles = useSubscribe('files.byProject', projectId);
   const loadClaudeProjects = useSubscribe('claudeProjects');
+  const loadMembers = useSubscribe('projectMembers', projectId);
 
   const project = useFind(() => ProjectsCollection.find({ _id: projectId }))[0];
   const linkedClaudeProjects = useFind(() => ClaudeProjectsCollection.find({ linkedProjectId: projectId }, { fields: { name: 1, linkedProjectId: 1 } }));
@@ -105,6 +106,17 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cleaningNoteIds, setCleaningNoteIds] = useState({});
   const [undoAvailable, setUndoAvailable] = useState({});
+
+  // Members state
+  const [memberEmail, setMemberEmail] = useState('');
+  const [memberError, setMemberError] = useState('');
+  const [addingMember, setAddingMember] = useState(false);
+  const currentUserId = useTracker(() => Meteor.userId(), []);
+  const isOwner = project?.userId === currentUserId;
+  const members = useTracker(() => {
+    if (!project?.memberIds) return [];
+    return Meteor.users.find({ _id: { $in: project.memberIds } }).fetch();
+  }, [project?.memberIds]);
 
   // Improve description (AI) modal state
   const [isImproveOpen, setIsImproveOpen] = useState(false);
@@ -388,6 +400,80 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
           />
         </Collapsible>
       </div>
+
+      {/* Members section (owner only) */}
+      {isOwner && (
+        <div className="projectMembersSection">
+          <Collapsible title={`Members (${members.length})`} defaultOpen={false}>
+            <ul className="membersList">
+              {members.map(m => {
+                const email = m.emails?.[0]?.address || '';
+                const displayName = m.username || m.profile?.name || email;
+                const isSelf = m._id === project.userId;
+                return (
+                  <li key={m._id} className="memberItem">
+                    <span className="memberName">{displayName}</span>
+                    {email && <span className="memberEmail muted"> ({email})</span>}
+                    {isSelf ? (
+                      <span className="memberBadge">Owner</span>
+                    ) : (
+                      <button
+                        className="btn btn-small"
+                        onClick={() => {
+                          Meteor.call('projects.removeMember', projectId, m._id, (err) => {
+                            if (err) setMemberError(err.reason || err.message);
+                          });
+                        }}
+                      >Remove</button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="addMemberRow">
+              <input
+                type="email"
+                className="addMemberInput"
+                placeholder="Email address"
+                value={memberEmail}
+                onChange={(e) => { setMemberEmail(e.target.value); setMemberError(''); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && memberEmail.trim()) {
+                    e.preventDefault();
+                    setAddingMember(true);
+                    setMemberError('');
+                    Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
+                      setAddingMember(false);
+                      if (err) {
+                        setMemberError(err.reason || err.message);
+                      } else {
+                        setMemberEmail('');
+                      }
+                    });
+                  }
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                disabled={addingMember || !memberEmail.trim()}
+                onClick={() => {
+                  setAddingMember(true);
+                  setMemberError('');
+                  Meteor.call('projects.addMember', projectId, memberEmail.trim(), (err) => {
+                    setAddingMember(false);
+                    if (err) {
+                      setMemberError(err.reason || err.message);
+                    } else {
+                      setMemberEmail('');
+                    }
+                  });
+                }}
+              >{addingMember ? 'Adding...' : 'Add'}</button>
+            </div>
+            {memberError && <div className="memberError">{memberError}</div>}
+          </Collapsible>
+        </div>
+      )}
 
       <h3 className="tasksHeader">Tasks</h3>
       <div className="projectActions">

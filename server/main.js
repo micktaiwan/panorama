@@ -326,11 +326,13 @@ Meteor.startup(async () => {
   const { UserPreferencesCollection } = await import('/imports/api/userPreferences/collections');
 
   ProjectsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  ProjectsCollection.rawCollection().createIndex({ memberIds: 1 }).catch(() => {});
   TasksCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   TasksCollection.rawCollection().createIndex({ userId: 1, done: 1 }).catch(() => {});
   NotesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   NoteSessionsCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   NoteLinesCollection.rawCollection().createIndex({ userId: 1, sessionId: 1 }).catch(() => {});
+  NoteLinesCollection.rawCollection().createIndex({ projectId: 1 }).catch(() => {});
   LinksCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   FilesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   UserPreferencesCollection.rawCollection().createIndex({ userId: 1 }, { unique: true }).catch(() => {});
@@ -425,6 +427,41 @@ Meteor.startup(async () => {
     } else {
       console.log('[startup] Skipping userId backfill: localUserId not set in appPreferences');
     }
+  }
+
+  // --- Backfill memberIds on projects ---
+  // One-time migration: adds memberIds: [userId] to all projects that don't have it yet.
+  if (prefs && !prefs._memberIdsBackfilled) {
+    console.log('[startup] Backfilling memberIds on projects...');
+    let memberIdsCount = 0;
+    const allProjects = await ProjectsCollection.find({ memberIds: { $exists: false } }).fetchAsync();
+    for (const p of allProjects) {
+      if (p.userId) {
+        await ProjectsCollection.updateAsync(p._id, { $set: { memberIds: [p.userId] } });
+        memberIdsCount++;
+      }
+    }
+    console.log(`[startup] memberIds backfill: ${memberIdsCount} projects updated`);
+
+    // Backfill projectId on noteLines from their parent session
+    console.log('[startup] Backfilling projectId on noteLines...');
+    let noteLinesCount = 0;
+    const sessionsWithProject = await NoteSessionsCollection.find(
+      { projectId: { $exists: true, $ne: null } },
+      { fields: { _id: 1, projectId: 1 } }
+    ).fetchAsync();
+    for (const ses of sessionsWithProject) {
+      const result = await NoteLinesCollection.rawCollection().updateMany(
+        { sessionId: ses._id, projectId: { $exists: false } },
+        { $set: { projectId: ses.projectId } }
+      );
+      noteLinesCount += result.modifiedCount;
+    }
+    console.log(`[startup] noteLines projectId backfill: ${noteLinesCount} lines updated`);
+
+    await AppPreferencesCollection.updateAsync(prefs._id, {
+      $set: { _memberIdsBackfilled: true, updatedAt: new Date() }
+    });
   }
 
   // Place server-side initialization here as your app grows.
