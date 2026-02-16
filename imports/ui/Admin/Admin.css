@@ -34,14 +34,6 @@
   opacity: 0.5;
 }
 
-.btn-danger {
-  color: var(--error, #e74c3c);
-  border-color: var(--error, #e74c3c);
-}
-.btn-danger:hover:not(:disabled) {
-  background: var(--error, #e74c3c);
-  color: #fff;
-}
 .btn-danger:disabled {
   opacity: 0.4;
   cursor: not-allowed;

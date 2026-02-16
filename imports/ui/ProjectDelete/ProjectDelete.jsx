@@ -68,7 +68,7 @@ export const ProjectDelete = ({ projectId, onBack }) => {
             <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
             I understand the consequences
           </label>
-          <button className="btn danger" onClick={handleDelete} disabled={!confirmed || isDeleting} aria-label={`Permanently delete project ${project.name || ''}`}>
+          <button className="btn btn-danger" onClick={handleDelete} disabled={!confirmed || isDeleting} aria-label={`Permanently delete project ${project.name || ''}`}>
             {isDeleting ? 'Deleting…' : 'Permanently delete project'}
           </button>
         </div>

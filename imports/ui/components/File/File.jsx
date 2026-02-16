@@ -52,7 +52,7 @@ export const FileItem = ({ file, startEditing = false, hoverActions = false }) =
         title="Delete file"
         actions={[
           <button key="cancel" className="btn" onClick={() => setConfirmOpen(false)}>Cancel</button>,
-          <button key="del" className="btn danger" onClick={() => {
+          <button key="del" className="btn btn-danger" onClick={() => {
             const id = file && file._id;
             if (!id) { setConfirmOpen(false); return; }
             Meteor.call('files.remove', id, () => setConfirmOpen(false));

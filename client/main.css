@@ -315,34 +315,34 @@ button { cursor: pointer; }
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", emoji, system-ui, sans-serif;
 }
 
-.btn.danger {
+.btn-danger {
   border-color: var(--danger);
   background: var(--danger);
   color: #fff;
 }
 
-.btn.danger:hover {
+.btn-danger:hover {
   background: var(--danger-600);
 }
 
 /* Softer red in light mode */
-.theme-light .btn.danger {
+.theme-light .btn-danger {
   background: var(--danger-400);
   border-color: var(--danger-400);
 }
 
-.theme-light .btn.danger:hover {
+.theme-light .btn-danger:hover {
   background: var(--danger);
   border-color: var(--danger);
 }
 
-.btn.success {
+.btn-success {
   border-color: var(--success);
   background: var(--success);
   color: #0b1a14; /* dark text on green button — intentional contrast */
 }
 
-.btn.success:hover {
+.btn-success:hover {
   background: var(--success-600);
 }
 

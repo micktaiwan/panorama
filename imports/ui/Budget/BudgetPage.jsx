@@ -249,7 +249,7 @@ export const BudgetPage = () => {
         {activeTab === 'import' && (
           <div className="panel">
             <div className="sectionActions">
-              <button className="btn danger" onClick={() => setResetOpen(true)}>Reset all</button>
+              <button className="btn btn-danger" onClick={() => setResetOpen(true)}>Reset all</button>
             </div>
             <ImportTab
               fileName={fileName}
@@ -315,7 +315,7 @@ export const BudgetPage = () => {
           <button key="cancel" className="btn" onClick={() => setResetOpen(false)}>Cancel</button>,
           <button
             key="confirm"
-            className="btn danger"
+            className="btn btn-danger"
             onClick={() => {
               Meteor.call('budget.resetAll', (err, res) => {
                 if (err) { console.error('budget.resetAll failed', err); notify({ message: 'Reset failed', kind: 'error' }); return; }
