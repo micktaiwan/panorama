@@ -613,7 +613,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         title={`Delete project ${project.name || '(untitled)'}`}
         actions={[
           <button key="cancel" className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>,
-          <button key="del" className="btn danger" onClick={confirmDeleteProject}>Delete</button>
+          <button key="del" className="btn btn-danger" onClick={confirmDeleteProject}>Delete</button>
         ]}
       >
         <div>Delete this project and all its tasks and sessions? This cannot be undone.</div>
@@ -667,7 +667,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         title="Delete note"
         actions={[
           <button key="cancel" className="btn" onClick={() => setNoteToDeleteId(null)}>Cancel</button>,
-          <button key="del" className="btn danger" onClick={() => {
+          <button key="del" className="btn btn-danger" onClick={() => {
             const id = noteToDeleteId;
             if (!id) return;
             Meteor.call('notes.remove', id, (err) => {

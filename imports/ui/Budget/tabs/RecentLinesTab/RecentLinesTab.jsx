@@ -296,7 +296,7 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
                         </a>
                       ) : null}
                       <button
-                        className="btn danger ml8"
+                        className="btn btn-danger ml8"
                         onClick={() => {
                           Meteor.call('budget.removeLine', r._id, (err, res) => {
                             if (err) { console.error('budget.removeLine failed', err); setToast({ message: 'Delete failed', kind: 'error' }); return; }

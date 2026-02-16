@@ -63,16 +63,7 @@
   cursor: not-allowed;
 }
 
-.ccNotePanelActions .btn-danger {
-  color: var(--danger);
-  opacity: 0.6;
-}
 
-.ccNotePanelActions .btn-danger:hover:not(:disabled) {
-  color: var(--danger);
-  background: rgba(var(--danger-rgb, 220, 53, 69), 0.1);
-  opacity: 1;
-}
 
 .ccNotePanelDirty {
   font-size: 11px;

@@ -457,7 +457,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
                     return (
                   <Tooltip placement="top" content={finalizeTooltip}>
                     <button
-                      className="btn success"
+                      className="btn btn-success"
                       disabled={isFinalizing || !session.projectId}
                       title={!session.projectId ? 'Link this session to a project to finalize as a note' : 'Finalize this recap as a project note'}
                       onClick={() => {
@@ -564,7 +564,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
             title="Delete session"
             actions={[
               <button key="cancel" className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>,
-              <button key="del" className="btn danger" onClick={() => {
+              <button key="del" className="btn btn-danger" onClick={() => {
                 Meteor.call('noteSessions.remove', sessionId, (err) => {
                   setShowDeleteModal(false);
                   if (err) {

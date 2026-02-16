@@ -56,7 +56,7 @@ export const LinkItem = ({ link, startEditing = false, hoverActions = false }) =
         title="Delete link"
         actions={[
           <button key="cancel" className="btn" onClick={() => setConfirmOpen(false)}>Cancel</button>,
-          <button key="del" className="btn danger" onClick={() => {
+          <button key="del" className="btn btn-danger" onClick={() => {
             const id = link && link._id;
             if (!id) { setConfirmOpen(false); return; }
             Meteor.call('links.remove', id, () => setConfirmOpen(false));

@@ -247,7 +247,7 @@ export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onT
                     </td>
                     <td>
                       <button
-                        className="btn danger"
+                        className="btn btn-danger"
                         onClick={() => {
                           Meteor.call('budget.removeLine', r._id, (err, res) => {
                             if (err) { console.error('budget.removeLine failed', err); setToast({ message: 'Delete failed', kind: 'error' }); return; }
