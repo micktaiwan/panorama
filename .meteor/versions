@@ -50,6 +50,7 @@ mongo@2.2.0
 mongo-decimal@0.2.0
 mongo-dev-server@1.1.1
 mongo-id@1.0.9
+nachocodoner:reactive-publish@1.1.0
 npm-mongo@6.16.1
 ordered-dict@1.2.0
 promise@1.0.0

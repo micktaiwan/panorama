@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { TasksCollection } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
 const sanitizeTaskDoc = (input) => {
@@ -28,6 +28,10 @@ Meteor.methods({
     ensureLoggedIn(this.userId);
     const now = new Date();
     const sanitized = sanitizeTaskDoc(doc);
+    // Verify membership of the target project
+    if (sanitized.projectId) {
+      await ensureProjectAccess(sanitized.projectId, this.userId);
+    }
     // If a project is provided, shift existing open tasks down and insert new task at rank 0
     if (sanitized.projectId) {
       const projectId = String(sanitized.projectId);
@@ -76,8 +80,13 @@ Meteor.methods({
     check(taskId, String);
     check(modifier, Object);
     ensureLoggedIn(this.userId);
-    await ensureOwner(TasksCollection, taskId, this.userId);
     const task = await TasksCollection.findOneAsync(taskId);
+    if (!task) throw new Meteor.Error('not-found', 'Task not found');
+    if (task.projectId) {
+      await ensureProjectAccess(task.projectId, this.userId);
+    } else if (task.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Task not found');
+    }
     const set = { ...sanitizeTaskDoc(modifier), updatedAt: new Date() };
     const unset = {};
     if (Object.prototype.hasOwnProperty.call(modifier, 'status')) {
@@ -110,8 +119,13 @@ Meteor.methods({
   async 'tasks.remove'(taskId) {
     check(taskId, String);
     ensureLoggedIn(this.userId);
-    await ensureOwner(TasksCollection, taskId, this.userId);
     const task = await TasksCollection.findOneAsync(taskId);
+    if (!task) throw new Meteor.Error('not-found', 'Task not found');
+    if (task.projectId) {
+      await ensureProjectAccess(task.projectId, this.userId);
+    } else if (task.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Task not found');
+    }
     const res = await TasksCollection.removeAsync(taskId);
     try { const { deleteDoc } = await import('/imports/api/search/vectorStore.js'); await deleteDoc('task', taskId); } catch (e) { console.error('[search][tasks.remove] delete failed', e); }
     if (task && task.projectId) {
@@ -122,7 +136,13 @@ Meteor.methods({
   async 'tasks.promoteToTop'(taskId) {
     check(taskId, String);
     ensureLoggedIn(this.userId);
-    const task = await ensureOwner(TasksCollection, taskId, this.userId);
+    const task = await TasksCollection.findOneAsync(taskId);
+    if (!task) throw new Meteor.Error('not-found', 'Task not found');
+    if (task.projectId) {
+      await ensureProjectAccess(task.projectId, this.userId);
+    } else if (task.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Task not found');
+    }
 
     // Get all open tasks for THIS USER sorted by current priorityRank
     const globalOpenSelector = {
