@@ -129,7 +129,7 @@ export function MCPServers() {
 
   return (
     <>
-      <h3>MCP Servers</h3>
+      <h2>MCP Servers</h2>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Actions</div>

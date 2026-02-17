@@ -4,7 +4,7 @@ import { notify } from '../utils/notify.js';
 export const PrefsGeneral = () => {
   return (
     <>
-      <h3>General</h3>
+      <h2>General</h2>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Display</div>

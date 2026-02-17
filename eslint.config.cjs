@@ -14,7 +14,8 @@ module.exports = [
       'dist/**',
       'build/**',
       'eslint.config.cjs',
-      '.eslintrc.json'
+      '.eslintrc.json',
+      '.deploy/**'
     ],
     files: ["**/*.js", "**/*.jsx"],
     languageOptions: {

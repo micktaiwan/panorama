@@ -17,7 +17,7 @@ export const PrefsProfile = () => {
 
   return (
     <>
-      <h3>Profile</h3>
+      <h2>Profile</h2>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Display name</div>

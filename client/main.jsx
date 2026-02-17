@@ -1,7 +1,18 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Meteor } from 'meteor/meteor';
+import { Accounts } from 'meteor/accounts-base';
 import '/imports/ui/utils/globalErrors.js';
+
+// Meteor accounts-base clears window.location.hash for reset-password / verify-email
+// during package init, then calls registered callbacks inside Meteor.startup().
+// Must register synchronously here (before startup fires, before dynamic imports).
+Accounts.onResetPasswordLink((token) => {
+  window.location.hash = `#/reset-password/${token}`;
+});
+Accounts.onEmailVerificationLink((token) => {
+  window.location.hash = `#/verify-email/${token}`;
+});
 
 Meteor.startup(() => {
   const container = document.getElementById('react-target');

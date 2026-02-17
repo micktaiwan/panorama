@@ -27,7 +27,7 @@ Accounts.onCreateUser(async (options, user) => {
 // --- Email templates ---
 
 Accounts.emailTemplates.siteName = 'Panorama';
-Accounts.emailTemplates.from = 'Panorama <noreply@panorama.mickaelfm.me>';
+Accounts.emailTemplates.from = 'Panorama <panorama@mickaelfm.me>';
 
 Accounts.emailTemplates.verifyEmail = {
   subject() {

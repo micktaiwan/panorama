@@ -3,7 +3,8 @@
 .prefsSidebar ul { list-style: none; padding: 0; margin: 0; }
 .prefsSidebar li { margin-bottom: 2px; }
 .prefsSidebar a {
-  display: block;
+  display: flex;
+  align-items: center;
   padding: 6px 12px;
   border-radius: 4px;
   color: var(--muted);
@@ -13,7 +14,10 @@
 }
 .prefsSidebar a:hover { background: var(--bgElevated); color: var(--text); }
 .prefsSidebar a.active { background: var(--primary); color: #fff; }
+.prefsAdminBadge { font-size: 11px; color: var(--muted); opacity: 0.5; margin-left: auto; }
+.prefsSidebar a.active .prefsAdminBadge { color: #fff; opacity: 0.5; }
 .prefsContent { flex: 1; min-width: 0; overflow-y: auto; }
+.prefsContent h2 { margin-top: 0; }
 .prefsSection { margin-top: 12px; }
 .prefsRow { display: grid; grid-template-columns: 260px minmax(0,1fr); align-items: start; gap: 12px; padding: 6px 0; }
 .prefsLabel { color: var(--muted); }
