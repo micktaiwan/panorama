@@ -157,6 +157,34 @@
   background: rgba(var(--purple-rgb), 0.25);
 }
 
+/* Lock banner */
+.note-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.note-lock-banner.other {
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--warning);
+}
+
+.note-lock-banner.self {
+  background: rgba(var(--success-rgb), 0.10);
+  border-bottom: 1px solid rgba(var(--success-rgb), 0.25);
+  color: var(--success);
+}
+
+.note-lock-banner-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   .notes-actions { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
   .notes-actions-center { display: none; }

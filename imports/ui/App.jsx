@@ -665,235 +665,233 @@ function App() {
   }
 
   return (
-    <div className={`container${focusMode ? ' focusMode' : ''}`}>
+    <div className={`app-layout${focusMode ? ' focusMode' : ''}`}>
       {!focusMode && (
-        <h1 className="appHeader">
-          <a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>
-            <img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />
-            Panorama
-          </a>
-          <PresenceBar />
-          <span className="headerUser">
-            <ThemeToggle
-              theme={userPrefs?.theme || 'dark'}
-              onToggle={(next) => Meteor.call('userPreferences.update', { theme: next })}
+        <header className="app-header">
+          <h1 className="appHeader">
+            <a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>
+              <img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />
+              Panorama
+            </a>
+            <PresenceBar />
+            <span className="headerUser">
+              <ThemeToggle
+                theme={userPrefs?.theme || 'dark'}
+                onToggle={(next) => Meteor.call('userPreferences.update', { theme: next })}
+              />
+              <NotificationBell />
+              <UserMenu />
+            </span>
+          </h1>
+          <HamburgerMenu
+            user={user}
+            onNewSession={() => handleNewSession()}
+            onExport={() => setExportOpen(true)}
+          />
+          {favoriteProjects.length > 0 && (
+            <div className="favoritesBar">
+              <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
+                <span className="name">Panorama</span>
+              </a>
+              <a className={`favChip${route?.name === 'dashboard' ? ' active' : ''}`} href="#/dashboard" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'dashboard' }); }}>
+                <span className="name">Overview</span>
+              </a>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext items={order} strategy={horizontalListSortingStrategy}>
+                  {order.map((id) => {
+                    const fp = favoriteProjects.find((p) => p._id === id);
+                    if (!fp) return null;
+                    return (
+                      <SortableChip
+                        key={id}
+                        id={id}
+                        name={fp?.name}
+                        onOpen={() => openProject(id)}
+                        active={route?.name === 'project' && route?.projectId === id}
+                      />
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
+            </div>
+          )}
+        </header>
+      )}
+      <main className="app-content">
+        {route?.name === 'home' && (
+          <div className="panel">
+            <div className="homeToolbar">
+              <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
+              <button className="btn ml8" onClick={() => handleNewSession(undefined)}>New Note Session</button>
+            </div>
+            <PanoramaPage />
+          </div>
+        )}
+        {route?.name === 'dashboard' && (
+          <div className="panel">
+            <div className="homeToolbar">
+              <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
+              <button className="btn ml8" onClick={() => handleNewSession(undefined)}>New Note Session</button>
+            </div>
+            <Dashboard />
+          </div>
+        )}
+        {route?.name === 'project' && (
+          <div className="panel panel--fill">
+            <ProjectDetails
+              key={route.projectId}
+              projectId={route.projectId}
+              onBack={goHome}
+              onOpenNoteSession={handleNewSession}
+              onCreateTaskViaPalette={(pid) => {
+                setCmdDefaultTab(1);
+                setCmdDefaultProjectId(pid || route.projectId || '');
+                setSearchOpen(true);
+              }}
             />
-            <NotificationBell />
-            <UserMenu />
-          </span>
-        </h1>
-      )}
-      {!focusMode && (
-        <HamburgerMenu
-          user={user}
-          onNewSession={() => handleNewSession()}
-          onExport={() => setExportOpen(true)}
-        />
-      )}
-      {!focusMode && favoriteProjects.length > 0 && (
-        <div className="favoritesBar">
-          <a className={`favChip${route?.name === 'home' ? ' active' : ''}`} href="#/" onClick={(e) => { e.preventDefault(); goHome(); }}>
-            <span className="name">Panorama</span>
-          </a>
-          <a className={`favChip${route?.name === 'dashboard' ? ' active' : ''}`} href="#/dashboard" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'dashboard' }); }}>
-            <span className="name">Overview</span>
-          </a>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={order} strategy={horizontalListSortingStrategy}>
-              {order.map((id) => {
-                const fp = favoriteProjects.find((p) => p._id === id);
-                if (!fp) return null;
-                return (
-                  <SortableChip
-                    key={id}
-                    id={id}
-                    name={fp?.name}
-                    onOpen={() => openProject(id)}
-                    active={route?.name === 'project' && route?.projectId === id}
-                  />
-                );
-              })}
-            </SortableContext>
-          </DndContext>
-        </div>
-      )}
-      {route?.name === 'home' && (
-        <div className="panel">
-          <div className="homeToolbar">
-            <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
-            <button className="btn ml8" onClick={() => handleNewSession(undefined)}>New Note Session</button>
           </div>
-          <PanoramaPage />
-        </div>
-      )}
-      {route?.name === 'dashboard' && (
-        <div className="panel">
-          <div className="homeToolbar">
-            <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
-            <button className="btn ml8" onClick={() => handleNewSession(undefined)}>New Note Session</button>
+        )}
+        {route?.name === 'session' && (
+          <div className="panel">
+            <NoteSession sessionId={route.sessionId} onBack={goHome} />
           </div>
-          <Dashboard />
-        </div>
-      )}
-      {route?.name === 'project' && (
-        <div className="panel">
-          <ProjectDetails
-            key={route.projectId}
-            projectId={route.projectId}
-            onBack={goHome}
-            onOpenNoteSession={handleNewSession}
-            onCreateTaskViaPalette={(pid) => {
-              setCmdDefaultTab(1);
-              setCmdDefaultProjectId(pid || route.projectId || '');
-              setSearchOpen(true);
-            }}
-          />
-        </div>
-      )}
-      {route?.name === 'session' && (
-        <div className="panel">
-          <NoteSession sessionId={route.sessionId} onBack={goHome} />
-        </div>
-      )}
-      {route?.name === 'projectDelete' && (
-        <div className="panel">
-          <ProjectDelete
-            projectId={route.projectId}
-            onBack={() => navigateTo({ name: 'project', projectId: route.projectId })}
-          />
-        </div>
-      )}
-      {route?.name === 'help' && (
-        <div className="panel">
-          <Help />
-        </div>
-      )}
-      {route?.name === 'alarms' && (
-        <div className="panel">
-          <Alarms />
-        </div>
-      )}
-      {route?.name === 'eisenhower' && (
-        <div className="panel">
-          <Eisenhower />
-        </div>
-      )}
-      {route?.name === 'budget' && (
-        <div className="panel">
-          <BudgetPage />
-        </div>
-      )}
-      {route?.name === 'reporting' && (
-        <div className="panel">
-          <ReportingPage />
-        </div>
-      )}
-      {route?.name === 'calendar' && (
-        <div className="panel">
-          <CalendarPage />
-        </div>
-      )}
-      {route?.name === 'panorama' && (
-        <div className="panel">
-          <PanoramaPage />
-        </div>
-      )}
-      {route?.name === 'situationAnalyzer' && (
-        <div className="panel">
-          <SituationAnalyzer />
-        </div>
-      )}
-      {route?.name === 'people' && (
-        <div className="panel">
-          <PeoplePage highlightId={route.personId} />
-        </div>
-      )}
-      {route?.name === 'links' && (
-        <div className="panel">
-          <LinksPage />
-        </div>
-      )}
-      {route?.name === 'files' && (
-        <div className="panel">
-          <FilesPage />
-        </div>
-      )}
-      {route?.name === 'userlog' && (
-        <div className="panel">
-          <UserLog />
-        </div>
-      )}
-      {route?.name === 'notes' && (
-        <div className="panel">
-          <NotesPage />
-        </div>
-      )}
-      {route?.name === 'emails' && (
-        <div className="panel">
-          <EmailsPage />
-        </div>
-      )}
-      {route?.name === 'inboxZero' && (
-        <div className="panel">
-          <InboxZero />
-        </div>
-      )}
-      {route?.name === 'notionReporting' && (
-        <div className="panel">
-          <NotionReporting />
-        </div>
-      )}
-      {route?.name === 'mcpServers' && (
-        <div className="panel">
-          <MCPServers />
-        </div>
-      )}
-      {route?.name === 'claude' && (
-        <ClaudeCodePage projectId={route.projectId} />
-      )}
-      {route?.name === 'onboarding' && (
-        <div className="panel">
-          <Onboarding />
-        </div>
-      )}
-      {route?.name === 'releases' && (
-        <div className="panel">
-          <ReleasesPage releaseId={route.releaseId} />
-        </div>
-      )}
-      {ADMIN_ROUTES.has(route?.name) && !user?.isAdmin && (
-        <div className="panel">
-          <div className="prefs"><div className="prefsContent">
-            <h2>Access denied</h2>
-            <p>Admin privileges required.</p>
-          </div></div>
-        </div>
-      )}
-      {route?.name === 'admin' && user?.isAdmin && (
-        <div className="panel">
-          <Admin tab={route.tab} />
-        </div>
-      )}
-      {route?.name === 'preferences' && (
-        <div className="panel">
-          <Preferences tab={route.tab} />
-        </div>
-      )}
-      {route?.name === 'searchQuality' && user?.isAdmin && (
-        <div className="panel">
-          <SearchQuality />
-        </div>
-      )}
-      {route?.name === 'web' && (
-        <div className="panel">
-          <WebPage />
-        </div>
-      )}
-      {route?.name === 'importTasks' && (
-        <div className="panel">
-          <ImportTasks />
-        </div>
-      )}
+        )}
+        {route?.name === 'projectDelete' && (
+          <div className="panel">
+            <ProjectDelete
+              projectId={route.projectId}
+              onBack={() => navigateTo({ name: 'project', projectId: route.projectId })}
+            />
+          </div>
+        )}
+        {route?.name === 'help' && (
+          <div className="panel">
+            <Help />
+          </div>
+        )}
+        {route?.name === 'alarms' && (
+          <div className="panel">
+            <Alarms />
+          </div>
+        )}
+        {route?.name === 'eisenhower' && (
+          <div className="panel">
+            <Eisenhower />
+          </div>
+        )}
+        {route?.name === 'budget' && (
+          <div className="panel">
+            <BudgetPage />
+          </div>
+        )}
+        {route?.name === 'reporting' && (
+          <div className="panel">
+            <ReportingPage />
+          </div>
+        )}
+        {route?.name === 'calendar' && (
+          <div className="panel">
+            <CalendarPage />
+          </div>
+        )}
+        {route?.name === 'panorama' && (
+          <div className="panel">
+            <PanoramaPage />
+          </div>
+        )}
+        {route?.name === 'situationAnalyzer' && (
+          <div className="panel">
+            <SituationAnalyzer />
+          </div>
+        )}
+        {route?.name === 'people' && (
+          <div className="panel">
+            <PeoplePage highlightId={route.personId} />
+          </div>
+        )}
+        {route?.name === 'links' && (
+          <div className="panel">
+            <LinksPage />
+          </div>
+        )}
+        {route?.name === 'files' && (
+          <div className="panel">
+            <FilesPage />
+          </div>
+        )}
+        {route?.name === 'userlog' && (
+          <div className="panel">
+            <UserLog />
+          </div>
+        )}
+        {route?.name === 'notes' && <NotesPage />}
+        {route?.name === 'emails' && (
+          <div className="panel">
+            <EmailsPage />
+          </div>
+        )}
+        {route?.name === 'inboxZero' && (
+          <div className="panel">
+            <InboxZero />
+          </div>
+        )}
+        {route?.name === 'notionReporting' && (
+          <div className="panel">
+            <NotionReporting />
+          </div>
+        )}
+        {route?.name === 'mcpServers' && (
+          <div className="panel">
+            <MCPServers />
+          </div>
+        )}
+        {route?.name === 'claude' && (
+          <ClaudeCodePage projectId={route.projectId} />
+        )}
+        {route?.name === 'onboarding' && (
+          <div className="panel">
+            <Onboarding />
+          </div>
+        )}
+        {route?.name === 'releases' && (
+          <div className="panel">
+            <ReleasesPage releaseId={route.releaseId} />
+          </div>
+        )}
+        {ADMIN_ROUTES.has(route?.name) && !user?.isAdmin && (
+          <div className="panel">
+            <div className="prefs"><div className="prefsContent">
+              <h2>Access denied</h2>
+              <p>Admin privileges required.</p>
+            </div></div>
+          </div>
+        )}
+        {route?.name === 'admin' && user?.isAdmin && (
+          <div className="panel">
+            <Admin tab={route.tab} />
+          </div>
+        )}
+        {route?.name === 'preferences' && (
+          <div className="panel">
+            <Preferences tab={route.tab} />
+          </div>
+        )}
+        {route?.name === 'searchQuality' && user?.isAdmin && (
+          <div className="panel">
+            <SearchQuality />
+          </div>
+        )}
+        {route?.name === 'web' && (
+          <div className="panel">
+            <WebPage />
+          </div>
+        )}
+        {route?.name === 'importTasks' && (
+          <div className="panel">
+            <ImportTasks />
+          </div>
+        )}
+      </main>
       <AlarmModal
         open={!!activeAlarmId}
         alarm={activeAlarmId ? alarms.find(a => a._id === activeAlarmId) : null}
@@ -1041,7 +1039,7 @@ function App() {
         defaultTab={cmdDefaultTab}
         defaultProjectId={cmdDefaultProjectId}
       />
-      {!focusMode && <footer className="appFooter">
+      {!focusMode && <footer className="app-footer">
         <span className="footerNextAlarm">
           {(() => {
             const effective = (a) => (a.snoozedUntilAt ? new Date(a.snoozedUntilAt) : new Date(a.nextTriggerAt));

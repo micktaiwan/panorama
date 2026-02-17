@@ -23,11 +23,13 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
   const [showCleanModal, setShowCleanModal] = useState(false);
   const [askAiSessionId, setAskAiSessionId] = useState(null);
   const askAiSessionIdRef = useRef(null);
+  const getCurrentContentRef = useRef(getCurrentContent);
+  useEffect(() => { getCurrentContentRef.current = getCurrentContent; }, [getCurrentContent]);
 
   // --- Helpers ---
 
   const resolveContent = () => {
-    if (getCurrentContent) return getCurrentContent();
+    if (getCurrentContentRef.current) return getCurrentContentRef.current();
     const view = editorRef.current?.view;
     if (view) return serializeMarkdown(view.state.doc);
     return '';
@@ -145,6 +147,9 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
 
   // --- Ask AI ---
 
+  const noteIdRef = useRef(noteId);
+  useEffect(() => { noteIdRef.current = noteId; }, [noteId]);
+
   const handleAskAI = useCallback(({ from, to }) => {
     const view = editorRef.current?.view;
     if (!view) return;
@@ -155,6 +160,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
     view.dispatch(tr);
 
     if (!askAiSessionId) {
+      const noteIdAtCall = noteIdRef.current;
       Meteor.call('claudeSessions.create', {
         name: 'Ask AI — Note',
         appendSystemPrompt: 'You are a helpful writing assistant. The user will provide their full note content and a selected portion. Answer their questions about the note or help them rewrite/improve the selected text. Respond concisely in the same language as the note. Output only the text content — no wrapping markdown fences, no explanations unless asked.',
@@ -162,6 +168,11 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
         if (err) {
           console.error('Failed to create Ask AI session:', err);
           notify({ message: 'Failed to start AI session', kind: 'error' });
+          return;
+        }
+        // If user switched tabs before callback fired, clean up the orphan session
+        if (noteIdRef.current !== noteIdAtCall) {
+          Meteor.call('claudeSessions.remove', newSessionId);
           return;
         }
         setAskAiSessionId(newSessionId);

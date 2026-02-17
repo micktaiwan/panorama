@@ -33,7 +33,21 @@ module.exports = [
       'import/resolver': { meteor: {} }
     },
     rules: {
-      'import/no-absolute-path': 'off'
+      'import/no-absolute-path': 'off',
+      // Too many false positives on `let x = default; if (...) x = ...` and try/catch patterns
+      'no-useless-assignment': 'off',
+      // Enforce project conventions
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'eqeqeq': ['error', 'always'],
+      'no-var': 'error',
+      'prefer-const': 'error',
+      'curly': ['error', 'multi-line'],
+      'no-throw-literal': 'error',
+      'no-alert': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // React hooks (align with CLAUDE.md: hooks at top-level only)
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn'
     }
   },
   // Node/server files (Meteor server, Electron)

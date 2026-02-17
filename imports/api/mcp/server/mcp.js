@@ -155,7 +155,6 @@ async function handleToolsCall(params) {
   let success = false;
   let error = null;
   let result = null;
-
   try {
     // 1. Check for infinite loops (protection anti-boucle)
     detectInfiniteLoop(name);

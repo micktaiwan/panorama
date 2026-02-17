@@ -14,7 +14,7 @@ export const normalizeDateStr = (val) => {
   }
   let s = String(val).trim();
   if (!s) return '';
-  s = s.replace(/[\.\-]/g, '/').replace(/[\r\n]+/g, ' ').trim();
+  s = s.replace(/[.-]/g, '/').replace(/[\r\n]+/g, ' ').trim();
   const all = s.match(/\b([0-3]?\d)\/([0-1]?\d)\/(\d{2,4})\b/g);
   if (all && all.length > 0) {
     let best = null;

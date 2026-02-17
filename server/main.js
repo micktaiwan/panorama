@@ -228,6 +228,15 @@ Meteor.startup(async () => {
   startConnectionTracker();
   console.log('[startup] User presence reset and connection tracker started');
 
+  // --- Note locks: clear all on startup (locks are session-bound, lost on restart) ---
+  const { NotesCollection: NotesCol } = await import('/imports/api/notes/collections');
+  await NotesCol.rawCollection().updateMany(
+    { lockedBy: { $exists: true } },
+    { $unset: { lockedBy: '', lockedAt: '' } }
+  );
+  NotesCol.rawCollection().createIndex({ lockedBy: 1 }, { sparse: true }).catch(() => {});
+  console.log('[startup] Note locks cleared');
+
   // Mark any Claude sessions stuck in "running" as interrupted (processes died on restart)
   const { ClaudeSessionsCollection } = await import('/imports/api/claudeSessions/collections');
   const { ClaudeMessagesCollection } = await import('/imports/api/claudeMessages/collections');

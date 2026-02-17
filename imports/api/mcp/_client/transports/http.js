@@ -78,7 +78,7 @@ class HttpConnection {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeout}ms`);
+        throw new Error(`Request timeout after ${timeout}ms`, { cause: error });
       }
       throw error;
     }

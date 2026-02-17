@@ -1,5 +1,6 @@
 import { Accounts } from 'meteor/accounts-base';
 import { UserPresenceCollection } from '../collections';
+import { NotesCollection } from '/imports/api/notes/collections';
 
 // In-memory map: connectionId → userId
 // Each Meteor process tracks only its own DDP connections.
@@ -40,6 +41,11 @@ export const startConnectionTracker = () => {
         };
         if (newCount <= 0) {
           update.$set.status = 'offline';
+          // Release all note locks held by this user (last connection closed)
+          NotesCollection.rawCollection().updateMany(
+            { lockedBy: uid },
+            { $unset: { lockedBy: '', lockedAt: '' } }
+          ).catch(e => console.error('[locks] disconnect release failed', e));
         }
         UserPresenceCollection.updateAsync({ userId: uid }, update);
       });

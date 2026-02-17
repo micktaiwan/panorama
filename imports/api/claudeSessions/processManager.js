@@ -35,7 +35,7 @@ try {
     fs.writeFileSync(LOG_FILE, firstNewline >= 0 ? half.slice(firstNewline + 1) : half);
     console.log(`[claude-pm] Log rotated: ${(stat.size / 1024 / 1024).toFixed(1)}MB → ${(fs.statSync(LOG_FILE).size / 1024 / 1024).toFixed(1)}MB`);
   }
-} catch (_) {}
+} catch { /* log rotation is best-effort */ }
 
 function log(...args) {
   const ts = new Date().toISOString();
@@ -146,7 +146,7 @@ export async function killProcess(sessionId) {
   await new Promise((resolve) => {
     const forceKillTimer = setTimeout(() => {
       log('killProcess: SIGTERM timeout, sending SIGKILL for', sessionId);
-      try { proc.kill('SIGKILL'); } catch (_) {}
+      try { proc.kill('SIGKILL'); } catch { /* process may already be dead */ }
       // Give SIGKILL a moment to work, then resolve anyway
       setTimeout(resolve, 500);
     }, 5000);
@@ -899,7 +899,7 @@ function runCodexTurn(sessionId, prompt, cwd, options = {}) {
           log('debate codex event:', event.type);
           if (event.type === 'item.completed') items.push(event.item);
           else if (event.type === 'turn.completed') usage = event.usage;
-        } catch (_) {}
+        } catch { /* skip malformed JSON lines */ }
       }
     }));
 
@@ -910,7 +910,7 @@ function runCodexTurn(sessionId, prompt, cwd, options = {}) {
 
     const timeout = setTimeout(() => {
       log('debate codex timeout, killing');
-      try { proc.kill('SIGKILL'); } catch (_) {}
+      try { proc.kill('SIGKILL'); } catch { /* process may already be dead */ }
       reject(new Error('Codex turn timeout'));
     }, DEBATE_TIMEOUT_MS);
 
@@ -987,7 +987,7 @@ function runClaudeTurn(sessionId, prompt, cwd, session) {
             const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
             if (text) resultText = text;
           }
-        } catch (_) {}
+        } catch { /* skip malformed JSON lines */ }
       }
     }));
 
@@ -998,7 +998,7 @@ function runClaudeTurn(sessionId, prompt, cwd, session) {
     });
 
     const timeout = setTimeout(() => {
-      try { proc.kill('SIGKILL'); } catch (_) {}
+      try { proc.kill('SIGKILL'); } catch { /* process may already be dead */ }
       reject(new Error('Claude turn timeout'));
     }, DEBATE_TIMEOUT_MS);
 
@@ -1021,7 +1021,7 @@ function runClaudeTurn(sessionId, prompt, cwd, session) {
             const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
             if (text) resultText = text;
           }
-        } catch (_) {}
+        } catch { /* skip malformed JSON in remaining buffer */ }
       }
 
       if (!resultText && stderr) resultText = `Error: ${stderr}`;
@@ -1165,9 +1165,9 @@ export function stopDebate(sessionId) {
   debate.aborted = true;
 
   if (debate.currentProc) {
-    try { debate.currentProc.kill('SIGTERM'); } catch (_) {}
+    try { debate.currentProc.kill('SIGTERM'); } catch { /* process may already be dead */ }
     setTimeout(() => {
-      try { debate.currentProc?.kill('SIGKILL'); } catch (_) {}
+      try { debate.currentProc?.kill('SIGKILL'); } catch { /* process may already be dead */ }
     }, 3000);
   }
 }

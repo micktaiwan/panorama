@@ -135,7 +135,6 @@ export function wrapToolHandler(toolName, handler, source = 'mcp') {
     let success = false;
     let error = null;
     let result = null;
-
     try {
       // 1. Check for infinite loops
       detectInfiniteLoop(toolName);
