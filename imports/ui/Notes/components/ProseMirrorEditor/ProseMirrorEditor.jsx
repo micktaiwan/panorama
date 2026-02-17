@@ -10,11 +10,12 @@ import '../BubbleMenu/BubbleMenu.css';
 import '../SlashMenu/SlashMenu.css';
 
 const DEBOUNCE_MS = 150;
-export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClose, onAskAI, shouldFocus }, ref) => {
+export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClose, onAskAI, shouldFocus, readOnly = false }, ref) => {
   const mountRef = useRef(null);
   const viewRef = useRef(null);
   const debounceRef = useRef(null);
   const shouldFocusOnMount = useRef(shouldFocus);
+  const readOnlyRef = useRef(readOnly);
   // Store callbacks in refs to avoid recreating the editor on callback changes
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
@@ -54,6 +55,7 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
 
     const view = new EditorView(mountRef.current, {
       state,
+      editable: () => !readOnlyRef.current,
       nodeViews: {
         list_item: (node, view, getPos) => new TaskItemView(node, view, getPos),
       },
@@ -88,7 +90,13 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={mountRef} className="prosemirror-editor" />;
+  // Update editable state dynamically when readOnly prop changes
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+    viewRef.current?.setProps({ editable: () => !readOnly });
+  }, [readOnly]);
+
+  return <div ref={mountRef} className={`prosemirror-editor${readOnly ? ' readonly' : ''}`} />;
 });
 
 ProseMirrorEditor.displayName = 'ProseMirrorEditor';
@@ -100,4 +108,5 @@ ProseMirrorEditor.propTypes = {
   onClose: PropTypes.func,
   onAskAI: PropTypes.func,
   shouldFocus: PropTypes.bool,
+  readOnly: PropTypes.bool,
 };

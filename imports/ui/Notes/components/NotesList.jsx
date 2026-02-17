@@ -19,7 +19,7 @@ import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
 import './NotesList.css';
 
-const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, onNoteClick, onDeleteClick }) => {
+const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onDeleteClick }) => {
   const {
     attributes,
     listeners,
@@ -63,6 +63,20 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, onNot
             </svg>
           )}
           {note.title || 'Untitled'}
+          {note.lockedBy && note.lockedBy !== Meteor.userId() && (
+            <svg className="note-lock-icon other" viewBox="0 0 16 16" title={`Editing by ${lockedByNames?.[note.lockedBy] || 'someone'}`} aria-hidden="true">
+              <title>{`Editing by ${lockedByNames?.[note.lockedBy] || 'someone'}`}</title>
+              <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
+            </svg>
+          )}
+          {note.lockedBy && note.lockedBy === Meteor.userId() && (
+            <svg className="note-lock-icon self" viewBox="0 0 16 16" aria-hidden="true">
+              <title>Locked by you</title>
+              <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
+            </svg>
+          )}
         </div>
         {note.projectId ? (
           <span className="note-project">{projectNamesById?.[note.projectId] || '—'}</span>
@@ -96,11 +110,12 @@ SortableNoteItem.propTypes = {
   openTabs: PropTypes.array.isRequired,
   activeTabId: PropTypes.string,
   projectNamesById: PropTypes.object,
+  lockedByNames: PropTypes.object,
   onNoteClick: PropTypes.func.isRequired,
   onDeleteClick: PropTypes.func.isRequired,
 };
 
-export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, projectNamesById, onNoteClick, onRequestClose, onReorderNote }) => {
+export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onRequestClose, onReorderNote }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const sensors = useSensors(
@@ -111,21 +126,22 @@ export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, project
     })
   );
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
     const noteId = deleteTarget._id;
-    // Close the tab if open
-    if (openTabs.find(tab => tab.id === noteId) && typeof onRequestClose === 'function') {
-      onRequestClose(noteId);
-    }
-    Meteor.call('notes.remove', noteId, (err) => {
-      if (err) {
-        notify({ message: 'Error deleting note', kind: 'error' });
-      } else {
-        notify({ message: 'Note deleted', kind: 'success' });
+    try {
+      await Meteor.callAsync('notes.remove', noteId);
+      // Close the tab only after successful deletion
+      if (openTabs.find(tab => tab.id === noteId) && typeof onRequestClose === 'function') {
+        onRequestClose(noteId);
       }
-    });
-    setDeleteTarget(null);
+      notify({ message: 'Note deleted', kind: 'success' });
+    } catch (err) {
+      console.error('notes.remove failed', err);
+      notify({ message: 'Error deleting note', kind: 'error' });
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   const handleDragEnd = (event) => {
@@ -193,6 +209,7 @@ export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, project
               openTabs={openTabs}
               activeTabId={activeTabId}
               projectNamesById={projectNamesById}
+              lockedByNames={lockedByNames}
               onNoteClick={onNoteClick}
               onDeleteClick={setDeleteTarget}
             />
@@ -227,6 +244,7 @@ NotesList.propTypes = {
   openTabs: PropTypes.array.isRequired,
   activeTabId: PropTypes.string,
   projectNamesById: PropTypes.object,
+  lockedByNames: PropTypes.object,
   onNoteClick: PropTypes.func.isRequired,
   onRequestClose: PropTypes.func,
   onReorderNote: PropTypes.func,

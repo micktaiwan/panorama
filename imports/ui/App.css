@@ -17,29 +17,54 @@
   margin-bottom: 16px;
 }
 
-/* Removed split layout; Dashboard uses full width */
+/* ---- App Layout (header / content / footer) ---- */
 
-.appFooter {
-  margin-top: 20px;
-  padding: 16px 0 8px;
+.app-header {
+  flex-shrink: 0;
+  padding: 24px 24px 0;
+}
+
+.app-header > h1 {
+  margin-top: 0;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+}
+
+.app-content > .panel {
+  flex-shrink: 0;
+}
+
+.app-content > .panel--fill {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.app-footer {
+  flex-shrink: 0;
+  padding: 8px 24px;
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  width: 100%;
 }
 
 .footerNextAlarm {
   display: block;
   text-align: center;
   font-size: 12px;
-}
-
-/* Tighter top spacing for the main title */
-.container > h1 {
-  margin-top: 0;
 }
 
 .appHeader {
@@ -72,7 +97,7 @@
   color: var(--danger);
 }
 
-.container > h1 a {
+.app-header > h1 a {
   color: inherit;
   text-decoration: none;
   cursor: pointer;
@@ -110,16 +135,16 @@
 .favChip.dragging { opacity: 0.6; cursor: grabbing; transform: scale(0.98); }
 .favChip.dropTarget { border-color: var(--warning); box-shadow: 0 0 0 1px var(--warning) inset; }
 
-.appFooter a {
+.app-footer a {
   color: var(--muted);
   text-decoration: none;
 }
 
-.appFooter a:hover {
+.app-footer a:hover {
   text-decoration: underline;
 }
 
-.appFooter .dot {
+.app-footer .dot {
   margin: 0 8px;
 }
 
@@ -136,12 +161,12 @@
 .btnArchive:hover { background: #223066; }
 
 /* Reserve space for docked chat (right sidebar) */
-body.withDockedChat .container {
+body.withDockedChat .app-layout {
   padding-right: var(--docked-chat-width, 420px);
 }
 
-/* When chat is wide (>=500px), force container to full width */
-body.chatWide .container {
+/* When chat is wide (>=500px), force layout to full width */
+body.chatWide .app-layout {
   max-width: 100%;
 }
 
@@ -176,16 +201,13 @@ body.chatWide .container {
 }
 .goLabel { color: var(--text-bright); }
 
-/* Focus mode: hide chrome, panel fills viewport */
-.container.focusMode {
-  max-width: 100%;
+/* Focus mode: hide chrome, content fills viewport */
+.app-layout.focusMode .app-content {
   padding: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
-.container.focusMode > .panel {
+.app-layout.focusMode .app-content > .panel,
+.app-layout.focusMode .app-content > .panel--fill {
   flex: 1;
   min-height: 0;
   margin: 0;
@@ -197,7 +219,10 @@ body.chatWide .container {
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .appHeader { display: none; }
-  .appFooter { display: none; }
-  .favoritesBar { display: none; }
+  .app-header { display: none; }
+  .app-footer { display: none; }
+
+  .app-content {
+    padding: 12px;
+  }
 }

@@ -31,6 +31,48 @@ Meteor.methods({
     }
     return _id;
   },
+  async 'notes.acquireLock'(noteId) {
+    check(noteId, String);
+    ensureLoggedIn(this.userId);
+    const note = await NotesCollection.findOneAsync(noteId);
+    if (!note) throw new Meteor.Error('not-found', 'Note not found');
+    if (note.projectId) {
+      await ensureProjectAccess(note.projectId, this.userId);
+    } else if (note.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Note not found');
+    }
+
+    // Idempotent: already locked by this user → refresh lockedAt
+    if (note.lockedBy === this.userId) {
+      await NotesCollection.updateAsync(noteId, { $set: { lockedAt: new Date() } });
+      return true;
+    }
+
+    // Locked by someone else
+    if (note.lockedBy) {
+      throw new Meteor.Error('note-locked', 'Note is being edited by another user');
+    }
+
+    // Atomic acquire: only succeeds if no one grabbed it in the meantime
+    const result = await NotesCollection.rawCollection().findOneAndUpdate(
+      { _id: noteId, lockedBy: { $exists: false } },
+      { $set: { lockedBy: this.userId, lockedAt: new Date() } },
+    );
+    if (!result) {
+      throw new Meteor.Error('note-locked', 'Note is being edited by another user');
+    }
+    return true;
+  },
+  async 'notes.releaseLock'(noteId) {
+    check(noteId, String);
+    ensureLoggedIn(this.userId);
+    // Only release if locked by this user — silent return otherwise
+    await NotesCollection.updateAsync(
+      { _id: noteId, lockedBy: this.userId },
+      { $unset: { lockedBy: '', lockedAt: '' } }
+    );
+    return true;
+  },
   async 'notes.update'(noteId, modifier) {
     check(noteId, String);
     check(modifier, Object);
@@ -42,6 +84,12 @@ Meteor.methods({
     } else if (note.userId !== this.userId) {
       throw new Meteor.Error('not-found', 'Note not found');
     }
+
+    // Lock guard: reject update if locked by another user
+    if (note.lockedBy && note.lockedBy !== this.userId) {
+      throw new Meteor.Error('note-locked', 'Note is being edited by another user');
+    }
+
     const sanitized = sanitizeNoteDoc(modifier);
 
     // Check if content has actually changed
@@ -68,6 +116,11 @@ Meteor.methods({
     } catch (e) {
       console.error('[search][notes.update] upsert failed', e);
       throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+    }
+
+    // Release lock after successful save (save = release)
+    if (note.lockedBy === this.userId && 'content' in modifier) {
+      await NotesCollection.updateAsync(noteId, { $unset: { lockedBy: '', lockedAt: '' } });
     }
 
     // Only update project timestamp if note content changed

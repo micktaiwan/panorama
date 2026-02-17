@@ -1207,7 +1207,6 @@ export const TOOL_HANDLERS = {
     const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
 
     let emails = [];
-
     if (useSemanticSearch) {
       // Use semantic search through Qdrant
       try {
@@ -1506,7 +1505,7 @@ export const TOOL_HANDLERS = {
       return buildSuccessResponse({ labels: formattedLabels, total: formattedLabels.length }, 'tool_emailsListLabels', { source: 'gmail' });
     } catch (error) {
       console.error('[tool_emailsListLabels] Error:', error);
-      throw new Error(`Failed to list Gmail labels: ${error.message}`);
+      throw new Error(`Failed to list Gmail labels: ${error.message}`, { cause: error });
     }
   },
 
@@ -1548,7 +1547,7 @@ export const TOOL_HANDLERS = {
       }, 'tool_emailsAddLabel', { source: 'gmail', policy: 'write' });
     } catch (error) {
       console.error('[tool_emailsAddLabel] Error:', error);
-      throw new Error(`Failed to add label to email: ${error.message}`);
+      throw new Error(`Failed to add label to email: ${error.message}`, { cause: error });
     }
   },
 
@@ -1590,7 +1589,7 @@ export const TOOL_HANDLERS = {
       }, 'tool_emailsRemoveLabel', { source: 'gmail', policy: 'write' });
     } catch (error) {
       console.error('[tool_emailsRemoveLabel] Error:', error);
-      throw new Error(`Failed to remove label from email: ${error.message}`);
+      throw new Error(`Failed to remove label from email: ${error.message}`, { cause: error });
     }
   },
 
@@ -1619,7 +1618,7 @@ export const TOOL_HANDLERS = {
       }, 'tool_emailsCreateLabel', { source: 'gmail', policy: 'write' });
     } catch (error) {
       console.error('[tool_emailsCreateLabel] Error:', error);
-      throw new Error(`Failed to create Gmail label: ${error.message}`);
+      throw new Error(`Failed to create Gmail label: ${error.message}`, { cause: error });
     }
   },
 
@@ -1891,7 +1890,7 @@ export const TOOL_HANDLERS = {
 
     } catch (error) {
       console.error('[tool_mcpServersSync] Error:', error);
-      throw new Error(`Failed to sync MCP servers: ${error.message}`);
+      throw new Error(`Failed to sync MCP servers: ${error.message}`, { cause: error });
     }
   },
 
@@ -2157,7 +2156,7 @@ export const TOOL_HANDLERS = {
       if (!path.isAbsolute(filePath)) {
         return buildErrorResponse(`Path must be absolute, got: "${filePath}"`, 'tool_readFile', {
           code: 'INVALID_PATH',
-          suggestion: 'Use absolute paths starting with / (Unix) or C:\ (Windows)'
+          suggestion: 'Use absolute paths starting with / (Unix) or C:\\ (Windows)'
         });
       }
 

@@ -32,7 +32,7 @@ export const AgentTeams = () => {
         setTeams(result.teams);
         if (result.teams.length > 0 && !expanded) {
           setExpanded(true);
-          try { localStorage.setItem('claude-teams-expanded', 'true'); } catch {}
+          try { localStorage.setItem('claude-teams-expanded', 'true'); } catch { /* localStorage may be unavailable */ }
         }
       }
     });
@@ -48,7 +48,7 @@ export const AgentTeams = () => {
   const toggleExpanded = () => {
     const next = !expanded;
     setExpanded(next);
-    try { localStorage.setItem('claude-teams-expanded', String(next)); } catch {}
+    try { localStorage.setItem('claude-teams-expanded', String(next)); } catch { /* localStorage may be unavailable */ }
     if (next) fetchTeams();
   };
 

@@ -309,7 +309,6 @@ export async function runChatAgent(query, history = [], options = {}) {
   const conversationHistory = [...messages];
   let totalToolCalls = 0;
   let finalText = '';
-
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Use streaming for real-time feedback
     const stream = client.messages.stream({

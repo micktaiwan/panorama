@@ -1,124 +1,19 @@
 .notes-page {
-  display: flex;
-  height: calc(100vh - 180px);
-  max-height: calc(100vh - 140px);
-  background: var(--notes-bg) !important;
-  margin: -16px; /* Annuler le padding du panel */
-  border-radius: 0; /* Annuler le border-radius du panel */
-  border: none; /* Annuler la border du panel */
-  min-height: 360px;
-  color: var(--text);
-}
-
-.notes-sidebar {
-  width: 300px;
-  background: var(--notes-panel) !important;
-  border-right: 1px solid var(--notes-border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* allow inner scroll sections to size correctly */
-}
-
-
-.notes-editor {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--notes-bg) !important;
-  min-height: 0; /* Allow flex item to shrink */
-  overflow: hidden; /* Prevent overflow from tabs */
-  max-width: 100%;
+  margin: -16px -24px;
 }
 
-
-.notes-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* Allow flex item to shrink */
-  overflow: hidden; /* Prevent overflow */
-}
-
-
-.notes-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  text-align: center;
-}
-
-.notes-empty h2 {
-  margin: 0 0 8px 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.notes-empty p {
-  margin: 0;
-  font-size: 16px;
-}
-
-/* Focus mode: fill the panel */
-.container.focusMode .notes-page {
-  height: 100%;
-  max-height: 100%;
+/* Focus mode: app-content has no padding, so no negative margin needed */
+.app-layout.focusMode .notes-page {
   margin: 0;
 }
 
-/* Mobile responsive: single-view toggle */
+/* Mobile responsive */
 @media (max-width: 768px) {
-  /* Flex column on container so compact header keeps natural size,
-     panel fills the rest — no magic-number height on .notes-page */
-  .container:has(.notes-page) {
-    box-sizing: border-box;
-    height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .container:has(.notes-page) > .panel {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-    padding: 0;
-    margin: 0;
-    border: none;
-    border-radius: 0;
-  }
-
   .notes-page {
-    flex: 1;
-    height: auto;
-    max-height: none;
-    min-height: 0;
-    margin: 0;
-  }
-
-  .notes-sidebar {
-    width: 100%;
-    border-right: none;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .notes-editor { display: none; }
-
-  .notes-page.mobile-editor-active .notes-sidebar { display: none; }
-  .notes-page.mobile-editor-active .notes-editor {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .container.focusMode .notes-page {
-    margin: 0;
-    height: 100dvh;
-    max-height: 100dvh;
+    margin: -12px;
   }
 }

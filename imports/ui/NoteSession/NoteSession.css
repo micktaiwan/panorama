@@ -6,7 +6,7 @@
 }
 
 /* In focus mode the panel has no padding — add some breathing room */
-.container.focusMode .noteSessionGrid {
+.app-layout.focusMode .noteSessionGrid {
   padding: 16px;
 }
 
@@ -222,7 +222,7 @@
 }
 
 /* When container is in small width mode (no .w90), narrow the open-tasks block */
-.container:not(.w90) .noteSessionGrid .contextColumn .contextSection + .contextSection {
+.app-layout:not(.w90) .noteSessionGrid .contextColumn .contextSection + .contextSection {
   max-width: 240px;
 }
 

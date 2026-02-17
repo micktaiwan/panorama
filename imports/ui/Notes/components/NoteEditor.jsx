@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { formatDateTime } from '/imports/ui/utils/date.js';
 import { navigateTo } from '/imports/ui/router.js';
@@ -24,10 +25,13 @@ export const NoteEditor = ({
   onMoveProject,
   onDuplicate,
   shouldFocus = false,
-  dirtySet = new Set()
+  dirtySet = new Set(),
+  lockedByName = null,
 }) => {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const editorRef = useRef(null);
+  const isLockedByOther = !!(activeNote?.lockedBy && activeNote.lockedBy !== Meteor.userId());
+  const isLockedBySelf = !!(activeNote?.lockedBy && activeNote.lockedBy === Meteor.userId());
 
   const {
     isCleaning, isSummarizing, undoAvailable, showCleanModal, askAiSessionId,
@@ -82,6 +86,24 @@ export const NoteEditor = ({
   return (
     <div className="note-editor-container">
       <div className="note-editor-main">
+        {isLockedByOther && (
+          <div className="note-lock-banner other">
+            <svg className="note-lock-banner-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
+            </svg>
+            Editing by {lockedByName || 'another user'} — read-only
+          </div>
+        )}
+        {isLockedBySelf && (
+          <div className="note-lock-banner self">
+            <svg className="note-lock-banner-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
+            </svg>
+            Locked by you
+          </div>
+        )}
         <div className="note-editor">
           <ProseMirrorEditor
             ref={editorRef}
@@ -92,6 +114,7 @@ export const NoteEditor = ({
             onClose={handleClose}
             onAskAI={handleAskAI}
             shouldFocus={shouldFocus}
+            readOnly={isLockedByOther}
           />
         </div>
 
@@ -100,7 +123,7 @@ export const NoteEditor = ({
             <button
               className="save-button"
               onClick={() => onSave(activeTabId)}
-              disabled={isSaving || !dirtySet.has(activeTabId)}
+              disabled={isSaving || !dirtySet.has(activeTabId) || isLockedByOther}
             >
               {isSaving ? 'Saving...' : 'Save'}
             </button>
@@ -160,16 +183,18 @@ export const NoteEditor = ({
               </button>
             )}
 
-            <NoteAIActions
-              noteId={activeTabId}
-              isDirty={dirtySet.has(activeTabId)}
-              isCleaning={isCleaning}
-              isSummarizing={isSummarizing}
-              undoAvailable={undoAvailable}
-              onClean={handleCleanNote}
-              onSummarize={handleSummarizeNote}
-              onUndo={handleUndo}
-            />
+            {!isLockedByOther && (
+              <NoteAIActions
+                noteId={activeTabId}
+                isDirty={dirtySet.has(activeTabId)}
+                isCleaning={isCleaning}
+                isSummarizing={isSummarizing}
+                undoAvailable={undoAvailable}
+                onClean={handleCleanNote}
+                onSummarize={handleSummarizeNote}
+                onUndo={handleUndo}
+              />
+            )}
 
             <button
               className="action-button duplicate-button"
@@ -251,4 +276,5 @@ NoteEditor.propTypes = {
   onDuplicate: PropTypes.func,
   shouldFocus: PropTypes.bool,
   dirtySet: PropTypes.instanceOf(Set),
+  lockedByName: PropTypes.string,
 };

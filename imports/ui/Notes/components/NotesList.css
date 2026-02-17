@@ -163,6 +163,21 @@
   font-size: 14px;
 }
 
+/* Lock indicator in note list */
+.note-title .note-lock-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.note-title .note-lock-icon.other {
+  color: var(--warning);
+}
+
+.note-title .note-lock-icon.self {
+  color: var(--success);
+}
+
 @media (max-width: 768px) {
   .note-item { padding: 16px 12px; }
   .note-item-row .note-delete-btn { opacity: 0.6; }

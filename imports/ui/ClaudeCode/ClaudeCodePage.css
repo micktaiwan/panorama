@@ -255,7 +255,7 @@
 }
 
 /* Focus mode: fill entire viewport */
-.container.focusMode .ccPage {
+.app-layout.focusMode .ccPage {
   height: 100vh;
   border: none;
   border-radius: 0;

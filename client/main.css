@@ -253,11 +253,13 @@ html, body, #react-target {
 a { cursor: pointer; }
 button { cursor: pointer; }
 
-.container {
+.app-layout {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
   max-width: 100%;
   margin: 0 auto;
-  padding: 24px;
-  padding-bottom: 32px;
 }
 
 /* Panels and layout */
@@ -536,9 +538,7 @@ select:disabled,
   html, body {
     overflow-x: hidden;
   }
-  .container {
-    padding: 12px;
-    padding-bottom: 16px;
+  .app-layout {
     overflow-x: hidden;
   }
   .panel {

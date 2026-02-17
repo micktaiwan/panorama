@@ -28,7 +28,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
     s = s.replace(/\(label généré\)/ig, '');
     s = s.replace(/\([^)]*\)\s*$/g, '');
     s = s.replace(/^Facture\s+/i, '').trim();
-    const parts = s.split(/\s*[\-–—]\s*/).filter(Boolean);
+    const parts = s.split(/\s*[-–—]\s*/).filter(Boolean);
     if (parts.length > 0) return parts[0].trim();
     return s.trim();
   };
