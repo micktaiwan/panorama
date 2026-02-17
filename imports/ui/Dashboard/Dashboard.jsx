@@ -66,6 +66,7 @@ export const Dashboard = () => {
     // Overdue counts only open tasks due today or earlier
     const overdue = allTasks.filter(t => !['done','cancelled'].includes(t.status || 'todo') && t.deadline && deadlineSeverity(t.deadline) === 'dueNow').length;
     return { total, open, closed, withDeadline, overdue };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(allTasks.map(t => [(t.status || 'todo') !== 'done' ? 'o' : 'c', t.deadline ? new Date(t.deadline).toDateString() : ''].join(':')))]);
 
   const recentDone = useMemo(() => {
@@ -80,6 +81,7 @@ export const Dashboard = () => {
       .filter(t => new Date(t.statusChangedAt) >= yesterdayStart && new Date(t.statusChangedAt) < todayStart)
       .sort((a, b) => new Date(b.statusChangedAt) - new Date(a.statusChangedAt));
     return { today, yesterday };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(allTasks.map(t => [(t.status || 'todo'), t.statusChangedAt ? new Date(t.statusChangedAt).toISOString().slice(0,10) : ''].join(':')))]);
 
   const unassignedTasks = useMemo(() => (
@@ -97,13 +99,14 @@ export const Dashboard = () => {
       if (includeIds.size > 0) return includeIds.has(pid);
       return true;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, JSON.stringify(projFilters)]);
 
   const removeTask = (taskId) => {
     if (!taskId) return;
     Meteor.call('tasks.remove', taskId, (err) => {
       if (err) {
-        // Simple UI feedback; dashboard has no local error banner
+        // eslint-disable-next-line no-alert -- simple feedback, no toast in Dashboard yet
         alert(err.reason || err.message || 'Failed to delete task');
       }
     });

@@ -41,14 +41,16 @@ export const useAlarmScheduler = () => {
   const subReady = useTracker(() => Meteor.subscribe('alarms.mine').ready(), []);
   const alarms = useTracker(() => AlarmsCollection.find({}, { sort: { snoozedUntilAt: 1, nextTriggerAt: 1 } }).fetch(), [subReady]);
   // Keep latest alarms in a ref to avoid recreating timers on every reactive change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { alarmsRef.current = alarms; }, [JSON.stringify(alarms)]);
 
   useEffect(() => {
     // elect a leader
     if (!isLeader()) claimLeadership();
     heartbeat(heartbeatRef);
+    const hbRef = heartbeatRef.current;
     return () => {
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      if (hbRef) clearInterval(hbRef);
     };
   }, []);
 
@@ -181,6 +183,7 @@ export const useAlarmScheduler = () => {
   // Trigger reschedule on alarms changes without re-installing timers/listeners
   useEffect(() => {
     scheduleFnRef.current();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(alarms)]);
 };
 

@@ -23,7 +23,7 @@ export const LinksPage = () => {
     <div>
       <h2>Links</h2>
       <div className="homeToolbar">
-        <button className="btn btn-primary" onClick={() => createNewLink(undefined, (id) => {
+        <button className="btn btn-primary" onClick={() => createNewLink(undefined, (_id) => {
           // Optional: nothing needed, new link appears first with default name; edit inline handled by LinkItem via startEditing when freshly created if we detect it below.
         })}>Add a link</button>
       </div>

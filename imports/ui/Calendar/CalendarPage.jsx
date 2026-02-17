@@ -27,9 +27,11 @@ export const CalendarPage = () => {
     try {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('calendar_proj_filters') : null;
       return raw ? (JSON.parse(raw) || {}) : {};
-    } catch (e) { return {}; }
+    } catch (_e) { return {}; }
   });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const includeIds = React.useMemo(() => Object.entries(projFilters).filter(([, v]) => v === 1).map(([k]) => k), [JSON.stringify(projFilters)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const excludeIds = React.useMemo(() => Object.entries(projFilters).filter(([, v]) => v === -1).map(([k]) => k), [JSON.stringify(projFilters)]);
   // Tasks subscriptions: unfiltered for suggestions, filtered for scheduled tasks
   const subTasksOpen = useSubscribe('tasks.calendar.open.unfiltered');
@@ -46,7 +48,7 @@ export const CalendarPage = () => {
     try {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('calendar_hide_multi_day') : null;
       return raw === 'true';
-    } catch (e) { return false; }
+    } catch (_e) { return false; }
   });
   const [availableCalendars, setAvailableCalendars] = React.useState([]);
   const [loadingCalendars, setLoadingCalendars] = React.useState(false);
@@ -55,7 +57,7 @@ export const CalendarPage = () => {
     try {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('calendar_hidden_calendars') : null;
       return raw ? JSON.parse(raw) : [];
-    } catch (e) { return []; }
+    } catch (_e) { return []; }
   });
   // Lightweight change keys to avoid costly JSON.stringify deps
   const eventsKey = React.useMemo(
@@ -68,6 +70,7 @@ export const CalendarPage = () => {
   );
   const rawJson = React.useMemo(
     () => (showRaw ? JSON.stringify(events || [], null, 2) : ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [showRaw, eventsKey]
   );
   const rawRef = React.useRef(null);
@@ -221,7 +224,7 @@ export const CalendarPage = () => {
         const w0 = earliestIdx >= 0 ? avail[earliestIdx] : avail[0];
         if (w0) {
           let slotStart = new Date(w0.start);
-          let adjust = shiftOutOfLunch(slotStart, 15);
+          const adjust = shiftOutOfLunch(slotStart, 15);
           if (adjust.minutes >= 15) {
             slotStart = adjust.start;
           } else {
@@ -326,6 +329,7 @@ export const CalendarPage = () => {
     }
 
     return { suggestions: propose, debug: { windows: sizedWindows.length, openTasks: openTasks.length } };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventsKey, tasksKey]);
 
   // Use local day key from helpers
@@ -385,6 +389,7 @@ export const CalendarPage = () => {
     }
     Array.from(map.values()).forEach((arr) => arr.sort((a, b) => new Date(a.start || 0) - new Date(b.start || 0)));
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  /* eslint-disable react-hooks/exhaustive-deps */
   }, [
     eventsKey,
     hideMultiDay,
@@ -394,6 +399,7 @@ export const CalendarPage = () => {
     React.useMemo(() => (suggestions || []).map(s => `${s?.task?._id || ''}:${s?.start?.toISOString?.() || ''}:${s?.end?.toISOString?.() || ''}:${s?.minutes || ''}`).join('|'), [suggestions]),
     localDayKey
   ]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const formatDow = (isoDate) => new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
   const formatDuration = (ev) => {

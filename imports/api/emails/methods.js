@@ -5,7 +5,7 @@ import { GmailTokensCollection, GmailMessagesCollection, EmailActionLogsCollecti
 import { chatComplete } from '/imports/api/_shared/llmProxy.js';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections.js';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 // OAuth2 configuration
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'];

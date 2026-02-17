@@ -12,7 +12,7 @@ const getArr = () => {
   try { const v = localStorage.getItem('budget.arr'); return Number(v || 0); } catch { return 0; }
 };
 
-export const TeamsTab = ({ rows, filter, teamFilter, search, dateRange, onFilterChange, onTeamChange, onDateRangeChange, onSearchChange, setToast }) => {
+export const TeamsTab = ({ rows, filter, teamFilter, search, dateRange, onFilterChange, onTeamChange, onDateRangeChange, onSearchChange, _setToast }) => {
   const [teamTriState, setTeamTriState] = React.useState({});
   // Reuse same filter logic as other tabs
   let filtered = applyDepartmentFilter(rows, filter);

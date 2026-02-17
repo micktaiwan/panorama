@@ -22,6 +22,7 @@ export const PrefsQdrant = ({ pref }) => {
     Meteor.call('qdrant.health', (err, res) => {
       if (!err && res) setHealth(res);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pref?._id]);
 
   const pollIndexStatus = React.useCallback((jobId) => {

@@ -115,7 +115,7 @@ export function MCPServers() {
       const result = await Promise.race([callPromise, timeoutPromise]);
       console.log('[MCPServers] Sync result:', result);
 
-      const { summary, imported, skipped, errors } = result;
+      const { summary, imported: _imported, skipped: _skipped, errors: _errors } = result;
 
       // Build notification message
       const parts = [];

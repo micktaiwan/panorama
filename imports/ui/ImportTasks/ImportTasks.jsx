@@ -17,7 +17,7 @@ export const ImportTasks = () => {
   const [taskProjectSelections, setTaskProjectSelections] = useState({});
   const [taskDeadlineSelections, setTaskDeadlineSelections] = useState({});
   const [taskTitleEdits, setTaskTitleEdits] = useState({});
-  const [savingMap, setSavingMap] = useState({});
+  const [_savingMap, setSavingMap] = useState({});
   const isLoadingProjects = useSubscribe('projects');
   const existingProjects = useFind(() => ProjectsCollection.find({}, { sort: { updatedAt: -1 } }));
   const sanitize = (s) => String(s || '').replace(/\s+/g, ' ').trim();
@@ -63,7 +63,7 @@ export const ImportTasks = () => {
   };
 
   const handleCreateProject = (p) => {
-    const sanitize = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+    const _sanitize = (s) => String(s || '').replace(/\s+/g, ' ').trim();
     Meteor.call('projects.insert', { name: p.name, description: p.description, status: p.status || 'planned' }, (err, res) => {
       if (err) {
         setError(err.error || err.message || 'Project creation failed');
@@ -137,11 +137,12 @@ export const ImportTasks = () => {
     if (Object.keys(nextDeadline).length > 0) {
       setTaskDeadlineSelections(prev => ({ ...prev, ...nextDeadline }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results, projectLabelLcToOption]);
 
   const handleSaveTask = (cid, t) => {
     const selected = taskProjectSelections[cid];
-    let projectId = selected && selected.value;
+    const projectId = selected && selected.value;
     if (!projectId) {
       setError('Select a project for the task before saving');
       return;

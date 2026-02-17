@@ -33,11 +33,12 @@ export function useNoteLock() {
 
   // Cleanup: release all locks on unmount
   useEffect(() => {
+    const ref = lockedNoteIdsRef.current;
     return () => {
-      for (const noteId of lockedNoteIdsRef.current) {
+      for (const noteId of ref) {
         Meteor.callAsync('notes.releaseLock', noteId).catch(() => {});
       }
-      lockedNoteIdsRef.current.clear();
+      ref.clear();
     };
   }, []);
 

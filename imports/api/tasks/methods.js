@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { TasksCollection } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
-import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
 const sanitizeTaskDoc = (input) => {

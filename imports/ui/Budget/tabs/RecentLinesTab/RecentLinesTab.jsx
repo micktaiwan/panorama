@@ -24,7 +24,7 @@ const NotesEditor = ({ lineId, initialNotes, setToast }) => {
     if (isSaving) return;
     setIsSaving(true);
     
-    Meteor.call('budget.setNotes', lineId, notes, (err, res) => {
+    Meteor.call('budget.setNotes', lineId, notes, (err, _res) => {
       setIsSaving(false);
       if (err) {
         console.error('budget.setNotes failed', err);
@@ -262,7 +262,7 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
                         <button
                           className="btn"
                           onClick={() => {
-                            Meteor.call('budget.setDepartment', r._id, 'tech', (err, res) => {
+                            Meteor.call('budget.setDepartment', r._id, 'tech', (err, _res) => {
                               if (err) { console.error('budget.setDepartment failed', err); setToast({ message: 'Unpark failed', kind: 'error' }); return; }
                               setToast({ message: 'Unparked', kind: 'success' });
                             });
@@ -298,7 +298,7 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
                       <button
                         className="btn btn-danger ml8"
                         onClick={() => {
-                          Meteor.call('budget.removeLine', r._id, (err, res) => {
+                          Meteor.call('budget.removeLine', r._id, (err, _res) => {
                             if (err) { console.error('budget.removeLine failed', err); setToast({ message: 'Delete failed', kind: 'error' }); return; }
                             setToast({ message: 'Line deleted', kind: 'success' });
                           });

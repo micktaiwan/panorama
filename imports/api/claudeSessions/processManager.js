@@ -9,7 +9,7 @@ import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collection
 let claudeBin = 'claude';
 try {
   claudeBin = execSync('which claude', { encoding: 'utf8' }).trim();
-} catch (_) {
+} catch (_err) {
   console.warn('[claude-pm] "claude" not found in PATH, spawn will likely fail');
 }
 
@@ -17,7 +17,7 @@ try {
 let codexBin = 'codex';
 try {
   codexBin = execSync('which codex', { encoding: 'utf8' }).trim();
-} catch (_) {
+} catch (_err) {
   console.warn('[claude-pm] "codex" not found in PATH');
 }
 
@@ -354,7 +354,7 @@ export function execCodexCommand(sessionId, prompt, cwd, options = {}, userId) {
         } else if (event.type === 'turn.completed') {
           usage = event.usage;
         }
-      } catch (_) {
+      } catch (_err) {
         // Ignore non-JSON lines
       }
     }
@@ -520,7 +520,7 @@ export async function spawnClaudeProcess(session, message) {
     let data;
     try {
       data = JSON.parse(trimmed);
-    } catch (_) {
+    } catch (_err) {
       log(`line #${lineCount} not JSON:`, trimmed.slice(0, 200));
       return;
     }
@@ -669,8 +669,8 @@ export async function spawnClaudeProcess(session, message) {
         sessionUpdate.lastModelUsage = data.modelUsage;
       }
       const sessionInc = {};
-      if (data.cost_usd != null) sessionInc.totalCostUsd = data.cost_usd;
-      if (data.duration_ms != null) sessionInc.totalDurationMs = data.duration_ms;
+      if (data.cost_usd !== null && data.cost_usd !== undefined) sessionInc.totalCostUsd = data.cost_usd;
+      if (data.duration_ms !== null && data.duration_ms !== undefined) sessionInc.totalDurationMs = data.duration_ms;
       const modifier = { $set: sessionUpdate };
       if (Object.keys(sessionInc).length > 0) modifier.$inc = sessionInc;
       await ClaudeSessionsCollection.updateAsync(sessionId, modifier);
@@ -819,8 +819,6 @@ export async function spawnClaudeProcess(session, message) {
 
 const DEBATE_MAX_ROUNDS = 5;
 const DEBATE_TIMEOUT_MS = 300000; // 5 min per turn
-const DEBATE_MAX_OUTPUT = 100000;
-
 function parseConsensusTag(text) {
   if (!text) return null;
   const lastAgree = text.lastIndexOf('[AGREE]');

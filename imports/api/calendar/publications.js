@@ -4,7 +4,6 @@ import { CalendarEventsCollection } from './collections';
 Meteor.publish('calendar.events.upcoming', function publishCalendarUpcoming() {
   if (!this.userId) return this.ready();
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const horizon = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days to match algorithm horizon
   return CalendarEventsCollection.find({
     userId: this.userId,

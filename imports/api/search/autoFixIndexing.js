@@ -1,7 +1,6 @@
 // Automated fix for indexing issues
 // This script identifies missing documents and reindexes them
 
-import { Meteor } from 'meteor/meteor';
 import { getQdrantClient, COLLECTION, toPointId, upsertDoc, upsertDocChunks } from './vectorStore';
 
 /**
@@ -32,7 +31,7 @@ export const autoFixIndexing = async (opts = {}) => {
     // Check if collection exists
     try {
       await client.getCollection(collectionName);
-    } catch (e) {
+    } catch (_err) {
       report.errors.push({
         type: 'collection_not_found',
         message: `Qdrant collection "${collectionName}" does not exist. Run full reindex.`,
@@ -114,7 +113,7 @@ export const autoFixIndexing = async (opts = {}) => {
           if (points.length === 0) {
             missing.push(doc);
           }
-        } catch (e) {
+        } catch (_err) {
           // If retrieve fails, assume document is missing
           missing.push(doc);
         }

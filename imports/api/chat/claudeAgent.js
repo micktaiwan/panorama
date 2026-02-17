@@ -50,8 +50,6 @@ function getToolDefinitions() {
 function buildSystemPrompt() {
   const now = new Date();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  const nowIso = now.toISOString();
-
   const userContext = buildUserContextBlock();
 
   return [
@@ -300,7 +298,7 @@ export async function runChatAgent(query, history = [], options = {}) {
   const model = options.model || DEFAULT_MODEL;
   const maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS;
   const system = buildSystemPrompt();
-  let messages = buildMessages(query, history);
+  const messages = buildMessages(query, history);
 
   const { onToolStart, onToolEnd, onText } = options;
 
@@ -319,7 +317,7 @@ export async function runChatAgent(query, history = [], options = {}) {
       tools
     });
 
-    let textChunks = [];
+    const textChunks = [];
     const toolUseBlocks = [];
     let currentToolUse = null;
 

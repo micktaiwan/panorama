@@ -42,6 +42,7 @@ export const Eisenhower = () => {
       const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return ac - bc;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(openTasks.map(t => [
     t._id,
     t.deadline ? new Date(t.deadline).toISOString().slice(0,10) : '',

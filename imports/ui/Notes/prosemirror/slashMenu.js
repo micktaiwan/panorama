@@ -54,8 +54,9 @@ export function slashMenuPlugin() {
   let tooltip = null;
   let selectedIndex = 0;
   let filteredCommands = COMMANDS;
+  // eslint-disable-next-line no-unused-vars -- read indirectly via closure
   let active = false;
-  let slashFrom = -1;
+  const _slashFrom = -1;
 
   function getQuery(state) {
     const { $from } = state.selection;
@@ -186,7 +187,7 @@ export function slashMenuPlugin() {
           tooltip.style.display = 'block';
           renderMenu();
 
-          const tooltipRect = tooltip.getBoundingClientRect();
+          const _tooltipRect = tooltip.getBoundingClientRect();
           tooltip.style.left = `${coords.left}px`;
           tooltip.style.top = `${coords.bottom + 4}px`;
         },

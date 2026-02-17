@@ -26,15 +26,11 @@ import {
   buildFilterSelector,
   compileWhere,
   getListKeyForCollection,
-  FIELD_ALLOWLIST,
-  COMMON_QUERIES,
-  getCommonQuery
+  FIELD_ALLOWLIST
 } from '/imports/api/tools/helpers';
 import {
   buildSuccessResponse,
-  buildErrorResponse,
-  inferSource,
-  inferPolicy
+  buildErrorResponse
 } from '/imports/api/tools/responseBuilder';
 
 // Utility functions
@@ -1509,7 +1505,7 @@ export const TOOL_HANDLERS = {
     }
   },
 
-  async tool_emailsAddLabel(args, memory) {
+  async tool_emailsAddLabel(args, _memory) {
     const { messageId, labelId } = args;
 
     if (!messageId) throw new Error('messageId is required');
@@ -1551,7 +1547,7 @@ export const TOOL_HANDLERS = {
     }
   },
 
-  async tool_emailsRemoveLabel(args, memory) {
+  async tool_emailsRemoveLabel(args, _memory) {
     const { messageId, labelId } = args;
 
     if (!messageId) throw new Error('messageId is required');
@@ -1699,7 +1695,7 @@ export const TOOL_HANDLERS = {
       }
 
       // Prepare response
-      const summary = dryRun
+      const _summary = dryRun
         ? `Would delete ${emailsToDelete.length} emails (keeping ${emailsToKeep.length})`
         : `Deleted ${deletedCount} emails (kept ${emailsToKeep.length})`;
 
@@ -1772,7 +1768,7 @@ export const TOOL_HANDLERS = {
       // Check if file exists
       try {
         await fs.access(configPath);
-      } catch (error) {
+      } catch (_error) {
         return buildErrorResponse(
           `Claude Desktop config not found at: ${configPath}`,
           'tool_mcpServersSync',
@@ -2166,7 +2162,7 @@ export const TOOL_HANDLERS = {
       // Check file exists and is readable
       try {
         await fs.access(resolvedPath);
-      } catch (error) {
+      } catch (_error) {
         return buildErrorResponse(`File not found or not accessible: "${filePath}"`, 'tool_readFile', {
           code: 'FILE_NOT_FOUND',
           resolvedPath,

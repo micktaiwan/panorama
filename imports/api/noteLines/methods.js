@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { NoteLinesCollection } from './collections';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
-import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'noteLines.insert'(doc) {

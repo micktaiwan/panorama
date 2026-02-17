@@ -92,7 +92,7 @@ Meteor.methods({
       headers: Match.Optional(Object)
     });
     ensureLoggedIn(this.userId);
-    await ensureOwner(MCPServersCollection, serverId, this.userId);
+    const server = await ensureOwner(MCPServersCollection, serverId, this.userId);
 
     const updateDoc = {};
 
@@ -270,7 +270,7 @@ Meteor.methods({
     // Check if file exists
     try {
       await fs.access(configPath);
-    } catch (error) {
+    } catch (_error) {
       throw new Meteor.Error('config-not-found', `Claude Desktop config not found at: ${configPath}`);
     }
 

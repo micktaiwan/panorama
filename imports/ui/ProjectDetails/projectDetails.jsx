@@ -40,14 +40,14 @@ function contrastText(hex) {
 }
 
 export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateTaskViaPalette }) => {
-  const loadProjects = useSubscribe('projects');
-  const loadTasks = useSubscribe('tasks');
-  const loadSessions = useSubscribe('noteSessions');
-  const loadNotes = useSubscribe('notes');
-  const loadLinks = useSubscribe('links.byProject', projectId);
-  const loadFiles = useSubscribe('files.byProject', projectId);
-  const loadClaudeProjects = useSubscribe('claudeProjects');
-  const loadMembers = useSubscribe('projectMembers', projectId);
+  const _loadProjects = useSubscribe('projects');
+  const _loadTasks = useSubscribe('tasks');
+  const _loadSessions = useSubscribe('noteSessions');
+  const _loadNotes = useSubscribe('notes');
+  const _loadLinks = useSubscribe('links.byProject', projectId);
+  const _loadFiles = useSubscribe('files.byProject', projectId);
+  const _loadClaudeProjects = useSubscribe('claudeProjects');
+  const _loadMembers = useSubscribe('projectMembers', projectId);
 
   const project = useFind(() => ProjectsCollection.find({ _id: projectId }))[0];
   const linkedClaudeProjects = useFind(() => ClaudeProjectsCollection.find({ linkedProjectId: projectId }, { fields: { name: 1, linkedProjectId: 1 } }));
@@ -79,6 +79,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   }, [tasks]);
   const doneTasks = useMemo(() => tasks
     .filter(t => ['done','cancelled'].includes(t.status || 'todo'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     .sort((a,b) => new Date((b.statusChangedAt || 0)) - new Date((a.statusChangedAt || 0))), [tasks, tasks && tasks.map(t => t.status || '').join(','), projectId]);
   // DnD setup for active tasks
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -241,7 +242,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
       .map(s => s.trim())
       .filter(Boolean);
     const answers = parts.length > 0 ? parts : String(answersText || '').split('\n').map(s => s.trim()).filter(Boolean);
-    Meteor.call('ai.project.applyImprovement', projectId, { answers }, (err, res) => {
+    Meteor.call('ai.project.applyImprovement', projectId, { answers }, (err, _res) => {
       setIsApplyingImprove(false);
       if (err) {
         console.error('ai.project.applyImprovement failed', err);
@@ -356,7 +357,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
           >
             <span className="pd-tabs__icon">{tab.icon}</span>
             {tab.label}
-            {tab.count != null && tab.count > 0 && <span className="pd-tabs__count">{tab.count}</span>}
+            {tab.count !== null && tab.count !== undefined && tab.count > 0 && <span className="pd-tabs__count">{tab.count}</span>}
           </button>
         ))}
         <div className="pd-tabs__actions">

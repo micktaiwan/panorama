@@ -10,6 +10,7 @@ export const PrefsProfile = () => {
 
   React.useEffect(() => {
     if (user) setName(user.profile?.name || '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id, user?.profile?.name]);
 
   const email = user?.emails?.[0]?.address || '';

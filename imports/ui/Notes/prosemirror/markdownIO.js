@@ -155,7 +155,7 @@ function taskListPlugin(md) {
 
 function listIsTight(tokens, i) {
   while (++i < tokens.length)
-    if (tokens[i].type !== 'list_item_open') return tokens[i].hidden;
+    {if (tokens[i].type !== 'list_item_open') return tokens[i].hidden;}
   return false;
 }
 
@@ -229,11 +229,11 @@ const markdownSerializer = new MarkdownSerializer(
     // With flushClose(2), adjacent lists produce \n\n which MarkdownIt merges
     // into a single list on reload.
     bullet_list(state, node) {
-      if (state.closed && state.closed.type == node.type) state.flushClose(2);
+      if (state.closed && state.closed.type === node.type) state.flushClose(2);
       state.renderList(node, '  ', () => (node.attrs.bullet || '*') + ' ');
     },
     ordered_list(state, node) {
-      if (state.closed && state.closed.type == node.type) state.flushClose(2);
+      if (state.closed && state.closed.type === node.type) state.flushClose(2);
       const start = node.attrs.order || 1;
       const maxW = String(start + node.childCount - 1).length;
       const space = state.repeat(' ', maxW + 2);

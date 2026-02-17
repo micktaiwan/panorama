@@ -4,7 +4,7 @@ import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import { navigateTo } from '../router.js';
 import { notify } from '../utils/notify.js';
 
-export const PrefsSecrets = ({ pref, userPref }) => {
+export const PrefsSecrets = ({ pref: _pref, userPref }) => {
   const [openaiApiKey, setOpenaiApiKey] = React.useState('');
   const [anthropicApiKey, setAnthropicApiKey] = React.useState('');
   const [perplexityApiKey, setPerplexityApiKey] = React.useState('');
@@ -14,7 +14,7 @@ export const PrefsSecrets = ({ pref, userPref }) => {
   const [googleCalendarClientId, setGoogleCalendarClientId] = React.useState('');
   const [googleCalendarClientSecret, setGoogleCalendarClientSecret] = React.useState('');
   const [googleCalendarConnected, setGoogleCalendarConnected] = React.useState(false);
-  const [googleCalendarAuthUrl, setGoogleCalendarAuthUrl] = React.useState('');
+  const [_googleCalendarAuthUrl, setGoogleCalendarAuthUrl] = React.useState('');
   const [googleCalendarLastSync, setGoogleCalendarLastSync] = React.useState(null);
   const [slackEnabled, setSlackEnabled] = React.useState(false);
   const [slackBotToken, setSlackBotToken] = React.useState('');
@@ -37,9 +37,11 @@ export const PrefsSecrets = ({ pref, userPref }) => {
     setSlackBotToken(userPref.slack?.botToken || '');
     setSlackAppToken(userPref.slack?.appToken || '');
     setSlackAllowedUserId(userPref.slack?.allowedUserId || '');
+  /* eslint-disable react-hooks/exhaustive-deps */
   }, [userPref?._id, userPref?.openaiApiKey, userPref?.anthropicApiKey, userPref?.perplexityApiKey,
       userPref?.pennylaneBaseUrl, userPref?.pennylaneToken, userPref?.calendarIcsUrl,
       JSON.stringify(userPref?.googleCalendar), JSON.stringify(userPref?.slack)]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
     <>

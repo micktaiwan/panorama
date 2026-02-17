@@ -2,7 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { CalendarEventsCollection } from './collections';
 import { getGoogleCalendarClient, getAuthUrl, exchangeCodeForTokens } from './googleCalendarClient';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 import { getGoogleCalendarConfigAsync } from '/imports/api/_shared/config';
 
 const isNonEmptyString = Match.Where((x) => typeof x === 'string' && x.trim().length > 0);
@@ -19,7 +19,7 @@ Meteor.methods({
     if (normalized.startsWith('webcal://')) {
       normalized = 'https://' + normalized.slice('webcal://'.length);
     }
-    let url = new URL(normalized);
+    const url = new URL(normalized);
     if (url.hostname.includes('calendar.google.com') && url.pathname.includes('/calendar/embed')) {
       const src = url.searchParams.get('src');
       if (src) {
@@ -181,7 +181,6 @@ Meteor.methods({
       }
 
       // First, remove events from calendars we're not syncing
-      const calendarIdsSet = new Set(calendarsToSync);
       const removedOthers = await CalendarEventsCollection.removeAsync({
         userId: this.userId,
         source: 'google',

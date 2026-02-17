@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { ChatsCollection } from './collections';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 const sanitizeMessage = (m) => ({
   role: (m && m.role === 'assistant') ? 'assistant' : 'user',

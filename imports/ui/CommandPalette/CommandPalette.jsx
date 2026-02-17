@@ -75,6 +75,7 @@ const SearchPane = ({ onClose }) => {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('search_type_filters_v1', JSON.stringify(typeFilters));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(typeFilters)]);
 
   useEffect(() => {
@@ -122,6 +123,7 @@ const SearchPane = ({ onClose }) => {
       if (!map.has(key)) map.set(key, r);
     }
     setCombinedResults(Array.from(map.values()));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(instantResults), JSON.stringify(searchResults)]);
 
   // Update counters and filtered list from combined results
@@ -142,6 +144,7 @@ const SearchPane = ({ onClose }) => {
     });
     setSearchFiltered(filtered);
     setSearchActiveIdx(idx => (idx >= 0 && idx < filtered.length ? idx : -1));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(combinedResults), JSON.stringify(typeFilters)]);
 
   useEffect(() => {
@@ -272,6 +275,7 @@ const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
     if (typeof defaultProjectId === 'string') {
       setNewTaskProjectId(defaultProjectId || '');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Re-apply default when projects list changes (after subscription) if user hasn't changed it
@@ -281,6 +285,7 @@ const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
     if (typeof defaultProjectId === 'string') {
       setNewTaskProjectId(defaultProjectId || '');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, Array.isArray(projects) ? projects.length : 0, defaultProjectId]);
 
   const handleCreateTask = () => {
@@ -294,7 +299,7 @@ const CreateTaskPane = ({ defaultProjectId = '', isOpen = false }) => {
       const parsed = new Date(newTaskDeadline);
       if (!Number.isNaN(parsed.getTime())) doc.deadline = parsed;
     }
-    Meteor.call('tasks.insert', doc, (err, res) => {
+    Meteor.call('tasks.insert', doc, (err, _res) => {
       setCreatingTask(false);
       if (err) { notify({ message: err?.reason || err?.message || 'Task creation failed', kind: 'error' }); return; }
       notify({ message: 'Task created!', kind: 'success' });
@@ -382,6 +387,7 @@ const CreateNotePane = ({ defaultProjectId = '', isOpen = false }) => {
     if (typeof defaultProjectId === 'string') {
       setProjectId(defaultProjectId || '');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
@@ -390,6 +396,7 @@ const CreateNotePane = ({ defaultProjectId = '', isOpen = false }) => {
     if (typeof defaultProjectId === 'string') {
       setProjectId(defaultProjectId || '');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, Array.isArray(projects) ? projects.length : 0, defaultProjectId]);
 
   const handleCreateNote = () => {
@@ -400,7 +407,7 @@ const CreateNotePane = ({ defaultProjectId = '', isOpen = false }) => {
     setCreating(true);
     const doc = { title: t || undefined, content: c };
     if (projectId) doc.projectId = projectId;
-    Meteor.call('notes.insert', doc, (err, res) => {
+    Meteor.call('notes.insert', doc, (err, _res) => {
       setCreating(false);
       if (err) { notify({ message: err?.reason || err?.message || 'Note creation failed', kind: 'error' }); return; }
       notify({ message: 'Note created', kind: 'success' });
@@ -575,7 +582,7 @@ export const CommandPalette = ({ open, onClose, defaultTab, defaultProjectId = '
     const fromStorage = () => {
       try {
         const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('cmd_palette_last_tab') : null;
-        const n = raw != null ? parseInt(raw, 10) : NaN;
+        const n = raw !== null && raw !== undefined ? parseInt(raw, 10) : NaN;
         return Number.isFinite(n) && (n === 0 || n === 1 || n === 2 || n === 3) ? n : 0;
       } catch (e) {
         console.error('cmd_palette_last_tab read failed', e?.message || e);

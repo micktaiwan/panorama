@@ -13,7 +13,7 @@ const parseLocalJson = (key, fallback) => {
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw);
-    return parsed == null ? fallback : parsed;
+    return parsed === null || parsed === undefined ? fallback : parsed;
   } catch (e) {
     console.error('[useNoteTabs] Failed to parse localStorage JSON for key', key, e);
     return fallback;
@@ -22,7 +22,7 @@ const parseLocalJson = (key, fallback) => {
 
 const getDraftFor = (noteId) => {
   const raw = localStorage.getItem(`note-content-${noteId}`);
-  if (raw == null) return null;
+  if (raw === null || raw === undefined) return null;
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object' && 'content' in parsed) {
@@ -399,7 +399,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
       const content = noteContents[noteId];
       const isFirstSave = !note?.updatedAt || note.updatedAt === note.createdAt;
       const hasNoTitle = !note?.title || note.title === 'New note' || note.title.trim() === '';
-      let updateData = { content };
+      const updateData = { content };
 
       if (isFirstSave && hasNoTitle && content.trim()) {
         const firstLine = content.split('\n')[0].trim();

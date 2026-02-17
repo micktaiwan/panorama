@@ -17,6 +17,7 @@ export const useRowHighlight = (id, rowSelector, onClear) => {
       }, 3000);
       return () => clearTimeout(t);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, rowSelector]);
 };
 

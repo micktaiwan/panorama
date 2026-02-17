@@ -76,7 +76,7 @@ export const Alarms = () => {
     setEditRecurrence('none');
   };
 
-  const onSaveEdit = (a) => {
+  const onSaveEdit = (_a) => {
     if (!editingId) return;
     if (!editDate || !editTime || !editTitle.trim()) { onCancelEdit(); return; }
     const dt = new Date(`${editDate}T${editTime}:00`);

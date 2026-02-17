@@ -12,14 +12,14 @@ const lsGet = (key, fallback) => {
   if (typeof localStorage === 'undefined') return fallback;
   try {
     const raw = localStorage.getItem(key);
-    if (raw == null) return fallback;
+    if (raw === null || raw === undefined) return fallback;
     return JSON.parse(raw);
   } catch {
     return fallback;
   }
 };
 
-const lsSet = (key, value) => {
+const _lsSet = (key, value) => {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem(key, JSON.stringify(value));
   }
@@ -87,6 +87,7 @@ export const useReportingData = ({
     });
   }, [windowKey, projectFilters]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(windowKey); }, []);
 
   // Persist AI options
@@ -103,6 +104,7 @@ export const useReportingData = ({
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('reporting_ai_recent_prompts', JSON.stringify(recentPrompts || []));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(recentPrompts)]);
 
   const upsertRecentPrompt = useCallback((prompt) => {
@@ -125,6 +127,7 @@ export const useReportingData = ({
       groups[e.type].push(e);
     }
     return groups;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(data?.events || [])]);
 
   // Stats

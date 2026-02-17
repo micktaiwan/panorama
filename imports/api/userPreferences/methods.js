@@ -100,7 +100,7 @@ Meteor.methods({
     if (typeof modifier.pennylaneToken === 'string') set.pennylaneToken = modifier.pennylaneToken.trim() || null;
     if (typeof modifier.calendarIcsUrl === 'string') set.calendarIcsUrl = modifier.calendarIcsUrl.trim() || null;
 
-    if (modifier.slack != null && typeof modifier.slack === 'object') {
+    if (modifier.slack !== null && modifier.slack !== undefined && typeof modifier.slack === 'object') {
       const slack = {};
       if (typeof modifier.slack.enabled === 'boolean') slack.enabled = modifier.slack.enabled;
       if (typeof modifier.slack.botToken === 'string') slack.botToken = modifier.slack.botToken.trim() || null;
@@ -109,7 +109,7 @@ Meteor.methods({
       if (Object.keys(slack).length > 0) set.slack = slack;
     }
 
-    if (modifier.googleCalendar != null && typeof modifier.googleCalendar === 'object') {
+    if (modifier.googleCalendar !== null && modifier.googleCalendar !== undefined && typeof modifier.googleCalendar === 'object') {
       const gc = {};
       if (typeof modifier.googleCalendar.clientId === 'string') gc.clientId = modifier.googleCalendar.clientId.trim() || null;
       if (typeof modifier.googleCalendar.clientSecret === 'string') gc.clientSecret = modifier.googleCalendar.clientSecret.trim() || null;
@@ -119,7 +119,7 @@ Meteor.methods({
       if (Object.keys(gc).length > 0) set.googleCalendar = gc;
     }
 
-    if (modifier.cta != null && typeof modifier.cta === 'object') {
+    if (modifier.cta !== null && modifier.cta !== undefined && typeof modifier.cta === 'object') {
       const cta = {};
       if (typeof modifier.cta.enabled === 'boolean') cta.enabled = modifier.cta.enabled;
       if (typeof modifier.cta.model === 'string') cta.model = modifier.cta.model;
@@ -127,7 +127,7 @@ Meteor.methods({
     }
 
     // AI config sub-object
-    if (modifier.ai != null && typeof modifier.ai === 'object') {
+    if (modifier.ai !== null && modifier.ai !== undefined && typeof modifier.ai === 'object') {
       const ai = {};
       if (['local', 'remote'].includes(modifier.ai.mode)) ai.mode = modifier.ai.mode;
       if (['none', 'local', 'remote'].includes(modifier.ai.fallback)) ai.fallback = modifier.ai.fallback;

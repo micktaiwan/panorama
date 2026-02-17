@@ -1,5 +1,5 @@
 import { keymap } from 'prosemirror-keymap';
-import { baseKeymap, toggleMark, setBlockType, wrapIn, lift, chainCommands } from 'prosemirror-commands';
+import { baseKeymap, toggleMark } from 'prosemirror-commands';
 import { sinkListItem, liftListItem, splitListItem } from 'prosemirror-schema-list';
 import { TextSelection } from 'prosemirror-state';
 import { Fragment } from 'prosemirror-model';
@@ -12,11 +12,11 @@ import { promptUrl } from './promptUrl.js';
  */
 export function createAppKeymap({ onSave, onClose }) {
   return keymap({
-    'Mod-s': (_state, _dispatch, view) => {
+    'Mod-s': (_state, _dispatch, _view) => {
       onSave?.();
       return true;
     },
-    'Mod-w': (_state, _dispatch, view) => {
+    'Mod-w': (_state, _dispatch, _view) => {
       onClose?.();
       return true;
     },
@@ -179,7 +179,7 @@ export function createFormattingKeymap() {
           const paragraphEnd = $from.after($from.depth);
 
           // Find the end position of the last item in the list
-          const lastListItem = prevSibling.lastChild;
+          const _lastListItem = prevSibling.lastChild;
           const endOfList = paragraphStart - 1; // Just before the paragraph = end of list
 
           const tr = state.tr.delete(paragraphStart, paragraphEnd);

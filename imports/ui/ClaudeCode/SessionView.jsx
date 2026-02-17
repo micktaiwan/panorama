@@ -32,7 +32,7 @@ const BUILTIN_COMMANDS = [
   { name: 'help', description: 'Show available commands', hasArgs: false },
 ];
 
-export const SessionView = ({ sessionId, homeDir, isActive, onFocus, onNewSession }) => {
+export const SessionView = ({ sessionId, homeDir, isActive, onFocus: _onFocus, onNewSession }) => {
   const [input, setInput] = useState('');
   const [editingSettings, setEditingSettings] = useState(false);
   const [localMessages, setLocalMessages] = useState([]);

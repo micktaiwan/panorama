@@ -4,7 +4,7 @@
 import { Meteor } from 'meteor/meteor';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { runChatAgent, isClaudeAgentAvailable } from './claudeAgent';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'chat.ask'(payload) {
@@ -95,7 +95,7 @@ Meteor.methods({
         },
 
         // Called with text chunks during streaming (optional - for future use)
-        onText: async (chunk) => {
+        onText: async (_chunk) => {
           // Could be used to stream partial responses
           // For now, we wait for complete response
         }

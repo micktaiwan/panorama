@@ -102,7 +102,7 @@ export const PanoramaPage = () => {
     setLoading(true);
     Meteor.call('panorama.getOverview', { periodDays }, (err, res) => {
       if (err) {
-        // eslint-disable-next-line no-console
+         
         console.error('panorama.getOverview failed', err);
         setData([]);
         setLoading(false);

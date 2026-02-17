@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { notify } from '/imports/ui/utils/notify';
 import './SearchQuality.css';

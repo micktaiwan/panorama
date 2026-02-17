@@ -140,6 +140,7 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
     }
 
     setOrder(ids);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openTabs.length, openTabs.map(t => t.id).join(',')]);
 
   const handleContextMenu = (e, tabId) => {

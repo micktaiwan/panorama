@@ -28,6 +28,7 @@ export const ProjectFilters = ({ projects, storageKey = 'dashboard_proj_filters'
       return an.localeCompare(bn);
     });
     return list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify((projects || []).map(p => [p._id, !!p.isFavorite, p.favoriteRank || 0, p.name || ''].join(':')))]);
 
   const toggle = (projectId) => {
@@ -46,6 +47,7 @@ export const ProjectFilters = ({ projects, storageKey = 'dashboard_proj_filters'
       try { localStorage.setItem(storageKey, JSON.stringify(filters)); } catch (e) { console.error('Failed to save', storageKey, e); }
     }
     if (typeof onChange === 'function') onChange(filters);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(filters), storageKey]);
 
   return (

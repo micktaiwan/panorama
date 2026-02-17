@@ -21,7 +21,7 @@ const extractSenderName = (from) => {
   return from;
 };
 
-export const EmailRow = ({ message, threadCount, onOpen, onArchive, onDelete, onAddLabel, onAnalyze, labels, formatDate, isSelected = false }) => {
+export const EmailRow = ({ message, threadCount, onOpen, onArchive, onDelete, onAddLabel: _onAddLabel, onAnalyze, labels: _labels, formatDate, isSelected = false }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 

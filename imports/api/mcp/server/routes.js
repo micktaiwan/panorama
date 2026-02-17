@@ -44,7 +44,7 @@ function parseJsonBody(req) {
 /**
  * GET /mcp/health - Health check endpoint (must be registered BEFORE /mcp)
  */
-WebApp.connectHandlers.use('/mcp/health', (req, res, next) => {
+WebApp.connectHandlers.use('/mcp/health', (req, res, _next) => {
   if (req.method !== 'GET') {
     res.writeHead(405);
     res.end();

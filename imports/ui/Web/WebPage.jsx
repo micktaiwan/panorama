@@ -183,7 +183,7 @@ export const WebPage = () => {
                 const raw = results?.response || '';
                 const title = String(results?.query || '').slice(0, 120);
                 setSavingNote(true);
-                Meteor.call('notes.insert', { title, content: raw }, (err, noteId) => {
+                Meteor.call('notes.insert', { title, content: raw }, (err, _noteId) => {
                   setSavingNote(false);
                   if (err) {
                     notify({ message: err?.reason || err?.message || 'Failed to create note', kind: 'error' });

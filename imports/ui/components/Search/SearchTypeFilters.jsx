@@ -42,6 +42,7 @@ export const SearchTypeFilters = ({
   React.useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(filters));
     if (typeof onChange === 'function') onChange(filters);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(filters), storageKey]);
 
   return (

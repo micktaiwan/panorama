@@ -5,7 +5,7 @@ import { toOneLine } from '/imports/api/_shared/aiCore';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 const buildPrompt = ({ project, lines: noteLines }) => {
   const head = [

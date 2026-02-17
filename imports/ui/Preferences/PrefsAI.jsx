@@ -3,7 +3,7 @@ import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
 import { notify } from '../utils/notify.js';
 
-export const PrefsAI = ({ pref, userPref }) => {
+export const PrefsAI = ({ pref: _pref, userPref }) => {
   const [aiMode, setAiMode] = React.useState('remote');
   const [aiFallback, setAiFallback] = React.useState('none');
   const [aiTimeoutMs, setAiTimeoutMs] = React.useState(30000);
@@ -35,6 +35,7 @@ export const PrefsAI = ({ pref, userPref }) => {
     setAiRemoteProvider(userPref.ai?.remote?.provider || 'openai');
     setAiRemoteChatModel(userPref.ai?.remote?.chatModel || 'gpt-4o-mini');
     setAiRemoteEmbeddingModel(userPref.ai?.remote?.embeddingModel || 'text-embedding-3-small');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPref?._id, JSON.stringify(userPref?.ai)]);
 
   React.useEffect(() => {
@@ -43,6 +44,7 @@ export const PrefsAI = ({ pref, userPref }) => {
       setCtaEnabled(userPref.cta.enabled !== false);
       setCtaModel(userPref.cta.model || 'local');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPref?._id, JSON.stringify(userPref?.cta)]);
 
   const generateAIPreferences = React.useCallback(() => ({

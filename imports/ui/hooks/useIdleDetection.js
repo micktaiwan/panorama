@@ -17,13 +17,11 @@ export const useIdleDetection = () => {
     };
 
     const goActive = () => {
-      if (!isAwayRef.current) {
-        // Not away — just reset the idle timer
+      const now = Date.now();
+      if (now - lastActiveCallRef.current < ACTIVE_THROTTLE_MS) {
         resetTimer();
         return;
       }
-      const now = Date.now();
-      if (now - lastActiveCallRef.current < ACTIVE_THROTTLE_MS) return;
       lastActiveCallRef.current = now;
       isAwayRef.current = false;
       Meteor.call('userPresence.setActive');
@@ -43,19 +41,31 @@ export const useIdleDetection = () => {
       }
     };
 
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        goAway();
+      } else {
+        goActive();
+      }
+    };
+
     const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
     const opts = { passive: true };
     for (const evt of events) {
       window.addEventListener(evt, onActivity, opts);
     }
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // Start the idle timer
+    // Ensure DB status is online on mount (covers HMR, reconnects, stale DB state)
+    Meteor.call('userPresence.setActive');
+    lastActiveCallRef.current = Date.now();
     resetTimer();
 
     return () => {
       for (const evt of events) {
         window.removeEventListener(evt, onActivity, opts);
       }
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);

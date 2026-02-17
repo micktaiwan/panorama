@@ -31,11 +31,11 @@ const decodeHtmlEntities = (text) => {
   return textarea.value;
 };
 
-export const MessageModal = ({ message, onClose, onArchive, onAddLabel, onAnalyze, labels, formatDate, getHeaderValue }) => {
+export const MessageModal = ({ message, onClose, onArchive: _onArchive, onAddLabel: _onAddLabel, onAnalyze, labels: _labels, formatDate, getHeaderValue }) => {
   // Use stored data from database if available
   const headers = message.payload?.headers || message.headers || [];
   const subject = getHeaderValue(headers, 'Subject') || message.subject || '';
-  const snippet = message.snippet || '';
+  const _snippet = message.snippet || '';
   
   const threadMessages = message.threadMessages || [message];
   const [expandedMessages, setExpandedMessages] = useState(new Set([threadMessages.length - 1])); // Only last message expanded by default

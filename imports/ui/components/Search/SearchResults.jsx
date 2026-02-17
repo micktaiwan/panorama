@@ -19,6 +19,7 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
     if (typeof activeIdxProp !== 'number') {
       setInternalIdx(-1);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list.length]);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyboardNav, list, activeIdx]);
 
   const activate = (index) => {

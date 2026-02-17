@@ -169,12 +169,12 @@ Meteor.methods({
             try {
               const stat = fs.statSync(path.join(dir, entry));
               if (stat.isFile()) totalSize += stat.size;
-            } catch (_) { /* skip */ }
+            } catch (_err) { /* skip */ }
           }
           disk = { dir, fileCount: entries.length, totalBytes: totalSize };
         }
       }
-    } catch (_) { /* disk info not critical */ }
+    } catch (_err) { /* disk info not critical */ }
 
     return { users, projects, tasks, notes, files, qdrant, disk };
   },
