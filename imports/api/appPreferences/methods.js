@@ -2,8 +2,6 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { AppPreferencesCollection } from './collections';
 
-const normalizePath = (p) => String(p || '').trim();
-
 Meteor.methods({
   async 'appPreferences.ensure'() {
     const doc = await AppPreferencesCollection.findOneAsync({});
@@ -12,30 +10,22 @@ Meteor.methods({
     return AppPreferencesCollection.insertAsync({
       createdAt: now,
       updatedAt: now,
-      filesDir: null,
-      onboardedAt: null,
-      devUrlMode: false,
       openaiApiKey: null,
       anthropicApiKey: null,
       perplexityApiKey: null,
       pennylaneBaseUrl: null,
       pennylaneToken: null,
-      qdrantUrl: null,
       settingsVersion: 1
     });
   },
   async 'appPreferences.update'(modifier) {
     check(modifier, Object);
     const set = { updatedAt: new Date() };
-    if (typeof modifier.filesDir === 'string') set.filesDir = normalizePath(modifier.filesDir) || null;
-    if (modifier.onboardedAt === true) set.onboardedAt = new Date();
-    if (typeof modifier.devUrlMode === 'boolean') set.devUrlMode = modifier.devUrlMode;
     if (typeof modifier.openaiApiKey === 'string') set.openaiApiKey = modifier.openaiApiKey.trim() || null;
     if (typeof modifier.anthropicApiKey === 'string') set.anthropicApiKey = modifier.anthropicApiKey.trim() || null;
     if (typeof modifier.perplexityApiKey === 'string') set.perplexityApiKey = modifier.perplexityApiKey.trim() || null;
     if (typeof modifier.pennylaneBaseUrl === 'string') set.pennylaneBaseUrl = modifier.pennylaneBaseUrl.trim() || null;
     if (typeof modifier.pennylaneToken === 'string') set.pennylaneToken = modifier.pennylaneToken.trim() || null;
-    if (typeof modifier.qdrantUrl === 'string') set.qdrantUrl = modifier.qdrantUrl.trim() || null;
     if (modifier.slack !== null && modifier.slack !== undefined && typeof modifier.slack === 'object') {
       const s = modifier.slack;
       const slack = {};

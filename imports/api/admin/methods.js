@@ -51,7 +51,7 @@ Meteor.methods({
     await ensureAdmin(this.userId);
 
     const users = await Meteor.users.find({}, {
-      fields: { emails: 1, createdAt: 1, lastLoginAt: 1, isAdmin: 1 },
+      fields: { emails: 1, profile: 1, createdAt: 1, lastLoginAt: 1, isAdmin: 1 },
       sort: { createdAt: 1 },
     }).fetchAsync();
 
@@ -65,6 +65,7 @@ Meteor.methods({
       ]);
       return {
         _id: uid,
+        name: u.profile?.name || '',
         email: u.emails?.[0]?.address || '(no email)',
         createdAt: u.createdAt,
         lastLoginAt: u.lastLoginAt,

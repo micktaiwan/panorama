@@ -21,6 +21,20 @@
   letter-spacing: 0.5px;
 }
 
+.adminTable th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.adminTable th.sortable:hover {
+  color: var(--text);
+}
+
+.sortArrow {
+  font-size: 10px;
+  color: var(--muted);
+}
+
 .adminTable tr:hover {
   background: var(--bgElevated);
 }

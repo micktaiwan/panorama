@@ -526,9 +526,11 @@ Meteor.methods({
             // Clear existing points for this user only
             await client.delete(collectionName, { filter: { must: [{ key: 'userId', match: { value: userId } }] } });
           } else {
-            console.log(`[qdrant.indexStart] Collection ${collectionName} has wrong dimensions (${existingSize} vs ${vectorSize}), recreating`);
-            await client.deleteCollection(collectionName);
-            await client.createCollection(collectionName, { vectors: { size: vectorSize, distance } });
+            // Dimension mismatch — abort to avoid deleting all users' data
+            console.warn(`[qdrant.indexStart] BLOCKED: Collection ${collectionName} has dimensions ${existingSize}, expected ${vectorSize}. Refusing to delete shared collection.`);
+            const st = indexJobs.get(jobId);
+            if (st) { st.done = true; st.error = `dimension-mismatch:${existingSize}:${vectorSize}`; st.finishedAt = new Date(); }
+            return;
           }
         } catch {
           // Collection doesn't exist, create it

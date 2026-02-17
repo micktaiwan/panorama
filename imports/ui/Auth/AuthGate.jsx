@@ -11,7 +11,6 @@ import { VerifyEmail } from './VerifyEmail.jsx';
 import './AuthGate.css';
 
 const AUTH_ROUTES = new Set(['login', 'signup', 'forgotPassword', 'resetPassword', 'verifyEmail']);
-const SHOWS_LOGIN_FORM = new Set(['login', 'signup', 'forgotPassword', 'resetPassword', 'verifyEmail', 'home']);
 
 export const AuthGate = ({ children }) => {
   const [route, setRoute] = useState(parseHashRoute());
@@ -22,10 +21,7 @@ export const AuthGate = ({ children }) => {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const { userId, loggingIn } = useTracker(() => ({
-    userId: Meteor.userId(),
-    loggingIn: Meteor.loggingIn(),
-  }));
+  const userId = useTracker(() => Meteor.userId());
 
   // Sync login token to a cookie so HTTP routes (/files/, /download-export/) can authenticate
   useEffect(() => {
@@ -49,15 +45,6 @@ export const AuthGate = ({ children }) => {
   // If logged in, render the app
   if (userId) {
     return children;
-  }
-
-  // If auto-logging in from stored token (not from a form submit), show loading
-  if (loggingIn && !SHOWS_LOGIN_FORM.has(route?.name)) {
-    return (
-      <div className="authGate">
-        <div className="authLoading">Loading...</div>
-      </div>
-    );
   }
 
   // Not logged in: show auth pages

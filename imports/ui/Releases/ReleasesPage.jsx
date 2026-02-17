@@ -120,6 +120,10 @@ export const ReleasesPage = ({ releaseId }) => {
           </div>
         </div>
       )}
+      <p className="releasesPage-footer muted">
+        The notification bell shows the 10 most recent releases.
+        This page displays up to 50.
+      </p>
     </div>
   );
 };

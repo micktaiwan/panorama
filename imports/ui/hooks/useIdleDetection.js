@@ -34,11 +34,7 @@ export const useIdleDetection = () => {
     };
 
     const onActivity = () => {
-      if (isAwayRef.current) {
-        goActive();
-      } else {
-        resetTimer();
-      }
+      goActive();
     };
 
     const onVisibilityChange = () => {

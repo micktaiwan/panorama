@@ -23,11 +23,6 @@
   font-size: 24px;
 }
 
-.authLoading {
-  color: var(--muted);
-  text-align: center;
-}
-
 /* Shared auth form styles */
 
 .authCard {

@@ -46,6 +46,11 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
   return (
     <>
       <h3>Secrets</h3>
+      {!openaiApiKey && (
+        <div className="prefsWarning" style={{ padding: '8px 12px', marginBottom: '12px', borderRadius: '4px', background: 'var(--warning-bg, rgba(255,180,0,0.1))', border: '1px solid var(--warning, #e6a800)', color: 'var(--warning, #e6a800)', fontSize: '13px' }}>
+          No OpenAI API key configured. Semantic search indexing is disabled — search results will be limited to basic text matching.
+        </div>
+      )}
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">OpenAI API Key</div>
@@ -55,10 +60,22 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
               placeholder="(not set)"
               fullWidth
               onSubmit={(next) => {
+                const hadKey = !!openaiApiKey;
                 setOpenaiApiKey(next);
-                Meteor.call('userPreferences.update', { openaiApiKey: next }, () => {});
+                Meteor.call('userPreferences.update', { openaiApiKey: next }, () => {
+                  if (!hadKey && next?.trim()) {
+                    notify({
+                      message: 'API key saved. Go to Preferences > Qdrant to rebuild your search index.',
+                      kind: 'success',
+                      durationMs: 8000,
+                    });
+                  }
+                });
               }}
             />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Semantic search indexing (Qdrant) and AI features (summaries, analysis, reports)
+            </div>
           </div>
         </div>
         <div className="prefsRow">
@@ -74,7 +91,7 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
               }}
             />
             <div className="muted mt4" style={{ fontSize: '12px' }}>
-              Utilisé par le chat AI (Claude SDK avec toolRunner)
+              Interactive Chat panel (Claude with tool calling)
             </div>
           </div>
         </div>
@@ -90,6 +107,9 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
                 Meteor.call('userPreferences.update', { perplexityApiKey: next }, () => {});
               }}
             />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Web Search page (Perplexity AI)
+            </div>
           </div>
         </div>
         <div className="prefsRow">
@@ -97,7 +117,7 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
           <div className="prefsValue">
             {googleCalendarConnected ? (
               <div>
-                <div style={{ color: '#0b6', marginBottom: '8px' }}>Connected to Google Calendar</div>
+                <div style={{ color: 'var(--success, #0b6)', marginBottom: '8px' }}>Connected to Google Calendar</div>
                 {googleCalendarLastSync ? (
                   <div className="muted" style={{ fontSize: '13px', marginBottom: '8px' }}>
                     Last sync: {new Date(googleCalendarLastSync).toLocaleString()}
@@ -116,22 +136,22 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
               </div>
             ) : (
               <div>
-                <div style={{ marginBottom: '12px' }}>
-                  <input
-                    className="afInput"
-                    type="text"
-                    placeholder="Client ID"
+                <div style={{ marginBottom: '8px' }}>
+                  <div className="muted" style={{ fontSize: '12px', marginBottom: '4px' }}>Client ID</div>
+                  <InlineEditable
                     value={googleCalendarClientId}
-                    onChange={(e) => setGoogleCalendarClientId(e.target.value)}
-                    style={{ width: '100%', marginBottom: '8px' }}
+                    placeholder="(not set)"
+                    fullWidth
+                    onSubmit={(next) => setGoogleCalendarClientId(next)}
                   />
-                  <input
-                    className="afInput"
-                    type="password"
-                    placeholder="Client Secret"
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <div className="muted" style={{ fontSize: '12px', marginBottom: '4px' }}>Client Secret</div>
+                  <InlineEditable
                     value={googleCalendarClientSecret}
-                    onChange={(e) => setGoogleCalendarClientSecret(e.target.value)}
-                    style={{ width: '100%' }}
+                    placeholder="(not set)"
+                    fullWidth
+                    onSubmit={(next) => setGoogleCalendarClientSecret(next)}
                   />
                 </div>
                 <button
@@ -167,45 +187,23 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
         <div className="prefsRow">
           <div className="prefsLabel">Google Calendar (Legacy ICS)</div>
           <div className="prefsValue">
-            <div>
-              <input
-                className="afInput"
-                type="text"
-                placeholder="Paste your private ICS URL"
-                value={calendarIcsUrl}
-                onChange={(e) => setCalendarIcsUrl(e.target.value)}
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="mt8">
-              <button
-                className="btn"
-                onClick={() => {
-                  const url = String(calendarIcsUrl || '').trim();
-                  if (!url) { notify({ message: 'ICS URL missing', kind: 'error' }); return; }
-                  Meteor.call('calendar.setIcsUrl', url, (err) => {
+            <InlineEditable
+              value={calendarIcsUrl}
+              placeholder="(not set)"
+              fullWidth
+              onSubmit={(next) => {
+                setCalendarIcsUrl(next);
+                if (next?.trim()) {
+                  Meteor.call('calendar.setIcsUrl', next.trim(), (err) => {
                     if (err) { notify({ message: err?.reason || err?.message || 'Save failed', kind: 'error' }); return; }
                     notify({ message: 'ICS URL saved', kind: 'success' });
                   });
-                }}
-              >Link with GCal (ICS)</button>
-            </div>
+                }
+              }}
+            />
           </div>
         </div>
-        <div className="prefsRow">
-          <div className="prefsLabel">MCP Servers</div>
-          <div className="prefsValue">
-            <div className="muted" style={{ marginBottom: '8px', fontSize: '13px' }}>
-              Configure external MCP servers (Notion, Google Calendar, etc.)
-            </div>
-            <button
-              className="btn"
-              onClick={() => navigateTo({ name: 'mcpServers' })}
-            >
-              Manage MCP Servers
-            </button>
-          </div>
-        </div>
+
         <div className="prefsRow">
           <div className="prefsLabel">Slack Integration</div>
           <div className="prefsValue">

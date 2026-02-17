@@ -1,26 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { navigateTo } from '/imports/ui/router.js';
-
-// Module-level: survives component remounts caused by AuthGate re-renders
-let lastLoginError = '';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setErrorState] = useState(lastLoginError);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const setError = (msg) => {
-    lastLoginError = msg;
-    setErrorState(msg);
-  };
-
-  useEffect(() => {
-    // Pick up any error from a previous mount
-    if (lastLoginError) setErrorState(lastLoginError);
-    return () => { /* keep lastLoginError for next mount */ };
-  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -38,7 +24,6 @@ export const Login = () => {
         setError(err.reason || err.message || String(err) || 'Login failed');
         return;
       }
-      lastLoginError = '';
       navigateTo({ name: 'home' });
     });
   };

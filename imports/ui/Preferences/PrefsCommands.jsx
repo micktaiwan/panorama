@@ -83,7 +83,12 @@ export const PrefsCommands = () => {
 
   return (
     <>
-      <h3>Built-in Commands</h3>
+      <h3>Claude Code Commands</h3>
+      <div className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
+        Slash commands for the integrated Claude Code terminal.
+      </div>
+
+      <h4>Built-in</h4>
       <div className="prefsSection">
         {BUILTIN_COMMANDS.map(cmd => (
           <div key={cmd.name} className="prefsRow">
@@ -102,7 +107,7 @@ export const PrefsCommands = () => {
         ))}
       </div>
 
-      <h3>Custom Commands</h3>
+      <h4>Custom</h4>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Actions</div>

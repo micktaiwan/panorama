@@ -9,11 +9,6 @@ export const AI_PREFERENCES_SCHEMA = {
     allowedValues: ['local', 'remote'],
     defaultValue: 'remote'
   },
-  fallback: {
-    type: String,
-    allowedValues: ['none', 'local', 'remote'],
-    defaultValue: 'none'
-  },
   timeoutMs: {
     type: Number,
     defaultValue: 30000
@@ -37,7 +32,6 @@ export const AI_PREFERENCES_SCHEMA = {
   remote: {
     type: Object,
     defaultValue: {
-      provider: 'openai',
       chatModel: 'gpt-4o-mini',
       embeddingModel: 'text-embedding-3-small'
     }
