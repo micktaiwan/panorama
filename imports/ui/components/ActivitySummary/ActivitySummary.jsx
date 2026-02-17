@@ -5,14 +5,17 @@ import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFil
 import { useReportingData } from '/imports/ui/hooks/useReportingData.js';
 import './ActivitySummary.css';
 
+const EMPTY_OBJECT = {};
+const EMPTY_ARRAY = [];
+
 export const ActivitySummary = ({
-  projectFilters = {},
+  projectFilters = EMPTY_OBJECT,
   windowKey: initialWindowKey = '24h',
   showProjectFilter = true,
   title: _title = 'Activity Summary',
   onFiltersChange,
   className = '',
-  excludeTypes = []
+  excludeTypes = EMPTY_ARRAY
 }) => {
   const rp = useReportingData({ initialWindowKey, projectFilters });
 

@@ -59,6 +59,7 @@ const SortableTab = ({ tab, isActive, isDirty, lockInfo, onClick, onDoubleClick,
       onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
       role="tab"
+      aria-selected={isActive}
       tabIndex={0}
       title={isFileTab ? tab.filePath : lockInfo ? (lockInfo.self ? 'Locked by you' : `Editing by ${lockInfo.name} — read-only`) : undefined}
     >
@@ -130,7 +131,9 @@ SortableTab.propTypes = {
   onKeyDown: PropTypes.func.isRequired,
 };
 
-export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, lockedTabs = {}, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false, onOpenFile, onBackToList }) => {
+const EMPTY_OBJECT = {};
+
+export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, lockedTabs = EMPTY_OBJECT, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false, onOpenFile, onBackToList }) => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
   const [editingTab, setEditingTab] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');

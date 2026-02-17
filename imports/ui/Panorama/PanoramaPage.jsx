@@ -82,6 +82,109 @@ const calculateHotspots = (projects) => {
 
 const STATUS_CYCLE = ['', 'red', 'orange', 'green'];
 
+const ProjectCardItem = ({ p, index, sortMode, onSetData }) => {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: p._id, disabled: sortMode !== 'custom' });
+  const style = { transform: CSS.Transform.toString(transform), transition, '--i': Math.min(index, 15) };
+  const status = p?.panoramaStatus || '';
+  const statusClass = status ? ` status-${status}` : '';
+  const healthScore = p?.health?.score;
+  const healthColor = typeof healthScore === 'number'
+    ? (healthScore >= 60 ? 'good' : healthScore >= 30 ? 'warn' : 'bad')
+    : '';
+
+  const cycleStatus = (e) => {
+    e.stopPropagation();
+    const idx = STATUS_CYCLE.indexOf(status);
+    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    onSetData(prev => prev.map(x => x._id === p._id ? { ...x, panoramaStatus: next || null } : x));
+    Meteor.call('projects.update', p._id, { panoramaStatus: next || null });
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={`ProjectCard${statusClass}${isDragging ? ' dragging' : ''}`}>
+      <div className="header">
+        <div className="title">
+          {sortMode === 'custom' ? (
+            <span className="dragHandle" title="Drag to reorder" {...attributes} {...listeners}>⠿</span>
+          ) : null}
+          <button
+            type="button"
+            className="clickable"
+            onClick={() => { window.location.hash = `#/projects/${p._id}`; }}
+          >
+            {p.name || '(untitled project)'}
+          </button>
+        </div>
+        <div className="badges">
+          <button
+            type="button"
+            className={`statusDot${status ? ` s-${status}` : ''}`}
+            title={
+              status === 'red' ? 'Important — click for Orange' :
+              status === 'orange' ? 'Attention — click for Green' :
+              status === 'green' ? 'All good — click to clear' :
+              'No status — click for Red'
+            }
+            onClick={cycleStatus}
+          />
+          {!!p?.tasks?.overdue && <span className="chip danger">{p.tasks.overdue} overdue</span>}
+          {p.isInactive && <span className="chip idle">Inactive</span>}
+        </div>
+      </div>
+
+      <div className="metrics">
+        <div className="metric">
+          <span className="metricLabel">Last</span>
+          <span className="metricValue">{p.lastActivityAt ? formatDate(p.lastActivityAt) : '—'}</span>
+        </div>
+        {typeof healthScore === 'number' && (
+          <div className="metric metricHealth">
+            <span className="metricLabel">Health</span>
+            <span className="healthBar">
+              <span className={`healthFill ${healthColor}`} style={{ width: `${Math.min(100, healthScore)}%` }} />
+            </span>
+            <span className="metricValue">{healthScore}</span>
+          </div>
+        )}
+        <div className="metric">
+          <span className="metricLabel">Heat</span>
+          <span className="metricValue heatValue">
+            <span className="heatN">{p?.heat?.notes || 0}n</span>
+            <span className="heatT">{p?.heat?.tasksChanged || 0}t</span>
+          </span>
+        </div>
+      </div>
+
+      {(p?.tasks?.next || []).length > 0 && (
+        <div className="next">
+          <div className="sectionTitle">Next actions</div>
+          {(p.tasks.next).slice(0, 5).map(t => (
+            <div key={t._id} className="taskRow">{t.title}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+ProjectCardItem.propTypes = {
+  p: PropTypes.shape({
+    _id: PropTypes.string.isRequired,
+    name: PropTypes.string,
+    isInactive: PropTypes.bool,
+    lastActivityAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date), PropTypes.number, PropTypes.oneOf([null])]),
+    heat: PropTypes.shape({ notes: PropTypes.number, tasksChanged: PropTypes.number }),
+    health: PropTypes.shape({ score: PropTypes.number }),
+    tasks: PropTypes.shape({
+      overdue: PropTypes.number,
+      next: PropTypes.arrayOf(PropTypes.shape({ _id: PropTypes.string.isRequired, title: PropTypes.string }))
+    }),
+    panoramaStatus: PropTypes.string,
+  }).isRequired,
+  index: PropTypes.number.isRequired,
+  sortMode: PropTypes.string.isRequired,
+  onSetData: PropTypes.func.isRequired,
+};
+
 export const PanoramaPage = () => {
   const [periodDays, setPeriodDays] = useLocalStorage('panorama_period_days', 14, (value) => {
     const n = Number(value);
@@ -187,107 +290,6 @@ export const PanoramaPage = () => {
     });
   };
 
-  const ProjectCardItem = ({ p, index }) => {
-    const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: p._id, disabled: sortMode !== 'custom' });
-    const style = { transform: CSS.Transform.toString(transform), transition, '--i': Math.min(index, 15) };
-    const status = p?.panoramaStatus || '';
-    const statusClass = status ? ` status-${status}` : '';
-    const healthScore = p?.health?.score;
-    const healthColor = typeof healthScore === 'number'
-      ? (healthScore >= 60 ? 'good' : healthScore >= 30 ? 'warn' : 'bad')
-      : '';
-
-    const cycleStatus = (e) => {
-      e.stopPropagation();
-      const idx = STATUS_CYCLE.indexOf(status);
-      const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
-      setData(prev => prev.map(x => x._id === p._id ? { ...x, panoramaStatus: next || null } : x));
-      Meteor.call('projects.update', p._id, { panoramaStatus: next || null });
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} className={`ProjectCard${statusClass}${isDragging ? ' dragging' : ''}`}>
-        <div className="header">
-          <div className="title">
-            {sortMode === 'custom' ? (
-              <span className="dragHandle" title="Drag to reorder" {...attributes} {...listeners}>⠿</span>
-            ) : null}
-            <button
-              type="button"
-              className="clickable"
-              onClick={() => { window.location.hash = `#/projects/${p._id}`; }}
-            >
-              {p.name || '(untitled project)'}
-            </button>
-          </div>
-          <div className="badges">
-            <button
-              type="button"
-              className={`statusDot${status ? ` s-${status}` : ''}`}
-              title={
-                status === 'red' ? 'Important — click for Orange' :
-                status === 'orange' ? 'Attention — click for Green' :
-                status === 'green' ? 'All good — click to clear' :
-                'No status — click for Red'
-              }
-              onClick={cycleStatus}
-            />
-            {!!p?.tasks?.overdue && <span className="chip danger">{p.tasks.overdue} overdue</span>}
-            {p.isInactive && <span className="chip idle">Inactive</span>}
-          </div>
-        </div>
-
-        <div className="metrics">
-          <div className="metric">
-            <span className="metricLabel">Last</span>
-            <span className="metricValue">{p.lastActivityAt ? formatDate(p.lastActivityAt) : '—'}</span>
-          </div>
-          {typeof healthScore === 'number' && (
-            <div className="metric metricHealth">
-              <span className="metricLabel">Health</span>
-              <span className="healthBar">
-                <span className={`healthFill ${healthColor}`} style={{ width: `${Math.min(100, healthScore)}%` }} />
-              </span>
-              <span className="metricValue">{healthScore}</span>
-            </div>
-          )}
-          <div className="metric">
-            <span className="metricLabel">Heat</span>
-            <span className="metricValue heatValue">
-              <span className="heatN">{p?.heat?.notes || 0}n</span>
-              <span className="heatT">{p?.heat?.tasksChanged || 0}t</span>
-            </span>
-          </div>
-        </div>
-
-        {(p?.tasks?.next || []).length > 0 && (
-          <div className="next">
-            <div className="sectionTitle">Next actions</div>
-            {(p.tasks.next).slice(0, 5).map(t => (
-              <div key={t._id} className="taskRow">{t.title}</div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-  ProjectCardItem.propTypes = {
-    p: PropTypes.shape({
-      _id: PropTypes.string.isRequired,
-      name: PropTypes.string,
-      isInactive: PropTypes.bool,
-      lastActivityAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date), PropTypes.number, PropTypes.oneOf([null])]),
-      heat: PropTypes.shape({ notes: PropTypes.number, tasksChanged: PropTypes.number }),
-      health: PropTypes.shape({ score: PropTypes.number }),
-      tasks: PropTypes.shape({
-        overdue: PropTypes.number,
-        next: PropTypes.arrayOf(PropTypes.shape({ _id: PropTypes.string.isRequired, title: PropTypes.string }))
-      }),
-      panoramaStatus: PropTypes.string,
-    }).isRequired,
-    index: PropTypes.number.isRequired,
-  };
-
   return (
     <div className="PanoramaPage">
       <div className="panoramaToolbar">
@@ -372,7 +374,7 @@ export const PanoramaPage = () => {
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           <div className="ProjectGrid">
             {sorted.map((p, i) => (
-              <ProjectCardItem key={p._id} p={p} index={i} />
+              <ProjectCardItem key={p._id} p={p} index={i} sortMode={sortMode} onSetData={setData} />
             ))}
           </div>
         </SortableContext>

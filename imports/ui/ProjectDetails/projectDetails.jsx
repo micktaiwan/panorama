@@ -39,6 +39,19 @@ function contrastText(hex) {
   return L > 0.4 ? '#000' : '#fff';
 }
 
+const SortableRow = ({ task, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: task._id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <li ref={setNodeRef} style={style} key={task._id} className={(task.status || 'todo') === 'done' ? 'taskDone' : ''}>
+      <div className={`taskRow${(task.status || 'todo') === 'in_progress' ? ' inProgress' : ''}`}>
+        <span className="dragHandle" {...attributes} {...listeners} title="Drag to reorder">≡</span>
+        {children}
+      </div>
+    </li>
+  );
+};
+
 export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateTaskViaPalette }) => {
   const _loadProjects = useSubscribe('projects');
   const _loadTasks = useSubscribe('tasks');
@@ -86,19 +99,6 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [order, setOrder] = useState([]);
   const activeTaskIds = useMemo(() => activeTasks.map(t => t._id), [activeTasks]);
   React.useEffect(() => { setOrder(activeTaskIds); }, [activeTaskIds]);
-
-  const SortableRow = ({ task, children }) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: task._id });
-    const style = { transform: CSS.Transform.toString(transform), transition };
-    return (
-      <li ref={setNodeRef} style={style} key={task._id} className={(task.status || 'todo') === 'done' ? 'taskDone' : ''}>
-        <div className={`taskRow${(task.status || 'todo') === 'in_progress' ? ' inProgress' : ''}`}>
-          <span className="dragHandle" {...attributes} {...listeners} title="Drag to reorder">≡</span>
-          {children}
-        </div>
-      </li>
-    );
-  };
 
   const onDragEnd = (event) => {
     const { active, over } = event;

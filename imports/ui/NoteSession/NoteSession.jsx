@@ -21,6 +21,19 @@ import { NoteRow } from '/imports/ui/components/NoteRow/NoteRow.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
 
+const SortableLine = ({ line, index, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: line._id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <li ref={setNodeRef} style={style} key={line._id}>
+      <div className="noteLineRow">
+        <span className="noteLineNumber dragHandle" title="Drag to reorder" {...attributes} {...listeners}>L{index + 1}</span>
+        {children}
+      </div>
+    </li>
+  );
+};
+
 export const NoteSession = ({ sessionId, onBack }) => {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
@@ -78,19 +91,6 @@ export const NoteSession = ({ sessionId, onBack }) => {
     setOrder(sorted.map(l => l._id));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify((lines || []).map(l => [l._id, Number.isFinite(l.lineRank) ? l.lineRank : 'x', (l.createdAt && new Date(l.createdAt).getTime()) || 0].join(':')))]);
-
-  const SortableLine = ({ line, index, children }) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: line._id });
-    const style = { transform: CSS.Transform.toString(transform), transition };
-    return (
-      <li ref={setNodeRef} style={style} key={line._id}>
-        <div className="noteLineRow">
-          <span className="noteLineNumber dragHandle" title="Drag to reorder" {...attributes} {...listeners}>L{index + 1}</span>
-          {children}
-        </div>
-      </li>
-    );
-  };
 
   const onDragEnd = (event) => {
     const { active, over } = event;

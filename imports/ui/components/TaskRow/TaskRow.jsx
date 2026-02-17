@@ -7,6 +7,8 @@ import { formatDate, formatDateTime, deadlineSeverity } from '/imports/ui/utils/
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import './TaskRow.css';
 
+const EMPTY_ARRAY = [];
+
 export const TaskRow = ({
   as = 'li',
   task,
@@ -16,7 +18,7 @@ export const TaskRow = ({
   projectHref,
   showProject = false,
   allowProjectChange = false,
-  projectOptions = [],
+  projectOptions = EMPTY_ARRAY,
   onMoveProject,
   showMoveProjectButton = false,
   projectColWidth,

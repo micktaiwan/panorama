@@ -164,7 +164,7 @@ export default function ChatWidget({ isStandalone = false }) {
     }
   }, [handleSend]);
 
-  const hasMessages = useMemo(() => renderList.length > 0, [renderList.length]);
+  const hasMessages = renderList.length > 0;
 
   // Focus input when panel opens
   useEffect(() => {

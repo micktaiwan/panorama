@@ -3,11 +3,13 @@ import PropTypes from 'prop-types';
 
 // Tri-state type filters for search results
 // State values: 1 include, -1 exclude, undefined neutral
+const EMPTY_OBJECT = {};
+
 export const SearchTypeFilters = ({
   storageKey = 'search_type_filters_v1',
   value,
   onChange,
-  counts = {}, // { project: n, task: n, ... }
+  counts = EMPTY_OBJECT, // { project: n, task: n, ... }
 }) => {
   const TYPES = React.useMemo(() => ([
     { key: 'project', label: 'Projects' },

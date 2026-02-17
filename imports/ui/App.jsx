@@ -92,7 +92,7 @@ SortableChip.propTypes = {
 };
 
 function App() {
-  const [route, setRoute] = useState(parseHashRoute());
+  const [route, setRoute] = useState(() => parseHashRoute());
   useAlarmScheduler();
   useIdleDetection();
   // Play a short beep at app startup

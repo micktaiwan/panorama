@@ -298,7 +298,7 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus: _onFocus, o
   }, [sessionId, flowMessages, localMessages.length, isRunning, scrollToBottom]);
 
   // Clear local messages when a new user message is sent (DB count changes from user action)
-  const userMessageCount = useMemo(() => allMessages.filter(m => m.role === 'user').length, [allMessages]);
+  const userMessageCount = allMessages.filter(m => m.role === 'user').length;
   useEffect(() => {
     if (localMessages.length > 0) setLocalMessages([]);
   }, [userMessageCount]); // eslint-disable-line react-hooks/exhaustive-deps

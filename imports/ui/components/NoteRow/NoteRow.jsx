@@ -4,6 +4,8 @@ import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { formatDateTime } from '/imports/ui/utils/date.js';
 import './NoteRow.css';
 
+const EMPTY_ARRAY = [];
+
 export const NoteRow = ({
   as = 'li',
   note,
@@ -13,7 +15,7 @@ export const NoteRow = ({
   projectColor,
   showProject = false,
   allowProjectChange = false,
-  projectOptions = [],
+  projectOptions = EMPTY_ARRAY,
   onMoveProject,
   // Controls
   showDelete = false,

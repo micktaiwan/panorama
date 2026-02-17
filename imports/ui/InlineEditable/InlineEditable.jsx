@@ -8,6 +8,13 @@ export const InlineEditable = ({ value, placeholder, onSubmit, as = 'input', sta
   const inputRef = useRef(null);
   const [openSelectOnMount, setOpenSelectOnMount] = useState(false);
 
+  // Sync draft when external value changes (replaces useEffect)
+  const [prevValue, setPrevValue] = useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
+    setDraft(value || '');
+  }
+
   useEffect(() => {
     if (!isEditing) return;
     const el = inputRef.current;
@@ -27,10 +34,6 @@ export const InlineEditable = ({ value, placeholder, onSubmit, as = 'input', sta
       });
     }
   }, [isEditing, selectAllOnFocus, as, openSelectOnMount]);
-
-  useEffect(() => {
-    setDraft(value || '');
-  }, [value]);
 
   useEffect(() => {
     if (startEditing) {
