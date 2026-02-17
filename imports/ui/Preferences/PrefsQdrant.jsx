@@ -37,7 +37,12 @@ export const PrefsQdrant = ({ pref }) => {
       setIndexJob({ ...st, jobId });
       if (st.done) {
         setIndexing(false);
-        notify({ message: 'Index rebuild completed', kind: 'success' });
+        if (st.error?.startsWith('dimension-mismatch')) {
+          const [, have, expected] = st.error.split(':');
+          notify({ message: `Rebuild blocked: collection has ${have}-dim vectors, model expects ${expected}. Change model or ask admin to recreate the collection.`, kind: 'error' });
+        } else {
+          notify({ message: 'Index rebuild completed', kind: 'success' });
+        }
         Meteor.call('qdrant.health', (e3, r3) => setHealth(e3 ? { error: e3?.reason || e3?.message || String(e3) } : r3));
       } else {
         setTimeout(() => pollIndexStatus(jobId), 800);
