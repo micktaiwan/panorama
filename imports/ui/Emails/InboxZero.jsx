@@ -12,7 +12,7 @@ export const InboxZero = () => {
   const [processedEmails, setProcessedEmails] = useState(new Set());
   const [lastAction, setLastAction] = useState(null);
   const [processedCount, setProcessedCount] = useState(0);
-  const [sessionStartTime, _setSessionStartTime] = useState(Date.now());
+  const [sessionStartTime, _setSessionStartTime] = useState(() => Date.now());
 
   // ✅ Solution 3 : Utiliser la publication réactive
   const subInboxZeroThreads = useSubscribe('emails.inboxZeroThreads');
@@ -239,13 +239,13 @@ export const InboxZero = () => {
 
   const nextEmail = () => {
     if (currentEmailIndex < visibleEmails.length - 1) {
-      setCurrentEmailIndex(currentEmailIndex + 1);
+      setCurrentEmailIndex(prev => prev + 1);
     }
   };
 
   const previousEmail = () => {
     if (currentEmailIndex > 0) {
-      setCurrentEmailIndex(currentEmailIndex - 1);
+      setCurrentEmailIndex(prev => prev - 1);
     }
   };
 

@@ -13,6 +13,8 @@ import { shortenPath } from './useHomeDir.js';
 import { AgentTeams } from './AgentTeams.jsx';
 import './ProjectList.css';
 
+const EMPTY_ARRAY = [];
+
 const COLLAPSE_STORAGE_KEY = 'claude-collapsed-projects';
 
 const loadCollapsed = () => {
@@ -32,7 +34,7 @@ const projectStatus = (sessions) => {
   return 'idle';
 };
 
-export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItems = [], activeSidebarId, onPanelClick, onSidebarToggle }) => {
+export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItems = EMPTY_ARRAY, activeSidebarId, onPanelClick, onSidebarToggle }) => {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCwd, setNewCwd] = useState('');

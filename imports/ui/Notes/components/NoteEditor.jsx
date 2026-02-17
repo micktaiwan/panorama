@@ -12,6 +12,8 @@ import { NoteAIActions } from './NoteAIActions/NoteAIActions.jsx';
 import { useNoteAI } from '../hooks/useNoteAI.js';
 import './NoteEditor.css';
 
+const EMPTY_ARRAY = [];
+
 export const NoteEditor = ({
   activeTabId,
   noteContents,
@@ -21,7 +23,7 @@ export const NoteEditor = ({
   onClose,
   isSaving,
   activeNote,
-  projectOptions = [],
+  projectOptions = EMPTY_ARRAY,
   onMoveProject,
   onDuplicate,
   shouldFocus = false,

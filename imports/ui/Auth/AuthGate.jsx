@@ -13,7 +13,7 @@ import './AuthGate.css';
 const AUTH_ROUTES = new Set(['login', 'signup', 'forgotPassword', 'resetPassword', 'verifyEmail']);
 
 export const AuthGate = ({ children }) => {
-  const [route, setRoute] = useState(parseHashRoute());
+  const [route, setRoute] = useState(() => parseHashRoute());
 
   useEffect(() => {
     const onHashChange = () => setRoute(parseHashRoute());
