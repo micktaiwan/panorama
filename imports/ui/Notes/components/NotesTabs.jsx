@@ -7,7 +7,15 @@ import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy 
 import { CSS } from '@dnd-kit/utilities';
 import { navigateTo } from '/imports/ui/router.js';
 
-const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, isEditing, inputRef, editingTitle, setEditingTitle, onSubmit, onKeyDown }) => {
+const LockIcon = ({ className }) => (
+  <svg className={className} width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
+  </svg>
+);
+LockIcon.propTypes = { className: PropTypes.string };
+
+const SortableTab = ({ tab, isActive, isDirty, lockInfo, onClick, onDoubleClick, onContextMenu, onClose, isEditing, inputRef, editingTitle, setEditingTitle, onSubmit, onKeyDown }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: tab?.id || 'fallback-id',
     disabled: isEditing // Disable dragging while editing
@@ -45,13 +53,14 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
       ref={setNodeRef}
       style={style}
       key={tab.id}
-      className={`note-tab ${isActive ? 'active' : ''} ${isFileTab ? 'file-tab' : ''} ${tab.note?.claudeProjectId ? 'claude-project' : ''}`}
+      className={`note-tab ${isActive ? 'active' : ''} ${isFileTab ? 'file-tab' : ''} ${tab.note?.claudeProjectId ? 'claude-project' : ''} ${lockInfo?.self ? 'locked-self' : ''} ${lockInfo && !lockInfo.self ? 'locked-other' : ''}`}
       onClick={handleClick}
+      onDoubleClick={!isFileTab ? onDoubleClick : undefined}
       onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
       role="tab"
       tabIndex={0}
-      title={isFileTab ? tab.filePath : undefined}
+      title={isFileTab ? tab.filePath : lockInfo ? (lockInfo.self ? 'Locked by you' : `Editing by ${lockInfo.name} — read-only`) : undefined}
     >
       <div
         className="tab-draggable"
@@ -69,7 +78,7 @@ const SortableTab = ({ tab, isActive, isDirty, onClick, onContextMenu, onClose, 
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{isFileTab && <span className="tab-file-icon">F</span>}{tab.note?.claudeProjectId && <svg className="tab-claude-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm2.5 6.5L6.5 8 4.5 6.5M8 9.5h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}{tab.title}</span>
+        <span className="tab-title">{isDirty ? (<span className="tab-dirty" aria-label="Unsaved changes" />) : null}{lockInfo && <LockIcon className={`tab-lock-icon ${lockInfo.self ? 'self' : 'other'}`} />}{isFileTab && <span className="tab-file-icon">F</span>}{tab.note?.claudeProjectId && <svg className="tab-claude-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm2.5 6.5L6.5 8 4.5 6.5M8 9.5h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}{tab.title}</span>
       )}
       </div>
       <button
@@ -108,7 +117,9 @@ SortableTab.propTypes = {
   }),
   isActive: PropTypes.bool,
   isDirty: PropTypes.bool,
+  lockInfo: PropTypes.shape({ self: PropTypes.bool, name: PropTypes.string }),
   onClick: PropTypes.func.isRequired,
+  onDoubleClick: PropTypes.func,
   onContextMenu: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
   isEditing: PropTypes.bool,
@@ -119,7 +130,7 @@ SortableTab.propTypes = {
   onKeyDown: PropTypes.func.isRequired,
 };
 
-export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false, onOpenFile, onBackToList }) => {
+export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTabRename, onTabsReorder, dirtySet, lockedTabs = {}, onTabDelete, onCloseOthers, onCloseAll, onCreateNote, isCreatingNote = false, onOpenFile, onBackToList }) => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
   const [editingTab, setEditingTab] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -255,7 +266,9 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
                 tab={tab}
                 isActive={activeTabId === tab.id}
                 isDirty={!!dirtySet?.has(tab.id)}
+                lockInfo={lockedTabs[tab.id] || null}
                 onClick={() => onTabClick(tab.id)}
+                onDoubleClick={() => handleRename(tab.id)}
                 onContextMenu={(e) => handleContextMenu(e, tab.id)}
                 onClose={(e) => { e.stopPropagation(); onTabClose(tab.id); }}
                 isEditing={editingTab === tab.id}
@@ -357,6 +370,7 @@ NotesTabs.propTypes = {
   onTabRename: PropTypes.func.isRequired,
   onTabsReorder: PropTypes.func,
   dirtySet: PropTypes.instanceOf(Set),
+  lockedTabs: PropTypes.object,
   onTabDelete: PropTypes.func,
   onCloseOthers: PropTypes.func,
   onCloseAll: PropTypes.func,

@@ -60,6 +60,7 @@ import UserLog from '/imports/ui/UserLog/UserLog.jsx';
 import { playBeep } from '/imports/ui/utils/sound.js';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import { HamburgerMenu } from '/imports/ui/components/HamburgerMenu/HamburgerMenu.jsx';
+import { QuickActions } from '/imports/ui/components/QuickActions/QuickActions.jsx';
 
 const SortableChip = ({ id, name, onOpen, active }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -682,6 +683,10 @@ function App() {
             </a>
             <PresenceBar />
             <span className="headerUser">
+              <QuickActions
+                onNewProject={handleNewProject}
+                onNewSession={() => handleNewSession(undefined)}
+              />
               <ThemeToggle
                 theme={userPrefs?.theme || 'dark'}
                 onToggle={(next) => Meteor.call('userPreferences.update', { theme: next })}
@@ -727,19 +732,11 @@ function App() {
       <main className="app-content">
         {route?.name === 'home' && (
           <div className="panel">
-            <div className="homeToolbar">
-              <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
-              <button className="btn ml8" onClick={() => handleNewSession(undefined)}>New Note Session</button>
-            </div>
             <PanoramaPage />
           </div>
         )}
         {route?.name === 'dashboard' && (
           <div className="panel">
-            <div className="homeToolbar">
-              <button className="btn btn-primary" onClick={handleNewProject}>New Project</button>
-              <button className="btn ml8" onClick={() => handleNewSession(undefined)}>New Note Session</button>
-            </div>
             <Dashboard />
           </div>
         )}

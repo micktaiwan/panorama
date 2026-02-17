@@ -151,7 +151,22 @@ export const NotesPanel = forwardRef(({
 
   // Compute lockedByName for the active note
   const activeNoteData = activeTabId ? (notesById.get(activeTabId) || openTabs.find(tab => tab.id === activeTabId)?.note) : null;
-  const activeLockedByName = activeNoteData?.lockedBy ? (lockedByNames[activeNoteData.lockedBy] || null) : null;
+  // Compute lock state per tab for tab bar display
+  const lockedTabs = useMemo(() => {
+    const myId = Meteor.userId();
+    const map = {};
+    for (const tab of openTabs) {
+      if (tab.type === 'file') continue;
+      const note = notesById.get(tab.id);
+      if (note?.lockedBy) {
+        map[tab.id] = {
+          self: note.lockedBy === myId,
+          name: lockedByNames[note.lockedBy] || 'another user',
+        };
+      }
+    }
+    return map;
+  }, [openTabs, notesById, lockedByNames]);
 
   return (
     <div className={`notes-panel${activeTabId ? ' mobile-editor-active' : ''}${className ? ` ${className}` : ''}`}>
@@ -162,6 +177,14 @@ export const NotesPanel = forwardRef(({
           showOnlyOpen={showOnlyOpen}
           onShowOnlyOpenChange={setShowOnlyOpen}
         />
+        <button
+          className="sidebar-new-note-btn"
+          onClick={handleCreateNote}
+          disabled={isCreatingNote}
+          type="button"
+        >
+          {isCreatingNote ? 'Creating...' : '+ New note'}
+        </button>
         <NotesList
           notes={notes}
           filteredNotes={filteredNotes}
@@ -186,6 +209,7 @@ export const NotesPanel = forwardRef(({
               onTabRename={handleTabRename}
               onTabsReorder={handleTabsReorder}
               dirtySet={dirtySet}
+              lockedTabs={lockedTabs}
               onTabDelete={deleteNote}
               onCloseOthers={closeOtherTabs}
               onCloseAll={closeAllTabs}
@@ -216,7 +240,6 @@ export const NotesPanel = forwardRef(({
                   onDuplicate={handleDuplicateNote}
                   shouldFocus={shouldFocusNote === activeTabId}
                   dirtySet={dirtySet}
-                  lockedByName={activeLockedByName}
                 />
               )}
             </div>
