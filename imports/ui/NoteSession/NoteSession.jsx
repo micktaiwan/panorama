@@ -76,6 +76,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
       return at - bt;
     });
     setOrder(sorted.map(l => l._id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify((lines || []).map(l => [l._id, Number.isFinite(l.lineRank) ? l.lineRank : 'x', (l.createdAt && new Date(l.createdAt).getTime()) || 0].join(':')))]);
 
   const SortableLine = ({ line, index, children }) => {
@@ -124,7 +125,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
     const content = inputValue.trim();
     if (content.length === 0) return;
     const prev = inputValue;
-    Meteor.call('noteLines.insert', { sessionId, content }, (err, res) => {
+    Meteor.call('noteLines.insert', { sessionId, content }, (err, _res) => {
       if (err) {
         // If vectorization failed, we keep the input but inform the user that data was saved
         if (err && err.error === 'vectorization-failed' && err.details && err.details.insertedId) {
@@ -268,7 +269,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
                       placeholder="(empty)"
                       onSubmit={(next) => {
                         const oldVal = l.content;
-                        Meteor.call('noteLines.update', l._id, { content: next }, (err, res) => {
+                        Meteor.call('noteLines.update', l._id, { content: next }, (err, _res) => {
                           if (err) {
                             if (err && err.error === 'vectorization-failed') {
                               notify({ message: 'Updated, but search indexing failed.', kind: 'warning' });
@@ -287,7 +288,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
                         className="iconButton"
                         title="Delete line"
                         onClick={() => {
-                          Meteor.call('noteLines.remove', l._id, (err, res) => {
+                          Meteor.call('noteLines.remove', l._id, (err, _res) => {
                             if (err) {
                               if (err && err.error === 'search-delete-failed') {
                                 notify({ message: 'Deleted, but search index cleanup failed.', kind: 'warning' });
@@ -333,7 +334,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
               disabled={isCoaching || !hasLines}
               onClick={() => {
                 setIsCoaching(true);
-                Meteor.call('ai.coachQuestions', sessionId, (err, res) => {
+                Meteor.call('ai.coachQuestions', sessionId, (err, _res) => {
                   setIsCoaching(false);
                   if (err) {
                     console.error('ai.coachQuestions failed', err);
@@ -369,7 +370,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
               disabled={isSummarizing || !hasLines}
               onClick={() => {
                 setIsSummarizing(true);
-                Meteor.call('ai.summarizeSession', sessionId, (err, res) => {
+                Meteor.call('ai.summarizeSession', sessionId, (err, _res) => {
                   setIsSummarizing(false);
                   if (err) {
                     console.error('ai.summarizeSession failed', err);
@@ -546,6 +547,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
           <button
             className="btn ml8"
             onClick={() => {
+              // eslint-disable-next-line no-alert -- simple confirmation, no modal refactor needed
               const ok = window.confirm('Reset this session? This will permanently delete all session lines and clear AI coach and summary data.');
               if (!ok) return;
               Meteor.call('noteSessions.resetAll', sessionId, (err) => {

@@ -41,7 +41,7 @@ Meteor.methods({
   },
   async 'teams.removeAndReassign'(id, newTeamId) {
     check(id, String);
-    if (newTeamId != null) check(newTeamId, String);
+    if (newTeamId !== null && newTeamId !== undefined) check(newTeamId, String);
     ensureLoggedIn(this.userId);
     await ensureOwner(TeamsCollection, id, this.userId);
     if (newTeamId) {

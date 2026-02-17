@@ -27,6 +27,7 @@ export const SituationAnalyzer = () => {
   const [toast, setToast] = useState(null);
   const subsReady = useTracker(() => Meteor.subscribe('situations.all').ready(), []);
   const situations = useTracker(() => SituationsCollection.find({}, { sort: { updatedAt: -1 } }).fetch(), [subsReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const currentId = useMemo(() => selectedSituationId || (situations[0]?._id || null), [selectedSituationId, JSON.stringify(situations.map(s => s._id))]);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export const SituationAnalyzer = () => {
     if (!exists && situations[0]?._id) {
       setSelectedSituationId(situations[0]._id);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSituationId, JSON.stringify(situations.map(s => s._id))]);
 
   useEffect(() => {
@@ -67,6 +69,7 @@ export const SituationAnalyzer = () => {
     notify(toast);
     const t = setTimeout(() => setToast(null), 0);
     return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast?.message, toast?.kind]);
 
   const addSituation = () => {

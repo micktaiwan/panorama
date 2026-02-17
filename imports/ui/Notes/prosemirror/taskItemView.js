@@ -29,7 +29,7 @@ export class TaskItemView {
     this.checkbox.contentEditable = 'false';
     this.checkbox.addEventListener('change', () => {
       const pos = this.getPos();
-      if (pos == null) return;
+      if (pos === null || pos === undefined) return;
       const { state } = this.view;
       this.view.dispatch(
         state.tr.setNodeMarkup(pos, null, { ...this.node.attrs, checked: this.checkbox.checked }),

@@ -21,7 +21,7 @@ export const NotionReporting = () => {
 
   // Subscribe to tickets for selected integration
   const ticketsSub = useSubscribe('notionTickets.byIntegration', selectedIntegrationId || '__none__');
-  const ticketsLoading = ticketsSub();
+  const _ticketsLoading = ticketsSub();
   const tickets = useFind(() =>
     NotionTicketsCollection.find(
       selectedIntegrationId ? { integrationId: selectedIntegrationId } : { _id: '__none__' },

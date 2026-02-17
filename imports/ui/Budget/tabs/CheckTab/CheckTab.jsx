@@ -20,7 +20,7 @@ const NotesEditor = ({ lineId, initialNotes, setToast }) => {
     if (isSaving) return;
     setIsSaving(true);
     
-    Meteor.call('budget.setNotes', lineId, notes, (err, res) => {
+    Meteor.call('budget.setNotes', lineId, notes, (err, _res) => {
       setIsSaving(false);
       if (err) {
         console.error('budget.setNotes failed', err);
@@ -249,7 +249,7 @@ export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onT
                       <button
                         className="btn btn-danger"
                         onClick={() => {
-                          Meteor.call('budget.removeLine', r._id, (err, res) => {
+                          Meteor.call('budget.removeLine', r._id, (err, _res) => {
                             if (err) { console.error('budget.removeLine failed', err); setToast({ message: 'Delete failed', kind: 'error' }); return; }
                             setToast({ message: 'Line deleted', kind: 'success' });
                           });

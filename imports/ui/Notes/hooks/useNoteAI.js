@@ -74,7 +74,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
         notify({ message: 'Error cleaning note', kind: 'error' });
         return;
       }
-      if (result?.content != null) {
+      if (result?.content !== null && result?.content !== undefined) {
         editorRef.current?.setContent(result.content);
         onContentUpdate(noteId, result.content);
       }
@@ -111,7 +111,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
         notify({ message: 'Error summarizing note', kind: 'error' });
         return;
       }
-      if (result?.content != null) {
+      if (result?.content !== null && result?.content !== undefined) {
         editorRef.current?.setContent(result.content);
         onContentUpdate(noteId, result.content);
       }
@@ -178,6 +178,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
         setAskAiSessionId(newSessionId);
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askAiSessionId]);
 
   const handleCloseAskAi = useCallback(() => {
@@ -186,12 +187,14 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
       view.dispatch(view.state.tr.setMeta(askAiKey, null));
     }
     setAskAiSessionId(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getNoteContent = useCallback(() => {
     const view = editorRef.current?.view;
     if (!view) return resolveContent();
     return serializeMarkdown(view.state.doc);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
 
   const getSelectedText = useCallback(() => {
@@ -204,6 +207,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
     const { from, to, empty } = view.state.selection;
     if (empty) return '';
     return view.state.doc.textBetween(from, to, '\n');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleReplace = useCallback((text) => {
@@ -221,6 +225,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
       .replaceWith(from, to, fragment)
       .setMeta(askAiKey, null);
     view.dispatch(tr);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleInsertBelow = useCallback((text) => {
@@ -235,6 +240,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
     const fragment = newDoc.content;
     const tr = view.state.tr.insert(insertPos, fragment);
     view.dispatch(tr);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- Effects ---
@@ -242,6 +248,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
   // Update undo availability when noteId changes
   useEffect(() => {
     setUndoAvailable(hasUndoData());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
 
   // Keep ref in sync with state + clear highlight when sidebar closes
@@ -253,6 +260,7 @@ export function useNoteAI({ noteId, editorRef, isDirty, onContentUpdate, getCurr
         view.dispatch(view.state.tr.setMeta(askAiKey, null));
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askAiSessionId]);
 
   // Cleanup Ask AI session when noteId changes (tab switch)

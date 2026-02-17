@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { NotionTicketsCollection } from './collections.js';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 /**
  * Meteor methods for Notion Tickets

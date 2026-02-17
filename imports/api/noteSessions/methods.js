@@ -3,7 +3,7 @@ import { check, Match } from 'meteor/check';
 import { NoteSessionsCollection } from './collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
-import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
 const sanitizeSessionDoc = (input) => {

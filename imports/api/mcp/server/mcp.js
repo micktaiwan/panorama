@@ -117,7 +117,7 @@ async function handleInitialize(params) {
 /**
  * Handle tools/list method - List all available tools
  */
-async function handleToolsList(params) {
+async function handleToolsList(_params) {
   console.log('[mcp] Tools list requested');
 
   return {

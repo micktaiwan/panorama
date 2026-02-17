@@ -8,7 +8,7 @@ import { fmtDisplayNoCents, fmtCopyNoCents } from '/imports/ui/Budget/utils/form
 import { groupByMonthTotals } from '/imports/ui/Budget/utils/aggregations.js';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 
-export const ReportTab = ({ rows, filter, teamFilter, search, onFilterChange, onTeamChange, onSearchChange, setToast }) => {
+export const ReportTab = ({ rows, filter, teamFilter, search, onFilterChange, onTeamChange, onSearchChange, _setToast }) => {
 
   const items = groupByMonthTotals(rows);
 

@@ -79,14 +79,14 @@ const processTasks = (allTasks, projectIds, since) => {
     }
     if (!isClosed) {
       const title = typeof t.title === 'string' ? t.title.trim() : '';
-      if (title) acc.next.push({
+      if (title) {acc.next.push({
         _id: t._id,
         title,
         deadline: t.deadline || null,
         status: t.status || 'todo',
         priorityRank: Number.isFinite(t.priorityRank) ? t.priorityRank : null,
         createdAt: t.createdAt || null
-      });
+      });}
     }
   }
   

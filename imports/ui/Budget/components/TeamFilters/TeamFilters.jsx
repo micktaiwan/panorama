@@ -29,6 +29,7 @@ export const TeamFilters = ({ teams = ['lemapp','sre','data','pony','cto'], stor
       try { localStorage.setItem(storageKey, JSON.stringify(filters)); } catch (e) { console.error('Failed to save', storageKey, e); }
     }
     if (typeof onChange === 'function') onChange(filters);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(filters), storageKey]);
 
   return (

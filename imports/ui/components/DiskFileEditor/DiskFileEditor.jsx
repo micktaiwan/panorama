@@ -30,6 +30,7 @@ export const DiskFileEditor = ({ filePath, onClose, onDirtyChange }) => {
 
   useEffect(() => {
     onDirtyChange?.(dirty);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty]);
 
   const loadFile = useCallback(async () => {
@@ -50,6 +51,7 @@ export const DiskFileEditor = ({ filePath, onClose, onDirtyChange }) => {
 
   useEffect(() => {
     loadFile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath]);
 
   // Check for external changes on window focus
@@ -80,7 +82,7 @@ export const DiskFileEditor = ({ filePath, onClose, onDirtyChange }) => {
 
   const handleSave = useCallback(async () => {
     const toSave = contentRef.current ?? content;
-    if (toSave == null) return;
+    if (toSave === null || toSave === undefined) return;
     setSaving(true);
     try {
       const result = await Meteor.callAsync('diskFile.write', filePath, toSave);

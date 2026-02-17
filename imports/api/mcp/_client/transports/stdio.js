@@ -223,7 +223,7 @@ class StdioConnection {
     const proc = this.process;
 
     // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests.entries()) {
+    for (const [_id, pending] of this.pendingRequests.entries()) {
       pending.reject(new Error('Connection closed'));
     }
     this.pendingRequests.clear();
@@ -250,7 +250,7 @@ class StdioConnection {
               proc.kill('SIGKILL');
             }
           }, 1000);
-        } catch (e) {
+        } catch (_err) {
           // Process may already be dead
         }
       }

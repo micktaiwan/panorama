@@ -3,13 +3,12 @@ import PropTypes from 'prop-types';
 import './VendorsTotalsTab.css';
 import { BudgetToolbar } from '/imports/ui/Budget/components/BudgetToolbar/BudgetToolbar.jsx';
 import { fmtDisplayNoCents, fmtCopyNoCents } from '/imports/ui/Budget/utils/formatters.js';
-import { filterByQuery, applyDepartmentFilter, applyTeamFilter } from '/imports/ui/Budget/utils/filters.js';
 import { vendorTotals } from '/imports/ui/Budget/utils/aggregations.js';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 import { Meteor } from 'meteor/meteor';
 
 export const VendorsTotalsTab = ({ rows, filter, teamFilter, sort, dateRange, search, onFilterChange, onTeamChange, onSortChange, onDateRangeChange, onSearchChange, setToast }) => {
-  let totals = vendorTotals(rows);
+  const totals = vendorTotals(rows);
   if (sort === 'amount-desc') {
     totals.sort((a, b) => Number(b.total) - Number(a.total) || a.vendor.localeCompare(b.vendor));
   } else if (sort === 'amount-asc') {

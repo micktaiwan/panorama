@@ -65,6 +65,7 @@ export default function UserLog() {
     const cutoff = since.getTime();
     const count = Array.isArray(entries) ? entries.filter(e => (new Date(e.createdAt).getTime() >= cutoff)).length : 0;
     return { label, count };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summaryWindow, entriesFirstId]);
 
   // Focus input on page mount
@@ -154,7 +155,7 @@ export default function UserLog() {
       if (Array.isArray(t?.sourceLogIds) && t.sourceLogIds.length > 0) {
         fields.source = { kind: 'userLog', logEntryIds: t.sourceLogIds, windowHours };
       }
-      // eslint-disable-next-line no-await-in-loop
+       
       await callInsert(fields);
     }
     const parts = [`Created ${created}`];

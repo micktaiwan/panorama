@@ -3,7 +3,7 @@ import { check } from 'meteor/check';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { toOneLine, formatAnchors, buildEntriesBlock, buildProjectsBlock } from '/imports/api/_shared/aiCore';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'ai.cleanUserLog'(logId) {

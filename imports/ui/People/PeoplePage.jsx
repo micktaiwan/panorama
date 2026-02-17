@@ -29,6 +29,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       counts.set(tid, (counts.get(tid) || 0) + 1);
     });
     return counts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify((people || []).map(p => [p._id, p.teamId]))]);
   const [teamCreateOpen, setTeamCreateOpen] = useState(false);
   const [teamCreateName, setTeamCreateName] = useState('');
@@ -115,6 +116,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       });
     }
     return afterTeam;
+  /* eslint-disable react-hooks/exhaustive-deps */
   }, [
     JSON.stringify(people.map(p => [
       p._id,
@@ -135,6 +137,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
     subteamFilter,
     JSON.stringify((teams || []).map(t => [t._id, t.name]))
   ]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const sorted = useMemo(() => {
     const list = Array.isArray(filtered) ? filtered.slice() : [];
     const cmp = (a, b) => {
@@ -150,6 +153,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       return 0;
     };
     return list.sort(cmp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(filtered.map(p => [
     p._id,
     p.left,
@@ -189,6 +193,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
       return 0;
     };
     return list.sort(cmp);
+  /* eslint-disable react-hooks/exhaustive-deps */
   }, [
     JSON.stringify((people || []).map(p => [
       p._id,
@@ -202,6 +207,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
     ])),
     filter
   ]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const handleCopy = async () => {
     const teamNameById = new Map((teams || []).map(t => [String(t._id), t.name || '']));
     const header = 'First name\tLast name\tRole\tTeam\tEmail\tAliases\tArrival\tLeft';

@@ -10,6 +10,7 @@ export const Onboarding = () => {
   const pref = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
   const [filesDir, setFilesDir] = React.useState('');
   const ready = !sub();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => { if (pref && typeof pref.filesDir === 'string') setFilesDir(pref.filesDir); }, [pref && pref._id]);
   if (!ready) return <div>Loading…</div>;
   const save = () => {

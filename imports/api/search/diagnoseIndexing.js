@@ -1,7 +1,6 @@
 // Diagnostic tool to check Qdrant indexing health
 // This script cross-references database documents with Qdrant index
 
-import { Meteor } from 'meteor/meteor';
 import { getQdrantClient, COLLECTION, toPointId } from './vectorStore';
 
 export const diagnoseIndexing = async () => {
@@ -83,7 +82,7 @@ export const diagnoseIndexing = async () => {
             if (point.length === 0) {
               notFound.push(docId);
             }
-          } catch (e) {
+          } catch (_err) {
             notFound.push(docId);
           }
         }

@@ -187,6 +187,7 @@ function App() {
     }
     localStorage.setItem('panorama-theme', theme);
     document.cookie = `panorama-theme=${theme};path=/;max-age=31536000;SameSite=Lax`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPrefs?.theme]);
 
   const suppressModalFor = (alarmId, ms = 3000) => {
@@ -214,6 +215,7 @@ function App() {
         setActiveAlarmId(id);
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(alarms)]);
 
   useEffect(() => {
@@ -356,6 +358,7 @@ function App() {
     };
     window.addEventListener('keydown', onNewSessionShortcut);
     return () => window.removeEventListener('keydown', onNewSessionShortcut);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route?.name, route?.projectId]);
 
   // Qdrant health check on startup
@@ -423,11 +426,11 @@ function App() {
       }
     };
     const onGoKeys = (e) => {
-      const target = e.target;
-      
+      const _target = e.target;
+
       const key = String(e.key || '').toLowerCase();
       const hasMod = e.metaKey || e.ctrlKey;
-      
+
       // Prevent global shortcuts when Go to screen is open
       if (hasMod) {
         e.preventDefault();
@@ -474,6 +477,7 @@ function App() {
     };
     window.addEventListener('keydown', onGoKeys);
     return () => window.removeEventListener('keydown', onGoKeys);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goOpen, goActiveIdx, route?.name, route?.projectId]);
 
   // Search logic moved to CommandPalette
@@ -496,6 +500,7 @@ function App() {
   const favoriteProjects = useTracker(() => ProjectsCollection.find({ isFavorite: true }, { sort: { favoriteRank: 1, updatedAt: -1 }, fields: { name: 1, favoriteRank: 1 } }).fetch(), [projectsReady]);
   // allProjects removed from App-level (handled in CreateTaskPane)
   const [order, setOrder] = useState([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setOrder(favoriteProjects.map(p => p._id)); }, [JSON.stringify(favoriteProjects.map(p => p._id))]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 5 } }));
 
@@ -594,6 +599,7 @@ function App() {
     
     window.addEventListener('keydown', onTabNavigation);
     return () => window.removeEventListener('keydown', onTabNavigation);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route?.name, route?.projectId, searchOpen, JSON.stringify(order)]);
 
   // Global: Cmd/Ctrl + Shift + H → go to Overview
@@ -658,6 +664,7 @@ function App() {
     if (needsOnboarding && route?.name !== 'onboarding') {
       navigateTo({ name: 'onboarding' });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subPrefs(), appPrefs?._id, route?.name]);
 
   if (subPrefs() || subUserPrefs() || !projectsReady) {
@@ -670,7 +677,7 @@ function App() {
         <header className="app-header">
           <h1 className="appHeader">
             <a href="#/" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'home' }); }}>
-              <img src="/favicon.svg" alt="" width="24" height="24" style={{ verticalAlign: 'middle', marginRight: 6, marginBottom: 2 }} />
+              <img src="/favicon.svg" alt="" width="36" height="36" style={{ verticalAlign: 'middle', marginRight: 8, marginBottom: 3 }} />
               Panorama
             </a>
             <PresenceBar />

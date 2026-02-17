@@ -7,7 +7,7 @@ import { WebApp } from 'meteor/webapp';
 import { Random } from 'meteor/random';
 import { FilesCollection } from './collections';
 import { AppPreferencesCollection } from '../appPreferences/collections';
-import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 
 // The order of preference for determining the storage directory is:

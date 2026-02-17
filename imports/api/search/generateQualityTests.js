@@ -1,8 +1,6 @@
 // Generate test dataset from real data
 // Analyzes existing documents and creates search queries that should find them
 
-import { Meteor } from 'meteor/meteor';
-
 // Extract concepts from text (simple keyword extraction)
 const extractConcepts = (text) => {
   const stopwords = new Set([
@@ -38,7 +36,7 @@ const extractConcepts = (text) => {
 };
 
 // Generate queries for a single document
-const generateQueriesForDoc = ({ kind, title, content }) => {
+const generateQueriesForDoc = ({ title, content }) => {
   const queries = [];
 
   // Query 1: Full title (if substantial)

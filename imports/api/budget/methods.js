@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getPennylaneConfig, getPennylaneConfigAsync } from '/imports/api/_shared/config';
+import { getPennylaneConfigAsync } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import { fetch } from 'meteor/fetch';
 import { BudgetLinesCollection, VendorsCacheCollection, VendorsIgnoreCollection } from './collections';
@@ -22,7 +22,7 @@ const normalizeDate = (input) => {
   // Normalize separators (dot -> slash), keep dashes for ISO; collapse newlines
   s = s.replace(/[.]/g, '/').replace(/[\r\n]+/g, ' ').trim();
   // Handle ISO yyyy-mm-dd explicitly to avoid tz quirks
-  let mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (mIso) {
     const yyyy = parseInt(mIso[1], 10);
     const mm = parseInt(mIso[2], 10);

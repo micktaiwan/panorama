@@ -93,7 +93,7 @@ export async function initSlackBot() {
   });
 
   // --- Modal Submit ---
-  slackApp.view('save_to_panorama_submit', async ({ ack, view, body, client }) => {
+  slackApp.view('save_to_panorama_submit', async ({ ack, view, body: _body, client: _client }) => {
     await ack();
 
     const projectId = view.state.values.project_block.project_select.selected_option.value;

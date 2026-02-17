@@ -14,11 +14,13 @@ export const PrefsGeneral = ({ pref, userPref }) => {
     setFilesDir(pref.filesDir || '');
     setQdrantUrl(pref.qdrantUrl || '');
     setDevUrlMode(!!pref.devUrlMode);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pref?._id]);
 
   React.useEffect(() => {
     if (!userPref) return;
     setTheme(userPref.theme || 'dark');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPref?._id, userPref?.theme]);
 
   return (

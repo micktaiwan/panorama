@@ -104,7 +104,7 @@ export function generateSummary(data, toolName) {
         return deadline < new Date();
       }).length;
 
-      let parts = [`Found ${total || items.length} task${items.length !== 1 ? 's' : ''}`];
+      const parts = [`Found ${total || items.length} task${items.length !== 1 ? 's' : ''}`];
       if (urgentCount > 0) parts.push(`${urgentCount} urgent`);
       if (importantCount > 0) parts.push(`${importantCount} important`);
       if (overdueCount > 0) parts.push(`${overdueCount} overdue`);
@@ -259,7 +259,7 @@ export function generateSummary(data, toolName) {
       const sessions = data?.sessions || [];
       const running = sessions.filter(s => s.status === 'running').length;
       const totalCost = sessions.reduce((sum, s) => sum + (s.totalCostUsd || 0), 0);
-      let parts = [`Found ${sessions.length} session${sessions.length !== 1 ? 's' : ''}`];
+      const parts = [`Found ${sessions.length} session${sessions.length !== 1 ? 's' : ''}`];
       if (running > 0) parts.push(`${running} running`);
       if (totalCost > 0) parts.push(`$${totalCost.toFixed(4)} total cost`);
       return parts.join(', ');

@@ -12,7 +12,7 @@ export const InboxZero = () => {
   const [processedEmails, setProcessedEmails] = useState(new Set());
   const [lastAction, setLastAction] = useState(null);
   const [processedCount, setProcessedCount] = useState(0);
-  const [sessionStartTime, setSessionStartTime] = useState(Date.now());
+  const [sessionStartTime, _setSessionStartTime] = useState(Date.now());
 
   // ✅ Solution 3 : Utiliser la publication réactive
   const subInboxZeroThreads = useSubscribe('emails.inboxZeroThreads');
@@ -126,6 +126,7 @@ export const InboxZero = () => {
         previousEmail();
         break;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEmail, isProcessing]);
 
   useEffect(() => {

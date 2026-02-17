@@ -36,7 +36,7 @@ Meteor.methods({
     if (typeof modifier.pennylaneBaseUrl === 'string') set.pennylaneBaseUrl = modifier.pennylaneBaseUrl.trim() || null;
     if (typeof modifier.pennylaneToken === 'string') set.pennylaneToken = modifier.pennylaneToken.trim() || null;
     if (typeof modifier.qdrantUrl === 'string') set.qdrantUrl = modifier.qdrantUrl.trim() || null;
-    if (modifier.slack != null && typeof modifier.slack === 'object') {
+    if (modifier.slack !== null && modifier.slack !== undefined && typeof modifier.slack === 'object') {
       const s = modifier.slack;
       const slack = {};
       if (typeof s.enabled === 'boolean') slack.enabled = s.enabled;

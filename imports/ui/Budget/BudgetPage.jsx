@@ -19,7 +19,7 @@ import { filterByQuery, applyDepartmentFilter, applyTeamFilter, filterByDateRang
 import { useBudgetData } from '/imports/ui/Budget/hooks/useBudgetData.js';
 import { notify, setNotifyHandler } from '/imports/ui/utils/notify.js';
 
-const safe = (v) => (v === undefined || v === null ? '' : v);
+const _safe = (v) => (v === undefined || v === null ? '' : v);
 
 export const BudgetPage = () => {
   const [fileName, setFileName] = useState('');
@@ -54,6 +54,7 @@ export const BudgetPage = () => {
     // Clear local toast after forwarding so components keep working without stacking locally
     const t = setTimeout(() => setToast(null), 0);
     return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast?.message, toast?.kind]);
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [vendorsDept, setVendorsDept] = useState('all');

@@ -41,7 +41,7 @@ const formatToolLabel = (block) => {
 const AskUserQuestionBlock = ({ block, onAnswer }) => {
   const questions = block.input?.questions || [];
   const [selections, setSelections] = useState({});
-  const hasMultipleQuestions = questions.length > 1;
+  const _hasMultipleQuestions = questions.length > 1;
 
   const selectOption = (qIdx, label, isMulti) => {
     setSelections(prev => {
@@ -434,7 +434,7 @@ const InfoCard = ({ data }) => {
 };
 
 export const MessageBubble = ({ message, onAnswer, sessionId }) => {
-  const { role, content, contentText, isStreaming, usage, costUsd, durationMs } = message;
+  const { role, content, contentText, isStreaming, usage: _usage, costUsd: _costUsd, durationMs: _durationMs } = message;
   const isUser = role === 'user';
   const isInfo = message.localType === 'info';
   const isDebateTurn = message.type === 'debate_turn';

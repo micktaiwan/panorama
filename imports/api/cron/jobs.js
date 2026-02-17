@@ -11,7 +11,7 @@ import { ensureLoggedIn } from '/imports/api/_shared/auth';
 let cronJobsStarted = false;
 const jobLocks = new Map();
 
-function scheduleNoOverlap(name, expression, timezone, task) {
+function scheduleNoOverlap(name, expression, timezone, task) { // eslint-disable-line no-unused-vars
   const run = async () => {
     if (jobLocks.get(name)) return;
     jobLocks.set(name, true);

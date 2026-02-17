@@ -11,7 +11,7 @@ const ensureEmbeddingReady = async (userId) => {
     }
   }
 };
-import { getQdrantClient, COLLECTION, VECTOR_SIZE, DISTANCE, embedText, makePreview, toPointId, splitIntoChunks, deleteByKind } from './vectorStore';
+import { getQdrantClient, COLLECTION, VECTOR_SIZE, DISTANCE, embedText, makePreview, toPointId, splitIntoChunks } from './vectorStore';
 
 // primitives are imported from './vectorStore'
 
@@ -324,7 +324,7 @@ Meteor.methods({
     }
 
     // Tasks
-    let taskProjectIds = new Set();
+    const taskProjectIds = new Set();
     let taskRows = [];
     if (want.has('task')) {
       const { TasksCollection } = await import('/imports/api/tasks/collections');
@@ -336,7 +336,7 @@ Meteor.methods({
     }
 
     // Notes
-    let noteProjectIds = new Set();
+    const noteProjectIds = new Set();
     let noteRows = [];
     if (want.has('note')) {
       const { NotesCollection } = await import('/imports/api/notes/collections');

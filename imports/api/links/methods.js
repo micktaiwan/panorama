@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
 import { LinksCollection } from './collections';
-import { ensureLoggedIn, ensureOwner, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 const ensureHttpUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
@@ -113,7 +113,7 @@ Meteor.methods({
     }
     if (!l || !l.url) throw new Meteor.Error('not-found', 'Link not found');
     const url = ensureHttpUrl(l.url);
-    if (registerClick) {
+    if (opts.registerClick) {
       await LinksCollection.updateAsync(linkId, { $inc: { clicksCount: 1 }, $set: { lastClickedAt: new Date(), updatedAt: new Date() } });
     }
     return url;

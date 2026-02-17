@@ -153,6 +153,7 @@ export const EmailsPage = () => {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredMessages, currentMessageIndex]);
 
   const loadMessages = async () => {

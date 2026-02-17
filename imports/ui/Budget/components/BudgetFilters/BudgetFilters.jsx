@@ -1,5 +1,4 @@
 import React from 'react';
-
 export const BudgetFilters = ({
   departmentEnabled = true,
   teamEnabled = false,

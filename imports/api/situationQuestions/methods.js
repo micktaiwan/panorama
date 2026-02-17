@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { SituationQuestionsCollection } from './collections';
-import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { ensureLoggedIn } from '/imports/api/_shared/auth';
 
 Meteor.methods({
   async 'situationQuestions.upsertForActor'(situationId, actorId, questions) {

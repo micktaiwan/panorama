@@ -27,6 +27,7 @@ export const AskAiSidebar = ({ sessionId, onClose, getNoteContent, getSelectedTe
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, messages[messages.length - 1]?.contentText]);
 
   // Focus textarea on mount (slight delay — session creation is async)

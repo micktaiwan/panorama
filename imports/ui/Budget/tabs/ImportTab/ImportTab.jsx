@@ -149,6 +149,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
     };
     run();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiRowsFiltered]);
 
   const [apiDateFrom, setApiDateFrom] = React.useState(() => {
@@ -675,7 +676,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
               </tr>
             </thead>
             <tbody>
-              {apiRowsVisible.slice(0, 100).map((r, idx) => (
+              {apiRowsVisible.slice(0, 100).map((r, _idx) => (
                 <tr key={rowKey(r)}>
                   <td>{r.date}</td>
                   <td>

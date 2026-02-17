@@ -203,7 +203,7 @@ body.chatWide .app-layout {
 
 /* Focus mode: hide chrome, content fills viewport */
 .app-layout.focusMode .app-content {
-  padding: 0;
+  padding: 10px;
 }
 
 .app-layout.focusMode .app-content > .panel,

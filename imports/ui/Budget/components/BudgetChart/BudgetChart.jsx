@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import './BudgetChart.css';
-import { fmtDisplayNoCents, yyyymm } from '/imports/ui/Budget/utils/formatters.js';
+import { fmtDisplayNoCents } from '/imports/ui/Budget/utils/formatters.js';
 
 export const BudgetChart = ({ items, width = 720, height = 180, padding = 28, yFormatter = fmtDisplayNoCents, yLabel = 'Total TTC' }) => {
   // Left padding larger to fit Y labels

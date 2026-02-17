@@ -9,7 +9,7 @@ export const ActivitySummary = ({
   projectFilters = {},
   windowKey: initialWindowKey = '24h',
   showProjectFilter = true,
-  title = 'Activity Summary',
+  title: _title = 'Activity Summary',
   onFiltersChange,
   className = '',
   excludeTypes = []

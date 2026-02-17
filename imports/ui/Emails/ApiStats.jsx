@@ -2,7 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Card } from '../components/Card/Card.jsx';
 
-export const ApiStats = ({ apiStats, emailStats, threadsCount, ctaStats, onRefreshStats, onCleanupDuplicates }) => {
+export const ApiStats = ({ apiStats, emailStats, threadsCount: _threadsCount, ctaStats, onRefreshStats, onCleanupDuplicates }) => {
   if (!apiStats) return null;
 
   return (

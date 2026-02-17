@@ -4,7 +4,7 @@ import { AppPreferencesCollection } from '/imports/api/appPreferences/collection
 import './AIStatusIndicator.css';
 
 export const AIStatusIndicator = () => {
-  const sub = useSubscribe('appPreferences');
+  const _sub = useSubscribe('appPreferences');
   const pref = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
   
   if (!pref?.ai) {

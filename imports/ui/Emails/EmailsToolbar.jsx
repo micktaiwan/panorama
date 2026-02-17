@@ -11,8 +11,8 @@ export const EmailsToolbar = ({
   isRefreshing, 
   onSyncLabels,
   isSyncingLabels,
-  onToggleApiStats, 
-  showApiStats,
+  onToggleApiStats,
+  showApiStats: _showApiStats,
   onNavigateToInboxZero
 }) => {
   return (

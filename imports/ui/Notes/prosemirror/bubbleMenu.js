@@ -31,7 +31,7 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
 
       function buildButtons() {
         tooltip.innerHTML = '';
-        const { state, dispatch } = editorView;
+        const { state, dispatch: _dispatch } = editorView;
         const { from, to } = state.selection;
 
         const buttons = [
