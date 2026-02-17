@@ -16,6 +16,9 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
   const debounceRef = useRef(null);
   const shouldFocusOnMount = useRef(shouldFocus);
   const readOnlyRef = useRef(readOnly);
+  // Track last content known to the editor (set on mount + after each onChange)
+  // to distinguish external prop updates from user-edit-driven prop updates
+  const lastKnownContentRef = useRef(content);
   // Store callbacks in refs to avoid recreating the editor on callback changes
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
@@ -68,6 +71,7 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
           clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(() => {
             const md = serializeMarkdown(newState.doc);
+            lastKnownContentRef.current = md;
             onChangeRef.current?.(md);
           }, DEBOUNCE_MS);
         }
@@ -86,9 +90,20 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
       view.destroy();
       viewRef.current = null;
     };
-    // Only run on mount — content changes trigger remount via key={activeTabId}
+    // Only run on mount — tab switches trigger remount via key={activeTabId}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync external content changes (e.g. DB update arriving after mount via draft invalidation)
+  useEffect(() => {
+    if (content === lastKnownContentRef.current) return;
+    lastKnownContentRef.current = content;
+    const view = viewRef.current;
+    if (!view) return;
+    const doc = parseMarkdown(content || '');
+    const state = EditorState.create({ doc, plugins: view.state.plugins });
+    view.updateState(state);
+  }, [content]);
 
   // Update editable state dynamically when readOnly prop changes
   useEffect(() => {
