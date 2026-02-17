@@ -67,7 +67,7 @@ export const AuthGate = ({ children }) => {
     <div className="authGate">
       <div className="authContainer">
         <div className="authLogo">
-          <img src="/favicon.svg" alt="" width="48" height="48" />
+          <img src="/favicon.svg" alt="" width="72" height="72" />
           <h1>Panorama</h1>
         </div>
         {authContent}

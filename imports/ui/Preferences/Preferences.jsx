@@ -19,9 +19,9 @@ const TABS = [
   { id: 'profile', label: 'Profile' },
   { id: 'secrets', label: 'Secrets' },
   { id: 'ai', label: 'AI' },
-  { id: 'qdrant', label: 'Qdrant' },
   { id: 'mcpServers', label: 'MCP Servers' },
   { id: 'commands', label: 'Commands' },
+  { id: 'qdrant', label: 'Qdrant', adminOnly: true },
   { id: 'pages', label: 'Pages', adminOnly: true },
   { id: 'debug', label: 'Debug', adminOnly: true },
 ];
@@ -59,6 +59,7 @@ export const Preferences = ({ tab }) => {
                 }}
               >
                 {t.label}
+                {t.adminOnly && <span className="prefsAdminBadge" title="Admin only">⛨</span>}
               </a>
             </li>
           ))}

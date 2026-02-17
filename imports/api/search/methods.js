@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { getQdrantUrl, getAIConfigAsync, getOpenAiApiKeyAsync } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
-import { ensureLoggedIn } from '/imports/api/_shared/auth';
+import { ensureLoggedIn, ensureAdmin } from '/imports/api/_shared/auth';
 
 const ensureEmbeddingReady = async (userId) => {
   const config = await getAIConfigAsync(userId);
@@ -499,10 +499,15 @@ Meteor.methods({
     await runIndexJob(jobId, this.userId);
     return indexJobs.get(jobId);
   },
-  async 'qdrant.indexStart'() {
+  async 'qdrant.indexStart'(targetUserId) {
     ensureLoggedIn(this.userId);
+    let userId = this.userId;
+    if (targetUserId) {
+      check(targetUserId, String);
+      await ensureAdmin(this.userId);
+      userId = targetUserId;
+    }
     await ensureEmbeddingReady(this.userId);
-    const userId = this.userId;
     const jobId = String(Date.now());
     // Precompute docs to know total count quickly
     const docs = await collectDocs(userId);
@@ -545,11 +550,16 @@ Meteor.methods({
     }, 0);
     return { jobId, total: docs.length };
   },
-  async 'qdrant.indexKindStart'(kind) {
+  async 'qdrant.indexKindStart'(kind, targetUserId) {
     check(kind, String);
     ensureLoggedIn(this.userId);
+    let userId = this.userId;
+    if (targetUserId) {
+      check(targetUserId, String);
+      await ensureAdmin(this.userId);
+      userId = targetUserId;
+    }
     await ensureEmbeddingReady(this.userId);
-    const userId = this.userId;
     const allowed = new Set(['project', 'task', 'note', 'session', 'line', 'alarm', 'link', 'userlog', 'email']);
     if (!allowed.has(kind)) {
       throw new Meteor.Error('invalid-kind', `Unsupported kind: ${kind}`);

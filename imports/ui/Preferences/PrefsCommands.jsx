@@ -83,7 +83,7 @@ export const PrefsCommands = () => {
 
   return (
     <>
-      <h3>Claude Code Commands</h3>
+      <h2>Claude Code Commands</h2>
       <div className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
         Slash commands for the integrated Claude Code terminal.
       </div>

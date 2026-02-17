@@ -23,7 +23,7 @@ export const PrefsDebug = () => {
 
   return (
     <>
-      <h3>Debug</h3>
+      <h2>Debug</h2>
       <div className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
         Admin only — this section is not visible to regular users.
       </div>

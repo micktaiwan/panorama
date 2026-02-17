@@ -8,6 +8,8 @@
 
 const MONGO_USER = process.env.PANORAMA_MONGO_USER;
 const MONGO_PASS = process.env.PANORAMA_MONGO_PASS;
+const MAIL_USER = process.env.PANORAMA_MAIL_USER;
+const MAIL_PASS = process.env.PANORAMA_MAIL_PASS;
 
 if (!MONGO_USER || !MONGO_PASS) {
   throw new Error(
@@ -51,6 +53,9 @@ module.exports = {
       PANORAMA_FILES_DIR: '/var/www/panorama/files',
       QDRANT_URL: 'http://organizer-qdrant:6333',
       PANORAMA_FILES_API_KEY: process.env.PANORAMA_FILES_API_KEY,
+      ...(MAIL_USER && MAIL_PASS ? {
+        MAIL_URL: `smtp://${encodeURIComponent(MAIL_USER)}:${encodeURIComponent(MAIL_PASS)}@mail.mickaelfm.me:587`,
+      } : {}),
     },
     deployCheckWaitTime: 120,
   },

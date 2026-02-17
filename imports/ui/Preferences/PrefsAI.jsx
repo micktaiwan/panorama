@@ -120,7 +120,7 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
 
   return (
     <>
-      <h3>AI Backend</h3>
+      <h2>AI Backend</h2>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Mode</div>

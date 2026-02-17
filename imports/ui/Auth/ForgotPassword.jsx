@@ -27,6 +27,7 @@ export const ForgotPassword = () => {
       <div className="authCard">
         <h2>Check your email</h2>
         <p>If an account exists for <strong>{email}</strong>, a reset link has been sent.</p>
+        <p className="authMuted">Don't see it? Check your spam or junk folder.</p>
         <div className="authLinks">
           <a href="#/login" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'login' }); }}>
             Back to sign in

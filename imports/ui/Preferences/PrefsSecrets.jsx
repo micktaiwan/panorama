@@ -45,7 +45,7 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
 
   return (
     <>
-      <h3>Secrets</h3>
+      <h2>Secrets</h2>
       {!openaiApiKey && (
         <div className="prefsWarning" style={{ padding: '8px 12px', marginBottom: '12px', borderRadius: '4px', background: 'var(--warning-bg, rgba(255,180,0,0.1))', border: '1px solid var(--warning, #e6a800)', color: 'var(--warning, #e6a800)', fontSize: '13px' }}>
           No OpenAI API key configured. Semantic search indexing is disabled — search results will be limited to basic text matching.

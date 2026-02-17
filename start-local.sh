@@ -44,6 +44,11 @@ export MONGO_URL MONGO_OPLOG_URL
 export QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}"
 export PANORAMA_FILES_URL="https://panorama.mickaelfm.me"
 export PANORAMA_FILES_API_KEY="${PANORAMA_FILES_API_KEY:?Définir PANORAMA_FILES_API_KEY dans ~/.env.secrets}"
+MAIL_USER="${PANORAMA_MAIL_USER:-}"
+MAIL_PASS="${PANORAMA_MAIL_PASS:-}"
+if [ -n "$MAIL_USER" ] && [ -n "$MAIL_PASS" ]; then
+  export MAIL_URL="smtp://$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MAIL_USER', safe=''))"):$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MAIL_PASS', safe=''))")@mail.mickaelfm.me:587"
+fi
 
 echo "→ Lancement Meteor + Electron (port $METEOR_PORT)..."
 echo "  MONGO_URL        = mongodb://${MONGO_USER}:***@${MONGO_HOST}/panorama?${MONGO_OPTS}"

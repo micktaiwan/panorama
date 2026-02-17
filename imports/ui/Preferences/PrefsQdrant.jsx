@@ -13,6 +13,14 @@ export const PrefsQdrant = ({ pref }) => {
   const [rawLines, setRawLines] = React.useState(null);
   const [fetchingLines, setFetchingLines] = React.useState(false);
   const [indexJob, setIndexJob] = React.useState(null);
+  const [users, setUsers] = React.useState([]);
+  const [selectedUserId, setSelectedUserId] = React.useState('');
+
+  React.useEffect(() => {
+    Meteor.call('admin.getUsers', (err, res) => {
+      if (!err && res) setUsers(res);
+    });
+  }, []);
 
   const aiMode = pref?.ai?.mode || 'remote';
   const aiLocalEmbeddingModel = pref?.ai?.local?.embeddingModel || 'nomic-embed-text:latest';
@@ -52,7 +60,7 @@ export const PrefsQdrant = ({ pref }) => {
 
   const startRebuild = React.useCallback(() => {
     setIndexing(true);
-    Meteor.call('qdrant.indexStart', (err, res) => {
+    Meteor.call('qdrant.indexStart', selectedUserId || undefined, (err, res) => {
       if (err || !res) {
         setIndexing(false);
         setHealth({ error: err?.reason || err?.message || 'start failed' });
@@ -62,11 +70,11 @@ export const PrefsQdrant = ({ pref }) => {
       setIndexJob({ jobId: res.jobId, total: res.total, processed: 0, upserts: 0, errors: 0, done: false });
       pollIndexStatus(res.jobId);
     });
-  }, [pollIndexStatus]);
+  }, [pollIndexStatus, selectedUserId]);
 
   return (
     <>
-      <h3>Qdrant</h3>
+      <h2>Qdrant</h2>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Health</div>
@@ -75,7 +83,6 @@ export const PrefsQdrant = ({ pref }) => {
               setChecking(true);
               Meteor.call('qdrant.health', (err, res) => { setChecking(false); setHealth(err ? { error: err?.reason || err?.message || String(err) } : res); });
             }}>{checking ? 'Checking...' : 'Check health'}</button>
-            <button className="btn ml8" disabled={indexing} onClick={() => setConfirmIndex(true)}>{indexing ? 'Indexing...' : 'Rebuild index'}</button>
             <button className="btn ml8" onClick={() => navigateTo({ name: 'searchQuality' })}>Search Quality Test</button>
           </div>
         </div>
@@ -121,8 +128,31 @@ export const PrefsQdrant = ({ pref }) => {
             </button>
           </div>
         </div>
+      </div>
+
+      <h3>Rebuild</h3>
+      <div className="prefsSection">
+        {users.length > 1 && (
+          <div className="prefsRow">
+            <div className="prefsLabel">User</div>
+            <div className="prefsValue">
+              <select className="afInput" value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}>
+                <option value="">Current user (me)</option>
+                {users.map(u => (
+                  <option key={u._id} value={u._id}>{u.name || u.email}{u.isAdmin ? ' (admin)' : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
         <div className="prefsRow">
-          <div className="prefsLabel">Rebuild by kind</div>
+          <div className="prefsLabel">All</div>
+          <div className="prefsValue">
+            <button className="btn" disabled={indexing} onClick={() => setConfirmIndex(true)}>{indexing ? 'Indexing...' : 'Rebuild index'}</button>
+          </div>
+        </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">By kind</div>
           <div className="prefsValue">
             <select className="afInput" value={selectedKind} onChange={(e) => setSelectedKind(e.target.value)}>
               <option value="project">Projects</option>
@@ -141,7 +171,7 @@ export const PrefsQdrant = ({ pref }) => {
               onClick={() => {
                 const kind = selectedKind;
                 setIndexing(true);
-                Meteor.call('qdrant.indexKindStart', kind, (err, res) => {
+                Meteor.call('qdrant.indexKindStart', kind, selectedUserId || undefined, (err, res) => {
                   if (err || !res) {
                     setIndexing(false);
                     notify({ message: `Rebuild failed for ${kind}: ${err?.reason || err?.message || 'unknown error'}`, kind: 'error' });
@@ -158,7 +188,7 @@ export const PrefsQdrant = ({ pref }) => {
         </div>
         {indexJob ? (
           <div className="prefsRow">
-            <div className="prefsLabel">Index progress</div>
+            <div className="prefsLabel">Progress</div>
             <div className="prefsValue">
               <div className="progressBar" aria-label="Indexing progress">
                 <div className="progressBarFill" style={{ width: `${Math.min(100, Math.round(((indexJob.processed || 0) / Math.max(1, indexJob.total || 0)) * 100))}%` }} />
