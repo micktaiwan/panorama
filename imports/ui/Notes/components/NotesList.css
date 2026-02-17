@@ -175,7 +175,7 @@
 }
 
 .note-title .note-lock-icon.self {
-  color: var(--success);
+  color: var(--danger);
 }
 
 @media (max-width: 768px) {

@@ -242,6 +242,49 @@
   border-bottom-color: var(--info) !important;
 }
 
+/* Lock icon inside tab */
+.tab-lock-icon {
+  flex-shrink: 0;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+.tab-lock-icon.self {
+  color: var(--danger);
+}
+
+.tab-lock-icon.other {
+  color: var(--warning);
+}
+
+/* Locked-by-self tab accent */
+.note-tab.locked-self {
+  background: rgba(var(--danger-rgb), 0.08) !important;
+}
+
+.note-tab.locked-self:hover {
+  background: rgba(var(--danger-rgb), 0.14) !important;
+}
+
+.note-tab.locked-self.active {
+  background: rgba(var(--danger-rgb), 0.11) !important;
+  border-bottom-color: var(--danger) !important;
+}
+
+/* Locked-by-other tab accent */
+.note-tab.locked-other {
+  background: rgba(245, 158, 11, 0.10) !important;
+}
+
+.note-tab.locked-other:hover {
+  background: rgba(245, 158, 11, 0.18) !important;
+}
+
+.note-tab.locked-other.active {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-bottom-color: var(--warning) !important;
+}
+
 /* Open file button */
 .open-file-button {
   font-family: var(--font-mono, monospace);

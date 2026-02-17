@@ -105,8 +105,8 @@ body {
   /* Notes active/open states */
   --notes-active-bg: var(--info-600);
   --notes-active-border: var(--info-400);
-  --notes-open-bg: var(--info-600);
-  --notes-open-border: var(--info);
+  --notes-open-bg: rgba(99, 149, 237, 0.08);
+  --notes-open-border: rgba(99, 149, 237, 0.25);
 
   /* Misc */
   --radius: 8px;
@@ -220,8 +220,8 @@ body {
   /* Notes active/open states */
   --notes-active-bg: #dbeafe;
   --notes-active-border: #93c5fd;
-  --notes-open-bg: #dbeafe;
-  --notes-open-border: #93c5fd;
+  --notes-open-bg: #eff6ff;
+  --notes-open-border: #bfdbfe;
 
   /* Misc */
   --tooltip-bg: #1a1a2e;
