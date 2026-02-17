@@ -5,14 +5,12 @@ import { notify } from '../utils/notify.js';
 
 export const PrefsAI = ({ pref: _pref, userPref }) => {
   const [aiMode, setAiMode] = React.useState('remote');
-  const [aiFallback, setAiFallback] = React.useState('none');
   const [aiTimeoutMs, setAiTimeoutMs] = React.useState(30000);
   const [aiMaxTokens, setAiMaxTokens] = React.useState(4000);
   const [aiTemperature, setAiTemperature] = React.useState(0.7);
   const [aiLocalHost, setAiLocalHost] = React.useState('http://127.0.0.1:11434');
   const [aiLocalChatModel, setAiLocalChatModel] = React.useState('llama3.1:latest');
   const [aiLocalEmbeddingModel, setAiLocalEmbeddingModel] = React.useState('nomic-embed-text:latest');
-  const [aiRemoteProvider, setAiRemoteProvider] = React.useState('openai');
   const [aiRemoteChatModel, setAiRemoteChatModel] = React.useState('gpt-4o-mini');
   const [aiRemoteEmbeddingModel, setAiRemoteEmbeddingModel] = React.useState('text-embedding-3-small');
   const [ctaEnabled, setCtaEnabled] = React.useState(true);
@@ -25,14 +23,12 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
   React.useEffect(() => {
     if (!userPref) return;
     setAiMode(userPref.ai?.mode || 'remote');
-    setAiFallback(userPref.ai?.fallback || 'none');
     setAiTimeoutMs(userPref.ai?.timeoutMs || 30000);
     setAiMaxTokens(userPref.ai?.maxTokens || 4000);
     setAiTemperature(userPref.ai?.temperature || 0.7);
     setAiLocalHost(userPref.ai?.local?.host || 'http://127.0.0.1:11434');
     setAiLocalChatModel(userPref.ai?.local?.chatModel || 'llama3.1:latest');
     setAiLocalEmbeddingModel(userPref.ai?.local?.embeddingModel || 'nomic-embed-text:latest');
-    setAiRemoteProvider(userPref.ai?.remote?.provider || 'openai');
     setAiRemoteChatModel(userPref.ai?.remote?.chatModel || 'gpt-4o-mini');
     setAiRemoteEmbeddingModel(userPref.ai?.remote?.embeddingModel || 'text-embedding-3-small');
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,13 +45,12 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
 
   const generateAIPreferences = React.useCallback(() => ({
     mode: aiMode,
-    fallback: aiFallback,
     timeoutMs: aiTimeoutMs,
     maxTokens: aiMaxTokens,
     temperature: aiTemperature,
     local: { host: aiLocalHost, chatModel: aiLocalChatModel, embeddingModel: aiLocalEmbeddingModel },
-    remote: { provider: aiRemoteProvider, chatModel: aiRemoteChatModel, embeddingModel: aiRemoteEmbeddingModel }
-  }), [aiMode, aiFallback, aiTimeoutMs, aiMaxTokens, aiTemperature, aiLocalHost, aiLocalChatModel, aiLocalEmbeddingModel, aiRemoteProvider, aiRemoteChatModel, aiRemoteEmbeddingModel]);
+    remote: { chatModel: aiRemoteChatModel, embeddingModel: aiRemoteEmbeddingModel }
+  }), [aiMode, aiTimeoutMs, aiMaxTokens, aiTemperature, aiLocalHost, aiLocalChatModel, aiLocalEmbeddingModel, aiRemoteChatModel, aiRemoteEmbeddingModel]);
 
   const saveAIPreferences = React.useCallback((showNotification = true) => {
     Meteor.call('userPreferences.update', { ai: generateAIPreferences() }, (err) => {
@@ -139,24 +134,36 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
               ]}
               onSubmit={(next) => setAiMode(next)}
             />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Routes all AI calls (summaries, analysis, embeddings) to the selected provider
+            </div>
           </div>
         </div>
         <div className="prefsRow">
           <div className="prefsLabel">Timeout (ms)</div>
           <div className="prefsValue">
             <InlineEditable value={aiTimeoutMs.toString()} onSubmit={(next) => setAiTimeoutMs(parseInt(next) || 30000)} />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Max wait time for each AI request before aborting
+            </div>
           </div>
         </div>
         <div className="prefsRow">
           <div className="prefsLabel">Max Tokens</div>
           <div className="prefsValue">
             <InlineEditable value={aiMaxTokens.toString()} onSubmit={(next) => setAiMaxTokens(parseInt(next) || 4000)} />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Default max response length for AI calls (some features override this)
+            </div>
           </div>
         </div>
         <div className="prefsRow">
           <div className="prefsLabel">Temperature</div>
           <div className="prefsValue">
             <InlineEditable value={aiTemperature.toString()} onSubmit={(next) => setAiTemperature(parseFloat(next) || 0.7)} />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Default creativity level (0 = deterministic, 1 = creative). Some features override this.
+            </div>
           </div>
         </div>
         <div className="prefsRow">
@@ -186,6 +193,9 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
             <button className="btn" onClick={() => testAIProvider('openai')} disabled={aiTesting.openai}>
               {aiTesting.openai ? 'Testing...' : 'Test Remote'}
             </button>
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Sends a test chat + embedding request to verify connectivity
+            </div>
           </div>
         </div>
       </div>
@@ -196,60 +206,62 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
           <div className="prefsLabel">Host</div>
           <div className="prefsValue">
             <InlineEditable value={aiLocalHost} fullWidth onSubmit={(next) => setAiLocalHost(next)} />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Ollama server URL (local or via SSH tunnel)
+            </div>
           </div>
         </div>
         <div className="prefsRow">
           <div className="prefsLabel">Chat Model</div>
-          <div className="prefsValue" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <select
-              value={aiLocalChatModel}
-              onChange={(e) => setAiLocalChatModel(e.target.value)}
-              style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              <option value="">Select a model...</option>
-              {ollamaModels.map((model) => (
-                <option key={model.name} value={model.name}>
-                  {model.name} {model.parameterSize ? `(${model.parameterSize})` : ''}
-                </option>
-              ))}
-            </select>
-            <button className="btn" onClick={loadOllamaModels} disabled={loadingModels} style={{ padding: '4px 8px', fontSize: '12px' }}>
-              {loadingModels ? 'Loading...' : 'Refresh'}
-            </button>
+          <div className="prefsValue">
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={aiLocalChatModel}
+                onChange={(e) => setAiLocalChatModel(e.target.value)}
+                style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+              >
+                <option value="">Select a model...</option>
+                {ollamaModels.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.name} {model.parameterSize ? `(${model.parameterSize})` : ''}
+                  </option>
+                ))}
+              </select>
+              <button className="btn" onClick={loadOllamaModels} disabled={loadingModels} style={{ padding: '4px 8px', fontSize: '12px' }}>
+                {loadingModels ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Used for summaries, analysis, and all chat-based AI features in local mode
+            </div>
           </div>
         </div>
         <div className="prefsRow">
           <div className="prefsLabel">Embedding Model</div>
-          <div className="prefsValue" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <select
-              value={aiLocalEmbeddingModel}
-              onChange={(e) => setAiLocalEmbeddingModel(e.target.value)}
-              style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              <option value="">Select a model...</option>
-              {ollamaModels.map((model) => (
-                <option key={model.name} value={model.name}>
-                  {model.name} {model.parameterSize ? `(${model.parameterSize})` : ''}
-                </option>
-              ))}
-            </select>
+          <div className="prefsValue">
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={aiLocalEmbeddingModel}
+                onChange={(e) => setAiLocalEmbeddingModel(e.target.value)}
+                style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+              >
+                <option value="">Select a model...</option>
+                {ollamaModels.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.name} {model.parameterSize ? `(${model.parameterSize})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Used for Qdrant semantic search indexing. Changing model requires a full reindex.
+            </div>
           </div>
         </div>
       </div>
 
       <h3>Remote AI (OpenAI)</h3>
       <div className="prefsSection">
-        <div className="prefsRow">
-          <div className="prefsLabel">Provider</div>
-          <div className="prefsValue">
-            <InlineEditable
-              as="select"
-              value={aiRemoteProvider}
-              options={[{ value: 'openai', label: 'OpenAI' }]}
-              onSubmit={(next) => setAiRemoteProvider(next)}
-            />
-          </div>
-        </div>
         <div className="prefsRow">
           <div className="prefsLabel">API Key</div>
           <div className="prefsValue">
@@ -262,18 +274,24 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
           <div className="prefsLabel">Chat Model</div>
           <div className="prefsValue">
             <InlineEditable value={aiRemoteChatModel} fullWidth onSubmit={(next) => setAiRemoteChatModel(next)} />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              OpenAI model for summaries, analysis, and all chat-based AI features in remote mode
+            </div>
           </div>
         </div>
         <div className="prefsRow">
           <div className="prefsLabel">Embedding Model</div>
           <div className="prefsValue">
             <InlineEditable value={aiRemoteEmbeddingModel} fullWidth onSubmit={(next) => setAiRemoteEmbeddingModel(next)} />
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              OpenAI model for Qdrant semantic search indexing. Changing model requires a full reindex.
+            </div>
           </div>
         </div>
       </div>
 
-      <h3>Email CTA Suggestions</h3>
-      <div className="prefsSection">
+      <h3 style={{ color: 'var(--muted)' }}>Email CTA Suggestions <span style={{ fontSize: '12px', fontWeight: 'normal' }}>Deprecated</span></h3>
+      <div className="prefsSection" style={{ opacity: 0.5, pointerEvents: 'none' }}>
         <div className="prefsRow">
           <div className="prefsLabel">Enable CTA Suggestions</div>
           <div className="prefsValue">

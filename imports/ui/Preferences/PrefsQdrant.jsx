@@ -181,21 +181,35 @@ export const PrefsQdrant = ({ pref }) => {
       <Modal
         open={confirmIndex}
         onClose={() => setConfirmIndex(false)}
-        title="Rebuild Qdrant index?"
-        actions={[
-          <button key="cancel" className="btn" onClick={() => setConfirmIndex(false)}>Cancel</button>,
-          <button key="ok" className="btn" onClick={() => { setConfirmIndex(false); startRebuild(); }}>Rebuild</button>
-        ]}
+        title={health?.incompatible ? 'Rebuild blocked — dimension mismatch' : 'Rebuild Qdrant index?'}
+        actions={health?.incompatible
+          ? [<button key="close" className="btn" onClick={() => setConfirmIndex(false)}>Close</button>]
+          : [
+            <button key="cancel" className="btn" onClick={() => setConfirmIndex(false)}>Cancel</button>,
+            <button key="ok" className="btn" onClick={() => { setConfirmIndex(false); startRebuild(); }}>Rebuild</button>
+          ]}
       >
-        <p>This will drop and recreate the collection, then reindex all documents.</p>
-        <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-          <strong>Collection:</strong> <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '3px', fontSize: '13px' }}>
-            {aiMode === 'remote' ? 'panorama' : `panorama_${aiLocalEmbeddingModel.replace(/[^a-zA-Z0-9]/g, '_')}`}
-          </code>
-          <span style={{ marginLeft: '8px', fontSize: '12px' }}>
-            ({aiMode === 'remote' ? 'Base collection' : 'Model-specific collection'})
-          </span>
-        </p>
+        {health?.incompatible ? (
+          <>
+            <p>The Qdrant collection <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '3px', fontSize: '13px' }}>{health.collection}</code> uses <strong>{health.vectorSize}</strong>-dimension vectors, but your current embedding model produces <strong>{health.expectedVectorSize}</strong>-dimension vectors.</p>
+            <p style={{ marginTop: '12px' }}>Rebuilding would require deleting the entire shared collection, which would <strong>erase all users' search index</strong>.</p>
+            <p style={{ marginTop: '12px', padding: '8px 12px', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: '4px', fontSize: '13px', color: 'var(--warning-text)' }}>
+              To fix this, either switch back to the embedding model that matches {health.vectorSize} dimensions, or ask an admin to manually recreate the Qdrant collection.
+            </p>
+          </>
+        ) : (
+          <>
+            <p>This will clear your indexed vectors and reindex all your documents.</p>
+            <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+              <strong>Collection:</strong> <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '3px', fontSize: '13px' }}>
+                {aiMode === 'remote' ? 'panorama' : `panorama_${aiLocalEmbeddingModel.replace(/[^a-zA-Z0-9]/g, '_')}`}
+              </code>
+              <span style={{ marginLeft: '8px', fontSize: '12px' }}>
+                ({aiMode === 'remote' ? 'Base collection' : 'Model-specific collection'})
+              </span>
+            </p>
+          </>
+        )}
       </Modal>
     </>
   );

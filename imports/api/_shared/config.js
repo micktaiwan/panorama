@@ -20,28 +20,26 @@ export const getAIConfig = () => {
   const prefs = getPrefs();
   const defaults = {
     mode: AI_PREFERENCES_SCHEMA.mode.defaultValue,
-    fallback: AI_PREFERENCES_SCHEMA.fallback.defaultValue,
     timeoutMs: AI_PREFERENCES_SCHEMA.timeoutMs.defaultValue,
     maxTokens: AI_PREFERENCES_SCHEMA.maxTokens.defaultValue,
     temperature: AI_PREFERENCES_SCHEMA.temperature.defaultValue,
     local: { ...AI_PREFERENCES_SCHEMA.local.defaultValue },
     remote: { ...AI_PREFERENCES_SCHEMA.remote.defaultValue }
   };
-  
+
   if (!prefs?.ai) {
     return defaults;
   }
-  
+
   const config = {
     mode: prefs.ai.mode || defaults.mode,
-    fallback: prefs.ai.fallback || defaults.fallback,
     timeoutMs: prefs.ai.timeoutMs || defaults.timeoutMs,
     maxTokens: prefs.ai.maxTokens || defaults.maxTokens,
     temperature: prefs.ai.temperature || defaults.temperature,
     local: { ...defaults.local, ...(prefs.ai.local || {}) },
     remote: { ...defaults.remote, ...(prefs.ai.remote || {}) }
   };
-  
+
   return config;
 };
 
@@ -121,7 +119,6 @@ export const getAIConfigAsync = async (userId) => {
   // Merge user overrides on top of instance config
   return {
     mode: userPref.ai.mode || base.mode,
-    fallback: userPref.ai.fallback || base.fallback,
     timeoutMs: userPref.ai.timeoutMs || base.timeoutMs,
     maxTokens: userPref.ai.maxTokens || base.maxTokens,
     temperature: userPref.ai.temperature ?? base.temperature,

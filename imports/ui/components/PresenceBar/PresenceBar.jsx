@@ -18,7 +18,7 @@ export const PresenceBar = () => {
   }, [presenceDocs]);
 
   if (subPresence() || subUsers()) return null; // loading
-  if (presenceDocs.length === 0) return null;
+  if (presenceDocs.length <= 1) return null;
 
   const currentUserId = Meteor.userId();
 

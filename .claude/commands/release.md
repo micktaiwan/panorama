@@ -25,6 +25,8 @@ Arguments passés par l'utilisateur : $ARGUMENTS
 
 Write the release notes **in English**, from a user perspective (not technical). Use markdown with categories if relevant (New, Improvements, Fixes). Be concise. If the user provided context in the arguments, use it to enrich the notes.
 
+**IMPORTANT** : Ne pas mentionner les fonctionnalités réservées aux admins (admin panel, debug tools, admin-only pages/tabs). Les release notes sont destinées aux utilisateurs finaux.
+
 ## 4. Afficher le résumé et demander confirmation
 
 Affiche :

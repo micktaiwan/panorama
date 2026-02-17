@@ -687,7 +687,7 @@ export const EmailsPage = () => {
     return header?.value || '';
   };
 
-  if (subTokens() || isLoadingThreads) {
+  if (subTokens() || (isConnected && isLoadingThreads)) {
     return <div>Loading…</div>;
   }
 

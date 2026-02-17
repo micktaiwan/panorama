@@ -7,7 +7,8 @@ import { ProjectDetails } from '/imports/ui/ProjectDetails/projectDetails.jsx';
 import { NoteSession } from '/imports/ui/NoteSession/NoteSession.jsx';
 import { ProjectDelete } from '/imports/ui/ProjectDelete/ProjectDelete.jsx';
 import './App.css';
-import { parseHashRoute, navigateTo, ADMIN_ROUTES } from '/imports/ui/router.js';
+import { parseHashRoute, navigateTo, ADMIN_ROUTES, OPTIONAL_PAGES } from '/imports/ui/router.js';
+import { canSeePage } from '/imports/ui/utils/pageAccess.js';
 import { ImportTasks } from '/imports/ui/ImportTasks/ImportTasks.jsx';
 import { Alarms } from '/imports/ui/Alarms/Alarms.jsx';
 import { LinksPage } from '/imports/ui/Links/LinksPage.jsx';
@@ -34,7 +35,6 @@ import { notify } from '/imports/ui/utils/notify.js';
 import { timeUntilPrecise } from '/imports/ui/utils/date.js';
 import { AIStatusIndicator } from '/imports/ui/components/AIStatusIndicator/AIStatusIndicator.jsx';
 import { CommandPalette } from '/imports/ui/CommandPalette/CommandPalette.jsx';
-import { Onboarding } from '/imports/ui/Onboarding/Onboarding.jsx';
 import { Preferences } from '/imports/ui/Preferences/Preferences.jsx';
 import { SearchQuality } from '/imports/ui/Preferences/SearchQuality/SearchQuality.jsx';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
@@ -110,6 +110,12 @@ function App() {
   const [qdrantStatus, setQdrantStatus] = useState(null);
   const [interruptedModalOpen, setInterruptedModalOpen] = useState(false);
   const [interruptedCount, setInterruptedCount] = useState(0);
+  // Preferences
+  const subPrefs = useSubscribe('appPreferences');
+  const subUserPrefs = useSubscribe('userPreferences');
+  const _appPrefs = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
+  const userPrefs = useFind(() => UserPreferencesCollection.find({}, { limit: 1 }))[0];
+
   // Command palette state is internal to component; keep only open/close here
   // Go to screen palette
   const [goOpen, setGoOpen] = useState(false);
@@ -138,16 +144,14 @@ function App() {
     { key: 'g', label: 'Preferences', route: { name: 'preferences' } },
     { key: 'd', label: 'Admin', route: { name: 'admin' } },
     { key: 'q', label: 'Search Quality', route: { name: 'searchQuality' } },
-  ].filter(item => !item.route || !ADMIN_ROUTES.has(item.route.name) || user?.isAdmin);
+  ].filter(item => {
+    if (!item.route) return true;
+    if (ADMIN_ROUTES.has(item.route.name) && !user?.isAdmin) return false;
+    return canSeePage(item.route.name, user, userPrefs);
+  });
   const [goActiveIdx, setGoActiveIdx] = useState(0);
   // (removed local search states)
   const suppressRef = useRef(new Set());
-
-  // Preferences
-  const subPrefs = useSubscribe('appPreferences');
-  const subUserPrefs = useSubscribe('userPreferences');
-  const appPrefs = useFind(() => AppPreferencesCollection.find({}, { limit: 1 }))[0];
-  const userPrefs = useFind(() => UserPreferencesCollection.find({}, { limit: 1 }))[0];
 
   // Claude Code: subscribe to unseen sessions + projects for notifications
   useSubscribe('claudeSessions.unseen');
@@ -658,15 +662,6 @@ function App() {
   // create task now handled inside CommandPalette
 
 
-  // Redirect to onboarding if not configured
-  useEffect(() => {
-    if (subPrefs()) return; // not ready
-    const needsOnboarding = !appPrefs?.onboardedAt;
-    if (needsOnboarding && route?.name !== 'onboarding') {
-      navigateTo({ name: 'onboarding' });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPrefs(), appPrefs?._id, route?.name]);
 
   if (subPrefs() || subUserPrefs() || !projectsReady) {
     return <div className="appLoading">Loading…</div>;
@@ -697,6 +692,7 @@ function App() {
           </h1>
           <HamburgerMenu
             user={user}
+            userPrefs={userPrefs}
             onNewSession={() => handleNewSession()}
             onExport={() => setExportOpen(true)}
           />
@@ -783,7 +779,7 @@ function App() {
             <Eisenhower />
           </div>
         )}
-        {route?.name === 'budget' && (
+        {route?.name === 'budget' && canSeePage('budget', user, userPrefs) && (
           <div className="panel">
             <BudgetPage />
           </div>
@@ -803,7 +799,7 @@ function App() {
             <PanoramaPage />
           </div>
         )}
-        {route?.name === 'situationAnalyzer' && (
+        {route?.name === 'situationAnalyzer' && canSeePage('situationAnalyzer', user, userPrefs) && (
           <div className="panel">
             <SituationAnalyzer />
           </div>
@@ -839,7 +835,7 @@ function App() {
             <InboxZero />
           </div>
         )}
-        {route?.name === 'notionReporting' && (
+        {route?.name === 'notionReporting' && canSeePage('notionReporting', user, userPrefs) && (
           <div className="panel">
             <NotionReporting />
           </div>
@@ -852,11 +848,6 @@ function App() {
         {route?.name === 'claude' && (
           <ClaudeCodePage projectId={route.projectId} />
         )}
-        {route?.name === 'onboarding' && (
-          <div className="panel">
-            <Onboarding />
-          </div>
-        )}
         {route?.name === 'releases' && (
           <div className="panel">
             <ReleasesPage releaseId={route.releaseId} />
@@ -867,6 +858,14 @@ function App() {
             <div className="prefs"><div className="prefsContent">
               <h2>Access denied</h2>
               <p>Admin privileges required.</p>
+            </div></div>
+          </div>
+        )}
+        {route?.name && (route.name in OPTIONAL_PAGES) && !canSeePage(route.name, user, userPrefs) && (
+          <div className="panel">
+            <div className="prefs"><div className="prefsContent">
+              <h2>Page not available</h2>
+              <p>This page is not enabled for your account.</p>
             </div></div>
           </div>
         )}
@@ -1063,14 +1062,18 @@ function App() {
           <span className="dot">·</span>
           
           <a href="#/eisenhower" onClick={(e) => { e.preventDefault(); goEisenhower(); }}>Eisenhower</a>
-          <span className="dot">·</span>
-          <a href="#/budget" onClick={(e) => { e.preventDefault(); goBudget(); }}>Budget</a>
+          {canSeePage('budget', user, userPrefs) && <>
+            <span className="dot">·</span>
+            <a href="#/budget" onClick={(e) => { e.preventDefault(); goBudget(); }}>Budget</a>
+          </>}
           <span className="dot">·</span>
           <a href="#/reporting" onClick={(e) => { e.preventDefault(); goReporting(); }}>Reporting</a>
           <span className="dot">·</span>
           <a href="#/calendar" onClick={(e) => { e.preventDefault(); goCalendar(); }}>Calendar</a>
-          <span className="dot">·</span>
-          <a href="#/situation-analyzer" onClick={(e) => { e.preventDefault(); goSituationAnalyzer(); }}>Situation Analyzer</a>
+          {canSeePage('situationAnalyzer', user, userPrefs) && <>
+            <span className="dot">·</span>
+            <a href="#/situation-analyzer" onClick={(e) => { e.preventDefault(); goSituationAnalyzer(); }}>Situation Analyzer</a>
+          </>}
           <span className="dot">·</span>
           <a href="#/people" onClick={(e) => { e.preventDefault(); goPeople(); }}>People</a>
           <span className="dot">·</span>
@@ -1085,8 +1088,10 @@ function App() {
           <a href="#/userlog" onClick={(e) => { e.preventDefault(); goUserLog(); }}>Journal</a>
           <span className="dot">·</span>
           <a href="#/emails" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'emails' }); }}>Emails</a>
-          <span className="dot">·</span>
-          <a href="#/notion-reporting" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'notionReporting' }); }}>Notion</a>
+          {canSeePage('notionReporting', user, userPrefs) && <>
+            <span className="dot">·</span>
+            <a href="#/notion-reporting" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'notionReporting' }); }}>Notion</a>
+          </>}
           {user?.isAdmin && <>
             <span className="dot">·</span>
             <a href="#/admin" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'admin' }); }}>Admin</a>

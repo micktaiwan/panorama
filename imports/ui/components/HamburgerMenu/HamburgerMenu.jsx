@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { navigateTo, ADMIN_ROUTES } from '/imports/ui/router.js';
+import { canSeePage } from '/imports/ui/utils/pageAccess.js';
 import './HamburgerMenu.css';
 
-export const HamburgerMenu = ({ user, onNewSession, onExport }) => {
+export const HamburgerMenu = ({ user, userPrefs, onNewSession, onExport }) => {
   const [open, setOpen] = useState(false);
 
   const close = useCallback(() => setOpen(false), []);
@@ -72,7 +73,12 @@ export const HamburgerMenu = ({ user, onNewSession, onExport }) => {
     { label: 'Admin', route: { name: 'admin' } },
     'separator',
     { label: 'Logout', action: () => Meteor.logout() },
-  ].filter(item => typeof item === 'string' || !item.route || !ADMIN_ROUTES.has(item.route.name) || user?.isAdmin);
+  ].filter(item => {
+    if (typeof item === 'string') return true;
+    if (!item.route) return true;
+    if (ADMIN_ROUTES.has(item.route.name) && !user?.isAdmin) return false;
+    return canSeePage(item.route.name, user, userPrefs);
+  });
 
   return (
     <>
@@ -132,6 +138,7 @@ export const HamburgerMenu = ({ user, onNewSession, onExport }) => {
 
 HamburgerMenu.propTypes = {
   user: PropTypes.object,
+  userPrefs: PropTypes.object,
   onNewSession: PropTypes.func.isRequired,
   onExport: PropTypes.func.isRequired,
 };

@@ -23,7 +23,12 @@ export const PrefsDebug = () => {
 
   return (
     <>
-      <h3>Test notify</h3>
+      <h3>Debug</h3>
+      <div className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
+        Admin only — this section is not visible to regular users.
+      </div>
+
+      <h4>Test notify</h4>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Notifications</div>
@@ -50,7 +55,7 @@ export const PrefsDebug = () => {
         </div>
       </div>
 
-      <h3>Test errors</h3>
+      <h4>Test errors</h4>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Client and Server</div>
@@ -68,7 +73,7 @@ export const PrefsDebug = () => {
         </div>
       </div>
 
-      <h3>Token Statistics</h3>
+      <h4>Token Statistics</h4>
       <div className="prefsSection">
         <div className="prefsRow">
           <div className="prefsLabel">Count Tokens</div>

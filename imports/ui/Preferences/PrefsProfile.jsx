@@ -45,6 +45,28 @@ export const PrefsProfile = () => {
             <span className="muted">{email}</span>
           </div>
         </div>
+        <div className="prefsRow">
+          <div className="prefsLabel">Display zoom</div>
+          <div className="prefsValue">
+            <button
+              className="btn"
+              onClick={() => {
+                if (window.electron?.resetZoom) {
+                  window.electron.resetZoom();
+                  notify({ message: 'Zoom reset to 100%', kind: 'success' });
+                } else {
+                  const isElectron = typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent || '');
+                  const msg = isElectron
+                    ? 'Zoom reset not available yet. Please restart the app to enable it.'
+                    : 'Zoom reset not available in browser';
+                  notify({ message: msg, kind: 'error' });
+                }
+              }}
+            >
+              Reset zoom (100%)
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );

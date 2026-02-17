@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { MCPServersCollection } from '../../api/mcpServers/collections.js';
-import { Card } from '../components/Card/Card.jsx';
 import { notify } from '../utils/notify.js';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { MCPServerForm } from './MCPServerForm.jsx';
 import './MCPServers.css';
 
 /**
- * MCP Servers management screen
+ * MCP Servers management — Preferences tab
  * Configure external MCP servers (stdio/HTTP)
  */
 export function MCPServers() {
@@ -23,10 +22,8 @@ export function MCPServers() {
   const [serverToRemove, setServerToRemove] = useState(null);
 
   const handleCreate = () => {
-    console.log('[MCPServers] handleCreate called');
     setEditingServer(null);
     setShowForm(true);
-    console.log('[MCPServers] showForm set to true');
   };
 
   const handleEdit = (server) => {
@@ -80,8 +77,6 @@ export function MCPServers() {
     setTestingServer(serverId);
     try {
       const result = await Meteor.callAsync('mcpServers.testConnection', serverId);
-      console.log('[MCPServers] Test connection result:', result);
-
       const toolCount = result.tools?.length || 0;
       notify({ message: `Connection successful! Found ${toolCount} tool(s) on "${serverName}"`, kind: 'success' });
     } catch (error) {
@@ -105,19 +100,13 @@ export function MCPServers() {
   const handleSyncFromClaudeDesktop = async () => {
     setSyncing(true);
     try {
-      // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Sync timeout after 10 seconds')), 10000)
       );
-
       const callPromise = Meteor.callAsync('mcpServers.syncFromClaudeDesktop');
-
       const result = await Promise.race([callPromise, timeoutPromise]);
-      console.log('[MCPServers] Sync result:', result);
 
-      const { summary, imported: _imported, skipped: _skipped, errors: _errors } = result;
-
-      // Build notification message
+      const { summary } = result;
       const parts = [];
       if (summary.imported > 0) parts.push(`${summary.imported} imported`);
       if (summary.skipped > 0) parts.push(`${summary.skipped} skipped`);
@@ -136,117 +125,113 @@ export function MCPServers() {
     }
   };
 
-  if (isLoading()) {
-    return <div className="mcpServers-loading">Loading...</div>;
-  }
+  if (isLoading()) return <div>Loading...</div>;
 
   return (
-    <div className="mcpServers">
-      <Card
-        title="MCP Servers"
-        actions={
-          <>
+    <>
+      <h3>MCP Servers</h3>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">Actions</div>
+          <div className="prefsValue">
             <button
-              className="btn btn-secondary"
+              className="btn"
               onClick={handleSyncFromClaudeDesktop}
               disabled={syncing}
             >
               {syncing ? 'Syncing...' : 'Sync from Claude Desktop'}
             </button>
-            <button className="btn btn-primary ml8" onClick={handleCreate}>
+            <button className="btn ml8" onClick={handleCreate}>
               Add Server
             </button>
-          </>
-        }
-      >
-        <div className="mcpServers-intro">
-          <p>
-            Configure external MCP servers to extend Panorama's capabilities.
-            Supports both local (stdio) and remote (HTTP) servers.
-          </p>
+          </div>
         </div>
 
-        {servers.length === 0 ? (
-          <div className="mcpServers-empty">
-            <p>No MCP servers configured yet.</p>
-            <p>Click "Add Server" to get started.</p>
-          </div>
-        ) : (
-          <div className="mcpServers-list">
-            {servers.map(server => (
-              <div key={server._id} className="mcpServer-item">
-                <div className="mcpServer-header">
-                  <div className="mcpServer-info">
-                    <div className="mcpServer-name">
-                      {server.name}
-                      <span className={`mcpServer-type badge badge-${server.type}`}>
-                        {server.type}
-                      </span>
-                      <span className={`mcpServer-status badge badge-${server.enabled ? 'success' : 'muted'}`}>
-                        {server.enabled ? 'enabled' : 'disabled'}
-                      </span>
+        <div className="prefsRow">
+          <div className="prefsLabel">Servers ({servers.length})</div>
+          <div className="prefsValue">
+            {servers.length === 0 ? (
+              <div className="muted">No MCP servers configured yet.</div>
+            ) : (
+              <div className="mcpServers-list">
+                {servers.map(server => (
+                  <div key={server._id} className="mcpServer-item">
+                    <div className="mcpServer-header">
+                      <div className="mcpServer-info">
+                        <div className="mcpServer-name">
+                          {server.name}
+                          <span className={`mcpServer-type badge badge-${server.type}`}>
+                            {server.type}
+                          </span>
+                          <span className={`mcpServer-status badge badge-${server.enabled ? 'success' : 'muted'}`}>
+                            {server.enabled ? 'enabled' : 'disabled'}
+                          </span>
+                        </div>
+                        {server.type === 'stdio' && (
+                          <div className="mcpServer-command">
+                            <code>{server.command} {server.args?.join(' ')}</code>
+                          </div>
+                        )}
+                        {server.type === 'http' && (
+                          <div className="mcpServer-url">
+                            <code>{server.url}</code>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mcpServer-actions">
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => handleTestConnection(server._id, server.name)}
+                          disabled={testingServer === server._id || !server.enabled}
+                          title="Test connection"
+                        >
+                          {testingServer === server._id ? 'Testing...' : 'Test'}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => handleToggleEnabled(server._id, server.enabled)}
+                          title={server.enabled ? 'Disable' : 'Enable'}
+                        >
+                          {server.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => handleEdit(server)}
+                          title="Edit configuration"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => handleRemoveClick(server)}
+                          title="Remove server"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                    {server.type === 'stdio' && (
-                      <div className="mcpServer-command">
-                        <code>{server.command} {server.args?.join(' ')}</code>
-                      </div>
-                    )}
-                    {server.type === 'http' && (
-                      <div className="mcpServer-url">
-                        <code>{server.url}</code>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mcpServer-actions">
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => handleTestConnection(server._id, server.name)}
-                      disabled={testingServer === server._id || !server.enabled}
-                      title="Test connection"
-                    >
-                      {testingServer === server._id ? 'Testing...' : 'Test'}
-                    </button>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => handleToggleEnabled(server._id, server.enabled)}
-                      title={server.enabled ? 'Disable' : 'Enable'}
-                    >
-                      {server.enabled ? 'Disable' : 'Enable'}
-                    </button>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => handleEdit(server)}
-                      title="Edit configuration"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      onClick={() => handleRemoveClick(server)}
-                      title="Remove server"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
 
-                <div className="mcpServer-meta">
-                  {server.lastConnectedAt && (
-                    <div className="mcpServer-lastConnected">
-                      Last connected: {new Date(server.lastConnectedAt).toLocaleString()}
-                    </div>
-                  )}
-                  {server.lastError && (
-                    <div className="mcpServer-error">
-                      Error: {server.lastError}
-                    </div>
-                  )}
-                </div>
+                    {(server.lastConnectedAt || server.lastError) && (
+                      <div className="mcpServer-meta">
+                        {server.lastConnectedAt && (
+                          <div className="mcpServer-lastConnected">
+                            Last connected: {new Date(server.lastConnectedAt).toLocaleString()}
+                          </div>
+                        )}
+                        {server.lastError && (
+                          <div className="mcpServer-error">
+                            Error: {server.lastError}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </Card>
+        </div>
+      </div>
 
       {showForm && (
         <MCPServerForm
@@ -273,6 +258,6 @@ export function MCPServers() {
         <p>Remove "{serverToRemove?.name}"?</p>
         <p>This will permanently delete the server configuration.</p>
       </Modal>
-    </div>
+    </>
   );
 }

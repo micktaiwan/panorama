@@ -41,18 +41,6 @@ export const UserMenu = () => {
       {open && (
         <div className="userMenuDropdown">
           <a
-            href="#/preferences/profile"
-            className="userMenuItem"
-            onClick={(e) => {
-              e.preventDefault();
-              navigateTo({ name: 'preferences', tab: 'profile' });
-              setOpen(false);
-            }}
-          >
-            <svg className="menuIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 8c3.3 0 6 1.3 6 3v1H2v-1c0-1.7 2.7-3 6-3z"/></svg>
-            Profile
-          </a>
-          <a
             href="#/preferences"
             className="userMenuItem"
             onClick={(e) => {

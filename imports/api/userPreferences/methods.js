@@ -130,13 +130,17 @@ Meteor.methods({
     if (modifier.ai !== null && modifier.ai !== undefined && typeof modifier.ai === 'object') {
       const ai = {};
       if (['local', 'remote'].includes(modifier.ai.mode)) ai.mode = modifier.ai.mode;
-      if (['none', 'local', 'remote'].includes(modifier.ai.fallback)) ai.fallback = modifier.ai.fallback;
       if (Number.isFinite(modifier.ai.timeoutMs)) ai.timeoutMs = modifier.ai.timeoutMs;
       if (Number.isFinite(modifier.ai.maxTokens)) ai.maxTokens = modifier.ai.maxTokens;
       if (Number.isFinite(modifier.ai.temperature)) ai.temperature = modifier.ai.temperature;
       if (modifier.ai.local && typeof modifier.ai.local === 'object') ai.local = modifier.ai.local;
       if (modifier.ai.remote && typeof modifier.ai.remote === 'object') ai.remote = modifier.ai.remote;
       if (Object.keys(ai).length > 0) set.ai = ai;
+    }
+
+    // Visible pages (admin-only optional pages)
+    if (Array.isArray(modifier.visiblePages)) {
+      set.visiblePages = modifier.visiblePages.filter(p => typeof p === 'string');
     }
 
     const doc = await UserPreferencesCollection.findOneAsync({ userId: this.userId });

@@ -10,7 +10,7 @@ export const NotificationBell = () => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  useSubscribe('releases.all');
+  useSubscribe('releases.recent');
   const releases = useFind(() => ReleasesCollection.find({}, { sort: { createdAt: -1 } }));
   const userPrefs = useFind(() => UserPreferencesCollection.find({}, { limit: 1 }))[0];
 

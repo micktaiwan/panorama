@@ -356,31 +356,3 @@ export const providers = {
   }
 };
 
-// Legacy function for backward compatibility
-export async function openAiChat({ system, user, expectJson, schema, userId }) {
-  const apiKey = userId ? await getOpenAiApiKeyAsync(userId) : getOpenAiApiKey();
-  if (!apiKey) throw new Meteor.Error('config-missing', 'OpenAI API key missing in settings');
-  const { default: fetch } = await import('node-fetch');
-  const body = expectJson
-    ? { model: OPENAI_MODEL, messages: [ { role: 'system', content: system }, { role: 'user', content: user } ], response_format: { type: 'json_schema', json_schema: { name: 'userlog_summary', strict: false, schema } } }
-    : { model: OPENAI_MODEL, messages: [ { role: 'system', content: system }, { role: 'user', content: user } ] };
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    const errText = await resp.text();
-    console.error('[openAiChat] request failed', { status: resp.status, statusText: resp.statusText, body: errText });
-    throw new Meteor.Error('openai-failed', errText);
-  }
-  const data = await resp.json();
-  const content = data?.choices?.[0]?.message?.content || (expectJson ? '{}' : '');
-  if (!expectJson) return String(content || '');
-  try {
-    return JSON.parse(content);
-  } catch (err) {
-    console.error('[openAiChat] invalid JSON', { content, error: err?.message });
-    throw new Meteor.Error('openai-invalid-json', 'Invalid JSON content from model');
-  }
-}

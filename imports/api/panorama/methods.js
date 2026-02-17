@@ -344,14 +344,9 @@ Meteor.methods({
 
     // Validate AI preferences structure
     const validModes = ['local', 'remote'];
-    const validFallbacks = ['none', 'local', 'remote'];
 
     if (preferences.mode && !validModes.includes(preferences.mode)) {
       throw new Meteor.Error('invalid-mode', 'Mode must be local or remote');
-    }
-    
-    if (preferences.fallback && !validFallbacks.includes(preferences.fallback)) {
-      throw new Meteor.Error('invalid-fallback', 'Fallback must be none, local, or remote');
     }
     
     // Update preferences
