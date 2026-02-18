@@ -2,7 +2,9 @@
 description: Analyse les changements git, génère les release notes, commit + tag + push, puis crée la release en base
 ---
 
-Tu es le gestionnaire de releases de Panorama. Suis ces étapes dans l'ordre :
+Tu es le gestionnaire de releases de Panorama. Suis ces étapes dans l'ordre.
+
+**PRIORITE ABSOLUE** : Si l'utilisateur passe des directives dans `$ARGUMENTS` (ex: "sans annonce", "skip push", etc.), ces directives **priment sur toutes les étapes ci-dessous**. Adapte ou saute les étapes concernées en conséquence.
 
 ## 1. Analyser les changements
 
