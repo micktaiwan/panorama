@@ -159,7 +159,7 @@ export const TaskRow = ({
                 >important</button>
               </>
             ) : null}
-            <button className="iconButton taskNotesButton" title={task.notes ? 'Edit notes' : 'Add notes'} aria-label="Notes" onClick={openNotes}>…</button>
+            <button className={`iconButton taskNotesButton${task.notes ? ' hasNotes' : ''}`} title={task.notes || 'Add notes'} aria-label="Notes" onClick={openNotes}>…</button>
           </span>
           {task.notes ? (
             <button
@@ -261,6 +261,7 @@ export const TaskRow = ({
             onClose={() => setIsNotesOpen(false)}
             title={task?.title ? `Notes · ${task?.title}` : 'Notes'}
             icon={false}
+            wide
           >
             <textarea
               className="taskNotesTextarea"

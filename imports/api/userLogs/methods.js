@@ -25,13 +25,15 @@ Meteor.methods({
       userId: this.userId,
       createdAt: now
     });
+    let vectorError;
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'userlog', id: _id, text: content, userId: this.userId });
     } catch (e) {
       console.error('[search][userLogs.insert] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your log was saved.', { insertedId: _id });
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your log was saved.', { insertedId: _id });
     }
+    if (vectorError) throw vectorError;
     return _id;
   },
   async 'userLogs.update'(logId, modifier) {
@@ -41,14 +43,16 @@ Meteor.methods({
     await ensureOwner(UserLogsCollection, logId, this.userId);
     const set = { ...sanitizeLog(modifier), updatedAt: new Date() };
     const res = await UserLogsCollection.updateAsync(logId, { $set: set });
+    let vectorError;
     try {
       const next = await UserLogsCollection.findOneAsync({ _id: logId }, { fields: { content: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'userlog', id: logId, text: next?.content || '', userId: this.userId });
     } catch (e) {
       console.error('[search][userLogs.update] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
     }
+    if (vectorError) throw vectorError;
     return res;
   },
   async 'userLogs.remove'(logId) {

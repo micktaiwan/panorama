@@ -69,14 +69,16 @@ Meteor.methods({
     if (doc.projectId) {
       await ProjectsCollection.updateAsync(doc.projectId, { $set: { updatedAt: new Date() } });
     }
+    let vectorError;
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       const text = `${sanitized.title || ''} ${sanitized.notes || ''}`.trim();
       await upsertDoc({ kind: 'task', id: _id, text, projectId: sanitized.projectId || null, userId: this.userId });
     } catch (e) {
       console.error('[search][tasks.insert] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your task was saved.', { insertedId: _id });
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your task was saved.', { insertedId: _id });
     }
+    if (vectorError) throw vectorError;
     return _id;
   },
   async 'tasks.update'(taskId, modifier) {
@@ -107,6 +109,7 @@ Meteor.methods({
       await ProjectsCollection.updateAsync(task.projectId, { $set: { updatedAt: new Date() } });
     }
     // Only re-index in vector store when searchable fields change
+    let vectorError;
     const shouldReindex = Object.hasOwn(modifier, 'title') || Object.hasOwn(modifier, 'notes') || Object.hasOwn(modifier, 'projectId');
     if (shouldReindex) {
       try {
@@ -116,9 +119,10 @@ Meteor.methods({
         await upsertDoc({ kind: 'task', id: taskId, text, projectId: next && next.projectId, userId: this.userId });
       } catch (e) {
         console.error('[search][tasks.update] upsert failed', e);
-        throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+        vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
       }
     }
+    if (vectorError) throw vectorError;
     return res;
   },
   // Removed legacy setDone/unsetDone methods

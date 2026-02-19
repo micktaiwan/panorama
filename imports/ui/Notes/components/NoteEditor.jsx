@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
@@ -14,7 +14,7 @@ import './NoteEditor.css';
 
 const EMPTY_ARRAY = [];
 
-export const NoteEditor = ({
+export const NoteEditor = forwardRef(({
   activeTabId,
   noteContents,
   onContentChange,
@@ -28,9 +28,16 @@ export const NoteEditor = ({
   onDuplicate,
   shouldFocus = false,
   dirtySet = new Set(),
-}) => {
+  searchTerm,
+  onSearchInfo,
+}, ref) => {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const editorRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    searchNext() { editorRef.current?.searchNext(); },
+    searchPrev() { editorRef.current?.searchPrev(); },
+  }), []);
   const isLockedByOther = !!(activeNote?.lockedBy && activeNote.lockedBy !== Meteor.userId());
 
   const {
@@ -95,6 +102,8 @@ export const NoteEditor = ({
             onSave={() => onSave(activeTabId)}
             onClose={handleClose}
             onAskAI={handleAskAI}
+            onSearchInfo={onSearchInfo}
+            searchTerm={searchTerm}
             shouldFocus={shouldFocus}
             readOnly={isLockedByOther}
           />
@@ -231,7 +240,9 @@ export const NoteEditor = ({
       )}
     </div>
   );
-};
+});
+
+NoteEditor.displayName = 'NoteEditor';
 
 NoteEditor.propTypes = {
   activeTabId: PropTypes.string,
@@ -241,6 +252,8 @@ NoteEditor.propTypes = {
   onSaveAll: PropTypes.func.isRequired,
   onClose: PropTypes.func,
   isSaving: PropTypes.bool.isRequired,
+  searchTerm: PropTypes.string,
+  onSearchInfo: PropTypes.func,
   activeNote: PropTypes.shape({
     _id: PropTypes.string,
     title: PropTypes.string,
