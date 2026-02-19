@@ -313,7 +313,12 @@ export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessio
   if (points.length === 0) {
     throw new Meteor.Error('vectorization-failed', 'No chunks could be embedded');
   }
-  await client.upsert(COLLECTION(), { points });
+  // Upsert in batches to avoid oversized HTTP payloads (tunnel/proxy limits)
+  const BATCH_SIZE = 10;
+  const col = COLLECTION();
+  for (let i = 0; i < points.length; i += BATCH_SIZE) {
+    await client.upsert(col, { points: points.slice(i, i + BATCH_SIZE) });
+  }
 };
 
 // Delete all points for a logical document by payload.docId

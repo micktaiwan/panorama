@@ -19,16 +19,18 @@ Meteor.methods({
     if (doc.projectId) await ensureProjectAccess(doc.projectId, this.userId);
     const sanitized = sanitizeNoteDoc(doc);
     const _id = await NotesCollection.insertAsync({ ...sanitized, userId: this.userId, createdAt: new Date() });
+    let vectorError;
     try {
       const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       await upsertDocChunks({ kind: 'note', id: _id, text: `${sanitized.title || ''} ${sanitized.content || ''}`.trim(), projectId: sanitized.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
     } catch (e) {
       console.error('[search][notes.insert] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
     }
     if (doc.projectId) {
       await ProjectsCollection.updateAsync(doc.projectId, { $set: { updatedAt: new Date() } });
     }
+    if (vectorError) throw vectorError;
     return _id;
   },
   async 'notes.acquireLock'(noteId) {
@@ -101,6 +103,10 @@ Meteor.methods({
       }
     }
 
+    // Check if searchable content changed (for Qdrant re-indexing)
+    const contentChanged = ('title' in sanitized && sanitized.title !== note?.title)
+      || ('content' in sanitized && sanitized.content !== note?.content);
+
     // If updatedAt is explicitly provided (for reordering), use it as-is
     // Otherwise, only update updatedAt if content has changed
     const updateDoc = modifier.updatedAt
@@ -108,14 +114,17 @@ Meteor.methods({
       : (hasChanged ? { ...sanitized, updatedAt: new Date() } : sanitized);
     const res = await NotesCollection.updateAsync(noteId, { $set: updateDoc });
 
-    try {
-      const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
-      const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
-      await deleteByDocId('note', noteId);
-      await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
-    } catch (e) {
-      console.error('[search][notes.update] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+    let vectorError;
+    if (contentChanged) {
+      try {
+        const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
+        const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+        await deleteByDocId('note', noteId);
+        await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
+      } catch (e) {
+        console.error('[search][notes.update] upsert failed', e);
+        vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+      }
     }
 
     // Release lock after successful save (save = release)
@@ -127,6 +136,7 @@ Meteor.methods({
     if (hasChanged && note?.projectId) {
       await ProjectsCollection.updateAsync(note.projectId, { $set: { updatedAt: new Date() } });
     }
+    if (vectorError) throw vectorError;
     return res;
   },
   async 'notes.remove'(noteId) {
@@ -166,19 +176,21 @@ Meteor.methods({
     
     const sanitized = sanitizeNoteDoc(duplicatedDoc);
     const _id = await NotesCollection.insertAsync({ ...sanitized, userId: this.userId, createdAt: new Date() });
-    
+
+    let vectorError;
     try {
       const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
       await upsertDocChunks({ kind: 'note', id: _id, text: `${sanitized.title || ''} ${sanitized.content || ''}`.trim(), projectId: sanitized.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
     } catch (e) {
       console.error('[search][notes.duplicate] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
     }
-    
+
     if (duplicatedDoc.projectId) {
       await ProjectsCollection.updateAsync(duplicatedDoc.projectId, { $set: { updatedAt: new Date() } });
     }
-    
+
+    if (vectorError) throw vectorError;
     return _id;
   }
 });

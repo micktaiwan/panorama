@@ -7,6 +7,7 @@ import { createInputRules } from './inputRules.js';
 import { bubbleMenuPlugin } from './bubbleMenu.js';
 import { slashMenuPlugin } from './slashMenu.js';
 import { askAiPlugin } from './askAiPlugin.js';
+import { createSearchPlugin } from './searchPlugin.js';
 
 // Link click handler: Cmd/Ctrl+click opens links in a new tab.
 // Shows a tooltip on hover with the URL and shortcut hint.
@@ -131,7 +132,7 @@ function placeholderPlugin() {
  * @param {{ onSave: () => void, onClose: () => void }} opts
  * @returns {Plugin[]}
  */
-export function createPlugins({ onSave, onClose, onAskAI }) {
+export function createPlugins({ onSave, onClose, onAskAI, onSearchInfo }) {
   return [
     slashMenuPlugin(),              // First: intercepts Enter/Arrows/Escape when menu is active
     createAppKeymap({ onSave, onClose }),
@@ -146,5 +147,6 @@ export function createPlugins({ onSave, onClose, onAskAI }) {
     askAiPlugin(),
     bubbleMenuPlugin({ onAskAI }),
     linkClickPlugin(),
+    createSearchPlugin(onSearchInfo),
   ];
 }

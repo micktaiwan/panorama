@@ -411,7 +411,15 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
         }
       }
 
-      await Meteor.callAsync('notes.update', noteId, updateData);
+      try {
+        await Meteor.callAsync('notes.update', noteId, updateData);
+      } catch (error) {
+        if (error?.error === 'vectorization-failed') {
+          notify({ message: 'Saved, but search indexing failed.', kind: 'warning' });
+        } else {
+          throw error;
+        }
+      }
       // Server releases the lock on content save; clean up client state
       releaseLock(noteId);
       localStorage.removeItem(`note-content-${noteId}`);
@@ -499,7 +507,15 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
 
   const handleTabRename = async (tabId, newTitle) => {
     try {
-      await Meteor.callAsync('notes.update', tabId, { title: newTitle });
+      try {
+        await Meteor.callAsync('notes.update', tabId, { title: newTitle });
+      } catch (error) {
+        if (error?.error === 'vectorization-failed') {
+          notify({ message: 'Renamed, but search indexing failed.', kind: 'warning' });
+        } else {
+          throw error;
+        }
+      }
       setOpenTabs(prev => prev.map(tab =>
         tab.id === tabId ? { ...tab, title: newTitle } : tab
       ));
@@ -515,15 +531,30 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
       await Meteor.callAsync('notes.update', noteId, { projectId });
       notify({ message: 'Note moved to project', kind: 'success' });
     } catch (error) {
-      console.error('Error moving note:', error);
-      notify({ message: 'Error moving note', kind: 'error' });
+      if (error?.error === 'vectorization-failed') {
+        notify({ message: 'Note moved, but search indexing failed.', kind: 'warning' });
+      } else {
+        console.error('Error moving note:', error);
+        notify({ message: 'Error moving note', kind: 'error' });
+      }
     }
   };
 
   const handleDuplicateNote = async (noteId) => {
     try {
       const originalNote = notesById.get(noteId);
-      const newNoteId = await Meteor.callAsync('notes.duplicate', noteId);
+      let newNoteId;
+      let hadVectorWarning = false;
+      try {
+        newNoteId = await Meteor.callAsync('notes.duplicate', noteId);
+      } catch (error) {
+        if (error?.error === 'vectorization-failed' && error?.details?.insertedId) {
+          newNoteId = error.details.insertedId;
+          hadVectorWarning = true;
+        } else {
+          throw error;
+        }
+      }
 
       // Build optimistic note — subscription may not have pushed the doc yet
       const optimisticNote = {
@@ -535,7 +566,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
         updatedAt: new Date(),
       };
       openNote(optimisticNote);
-      notify({ message: 'Note duplicated successfully', kind: 'success' });
+      notify({ message: hadVectorWarning ? 'Note duplicated, but search indexing failed.' : 'Note duplicated successfully', kind: hadVectorWarning ? 'warning' : 'success' });
     } catch (error) {
       console.error('Error duplicating note:', error);
       notify({ message: 'Error duplicating note', kind: 'error' });

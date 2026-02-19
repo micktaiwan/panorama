@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import PropTypes from 'prop-types';
 import { useTracker } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
@@ -85,6 +85,10 @@ export const NotesPanel = forwardRef(({
     handleMoveProject, handleDuplicateNote, handleReorderNote,
     handleCreateNote,
   } = tabs;
+
+  // ---- Search match info (from ProseMirror search plugin) ----
+  const [searchMatchInfo, setSearchMatchInfo] = useState({ count: 0, currentIndex: -1 });
+  const noteEditorRef = useRef(null);
 
   // ---- Notify parent of dirty count changes ----
   const prevDirtyCountRef = useRef(dirtySet.size);
@@ -176,6 +180,11 @@ export const NotesPanel = forwardRef(({
           onSearchChange={setSearchTerm}
           showOnlyOpen={showOnlyOpen}
           onShowOnlyOpenChange={setShowOnlyOpen}
+          noteCount={searchTerm ? filteredNotes.length : 0}
+          matchCount={searchMatchInfo.count}
+          currentMatch={searchMatchInfo.currentIndex}
+          onPrevMatch={() => noteEditorRef.current?.searchPrev()}
+          onNextMatch={() => noteEditorRef.current?.searchNext()}
         />
         <button
           className="sidebar-new-note-btn"
@@ -227,6 +236,7 @@ export const NotesPanel = forwardRef(({
                 />
               ) : (
                 <NoteEditor
+                  ref={noteEditorRef}
                   activeTabId={activeTabId}
                   noteContents={noteContents}
                   onContentChange={updateNoteContent}
@@ -240,6 +250,8 @@ export const NotesPanel = forwardRef(({
                   onDuplicate={handleDuplicateNote}
                   shouldFocus={shouldFocusNote === activeTabId}
                   dirtySet={dirtySet}
+                  searchTerm={searchTerm}
+                  onSearchInfo={(count, currentIndex) => setSearchMatchInfo({ count, currentIndex })}
                 />
               )}
             </div>

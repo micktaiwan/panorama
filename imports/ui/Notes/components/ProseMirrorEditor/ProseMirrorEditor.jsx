@@ -4,13 +4,14 @@ import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { parseMarkdown, serializeMarkdown } from '../../prosemirror/markdownIO.js';
 import { createPlugins } from '../../prosemirror/plugins.js';
+import { searchPluginKey } from '../../prosemirror/searchPlugin.js';
 import { TaskItemView } from '../../prosemirror/taskItemView.js';
 import './ProseMirrorEditor.css';
 import '../BubbleMenu/BubbleMenu.css';
 import '../SlashMenu/SlashMenu.css';
 
 const DEBOUNCE_MS = 150;
-export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClose, onAskAI, shouldFocus, readOnly = false }, ref) => {
+export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClose, onAskAI, onSearchInfo, searchTerm, shouldFocus, readOnly = false }, ref) => {
   const mountRef = useRef(null);
   const viewRef = useRef(null);
   const debounceRef = useRef(null);
@@ -24,12 +25,14 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
   const onSaveRef = useRef(onSave);
   const onCloseRef = useRef(onClose);
   const onAskAIRef = useRef(onAskAI);
+  const onSearchInfoRef = useRef(onSearchInfo);
 
   // Keep refs in sync
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => { onAskAIRef.current = onAskAI; }, [onAskAI]);
+  useEffect(() => { onSearchInfoRef.current = onSearchInfo; }, [onSearchInfo]);
 
   // Expose the editor view to parent via ref
   useImperativeHandle(ref, () => ({
@@ -40,6 +43,16 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
       const doc = parseMarkdown(markdown || '');
       const state = EditorState.create({ doc, plugins: view.state.plugins });
       view.updateState(state);
+    },
+    searchNext() {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch(view.state.tr.setMeta(searchPluginKey, { navigate: 'next' }));
+    },
+    searchPrev() {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch(view.state.tr.setMeta(searchPluginKey, { navigate: 'prev' }));
     },
   }), []);
 
@@ -52,6 +65,7 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
       onSave: () => onSaveRef.current?.(),
       onClose: () => onCloseRef.current?.(),
       onAskAI: (data) => onAskAIRef.current?.(data),
+      onSearchInfo: (count, idx) => onSearchInfoRef.current?.(count, idx),
     });
 
     const state = EditorState.create({ doc, plugins });
@@ -111,6 +125,14 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
     viewRef.current?.setProps({ editable: () => !readOnly });
   }, [readOnly]);
 
+  // Dispatch search query to plugin when searchTerm changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const query = searchTerm && searchTerm.length >= 3 ? searchTerm : '';
+    view.dispatch(view.state.tr.setMeta(searchPluginKey, { query }));
+  }, [searchTerm]);
+
   return <div ref={mountRef} className={`prosemirror-editor${readOnly ? ' readonly' : ''}`} />;
 });
 
@@ -122,6 +144,8 @@ ProseMirrorEditor.propTypes = {
   onSave: PropTypes.func,
   onClose: PropTypes.func,
   onAskAI: PropTypes.func,
+  onSearchInfo: PropTypes.func,
+  searchTerm: PropTypes.string,
   shouldFocus: PropTypes.bool,
   readOnly: PropTypes.bool,
 };

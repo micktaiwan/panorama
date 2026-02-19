@@ -42,13 +42,15 @@ Meteor.methods({
     if (doc.status !== undefined) check(doc.status, String);
     const sanitized = sanitizeProjectDoc(doc);
     const _id = await ProjectsCollection.insertAsync({ ...sanitized, userId: this.userId, memberIds: [this.userId], createdAt: new Date(), updatedAt: new Date() });
+    let vectorError;
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'project', id: _id, text: `${sanitized.name || ''} ${sanitized.description || ''}`.trim(), projectId: _id, userId: this.userId });
     } catch (e) {
       console.error('[search][projects.insert] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your project was saved.', { insertedId: _id });
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your project was saved.', { insertedId: _id });
     }
+    if (vectorError) throw vectorError;
     return _id;
   },
   async 'projects.update'(projectId, modifier) {
@@ -64,14 +66,16 @@ Meteor.methods({
       sanitized.panoramaStatus = v || null;
     }
     const res = await ProjectsCollection.updateAsync(projectId, { $set: { ...sanitized, updatedAt: new Date() } });
+    let vectorError;
     try {
       const next = await ProjectsCollection.findOneAsync(projectId, { fields: { name: 1, description: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'project', id: projectId, text: `${next?.name || ''} ${next?.description || ''}`.trim(), projectId, userId: this.userId });
     } catch (e) {
       console.error('[search][projects.update] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
     }
+    if (vectorError) throw vectorError;
     return res;
   },
   async 'projects.remove'(projectId) {

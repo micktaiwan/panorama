@@ -221,6 +221,18 @@
 .prosemirror-editor span.text-color-purple { color: var(--text-color-purple); }
 .prosemirror-editor span.text-color-orange { color: var(--text-color-orange); }
 
+/* Search highlights */
+.prosemirror-editor .pm-search-match {
+  background: rgba(var(--warning-rgb), 0.3);
+  border-radius: 2px;
+}
+
+.prosemirror-editor .pm-search-match-current {
+  background: rgba(var(--info-rgb), 0.4);
+  border-radius: 2px;
+  outline: 2px solid var(--info);
+}
+
 @media (max-width: 768px) {
   .prosemirror-editor .ProseMirror { padding: 12px; }
 }

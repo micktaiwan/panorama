@@ -15,13 +15,15 @@ Meteor.methods({
     const projectId = session?.projectId || null;
     if (projectId) await ensureProjectAccess(projectId, this.userId);
     const _id = await NoteLinesCollection.insertAsync({ ...doc, projectId, userId: this.userId, createdAt: new Date() });
+    let vectorError;
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'line', id: _id, text: doc.content || '', sessionId: doc.sessionId || null, userId: this.userId });
     } catch (e) {
       console.error('[search][noteLines.insert] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your note was saved.', { insertedId: _id });
     }
+    if (vectorError) throw vectorError;
     return { _id };
   },
   async 'noteLines.update'(lineId, modifier) {
@@ -36,14 +38,16 @@ Meteor.methods({
       throw new Meteor.Error('not-found', 'Line not found');
     }
     const res = await NoteLinesCollection.updateAsync(lineId, { $set: { ...modifier } });
+    let vectorError;
     try {
       const next = await NoteLinesCollection.findOneAsync(lineId, { fields: { content: 1, sessionId: 1 } });
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       await upsertDoc({ kind: 'line', id: lineId, text: next?.content || '', sessionId: next?.sessionId || null, userId: this.userId });
     } catch (e) {
       console.error('[search][noteLines.update] upsert failed', e);
-      throw e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
     }
+    if (vectorError) throw vectorError;
     return { modifiedCount: res };
   },
   async 'noteLines.remove'(lineId) {
