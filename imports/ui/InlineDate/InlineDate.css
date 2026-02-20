@@ -18,10 +18,25 @@
   border-radius: 4px; 
 }
 
+/* Inside hero: blend with project-color background */
+.pd-hero .deadlineInput {
+  background: transparent;
+  border-color: currentColor;
+  opacity: 0.8;
+}
+.pd-hero .deadlineInput:focus {
+  opacity: 1;
+}
+
 /* Make the native calendar picker icon visible in dark mode */
 .deadlineInput::-webkit-calendar-picker-indicator {
   filter: invert(1);
   opacity: 0.9;
+}
+/* Inside hero: adapt picker icon to project text color */
+.pd-hero .deadlineInput::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.7;
 }
 
 @media (max-width: 768px) {
