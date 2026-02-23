@@ -114,29 +114,29 @@ Meteor.methods({
       : (hasChanged ? { ...sanitized, updatedAt: new Date() } : sanitized);
     const res = await NotesCollection.updateAsync(noteId, { $set: updateDoc });
 
-    let vectorError;
+    // Fire-and-forget: Qdrant indexing, lock release, project timestamp
+    const userId = this.userId;
     if (contentChanged) {
-      try {
-        const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
-        const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
-        await deleteByDocId('note', noteId);
-        await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId: this.userId, minChars: 800, maxChars: 1200, overlap: 150 });
-      } catch (e) {
-        console.error('[search][notes.update] upsert failed', e);
-        vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your change was saved.');
-      }
+      (async () => {
+        try {
+          const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
+          const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+          await deleteByDocId('note', noteId);
+          await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId, minChars: 800, maxChars: 1200, overlap: 150 });
+        } catch (e) {
+          console.error('[search][notes.update] upsert failed', e);
+        }
+      })();
     }
 
-    // Release lock after successful save (save = release)
-    if (note.lockedBy === this.userId && 'content' in modifier) {
-      await NotesCollection.updateAsync(noteId, { $unset: { lockedBy: '', lockedAt: '' } });
+    if (note.lockedBy === userId && 'content' in modifier) {
+      NotesCollection.updateAsync(noteId, { $unset: { lockedBy: '', lockedAt: '' } }).catch(e => console.error('[notes.update] lock release failed', e));
     }
 
-    // Only update project timestamp if note content changed
     if (hasChanged && note?.projectId) {
-      await ProjectsCollection.updateAsync(note.projectId, { $set: { updatedAt: new Date() } });
+      ProjectsCollection.updateAsync(note.projectId, { $set: { updatedAt: new Date() } }).catch(e => console.error('[notes.update] project timestamp failed', e));
     }
-    if (vectorError) throw vectorError;
+
     return res;
   },
   async 'notes.remove'(noteId) {
