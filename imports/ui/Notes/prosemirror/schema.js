@@ -54,6 +54,23 @@ export const schema = new Schema({
         return ['li', 0];
       },
     },
+    toggle_block: {
+      group: 'block',
+      content: 'block+',
+      attrs: { summary: { default: 'Toggle' }, expanded: { default: true } },
+      parseDOM: [{
+        tag: 'div.toggle-block',
+        getAttrs: (dom) => ({
+          summary: dom.querySelector('.toggle-block-summary')?.textContent || 'Toggle',
+        }),
+      }],
+      toDOM(node) {
+        return ['div', { class: 'toggle-block' },
+          ['div', { class: 'toggle-block-header' }, node.attrs.summary],
+          ['div', { class: 'toggle-block-content' }, 0],
+        ];
+      },
+    },
   },
   marks: { ...basicMarks, highlight: highlightMark, textColor: textColorMark },
 });

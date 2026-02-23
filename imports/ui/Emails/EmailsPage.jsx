@@ -10,6 +10,7 @@ import { AnalysisModal } from './AnalysisModal.jsx';
 import { EmailsToolbar } from './EmailsToolbar.jsx';
 import { ApiStats } from './ApiStats.jsx';
 import { navigateTo } from '../router.js';
+import { RefreshProgressModal } from './RefreshProgressModal.jsx';
 import './EmailsPage.css';
 
 
@@ -31,6 +32,7 @@ export const EmailsPage = () => {
   const [messages, setMessages] = useState([]);
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [refreshProgress, setRefreshProgress] = useState({ open: false, steps: [] });
 
   const subTokens = useSubscribe('gmail.tokens');
   const tokens = useFind(() => GmailTokensCollection.find({}))[0];
@@ -156,65 +158,73 @@ export const EmailsPage = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredMessages, currentMessageIndex]);
 
+  const updateStep = (index, update) => {
+    setRefreshProgress(prev => {
+      const steps = [...prev.steps];
+      steps[index] = { ...steps[index], ...update };
+      return { ...prev, steps };
+    });
+  };
+
   const loadMessages = async () => {
-    if (isRefreshing) return; // Prevent multiple simultaneous calls
-    
+    if (isRefreshing) return;
+
     setIsRefreshing(true);
-    
-    // Store current selection before refresh
+
     const currentMessageId = filteredMessages[currentMessageIndex]?.message?.id;
-    
+
+    const initialSteps = [
+      { label: 'Fetch new emails', status: 'pending' },
+      { label: 'Sync labels', status: 'pending' },
+      { label: 'Load stats', status: 'pending' },
+    ];
+    setRefreshProgress({ open: true, steps: initialSteps });
+
+    // Step 1: Fetch new emails (skip label sync — we do it separately)
+    let fetchResult = null;
+    updateStep(0, { status: 'running' });
     try {
-      const result = await Meteor.callAsync('gmail.listMessages', '', 20);
-      
-      // Refresh stats after API call
-      loadApiStats();
-      
-      // Show notification with detailed results
-      const newMessagesCount = result?.newMessagesCount || 0;
-      const successCount = result?.successCount || 0;
-      const errorCount = result?.errorCount || 0;
-      
-      if (newMessagesCount > 0) {
-        if (errorCount > 0) {
-          notify({ 
-            message: `Refresh completed: ${successCount} emails loaded successfully, ${errorCount} failed to load`, 
-            kind: 'warning',
-            duration: 6000
-          });
-          
-          // Log error details for debugging
-          if (result?.errorDetails?.length > 0) {
-            console.warn('Email loading errors:', result.errorDetails);
-          }
-        } else {
-          notify({ 
-            message: `Refresh completed: ${newMessagesCount} new email${newMessagesCount > 1 ? 's' : ''} fetched successfully`, 
-            kind: 'success' 
-          });
-        }
-      } else {
-        notify({ 
-          message: 'Refresh completed: No new emails found', 
-          kind: 'info' 
-        });
-      }
-      
-      // Restore selection after refresh if possible
-      if (currentMessageId) {
-        setTimeout(() => {
-          const newIndex = filteredMessages.findIndex(thread => thread.message.id === currentMessageId);
-          if (newIndex !== -1) {
-            setCurrentMessageIndex(newIndex);
-          }
-        }, 100); // Small delay to ensure state is updated
-      }
+      fetchResult = await Meteor.callAsync('gmail.listMessages', '', 20, { skipLabelSync: true });
+      const n = fetchResult?.newMessagesCount || 0;
+      updateStep(0, { status: 'done', detail: n > 0 ? `${n} new` : 'No new emails' });
     } catch (error) {
-      console.error('Failed to load messages:', error);
-      notify({ message: `Failed to load messages: ${error?.message || 'Unknown error'}`, kind: 'error' });
-    } finally {
-      setIsRefreshing(false);
+      console.error('Failed to fetch emails:', error);
+      updateStep(0, { status: 'error', detail: error?.message || 'Error' });
     }
+
+    // Step 2: Sync labels
+    updateStep(1, { status: 'running' });
+    try {
+      const syncResult = await Meteor.callAsync('gmail.syncLabels', 50);
+      const processed = syncResult?.processedCount || 0;
+      updateStep(1, { status: 'done', detail: `${processed} processed` });
+    } catch (error) {
+      console.error('Failed to sync labels:', error);
+      updateStep(1, { status: 'error', detail: error?.message || 'Error' });
+    }
+
+    // Step 3: Load stats
+    updateStep(2, { status: 'running' });
+    try {
+      await loadApiStats();
+      updateStep(2, { status: 'done' });
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+      updateStep(2, { status: 'error', detail: error?.message || 'Error' });
+    }
+
+    // Reload threads to reflect new data
+    await loadEmailsPageThreads();
+
+    // Restore selection
+    if (currentMessageId) {
+      setTimeout(() => {
+        const newIndex = filteredMessages.findIndex(thread => thread.message.id === currentMessageId);
+        if (newIndex !== -1) setCurrentMessageIndex(newIndex);
+      }, 100);
+    }
+
+    setIsRefreshing(false);
   };
 
 
@@ -804,6 +814,12 @@ export const EmailsPage = () => {
           formatDate={formatDate}
         />
       )}
+
+      <RefreshProgressModal
+        open={refreshProgress.open}
+        onClose={() => setRefreshProgress({ open: false, steps: [] })}
+        steps={refreshProgress.steps}
+      />
     </div>
   );
 };

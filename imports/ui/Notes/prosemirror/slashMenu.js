@@ -38,6 +38,16 @@ const COMMANDS = [
     },
   },
   {
+    label: 'Toggle', keyword: 'toggle collapsible', action: (view) => {
+      const { state, dispatch } = view;
+      const paragraph = schema.nodes.paragraph.create();
+      const toggle = schema.nodes.toggle_block.create({ summary: 'Toggle' }, paragraph);
+      const tr = state.tr.replaceSelectionWith(toggle).scrollIntoView();
+      dispatch(tr);
+      return true;
+    },
+  },
+  {
     label: 'Horizontal Rule', keyword: 'hr', action: (view) => {
       const { state, dispatch } = view;
       dispatch(state.tr.replaceSelectionWith(schema.nodes.horizontal_rule.create()).scrollIntoView());
