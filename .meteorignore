@@ -1,0 +1,5 @@
+docs/
+electron/
+.deploy/
+**/__tests__/
+**/*.test.js

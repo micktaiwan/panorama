@@ -203,6 +203,63 @@
   color: var(--muted);
 }
 
+/* Toggle blocks */
+.prosemirror-editor .toggle-block {
+  margin: 8px 0;
+}
+
+.prosemirror-editor .toggle-block-header {
+  cursor: pointer;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  border-radius: 6px;
+  transition: background 150ms ease;
+}
+
+.prosemirror-editor .toggle-block-header:hover {
+  background: var(--surface);
+}
+
+.prosemirror-editor .toggle-block-arrow {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 200ms ease;
+  transform: rotate(90deg);
+}
+
+.prosemirror-editor .toggle-block-collapsed .toggle-block-arrow {
+  transform: rotate(0deg);
+}
+
+.prosemirror-editor .toggle-block-summary {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.prosemirror-editor .toggle-block-content {
+  padding: 4px 12px 8px 28px;
+}
+
+.prosemirror-editor .toggle-block-summary-input {
+  background: transparent;
+  border: none;
+  border-bottom: none;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+  padding: 0;
+}
+
 /* Highlight marks */
 .prosemirror-editor mark {
   border-radius: 2px;

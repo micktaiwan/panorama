@@ -1,4 +1,5 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
+import { Fragment, Slice } from 'prosemirror-model';
 import { toggleMark, setBlockType, lift } from 'prosemirror-commands';
 import { wrapInList, liftListItem } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
@@ -182,6 +183,26 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
           updateTooltip(editorView);
         };
         tooltip.appendChild(todoBtn);
+
+        // Toggle block button — wraps selection in a toggle
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'bubble-menu-btn';
+        toggleBtn.textContent = '▶';
+        toggleBtn.title = 'Wrap in toggle';
+        toggleBtn.onmousedown = (e) => {
+          e.preventDefault();
+          const { state: st } = editorView;
+          const { $from, $to } = st.selection;
+          // Grab the full range of blocks covered by the selection
+          const start = $from.start($from.depth);
+          const end = $to.end($to.depth);
+          const content = st.doc.slice(start, end).content;
+          const toggle = schema.nodes.toggle_block.create({ summary: 'Toggle', expanded: true }, content);
+          editorView.dispatch(st.tr.replaceRange(start, end, new Slice(Fragment.from(toggle), 0, 0)));
+          editorView.focus();
+          updateTooltip(editorView);
+        };
+        tooltip.appendChild(toggleBtn);
 
         // Separator before highlight/clear
         const sep3 = document.createElement('div');

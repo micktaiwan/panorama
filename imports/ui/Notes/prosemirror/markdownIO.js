@@ -151,6 +151,68 @@ function taskListPlugin(md) {
   });
 }
 
+// --- Toggle block support: detect ??? Summary ... ??? ---
+
+function toggleBlockPlugin(md) {
+  md.block.ruler.before('fence', 'toggle_block', (state, startLine, endLine, silent) => {
+    const startPos = state.bMarks[startLine] + state.tShift[startLine];
+    const startMax = state.eMarks[startLine];
+    const line = state.src.slice(startPos, startMax);
+
+    // Must start with ??? — optionally ???+ for expanded
+    if (!line.startsWith('???')) return false;
+    let expanded = false;
+    let rest;
+    if (line.startsWith('???+')) {
+      expanded = true;
+      rest = line.slice(4).trim();
+    } else {
+      rest = line.slice(3).trim();
+    }
+    // Must have a summary after the marker
+    if (!rest) return false;
+    const summary = rest;
+
+    if (silent) return true;
+
+    // Find closing ???
+    let nextLine = startLine + 1;
+    let found = false;
+    while (nextLine < endLine) {
+      const pos = state.bMarks[nextLine] + state.tShift[nextLine];
+      const max = state.eMarks[nextLine];
+      const text = state.src.slice(pos, max).trim();
+      if (text === '???') {
+        found = true;
+        break;
+      }
+      nextLine++;
+    }
+
+    if (!found) return false;
+
+    const tokenOpen = state.push('toggle_block_open', 'details', 1);
+    tokenOpen.attrSet('data-summary', summary);
+    tokenOpen.attrSet('data-expanded', expanded ? 'true' : 'false');
+    tokenOpen.map = [startLine, nextLine + 1];
+
+    // Parse inner content as markdown blocks
+    const oldParent = state.parentType;
+    const oldLineMax = state.lineMax;
+    state.parentType = 'root';
+    state.lineMax = nextLine;
+    // Parse lines between opening and closing ???
+    state.md.block.tokenize(state, startLine + 1, nextLine);
+    state.parentType = oldParent;
+    state.lineMax = oldLineMax;
+
+    state.push('toggle_block_close', 'details', -1);
+
+    state.line = nextLine + 1;
+    return true;
+  });
+}
+
 // --- Parser: markdown string → ProseMirror Doc ---
 
 function listIsTight(tokens, i) {
@@ -163,6 +225,7 @@ const md = MarkdownIt('commonmark', { html: false });
 md.use(highlightPlugin);
 md.use(textColorPlugin);
 md.use(taskListPlugin);
+md.use(toggleBlockPlugin);
 
 const markdownParser = new MarkdownParser(schema, md, {
   blockquote: { block: 'blockquote' },
@@ -214,6 +277,13 @@ const markdownParser = new MarkdownParser(schema, md, {
     mark: 'textColor',
     getAttrs: (tok) => ({ color: tok.attrGet('data-color') }),
   },
+  toggle_block: {
+    block: 'toggle_block',
+    getAttrs: (tok) => ({
+      summary: tok.attrGet('data-summary') || 'Toggle',
+      expanded: tok.attrGet('data-expanded') === 'true',
+    }),
+  },
 });
 
 // --- Serializer: ProseMirror Doc → markdown string ---
@@ -256,6 +326,14 @@ const markdownSerializer = new MarkdownSerializer(
         state.write(node.attrs.checked ? '[x] ' : '[ ] ');
       }
       state.renderContent(node);
+    },
+    toggle_block(state, node) {
+      const marker = node.attrs.expanded ? '???+' : '???';
+      state.write(`${marker} ${node.attrs.summary}\n`);
+      state.renderContent(node);
+      state.ensureNewLine();
+      state.write('???');
+      state.closeBlock(node);
     },
   },
   {

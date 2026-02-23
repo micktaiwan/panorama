@@ -148,7 +148,7 @@ Meteor.methods({
     return tokenDoc;
   },
 
-  async 'gmail.listMessages'(query = '', maxResults = 20) {
+  async 'gmail.listMessages'(query = '', maxResults = 20, { skipLabelSync = false } = {}) {
     ensureLoggedIn(this.userId);
     logApiCall('GET', '/messages/list', `Query: "${query}", MaxResults: ${maxResults}`);
 
@@ -333,7 +333,7 @@ Meteor.methods({
     let syncErrorCount = 0;
     const syncErrorDetails = [];
 
-    if (existingIds.size > 0) {
+    if (existingIds.size > 0 && !skipLabelSync) {
       console.log(`[GMAIL API] Syncing labels for all ${existingIds.size} existing messages`);
 
       const existingMessagesToSync = await GmailMessagesCollection.find(
@@ -374,15 +374,20 @@ Meteor.methods({
 
           syncSuccessCount++;
         } catch (error) {
-          syncErrorCount++;
-          const errorMessage = error?.message || 'Unknown error';
+          if (error?.code === 404 || error?.status === 404) {
+            await GmailMessagesCollection.removeAsync({ id: existingMsg.id, userId: this.userId });
+            console.log(`[GMAIL API] Message ${existingMsg.id} no longer exists in Gmail, removed from cache`);
+          } else {
+            syncErrorCount++;
+            const errorMessage = error?.message || 'Unknown error';
 
-          console.error(`[GMAIL API ERROR] Failed to sync labels for message ${existingMsg.id}:`, error);
+            console.error(`[GMAIL API ERROR] Failed to sync labels for message ${existingMsg.id}:`, error);
 
-          syncErrorDetails.push({
-            messageId: existingMsg.id,
-            error: errorMessage
-          });
+            syncErrorDetails.push({
+              messageId: existingMsg.id,
+              error: errorMessage
+            });
+          }
         }
       }
 
@@ -785,9 +790,6 @@ Meteor.methods({
     ensureLoggedIn(this.userId);
     logApiCall('POST', '/analyze-thread', 'Analyze email thread with AI based on preferences');
     
-    // Import the LLM proxy function
-    const { chatComplete } = await import('/imports/api/_shared/llmProxy.js');
-    
     // Prepare the thread content for analysis
     const threadText = threadData.threadContent.map((message) => `
 --- Message ${message.messageIndex} ---
@@ -826,10 +828,10 @@ ${fullThreadText}`;
     
     try {
       // Use AI preferences to determine provider (local/remote/auto)
-      const result = await chatComplete({ 
-        system, 
-        messages: [{ role: 'user', content: userContent }]
-        // No route override - let preferences determine the provider
+      const result = await chatComplete({
+        system,
+        messages: [{ role: 'user', content: userContent }],
+        userId: this.userId,
       });
       
       return {
@@ -862,6 +864,7 @@ ${fullThreadText}`;
       
       let successCount = 0;
       let errorCount = 0;
+      let removedCount = 0;
       const errorDetails = [];
       
       for (const message of existingMessages) {
@@ -895,31 +898,39 @@ ${fullThreadText}`;
           
           successCount++;
         } catch (error) {
-          errorCount++;
-          const errorMessage = error?.message || 'Unknown error';
-          const errorType = error?.error || 'unknown';
-          
-          console.error(`[GMAIL SYNC ERROR] Failed to sync labels for message ${message.id}:`, error);
-          
-          errorDetails.push({
-            messageId: message.id,
-            error: errorMessage,
-            type: errorType
-          });
+          // If the message no longer exists in Gmail (404), remove it from local cache
+          if (error?.code === 404 || error?.status === 404) {
+            await GmailMessagesCollection.removeAsync({ id: message.id, userId: this.userId });
+            console.log(`[GMAIL SYNC] Message ${message.id} no longer exists in Gmail, removed from cache`);
+            removedCount++;
+          } else {
+            errorCount++;
+            const errorMessage = error?.message || 'Unknown error';
+            const errorType = error?.error || 'unknown';
+
+            console.error(`[GMAIL SYNC ERROR] Failed to sync labels for message ${message.id}:`, error);
+
+            errorDetails.push({
+              messageId: message.id,
+              error: errorMessage,
+              type: errorType
+            });
+          }
         }
       }
       
-      console.log(`[GMAIL SYNC] Label sync completed: ${successCount} successful, ${errorCount} errors`);
+      console.log(`[GMAIL SYNC] Label sync completed: ${successCount} successful, ${removedCount} removed, ${errorCount} errors`);
       if (errorCount > 0) {
         console.log(`[GMAIL SYNC] Error details:`, errorDetails);
       }
-      
+
       return {
         success: true,
         processedCount: existingMessages.length,
-        successCount: successCount,
-        errorCount: errorCount,
-        errorDetails: errorDetails
+        successCount,
+        removedCount,
+        errorCount,
+        errorDetails
       };
     } catch (error) {
       console.error('[GMAIL SYNC ERROR] Failed to sync labels:', error);
