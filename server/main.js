@@ -169,6 +169,11 @@ import '/imports/api/emails/collections';
 import '/imports/api/emails/publications';
 import '/imports/api/emails/methods';
 
+// Refresh Progress (reactive email refresh feedback)
+import '/imports/api/refreshProgress/collections';
+import '/imports/api/refreshProgress/publications';
+import '/imports/api/refreshProgress/methods';
+
 // Notion Integration
 import '/imports/api/notionIntegrations/collections';
 import '/imports/api/notionIntegrations/publications';

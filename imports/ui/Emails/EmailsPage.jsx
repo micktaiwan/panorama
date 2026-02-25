@@ -173,44 +173,77 @@ export const EmailsPage = () => {
 
     const currentMessageId = filteredMessages[currentMessageIndex]?.message?.id;
 
+    // Clear server-side progress docs
+    try { await Meteor.callAsync('refreshProgress.clear'); } catch (_) { /* ignore */ }
+
     const initialSteps = [
-      { label: 'Fetch new emails', status: 'pending' },
-      { label: 'Sync labels', status: 'pending' },
-      { label: 'Load stats', status: 'pending' },
+      { label: 'Validate connection', status: 'pending', key: 'validateConnection' },
+      { label: 'List new emails', status: 'pending', key: 'listNewIds' },
+      { label: 'Download emails', status: 'pending', key: 'fetchMessages' },
+      { label: 'Sync labels', status: 'pending', key: 'syncLabels' },
+      { label: 'Load stats', status: 'pending', key: 'loadStats' },
     ];
     setRefreshProgress({ open: true, steps: initialSteps });
 
-    // Step 1: Fetch new emails (skip label sync — we do it separately)
-    let fetchResult = null;
+    // Step 1: Validate connection
     updateStep(0, { status: 'running' });
     try {
-      fetchResult = await Meteor.callAsync('gmail.listMessages', '', 20, { skipLabelSync: true });
-      const n = fetchResult?.newMessagesCount || 0;
-      updateStep(0, { status: 'done', detail: n > 0 ? `${n} new` : 'No new emails' });
+      const conn = await Meteor.callAsync('gmail.validateConnection');
+      updateStep(0, { status: 'done', detail: conn.email });
     } catch (error) {
-      console.error('Failed to fetch emails:', error);
-      updateStep(0, { status: 'error', detail: error?.message || 'Error' });
+      console.error('Failed to validate connection:', error);
+      updateStep(0, { status: 'error', detail: error?.reason || error?.message || 'Error' });
+      setIsRefreshing(false);
+      return;
     }
 
-    // Step 2: Sync labels
+    // Step 2: List new message IDs
     updateStep(1, { status: 'running' });
+    let newMessageIds = [];
     try {
-      const syncResult = await Meteor.callAsync('gmail.syncLabels', 50);
-      const processed = syncResult?.processedCount || 0;
-      updateStep(1, { status: 'done', detail: `${processed} processed` });
+      const result = await Meteor.callAsync('gmail.listNewMessageIds', '', 20);
+      newMessageIds = result.newMessageIds;
+      updateStep(1, { status: 'done', detail: `${newMessageIds.length} new / ${result.totalListed} listed` });
+    } catch (error) {
+      console.error('Failed to list messages:', error);
+      updateStep(1, { status: 'error', detail: error?.reason || error?.message || 'Error' });
+    }
+
+    // Step 3: Download new messages
+    updateStep(2, { status: 'running' });
+    if (newMessageIds.length > 0) {
+      try {
+        const result = await Meteor.callAsync('gmail.fetchAndStoreMessages', newMessageIds);
+        updateStep(2, {
+          status: result.errorCount > 0 ? 'error' : 'done',
+          detail: `${result.successCount} ok${result.errorCount ? `, ${result.errorCount} errors` : ''}`
+        });
+      } catch (error) {
+        console.error('Failed to fetch messages:', error);
+        updateStep(2, { status: 'error', detail: error?.reason || error?.message || 'Error' });
+      }
+    } else {
+      updateStep(2, { status: 'done', detail: 'Nothing to download' });
+    }
+
+    // Step 4: Sync labels
+    updateStep(3, { status: 'running' });
+    try {
+      const syncResult = await Meteor.callAsync('gmail.syncLabelsWithProgress', 50);
+      updateStep(3, { status: 'done', detail: `${syncResult.processedCount} processed` });
     } catch (error) {
       console.error('Failed to sync labels:', error);
-      updateStep(1, { status: 'error', detail: error?.message || 'Error' });
+      updateStep(3, { status: 'error', detail: error?.reason || error?.message || 'Error' });
     }
 
-    // Step 3: Load stats
-    updateStep(2, { status: 'running' });
+    // Step 5: Load stats
+    updateStep(4, { status: 'running' });
     try {
       await loadApiStats();
-      updateStep(2, { status: 'done' });
+      updateStep(4, { status: 'done' });
     } catch (error) {
       console.error('Failed to load stats:', error);
-      updateStep(2, { status: 'error', detail: error?.message || 'Error' });
+      updateStep(4, { status: 'error', detail: error?.reason || error?.message || 'Error' });
     }
 
     // Reload threads to reflect new data

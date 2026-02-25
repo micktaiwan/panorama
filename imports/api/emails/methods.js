@@ -953,6 +953,245 @@ ${fullThreadText}`;
       throw new Meteor.Error('sync-failed', `Failed to sync labels: ${errorMessage}`);
     }
   },
+
+  // ── Granular refresh methods (B+C pattern) ──────────────────────────
+
+  async 'gmail.validateConnection'() {
+    ensureLoggedIn(this.userId);
+    const { updateProgress } = await import('/imports/api/refreshProgress/methods');
+    await updateProgress(this.userId, 'validateConnection', {
+      status: 'running', label: 'Validating Gmail connection', detail: 'Checking token...'
+    });
+
+    await ensureValidTokens(this.userId);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    logApiCall('GET', '/profile', 'Validate connection');
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+
+    await updateProgress(this.userId, 'validateConnection', {
+      status: 'done', label: 'Validating Gmail connection',
+      detail: profile.data.emailAddress
+    });
+
+    return { email: profile.data.emailAddress, totalMessages: profile.data.messagesTotal };
+  },
+
+  async 'gmail.listNewMessageIds'(query = '', maxResults = 20) {
+    ensureLoggedIn(this.userId);
+    const { updateProgress } = await import('/imports/api/refreshProgress/methods');
+    await updateProgress(this.userId, 'listNewIds', {
+      status: 'running', label: 'Listing emails', detail: 'Querying Gmail...'
+    });
+
+    await ensureValidTokens(this.userId);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const searchQuery = query ? `in:inbox ${query}` : 'in:inbox';
+
+    let allMessages = [];
+    let pageToken = null;
+    const perPageLimit = 100;
+    let pageNum = 0;
+
+    do {
+      pageNum++;
+      await updateProgress(this.userId, 'listNewIds', {
+        status: 'running', label: 'Listing emails',
+        detail: `Page ${pageNum}...`, current: allMessages.length, total: maxResults
+      });
+
+      logApiCall('GET', '/messages/list', `Page ${pageNum}`);
+      const response = await gmail.users.messages.list({
+        userId: 'me', q: searchQuery, maxResults: perPageLimit, pageToken
+      });
+
+      const messages = response.data.messages || [];
+      allMessages = allMessages.concat(messages);
+      pageToken = response.data.nextPageToken;
+
+      if (allMessages.length >= maxResults) {
+        allMessages = allMessages.slice(0, maxResults);
+        break;
+      }
+    } while (pageToken);
+
+    // Find which are new
+    const existingIds = new Set();
+    const existing = await GmailMessagesCollection.find(
+      { userId: this.userId }, { fields: { id: 1 } }
+    ).fetchAsync();
+    existing.forEach(msg => existingIds.add(msg.id));
+
+    const newMessages = allMessages.filter(msg => !existingIds.has(msg.id));
+
+    await updateProgress(this.userId, 'listNewIds', {
+      status: 'done', label: 'Listing emails',
+      detail: `${newMessages.length} new / ${allMessages.length} listed`,
+      current: allMessages.length, total: allMessages.length
+    });
+
+    return {
+      newMessageIds: newMessages.map(m => ({ id: m.id, threadId: m.threadId })),
+      totalListed: allMessages.length,
+      existingCount: existingIds.size
+    };
+  },
+
+  async 'gmail.fetchAndStoreMessages'(messageRefs) {
+    ensureLoggedIn(this.userId);
+    const { updateProgress } = await import('/imports/api/refreshProgress/methods');
+
+    await ensureValidTokens(this.userId);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    let successCount = 0;
+    let errorCount = 0;
+    const errorDetails = [];
+    const total = messageRefs.length;
+
+    for (let i = 0; i < total; i++) {
+      const msgRef = messageRefs[i];
+
+      await updateProgress(this.userId, 'fetchMessages', {
+        status: 'running', label: 'Downloading emails',
+        detail: `${i + 1} / ${total}`, current: i + 1, total
+      });
+
+      try {
+        logApiCall('GET', `/messages/${msgRef.id}`, 'Get full message content');
+        const messageResponse = await gmail.users.messages.get({
+          userId: 'me', id: msgRef.id, format: 'full'
+        });
+
+        const payload = messageResponse.data.payload;
+        const headers = payload?.headers || [];
+        const dateHeader = headers.find(h => h.name?.toLowerCase() === 'date');
+        const fromHeader = headers.find(h => h.name?.toLowerCase() === 'from');
+        const subjectHeader = headers.find(h => h.name?.toLowerCase() === 'subject');
+        const toHeader = headers.find(h => h.name?.toLowerCase() === 'to');
+
+        const gmailDate = dateHeader?.value ? new Date(dateHeader.value) : new Date();
+        const from = fromHeader?.value || '';
+        const subject = subjectHeader?.value || '';
+        const to = toHeader?.value || '';
+        const snippet = messageResponse.data.snippet || '';
+        const labelIds = messageResponse.data.labelIds || [];
+        const body = extractMessageBody(payload);
+
+        // Update progress with sender/subject for visibility
+        const fromShort = from.replace(/<.*>/, '').trim().substring(0, 30);
+        await updateProgress(this.userId, 'fetchMessages', {
+          status: 'running', label: 'Downloading emails',
+          detail: `${i + 1} / ${total} — ${fromShort}`, current: i + 1, total
+        });
+
+        await GmailMessagesCollection.insertAsync({
+          id: msgRef.id, threadId: msgRef.threadId, userId: this.userId,
+          createdAt: new Date(), gmailDate, from, subject, to, snippet, body,
+          labelIds, headers, fullPayload: payload
+        });
+
+        // Vectorize
+        try {
+          const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+          await upsertDocChunks({
+            kind: 'email', id: msgRef.id,
+            text: `${from} ${to} ${subject} ${snippet} ${body}`,
+            userId: this.userId, threadId: msgRef.threadId || null
+          });
+        } catch (vectorError) {
+          console.error(`[GMAIL API ERROR] Failed to vectorize message ${msgRef.id}:`, vectorError);
+        }
+
+        successCount++;
+      } catch (error) {
+        errorCount++;
+        errorDetails.push({ messageId: msgRef.id, error: error?.message });
+
+        // Fallback insert
+        await GmailMessagesCollection.insertAsync({
+          id: msgRef.id, threadId: msgRef.threadId, userId: this.userId,
+          createdAt: new Date(), gmailDate: new Date(),
+          from: '', subject: '', to: '', snippet: '', body: '',
+          labelIds: [], headers: [], fullPayload: null,
+          loadError: error?.message, loadErrorType: error?.error || 'unknown'
+        });
+      }
+    }
+
+    await updateProgress(this.userId, 'fetchMessages', {
+      status: errorCount > 0 ? 'error' : 'done',
+      label: 'Downloading emails',
+      detail: `${successCount} ok${errorCount ? `, ${errorCount} errors` : ''}`,
+      current: total, total
+    });
+
+    return { successCount, errorCount, errorDetails };
+  },
+
+  async 'gmail.syncLabelsWithProgress'(maxMessages = 50) {
+    ensureLoggedIn(this.userId);
+    const { updateProgress } = await import('/imports/api/refreshProgress/methods');
+
+    await ensureValidTokens(this.userId);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    const existingMessages = await GmailMessagesCollection.find(
+      { userId: this.userId },
+      { fields: { id: 1, labelIds: 1 }, limit: maxMessages, sort: { gmailDate: -1 } }
+    ).fetchAsync();
+
+    const total = existingMessages.length;
+    let successCount = 0;
+    let errorCount = 0;
+    let removedCount = 0;
+    const errorDetails = [];
+
+    for (let i = 0; i < total; i++) {
+      const message = existingMessages[i];
+
+      await updateProgress(this.userId, 'syncLabels', {
+        status: 'running', label: 'Syncing labels',
+        detail: `${i + 1} / ${total}`, current: i + 1, total
+      });
+
+      try {
+        logApiCall('GET', `/messages/${message.id}`, 'Sync labels');
+        const messageResponse = await gmail.users.messages.get({
+          userId: 'me', id: message.id, format: 'minimal'
+        });
+
+        const currentLabelIds = messageResponse.data.labelIds || [];
+        const storedLabelIds = message.labelIds || [];
+        const sortedCurrent = [...currentLabelIds].sort((a, b) => a.localeCompare(b));
+        const sortedStored = [...storedLabelIds].sort((a, b) => a.localeCompare(b));
+
+        if (JSON.stringify(sortedCurrent) !== JSON.stringify(sortedStored)) {
+          await GmailMessagesCollection.updateAsync(
+            { id: message.id, userId: this.userId },
+            { $set: { labelIds: currentLabelIds, labelsSyncedAt: new Date() } }
+          );
+        }
+        successCount++;
+      } catch (error) {
+        if (error?.code === 404 || error?.status === 404) {
+          await GmailMessagesCollection.removeAsync({ id: message.id, userId: this.userId });
+          removedCount++;
+        } else {
+          errorCount++;
+          errorDetails.push({ messageId: message.id, error: error?.message });
+        }
+      }
+    }
+
+    await updateProgress(this.userId, 'syncLabels', {
+      status: errorCount > 0 ? 'error' : 'done',
+      label: 'Syncing labels',
+      detail: `${successCount} synced${removedCount ? `, ${removedCount} removed` : ''}${errorCount ? `, ${errorCount} errors` : ''}`,
+      current: total, total
+    });
+
+    return { processedCount: total, successCount, removedCount, errorCount, errorDetails };
+  },
 });
 
 // Helper function to extract message body from payload
