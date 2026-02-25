@@ -464,13 +464,8 @@ export const InboxZero = () => {
               Analyzing email...
             </div>
           ) : (
-            <div className="inboxZero-loadingState">
-              <div className="inboxZero-loadingSpinner"></div>
-              Analyze in progress...
-              <br />
-              <button className="inboxZero-refreshButton inboxZero-refreshButton--topMargin" onClick={refreshEmails}>
-                Refresh
-              </button>
+            <div className="inboxZero-loadingState inboxZero-loadingState--disabled">
+              AI analysis is disabled (cron not active)
             </div>
           )}
         </div>

@@ -36,6 +36,7 @@
   gap: 8px;
   font-size: 14px;
   color: var(--text-muted);
+  flex-wrap: wrap;
 }
 
 .refreshStep.running {
@@ -63,27 +64,33 @@
   animation: pulse 0.8s ease-in-out infinite;
 }
 
-.refreshStep.running::after {
-  content: '…';
-  animation: dots 1.2s steps(4, end) infinite;
-  width: 12px;
-  display: inline-block;
-}
 
 @keyframes pulse {
   0%, 100% { opacity: 0.3; transform: scale(0.8); }
   50% { opacity: 1; transform: scale(1.3); }
 }
 
-@keyframes dots {
-  0% { content: ''; }
-  25% { content: '.'; }
-  50% { content: '..'; }
-  75% { content: '...'; }
-}
 
 .refreshStepDetail {
   font-size: 12px;
   color: var(--text-muted);
   margin-left: auto;
+}
+
+.refreshStepSubProgress {
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+  margin-left: 24px;
+}
+
+.refreshStepSubProgressFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+  opacity: 0.6;
 }
