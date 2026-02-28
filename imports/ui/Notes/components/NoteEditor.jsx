@@ -8,6 +8,7 @@ import { CleanPromptModal } from './CleanPromptModal.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { ProseMirrorEditor } from './ProseMirrorEditor/ProseMirrorEditor.jsx';
 import { AskAiSidebar } from './AskAiSidebar/AskAiSidebar.jsx';
+import { NoteToc } from './NoteToc/NoteToc.jsx';
 import { NoteAIActions } from './NoteAIActions/NoteAIActions.jsx';
 import { useNoteAI } from '../hooks/useNoteAI.js';
 import './NoteEditor.css';
@@ -32,6 +33,7 @@ export const NoteEditor = forwardRef(({
   onSearchInfo,
 }, ref) => {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [docVersion, setDocVersion] = useState(0);
   const editorRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -39,6 +41,7 @@ export const NoteEditor = forwardRef(({
     searchPrev() { editorRef.current?.searchPrev(); },
   }), []);
   const isLockedByOther = !!(activeNote?.lockedBy && activeNote.lockedBy !== Meteor.userId());
+
 
   const {
     isCleaning, isSummarizing, undoAvailable, showCleanModal, askAiSessionId,
@@ -98,7 +101,10 @@ export const NoteEditor = forwardRef(({
             ref={editorRef}
             key={activeTabId}
             content={noteContents[activeTabId] || ''}
-            onChange={(md) => onContentChange(activeTabId, md)}
+            onChange={(md) => {
+              onContentChange(activeTabId, md);
+              setDocVersion(v => v + 1);
+            }}
             onSave={() => onSave(activeTabId)}
             onClose={handleClose}
             onAskAI={handleAskAI}
@@ -227,6 +233,8 @@ export const NoteEditor = forwardRef(({
           This note has unsaved changes. Are you sure you want to close it?
         </Modal>
       </div>
+
+      <NoteToc editorRef={editorRef} docVersion={docVersion} noteId={activeTabId} />
 
       {askAiSessionId && (
         <AskAiSidebar
