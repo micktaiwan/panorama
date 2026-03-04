@@ -8,6 +8,37 @@ import { bubbleMenuPlugin } from './bubbleMenu.js';
 import { slashMenuPlugin } from './slashMenu.js';
 import { askAiPlugin } from './askAiPlugin.js';
 import { createSearchPlugin } from './searchPlugin.js';
+import { schema } from './schema.js';
+import { looksLikeUrl } from './linkUtils.js';
+
+// Auto-link on paste: if pasted text is a URL, create a clickable link.
+// - With selection: wraps selected text with the link
+// - Without selection: inserts the URL as a clickable link
+function autolinkPastePlugin() {
+  return new Plugin({
+    props: {
+      handlePaste(view, event) {
+        const text = event.clipboardData?.getData('text/plain')?.trim();
+        if (!text || !looksLikeUrl(text)) return false;
+
+        const { state } = view;
+        const linkMark = schema.marks.link.create({ href: text });
+
+        let tr;
+        if (state.selection.empty) {
+          const linkNode = schema.text(text, [linkMark]);
+          tr = state.tr.replaceSelectionWith(linkNode, false);
+        } else {
+          const { from, to } = state.selection;
+          tr = state.tr.addMark(from, to, linkMark);
+        }
+
+        view.dispatch(tr);
+        return true;
+      },
+    },
+  });
+}
 
 // Link click handler: Cmd/Ctrl+click opens links in a new tab.
 // Shows a tooltip on hover with the URL and shortcut hint.
@@ -146,6 +177,7 @@ export function createPlugins({ onSave, onClose, onAskAI, onSearchInfo }) {
     placeholderPlugin(),
     askAiPlugin(),
     bubbleMenuPlugin({ onAskAI }),
+    autolinkPastePlugin(),
     linkClickPlugin(),
     createSearchPlugin(onSearchInfo),
   ];

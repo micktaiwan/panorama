@@ -4,6 +4,7 @@ import { toggleMark, setBlockType, lift } from 'prosemirror-commands';
 import { wrapInList, liftListItem } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
 import { promptUrl } from './promptUrl.js';
+import { looksLikeUrl } from './linkUtils.js';
 
 export const bubbleMenuKey = new PluginKey('bubbleMenu');
 
@@ -78,7 +79,7 @@ export function bubbleMenuPlugin({ onAskAI } = {}) {
             updateTooltip(editorView);
           } else {
             const selectedText = state.doc.textBetween(from, to).trim();
-            const defaultUrl = /^https?:\/\/\S+$/.test(selectedText) ? selectedText : '';
+            const defaultUrl = looksLikeUrl(selectedText) ? selectedText : '';
             promptUrl(defaultUrl).then((href) => {
               if (href) {
                 const mark = schema.marks.link.create({ href });

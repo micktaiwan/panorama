@@ -134,6 +134,47 @@
   border-radius: 6px;
 }
 
+/* Image resize */
+.prosemirror-editor .image-resize-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.prosemirror-editor .image-resize-wrapper img {
+  display: block;
+  height: auto;
+}
+
+.prosemirror-editor .resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: var(--info);
+  opacity: 0;
+  transition: opacity 0.15s;
+  border-radius: 3px;
+}
+
+.prosemirror-editor .image-resize-wrapper:hover .resize-handle {
+  opacity: 0.5;
+}
+
+.prosemirror-editor .resize-handle.left {
+  left: -3px;
+}
+
+.prosemirror-editor .resize-handle.right {
+  right: -3px;
+}
+
+.prosemirror-editor .resize-handle:hover,
+.prosemirror-editor .resize-handle.active {
+  opacity: 1;
+}
+
 /* Selection highlight */
 .prosemirror-editor .ProseMirror-selectednode {
   outline: 2px solid var(--info);

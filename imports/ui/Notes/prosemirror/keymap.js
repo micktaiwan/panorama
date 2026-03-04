@@ -6,6 +6,7 @@ import { Fragment } from 'prosemirror-model';
 import { undo, redo } from 'prosemirror-history';
 import { schema } from './schema.js';
 import { promptUrl } from './promptUrl.js';
+import { looksLikeUrl } from './linkUtils.js';
 
 /**
  * Create the app-level keymap (Cmd+S, Cmd+W).
@@ -43,7 +44,7 @@ export function createFormattingKeymap() {
       }
       if (view) {
         const selectedText = state.doc.textBetween(from, to).trim();
-        const defaultUrl = /^https?:\/\/\S+$/.test(selectedText) ? selectedText : '';
+        const defaultUrl = looksLikeUrl(selectedText) ? selectedText : '';
         promptUrl(defaultUrl).then((href) => {
           if (href) {
             const mark = link.create({ href });

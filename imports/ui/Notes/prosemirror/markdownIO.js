@@ -213,6 +213,33 @@ function toggleBlockPlugin(md) {
   });
 }
 
+// --- Image width support: detect {width=N} after images ---
+
+function imageWidthPlugin(md) {
+  // Core rule: after inline parsing, scan for image tokens followed by {width=N}
+  md.core.ruler.push('image_width', (state) => {
+    for (const blockToken of state.tokens) {
+      if (blockToken.type !== 'inline' || !blockToken.children) continue;
+      const children = blockToken.children;
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].type !== 'image') continue;
+        // Check if next token is text starting with {width=N}
+        const next = children[i + 1];
+        if (!next || next.type !== 'text') continue;
+        const match = /^\{width=(\d+)\}/.exec(next.content);
+        if (!match) continue;
+        // Inject width attr on the image token
+        children[i].attrSet('width', match[1]);
+        // Remove the {width=N} from the text token
+        next.content = next.content.slice(match[0].length);
+        if (!next.content) {
+          children.splice(i + 1, 1);
+        }
+      }
+    }
+  });
+}
+
 // --- Parser: markdown string → ProseMirror Doc ---
 
 function listIsTight(tokens, i) {
@@ -226,6 +253,7 @@ md.use(highlightPlugin);
 md.use(textColorPlugin);
 md.use(taskListPlugin);
 md.use(toggleBlockPlugin);
+md.use(imageWidthPlugin);
 
 const markdownParser = new MarkdownParser(schema, md, {
   blockquote: { block: 'blockquote' },
@@ -256,6 +284,7 @@ const markdownParser = new MarkdownParser(schema, md, {
       src: tok.attrGet('src'),
       title: tok.attrGet('title') || null,
       alt: (tok.children?.[0] && tok.children[0].content) || null,
+      width: tok.attrGet('width') ? Number(tok.attrGet('width')) : null,
     }),
   },
   hardbreak: { node: 'hard_break' },
@@ -326,6 +355,13 @@ const markdownSerializer = new MarkdownSerializer(
         state.write(node.attrs.checked ? '[x] ' : '[ ] ');
       }
       state.renderContent(node);
+    },
+    image(state, node) {
+      const { src, alt, title, width } = node.attrs;
+      const altText = state.esc(alt || '');
+      const titlePart = title ? ` ${state.quote(title)}` : '';
+      const widthPart = width ? `{width=${width}}` : '';
+      state.write(`![${altText}](${src}${titlePart})${widthPart}`);
     },
     toggle_block(state, node) {
       const marker = node.attrs.expanded ? '???+' : '???';
