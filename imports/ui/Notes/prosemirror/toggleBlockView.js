@@ -112,7 +112,10 @@ export class ToggleBlockView {
     return this.header.contains(event.target);
   }
 
-  ignoreMutation() {
+  ignoreMutation(mutation) {
+    // Allow ProseMirror to track mutations inside contentDOM (editable body)
+    // but ignore mutations in the header (managed manually)
+    if (this.contentDOM.contains(mutation.target)) return false;
     return true;
   }
 }

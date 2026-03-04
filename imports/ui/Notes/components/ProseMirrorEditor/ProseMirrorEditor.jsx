@@ -7,6 +7,7 @@ import { createPlugins } from '../../prosemirror/plugins.js';
 import { searchPluginKey } from '../../prosemirror/searchPlugin.js';
 import { TaskItemView } from '../../prosemirror/taskItemView.js';
 import { ToggleBlockView } from '../../prosemirror/toggleBlockView.js';
+import { ImageResizeView } from '../../prosemirror/imageResizeView.js';
 import './ProseMirrorEditor.css';
 import '../BubbleMenu/BubbleMenu.css';
 import '../SlashMenu/SlashMenu.css';
@@ -77,6 +78,7 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
       nodeViews: {
         list_item: (node, view, getPos) => new TaskItemView(node, view, getPos),
         toggle_block: (node, view, getPos) => new ToggleBlockView(node, view, getPos),
+        image: (node, view, getPos) => new ImageResizeView(node, view, getPos),
       },
       dispatchTransaction(tr) {
         const newState = view.state.apply(tr);

@@ -26,9 +26,38 @@ const textColorMark = {
   },
 };
 
+// Override image node to support width attribute for resizing
+const imageNode = {
+  ...basicNodes.image,
+  attrs: {
+    src: {},
+    alt: { default: null },
+    title: { default: null },
+    width: { default: null },
+  },
+  parseDOM: [{
+    tag: 'img[src]',
+    getAttrs(dom) {
+      return {
+        src: dom.getAttribute('src'),
+        alt: dom.getAttribute('alt'),
+        title: dom.getAttribute('title'),
+        width: dom.getAttribute('width') ? Number(dom.getAttribute('width')) : null,
+      };
+    },
+  }],
+  toDOM(node) {
+    const { src, alt, title, width } = node.attrs;
+    const attrs = { src, alt, title };
+    if (width) attrs.width = width;
+    return ['img', attrs];
+  },
+};
+
 export const schema = new Schema({
   nodes: {
     ...basicNodes,
+    image: imageNode,
     ordered_list: { ...orderedList, content: 'list_item+', group: 'block' },
     bullet_list: { ...bulletList, content: 'list_item+', group: 'block' },
     list_item: {

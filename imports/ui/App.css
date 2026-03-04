@@ -222,7 +222,9 @@ body.chatWide .app-layout {
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .app-header { display: none; }
+  .app-header { padding: 8px 12px 0; }
+  .app-header > h1 { display: none; }
+  .app-header .favoritesBar { display: none; }
   .app-footer { display: none; }
 
   .app-content {
