@@ -30,9 +30,12 @@ export class ImageResizeView {
     this.handleRight.className = 'resize-handle right';
     this.dom.appendChild(this.handleRight);
 
-    // Bind drag
-    this.handleLeft.addEventListener('mousedown', (e) => this._onMouseDown(e, 'left'));
-    this.handleRight.addEventListener('mousedown', (e) => this._onMouseDown(e, 'right'));
+    // Bind drag (store refs for cleanup)
+    this._onMouseDownLeft = (e) => this._onMouseDown(e, 'left');
+    this._onMouseDownRight = (e) => this._onMouseDown(e, 'right');
+    this.handleLeft.addEventListener('mousedown', this._onMouseDownLeft);
+    this.handleRight.addEventListener('mousedown', this._onMouseDownRight);
+    this._cleanupDrag = null;
   }
 
   _onMouseDown(e, side) {
@@ -55,6 +58,7 @@ export class ImageResizeView {
     };
 
     const onMouseUp = () => {
+      this._cleanupDrag = null;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
       handle.classList.remove('active');
@@ -69,6 +73,11 @@ export class ImageResizeView {
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
+    this._cleanupDrag = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      handle.classList.remove('active');
+    };
   }
 
   update(node) {
@@ -83,6 +92,12 @@ export class ImageResizeView {
 
   stopEvent(event) {
     return this.handleLeft.contains(event.target) || this.handleRight.contains(event.target);
+  }
+
+  destroy() {
+    this._cleanupDrag?.();
+    this.handleLeft.removeEventListener('mousedown', this._onMouseDownLeft);
+    this.handleRight.removeEventListener('mousedown', this._onMouseDownRight);
   }
 
   ignoreMutation() {
