@@ -3,12 +3,14 @@
 
 import { WebApp } from 'meteor/webapp';
 import { handleMCPRequest, getHealthStatus } from './mcp';
+import { extractAuthToken, resolveUserIdFromApiKey } from './auth';
+import { mcpRequestContext } from './requestContext';
 
 // CORS headers for cross-origin requests
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key'
 };
 
 /**
@@ -23,15 +25,24 @@ function setCorsHeaders(res) {
 /**
  * Parse JSON request body
  */
+const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
+
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let body = '';
+    const chunks = [];
+    let size = 0;
     req.on('data', chunk => {
-      body += chunk.toString();
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error('Request body too large'));
+        return;
+      }
+      chunks.push(chunk);
     });
     req.on('end', () => {
       try {
-        const parsed = JSON.parse(body);
+        const parsed = JSON.parse(Buffer.concat(chunks).toString());
         resolve(parsed);
       } catch (error) {
         reject(error);
@@ -39,6 +50,18 @@ function parseJsonBody(req) {
     });
     req.on('error', reject);
   });
+}
+
+/**
+ * Resolve userId from request via API key.
+ * Returns { userId } or { error, status }.
+ */
+function resolveUserId(req) {
+  const token = extractAuthToken(req);
+  if (!token) return { error: 'Unauthorized: missing API key', status: 401 };
+  const userId = resolveUserIdFromApiKey(token);
+  if (!userId) return { error: 'Unauthorized: invalid API key', status: 401 };
+  return { userId };
 }
 
 /**
@@ -90,12 +113,25 @@ WebApp.connectHandlers.use('/mcp', async (req, res, next) => {
     return;
   }
 
+  // Authenticate via API key
+  const auth = resolveUserId(req);
+  if (auth.error) {
+    res.writeHead(auth.status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      jsonrpc: '2.0', id: null,
+      error: { code: -32000, message: auth.error }
+    }));
+    return;
+  }
+
   try {
     // Parse JSON body
     const requestBody = await parseJsonBody(req);
 
-    // Handle JSON-RPC request
-    const response = await handleMCPRequest(requestBody);
+    // Handle JSON-RPC request within userId context
+    const response = await mcpRequestContext.run({ userId: auth.userId }, () =>
+      handleMCPRequest(requestBody)
+    );
 
     // Send response
     res.writeHead(200, { 'Content-Type': 'application/json' });

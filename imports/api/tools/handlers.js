@@ -3,14 +3,15 @@
 // Enhanced with structured responses (Clever Cloud MCP best practices)
 
 import { Meteor } from 'meteor/meteor';
-import { getQdrantUrl, getLocalUserId } from '/imports/api/_shared/config';
+import { getQdrantUrl } from '/imports/api/_shared/config';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { COLLECTION } from '/imports/api/search/vectorStore';
+import { getMCPRequestUserId } from '/imports/api/mcp/server/requestContext';
 
-// MCP userId helper: reads localUserId from appPreferences for server-to-server calls
+// MCP userId helper: reads userId from AsyncLocalStorage (set by API key auth in routes.js)
 const getMCPUserId = () => {
-  const id = getLocalUserId();
-  if (!id) throw new Meteor.Error('mcp-no-user', 'localUserId not configured in appPreferences. Set it in Preferences to use MCP tools.');
+  const id = getMCPRequestUserId();
+  if (!id) throw new Meteor.Error('mcp-no-user', 'MCP API key required. Generate one in Preferences > Secrets.');
   return id;
 };
 

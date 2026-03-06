@@ -107,6 +107,7 @@ import '/imports/api/chats/publications';
 import '/imports/api/chats/methods';
 
 // MCP Server (Model Context Protocol)
+import '/imports/api/mcp/server/auth';
 import '/imports/api/mcp/server/routes';
 
 // Budget & Financial
@@ -369,6 +370,7 @@ Meteor.startup(async () => {
   LinksCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   FilesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   UserPreferencesCollection.rawCollection().createIndex({ userId: 1 }, { unique: true }).catch(() => {});
+  UserPreferencesCollection.rawCollection().createIndex({ mcpApiKey: 1 }, { unique: true, sparse: true }).catch(() => {});
 
   // Previously local-only collections - now userId-partitioned
   const { AlarmsCollection } = await import('/imports/api/alarms/collections');

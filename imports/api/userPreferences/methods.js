@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { UserPreferencesCollection } from './collections';
@@ -138,6 +139,9 @@ Meteor.methods({
       if (Object.keys(ai).length > 0) set.ai = ai;
     }
 
+    // MCP API key revocation
+    if (modifier.mcpApiKey === null) set.mcpApiKey = null;
+
     // Visible pages (admin-only optional pages)
     if (Array.isArray(modifier.visiblePages)) {
       set.visiblePages = modifier.visiblePages.filter(p => typeof p === 'string');
@@ -150,5 +154,34 @@ Meteor.methods({
     }
     await UserPreferencesCollection.updateAsync(doc._id, { $set: set });
     return true;
+  },
+
+  /**
+   * Return the current MCP API key (or null).
+   * Not published via DDP — only available on explicit call.
+   */
+  async 'userPreferences.getMcpApiKey'() {
+    ensureLoggedIn(this.userId);
+    const doc = await UserPreferencesCollection.findOneAsync({ userId: this.userId }, { fields: { mcpApiKey: 1 } });
+    return doc?.mcpApiKey || null;
+  },
+
+  async 'userPreferences.generateMcpApiKey'() {
+    ensureLoggedIn(this.userId);
+    const key = 'pano_' + crypto.randomBytes(24).toString('hex');
+    const doc = await UserPreferencesCollection.findOneAsync({ userId: this.userId });
+    if (!doc) {
+      await UserPreferencesCollection.insertAsync({
+        userId: this.userId,
+        mcpApiKey: key,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } else {
+      await UserPreferencesCollection.updateAsync(doc._id, {
+        $set: { mcpApiKey: key, updatedAt: new Date() },
+      });
+    }
+    return key;
   }
 });
