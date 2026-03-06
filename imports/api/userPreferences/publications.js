@@ -3,5 +3,7 @@ import { UserPreferencesCollection } from './collections';
 
 Meteor.publish('userPreferences', function publishUserPreferences() {
   if (!this.userId) return this.ready();
-  return UserPreferencesCollection.find({ userId: this.userId });
+  return UserPreferencesCollection.find({ userId: this.userId }, {
+    fields: { mcpApiKey: 0 },
+  });
 });

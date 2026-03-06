@@ -1,11 +1,24 @@
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '../InlineEditable/InlineEditable.jsx';
+import { Modal } from '../components/Modal/Modal.jsx';
 import { navigateTo } from '../router.js';
 import { notify } from '../utils/notify.js';
 
 export const PrefsSecrets = ({ pref: _pref, userPref }) => {
   const [openaiApiKey, setOpenaiApiKey] = React.useState('');
+  const [mcpApiKey, setMcpApiKey] = React.useState(null);
+  const [mcpKeyVisible, setMcpKeyVisible] = React.useState(false);
+  const [mcpConfirmAction, setMcpConfirmAction] = React.useState(null);
+
+  const generateMcpKey = (successMsg) => {
+    Meteor.call('userPreferences.generateMcpApiKey', (err, key) => {
+      if (err) { notify({ message: err?.reason || 'Generation failed', kind: 'error' }); return; }
+      setMcpApiKey(key);
+      navigator.clipboard.writeText(key);
+      notify({ message: successMsg, kind: 'success' });
+    });
+  };
   const [anthropicApiKey, setAnthropicApiKey] = React.useState('');
   const [perplexityApiKey, setPerplexityApiKey] = React.useState('');
   const [pennyBaseUrl, setPennyBaseUrl] = React.useState('');
@@ -20,6 +33,14 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
   const [slackBotToken, setSlackBotToken] = React.useState('');
   const [slackAppToken, setSlackAppToken] = React.useState('');
   const [slackAllowedUserId, setSlackAllowedUserId] = React.useState('');
+
+  // Load MCP API key via method (not published for security)
+  React.useEffect(() => {
+    if (!userPref?._id) return;
+    Meteor.call('userPreferences.getMcpApiKey', (err, key) => {
+      if (!err) setMcpApiKey(key);
+    });
+  }, [userPref?._id]);
 
   React.useEffect(() => {
     if (!userPref) return;
@@ -293,6 +314,87 @@ export const PrefsSecrets = ({ pref: _pref, userPref }) => {
           </div>
         </div>
       </div>
+
+      <h2>MCP API Key</h2>
+      <div className="prefsSection">
+        <div className="prefsRow">
+          <div className="prefsLabel">API Key</div>
+          <div className="prefsValue">
+            {mcpApiKey ? (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <code style={{ fontSize: '13px', wordBreak: 'break-all' }}>
+                    {mcpKeyVisible ? mcpApiKey : `${mcpApiKey.slice(0, 8)}${'*'.repeat(12)}${mcpApiKey.slice(-4)}`}
+                  </code>
+                  <button className="btn btn-small" onClick={() => setMcpKeyVisible(v => !v)}>
+                    {mcpKeyVisible ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-small" onClick={() => {
+                    navigator.clipboard.writeText(mcpApiKey);
+                    notify({ message: 'API key copied to clipboard', kind: 'success' });
+                  }}>Copy</button>
+                  <button className="btn btn-small" onClick={() => setMcpConfirmAction('regenerate')}>Regenerate</button>
+                  <button className="btn btn-small btn-danger" onClick={() => setMcpConfirmAction('revoke')}>Revoke</button>
+                </div>
+              </div>
+            ) : (
+              <button className="btn" onClick={() => generateMcpKey('API key generated and copied to clipboard')}>Generate API Key</button>
+            )}
+            <div className="muted mt4" style={{ fontSize: '12px' }}>
+              Authenticates external MCP clients (Claude Code, etc.) to the Panorama MCP endpoint.
+            </div>
+            {mcpApiKey && (
+              <details style={{ marginTop: '8px' }}>
+                <summary className="muted" style={{ fontSize: '12px', cursor: 'pointer' }}>Claude Code config snippet</summary>
+                <pre style={{ fontSize: '11px', marginTop: '4px', padding: '8px', background: 'var(--surface)', borderRadius: '4px', overflow: 'auto' }}>{`// ~/.claude/settings.json
+{
+  "mcpServers": {
+    "panorama": {
+      "type": "url",
+      "url": "https://panorama.mickaelfm.me/mcp",
+      "headers": {
+        "Authorization": "Bearer ${mcpKeyVisible ? mcpApiKey : '<your-api-key>'}"
+      }
+    }
+  }
+}`}</pre>
+              </details>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Modal
+        open={!!mcpConfirmAction}
+        onClose={() => setMcpConfirmAction(null)}
+        title={mcpConfirmAction === 'regenerate' ? 'Regenerate MCP API Key?' : 'Revoke MCP API Key?'}
+        actions={[
+          { label: 'Cancel', onClick: () => setMcpConfirmAction(null) },
+          {
+            label: mcpConfirmAction === 'regenerate' ? 'Regenerate' : 'Revoke',
+            className: mcpConfirmAction === 'revoke' ? 'btn-danger' : '',
+            onClick: () => {
+              if (mcpConfirmAction === 'regenerate') {
+                generateMcpKey('New API key generated and copied');
+              } else {
+                Meteor.call('userPreferences.update', { mcpApiKey: null }, (err) => {
+                  if (err) { notify({ message: err?.reason || 'Revocation failed', kind: 'error' }); return; }
+                  setMcpApiKey(null);
+                  setMcpKeyVisible(false);
+                  notify({ message: 'API key revoked', kind: 'success' });
+                });
+              }
+              setMcpConfirmAction(null);
+            }
+          }
+        ]}
+      >
+        {mcpConfirmAction === 'regenerate'
+          ? 'The current key will stop working immediately. Any MCP client using it will need the new key.'
+          : 'This will immediately invalidate the key. MCP clients will no longer be able to authenticate.'}
+      </Modal>
     </>
   );
 };

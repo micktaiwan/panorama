@@ -5,6 +5,7 @@ import { Meteor } from 'meteor/meteor';
 import { ChatsCollection } from '/imports/api/chats/collections';
 import { runChatAgent, isClaudeAgentAvailable } from './claudeAgent';
 import { ensureLoggedIn } from '/imports/api/_shared/auth';
+import { mcpRequestContext } from '/imports/api/mcp/server/requestContext';
 
 Meteor.methods({
   async 'chat.ask'(payload) {
@@ -46,7 +47,7 @@ Meteor.methods({
 
     try {
       // Run the Claude agent with callbacks for real-time feedback
-      const { text, citations, actions } = await runChatAgent(query, history, {
+      const { text, citations, actions } = await mcpRequestContext.run({ userId }, () => runChatAgent(query, history, {
         // Called when tool execution starts
         onToolStart: async (tools) => {
           const toolList = tools.map(t => `${t.displayName}${t.args}`).join(', ');
@@ -99,7 +100,7 @@ Meteor.methods({
           // Could be used to stream partial responses
           // For now, we wait for complete response
         }
-      });
+      }));
 
       // Remove the last "analyzing" status message
       if (currentStatusId) {
