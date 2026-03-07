@@ -27,6 +27,11 @@ function isTransientMongoError(err) {
   if (!err) return false;
   const name = err.constructor?.name || err.name || '';
   if (TRANSIENT_MONGO_ERRORS.has(name)) return true;
+  // EPIPE/ECONNRESET from the MongoDB TLS socket (broken pipe after sleep/wake)
+  if (err.code === 'EPIPE' || err.code === 'ECONNRESET') {
+    const stack = err.stack || '';
+    if (stack.includes('mongodb') || stack.includes('Connection.')) return true;
+  }
   // Also check the cause chain (PoolClearedOnNetworkError wraps MongoNetworkTimeoutError)
   if (err.cause && isTransientMongoError(err.cause)) return true;
   return false;
