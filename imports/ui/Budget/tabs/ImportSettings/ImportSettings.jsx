@@ -1,8 +1,10 @@
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
-import { notify } from '/imports/ui/utils/notify.js';
+
 
 export const ImportSettings = () => {
+  const [testing, setTesting] = React.useState(false);
+  const [testResult, setTestResult] = React.useState(null); // { ok, message }
   const [arrInput, setArrInput] = React.useState(() => {
     try {
       return localStorage.getItem('budget.arr') || '';
@@ -29,21 +31,28 @@ export const ImportSettings = () => {
       <div className="mt12">
         <button
           className="btn"
+          disabled={testing}
           onClick={() => {
+            setTesting(true);
+            setTestResult(null);
             Meteor.call('budget.testPennylaneApi', (err, res) => {
+              setTesting(false);
               if (err) {
-                 
                 console.error('budget.testPennylaneApi failed', err);
-                notify({ message: `Pennylane API failed: ${err?.reason || err?.message || 'error'}`, kind: 'error' });
+                setTestResult({ ok: false, message: err?.reason || err?.message || 'Unknown error' });
                 return;
               }
-              
-              notify({ message: `Pennylane OK (HTTP ${res?.status ?? '200'})`, kind: 'success' });
+              setTestResult({ ok: true, message: `OK — HTTP ${res?.status ?? '200'}, endpoint: ${res?.url || '?'}` });
             });
           }}
         >
-          Test Pennylane API
+          {testing ? 'Testing…' : 'Test Pennylane API'}
         </button>
+        {testResult && (
+          <span className="ml8" style={{ color: testResult.ok ? 'var(--green)' : 'var(--red)' }}>
+            {testResult.ok ? '✓' : '✗'} {testResult.message}
+          </span>
+        )}
       </div>
     </div>
   );
