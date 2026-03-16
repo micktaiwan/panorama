@@ -210,6 +210,26 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_updatePerson',
+    description: 'Update a person\'s fields (role, name, lastName, email, teamId, etc.). All fields except personId are optional — only pass the fields you want to change.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        personId: { type: 'string', description: 'Person ID (required)' },
+        name: { type: 'string', description: 'New first name (optional)' },
+        lastName: { type: 'string', description: 'New last name (optional)' },
+        role: { type: 'string', description: 'New role (optional)' },
+        email: { type: 'string', description: 'New email address (optional)' },
+        teamId: { type: 'string', description: 'New team ID, or empty string to unset (optional)' },
+        left: { type: 'boolean', description: 'Whether the person has left (optional)' },
+        contactOnly: { type: 'boolean', description: 'Whether the person is an external contact only (optional)' }
+      },
+      required: ['personId']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_teamsList',
     description: 'List all teams in the workspace. Use when the user asks about teams, groups, or organizational structure.',
     parameters: {

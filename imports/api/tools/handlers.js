@@ -690,6 +690,80 @@ export const TOOL_HANDLERS = {
       'tool_peopleList'
     );
   },
+  async tool_updatePerson(args, memory) {
+    const personId = String(args?.personId || '').trim();
+    if (!personId) {
+      return buildErrorResponse('personId is required', 'tool_updatePerson', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide personId parameter. Use tool_peopleList to find the correct personId'
+      });
+    }
+
+    const userId = getMCPUserId();
+    const { PeopleCollection } = await import('/imports/api/people/collections');
+    const existingPerson = await PeopleCollection.findOneAsync({ _id: personId, userId }, { fields: { _id: 1 } });
+
+    if (!existingPerson) {
+      console.warn(`[tool_updatePerson] Person not found: ${personId}`);
+      return buildErrorResponse(`Person not found: "${personId}"`, 'tool_updatePerson', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_peopleList to find the correct personId'
+      });
+    }
+
+    const modifier = {};
+
+    if (args?.name !== undefined) modifier.name = String(args.name || '').trim();
+    if (args?.lastName !== undefined) modifier.lastName = String(args.lastName || '').trim();
+    if (args?.role !== undefined) modifier.role = String(args.role || '').trim();
+    if (args?.email !== undefined) modifier.email = String(args.email || '').trim().toLowerCase();
+    if (args?.teamId !== undefined) modifier.teamId = args.teamId ? String(args.teamId).trim() : null;
+    if (args?.left !== undefined) modifier.left = !!args.left;
+    if (args?.contactOnly !== undefined) modifier.contactOnly = !!args.contactOnly;
+
+    // Validate teamId if provided
+    if (modifier.teamId) {
+      const { TeamsCollection } = await import('/imports/api/teams/collections');
+      const existingTeam = await TeamsCollection.findOneAsync(
+        { _id: modifier.teamId, userId },
+        { fields: { _id: 1 } }
+      );
+      if (!existingTeam) {
+        console.warn(`[tool_updatePerson] Team not found: ${modifier.teamId}`);
+        return buildErrorResponse(`Team not found: "${modifier.teamId}"`, 'tool_updatePerson', {
+          code: 'TEAM_NOT_FOUND',
+          suggestion: 'Use tool_teamsList to find the correct teamId'
+        });
+      }
+    }
+
+    if (Object.keys(modifier).length === 0) {
+      return buildErrorResponse('No fields to update', 'tool_updatePerson', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide at least one field to update (name, lastName, role, email, teamId, left, contactOnly)'
+      });
+    }
+
+    const res = await callMethodAs('people.update', userId, personId, modifier);
+
+    if (res === 0) {
+      console.error(`[tool_updatePerson] Update returned 0 for personId: ${personId}`);
+      return buildErrorResponse('Person update failed (0 documents modified)', 'tool_updatePerson', {
+        code: 'UPDATE_FAILED',
+        suggestion: 'The person may have been deleted between validation and update'
+      });
+    }
+
+    console.log(`[tool_updatePerson] Successfully updated person: ${personId}`);
+
+    const result = { updated: true, personId };
+    if (memory) {
+      memory.ids = memory.ids || {};
+      memory.ids.personId = personId;
+    }
+
+    return buildSuccessResponse(result, 'tool_updatePerson', { policy: 'write' });
+  },
   async tool_teamsList(args, memory) {
     const { TeamsCollection } = await import('/imports/api/teams/collections');
     const teams = await TeamsCollection.find({ userId: getMCPUserId() }, { fields: { name: 1 } }).fetchAsync();
