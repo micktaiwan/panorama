@@ -24,14 +24,9 @@ else
   echo "✓ Tunnel Qdrant démarré"
 fi
 
-# Vérifier la connexion MongoDB TLS
-echo "→ Vérification MongoDB (TLS)..."
-if mongosh --quiet "mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?tls=true&authSource=admin" --eval "db.runCommand({ping:1}).ok" 2>/dev/null | grep -q 1; then
-  echo "✓ MongoDB accessible"
-else
-  echo "✗ MongoDB non accessible sur ${MONGO_HOST}"
-  exit 1
-fi
+# NOTE: pas de mongosh ping ici — il ajoutait 2–5 s de latence visible
+# avant que la fenêtre Electron n'apparaisse. Si Mongo est down, Meteor
+# le signalera tout seul dans les logs.
 
 # Lancer Meteor
 # serverSelectionTimeoutMS=60000 : laisse 60s au driver pour retrouver le serveur après un sleep/wake
@@ -50,9 +45,19 @@ if [ -n "$MAIL_USER" ] && [ -n "$MAIL_PASS" ]; then
   export MAIL_URL="smtp://$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MAIL_USER', safe=''))"):$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MAIL_PASS', safe=''))")@mail.mickaelfm.me:587"
 fi
 
-echo "→ Lancement Meteor + Electron (port $METEOR_PORT)..."
+echo "→ Lancement Electron (splash) + Meteor (port $METEOR_PORT)..."
 echo "  MONGO_URL        = mongodb://${MONGO_USER}:***@${MONGO_HOST}/panorama?${MONGO_OPTS}"
 echo "  MONGO_OPLOG_URL  = mongodb://${MONGO_USER}:***@${MONGO_HOST}/local?${MONGO_OPTS}"
 echo "  QDRANT_URL       = $QDRANT_URL"
 
-npm run dev:desktop:4000
+# Lancer Electron immédiatement en background (le splash apparaît tout de suite,
+# pendant que Meteor compile et se connecte). Electron poll Meteor et bascule
+# sur l'URL réelle quand le serveur répond.
+METEOR_PORT=$METEOR_PORT ./node_modules/.bin/electron . &
+ELECTRON_PID=$!
+
+# S'assurer qu'Electron est tué si on quitte le script
+trap "kill $ELECTRON_PID 2>/dev/null" EXIT INT TERM
+
+# Meteor en foreground
+npm run dev:meteor:4000

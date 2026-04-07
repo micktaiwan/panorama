@@ -6,6 +6,60 @@ const { app, BrowserWindow, nativeImage, Menu, screen, shell, ipcMain, Notificat
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+
+const SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8" />
+<title>Panorama</title>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, Helvetica, Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh;
+    background: #1a1a1a; color: #e6e6e6;
+    -webkit-user-select: none; user-select: none;
+  }
+  .logo { font-size: 28px; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 28px; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid rgba(255,255,255,0.12);
+    border-top-color: #6aa9ff;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status { margin-top: 20px; font-size: 13px; color: #888; min-height: 1.2em; }
+  @media (prefers-color-scheme: light) {
+    body { background: #fafafa; color: #222; }
+    .spinner { border-color: rgba(0,0,0,0.08); border-top-color: #2563eb; }
+    .status { color: #666; }
+  }
+</style></head>
+<body>
+  <div class="logo">Panorama</div>
+  <div class="spinner"></div>
+  <div class="status" id="status">Démarrage du serveur Meteor…</div>
+</body></html>`;
+
+function waitForMeteor(url, win) {
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (win.isDestroyed()) return;
+      const req = http.get(url, (res) => {
+        res.destroy();
+        if (res.statusCode && res.statusCode < 500) {
+          resolve();
+        } else {
+          setTimeout(tick, 500);
+        }
+      });
+      req.on('error', () => setTimeout(tick, 500));
+      req.setTimeout(2000, () => { req.destroy(); setTimeout(tick, 500); });
+    };
+    tick();
+  });
+}
 
 function getWindowStateFilePath() {
   return path.join(app.getPath('userData'), 'window-state.json');
@@ -199,7 +253,11 @@ function createChatWindow() {
 
   chatWindow = new BrowserWindow(windowOptions);
   const port = process.env.METEOR_PORT || 3000;
-  chatWindow.loadURL(`http://localhost:${port}?chatWindow=1`);
+  const chatUrl = `http://localhost:${port}?chatWindow=1`;
+  chatWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(SPLASH_HTML));
+  waitForMeteor(`http://localhost:${port}`, chatWindow).then(() => {
+    if (chatWindow && !chatWindow.isDestroyed()) chatWindow.loadURL(chatUrl);
+  });
 
   // Save state on move/resize
   let saveTimer = null;
@@ -263,7 +321,15 @@ function createWindow(savedState) {
   const win = new BrowserWindow(windowOptions);
   mainWindow = win; // Track main window reference
   const port = process.env.METEOR_PORT || 3000;
-  win.loadURL(`http://localhost:${port}`);
+  const meteorUrl = `http://localhost:${port}`;
+
+  // Show splash immediately, then swap to Meteor URL once the server responds.
+  // This makes the window appear instantly instead of waiting for Meteor's
+  // (slow) startup against the remote MongoDB.
+  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(SPLASH_HTML));
+  waitForMeteor(meteorUrl, win).then(() => {
+    if (!win.isDestroyed()) win.loadURL(meteorUrl);
+  });
 
   // Intercept popups/new windows to handle app file links gracefully
   win.webContents.setWindowOpenHandler(({ url }) => {
