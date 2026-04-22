@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { parseHashRoute, navigateTo } from '/imports/ui/router.js';
 import { NotesPanel } from './NotesPanel/NotesPanel.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { dirtyNotesStore } from './dirtyNotesStore.js';
 import './NotesPage.css';
 
 export const NotesPage = () => {
@@ -30,6 +31,7 @@ export const NotesPage = () => {
 
   useEffect(() => {
     const onBeforeUnload = (e) => {
+      if (dirtyNotesStore.isQuitting()) return;
       if (dirtyCountRef.current > 0) {
         e.preventDefault();
         e.returnValue = '';
@@ -38,6 +40,8 @@ export const NotesPage = () => {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
+
+  useEffect(() => () => { dirtyNotesStore.setCount(0); }, []);
 
   // Open note from URL hash (#/notes/:noteId) — on mount and on hash changes
   useEffect(() => {
@@ -67,7 +71,7 @@ export const NotesPage = () => {
         ref={panelRef}
         storageKey="notes"
         showFileOpen
-        onDirtyCountChange={(count) => { dirtyCountRef.current = count; }}
+        onDirtyCountChange={(count) => { dirtyCountRef.current = count; dirtyNotesStore.setCount(count); }}
         onTabClosed={(tabId) => {
           const route = parseHashRoute();
           if (route.name === 'notes' && route.noteId === tabId) {
