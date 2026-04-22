@@ -29,6 +29,7 @@ import { SortableContext, useSortable, arrayMove, horizontalListSortingStrategy 
 import { CSS } from '@dnd-kit/utilities';
 import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { dirtyNotesStore, useDirtyNotesCount } from '/imports/ui/Notes/dirtyNotesStore.js';
 import { AlarmModal } from '/imports/ui/Alarms/AlarmModal.jsx';
 import { NotifyProvider } from '/imports/ui/components/Notify/NotifyManager.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
@@ -120,6 +121,7 @@ function App() {
   // Go to screen palette
   const [goOpen, setGoOpen] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const dirtyNotesCount = useDirtyNotesCount();
   const [focusMode, setFocusMode] = useState(() => localStorage.getItem('focusMode') === '1');
   const goItems = [
     { key: 'v', label: 'Panorama', route: { name: 'panorama' } },
@@ -1132,15 +1134,16 @@ function App() {
       <Modal
         open={showQuitConfirm}
         onClose={() => setShowQuitConfirm(false)}
-        title="Quit Panorama"
+        title={dirtyNotesCount > 0 ? 'Unsaved notes' : 'Quit Panorama'}
         actions={[
           <button key="cancel" className="btn" type="button" onClick={() => setShowQuitConfirm(false)}>Cancel</button>,
           <button
             key="quit"
-            className="btn btn-primary"
+            className={dirtyNotesCount > 0 ? 'btn btn-danger' : 'btn btn-primary'}
             type="button"
             onClick={() => {
               setShowQuitConfirm(false);
+              dirtyNotesStore.setQuitting(true);
               if (window.electron?.quit) {
                 window.electron.quit();
               } else {
@@ -1148,11 +1151,13 @@ function App() {
               }
             }}
           >
-            Quit
+            {dirtyNotesCount > 0 ? 'Quit anyway' : 'Quit'}
           </button>,
         ]}
       >
-        Are you sure you want to quit Panorama?
+        {dirtyNotesCount > 0
+          ? `You have ${dirtyNotesCount} unsaved note${dirtyNotesCount > 1 ? 's' : ''}. Quit anyway?`
+          : 'Are you sure you want to quit Panorama?'}
       </Modal>
     </div>
   );
