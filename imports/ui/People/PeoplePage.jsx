@@ -240,6 +240,7 @@ export const PeoplePage = ({ highlightId: externalHighlightId }) => {
         count={sorted.length}
         onCopy={handleCopy}
         onImportComplete={setImportResult}
+        people={people}
       />
       <Collapsible title="Teams" className="peopleSection" open={openTeams} onToggle={setOpenTeams} toggleTextClosed="Show teams" toggleTextOpen="Hide teams">
         <TeamsTable

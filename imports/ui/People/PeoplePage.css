@@ -18,8 +18,10 @@
 .peopleFilter { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 .peopleTable { width: 100%; border-collapse: collapse; }
 .peopleTable th, .peopleTable td { border-bottom: 1px solid var(--border); padding: 8px; text-align: left; }
+.peopleTable tbody tr { transition: background-color 0.12s ease; }
+.peopleTable tbody tr:hover { background: var(--row-hover); }
 .peopleTable th { background: var(--panel); }
-.peopleTable thead th { position: sticky; top: 0; z-index: 2; background: #224b7a; }
+.peopleTable thead th { position: sticky; top: 0; z-index: 2; background: #224b7a; color: #fff; }
 .peopleTable .actionsCol { width: 1%; white-space: nowrap; }
 .peopleTable tr.highlight { animation: rowFlash 3s ease-out 1; }
 @keyframes rowFlash {
@@ -31,4 +33,14 @@
 .peopleTable tr.leftRow { background: var(--scrollbar-track); }
 .peopleTable tr.leftRow td { font-style: italic; color: var(--muted); }
 .peopleTable tr.leftRow td.emptyCell { background: transparent; }
+
+.exportModal { display: flex; flex-direction: column; gap: 20px; min-width: 420px; }
+.exportSection { display: flex; flex-direction: column; gap: 8px; }
+.exportSectionHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.exportSectionTitle { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.exportFieldActions { display: flex; align-items: center; }
+.exportInline { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.exportFieldsGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 16px; }
+.exportField { display: flex; align-items: center; gap: 6px; color: var(--text); }
+.exportPreview { font-size: 12px; color: var(--muted); margin-top: 4px; }
 

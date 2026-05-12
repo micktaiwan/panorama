@@ -110,7 +110,15 @@ const fetchPreview = async (kind, rawId) => {
 };
 
 // Helper to detect if query could use a COMMON_QUERY
-const detectCommonQuery = (collection, where) => {
+const detectCommonQuery = (collection, where, sort) => {
+  if (collection === 'notes') {
+    const whereEmpty = !where || Object.keys(where).length === 0;
+    if (whereEmpty && sort && sort.updatedAt === -1) {
+      return 'recentNotes';
+    }
+    return null;
+  }
+
   if (collection !== 'tasks') return null;
 
   const whereStr = JSON.stringify(where || {});
@@ -471,7 +479,7 @@ export const TOOL_HANDLERS = {
       }
 
       // Detect if a COMMON_QUERY could be used and add hint in metadata
-      const commonQueryName = detectCommonQuery(collection, where);
+      const commonQueryName = detectCommonQuery(collection, where, sort);
       const options = {};
 
       if (commonQueryName) {

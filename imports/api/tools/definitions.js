@@ -289,16 +289,16 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_collectionQuery',
-    description: 'Generic read-only query across collections with a validated where DSL. Use to filter items by fields.',
+    description: 'Generic read-only query with sort/limit/select and a validated where DSL. The first choice for any list-style read: "recent notes", "recent tasks", "tasks since X", "people created last week", etc. — before reaching for a more specialized tool. userId scoping is applied automatically (no need to filter by user).\n\nSupported collections: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets, claudeProjects, claudeSessions, claudeMessages.\n\nwhere DSL — operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Dates accept ISO 8601 strings (auto-converted) on fields: createdAt, updatedAt, deadline, when, snoozedUntilAt. Unknown fields are silently dropped (allowlist per collection).\n\nExamples:\n• Recent notes across all projects: {collection:"notes", sort:{updatedAt:-1}, limit:20}\n• Notes updated since a date: {collection:"notes", where:{updatedAt:{gt:"2026-01-01T00:00:00Z"}}, sort:{updatedAt:-1}}\n• Recent tasks in a project: {collection:"tasks", where:{projectId:{eq:"abc"}}, sort:{updatedAt:-1}, limit:50}\n• Urgent open tasks: {collection:"tasks", where:{and:[{status:{ne:"done"}},{isUrgent:{eq:true}}]}}\n• People in a team: {collection:"people", where:{teamId:{eq:"xyz"}}, sort:{name:1}}\n\nPre-baked patterns are exposed in COMMON_QUERIES (helpers.js): recentNotes, recentSessions, costlySessions, tasksWithDeadline, urgentTasks, importantTasks, overdueTasks, todoTasks, inProgressTasks, activeTasks, activeSessions.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        collection: { type: 'string' },
-        where: { type: 'object' },
-        select: { type: 'array', items: { type: 'string' } },
-        limit: { type: 'number' },
-        sort: { type: 'object' }
+        collection: { type: 'string', description: 'Collection name. Required. See list in tool description.' },
+        where: { type: 'object', description: 'Filter DSL. Operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Empty/omitted = no filter (still userId-scoped). Example: {updatedAt:{gt:"2026-01-01T00:00:00Z"}}.' },
+        select: { type: 'array', items: { type: 'string' }, description: 'Fields to return. Unknown fields are dropped. Omit to return all allowed fields for the collection.' },
+        limit: { type: 'number', description: 'Max docs (default 50, capped at 200).' },
+        sort: { type: 'object', description: 'Mongo-style sort, e.g. {updatedAt:-1} or {deadline:1}. Use -1 for desc, 1 for asc.' }
       },
       required: ['collection']
     }
