@@ -393,6 +393,14 @@ export const COMMON_QUERIES = {
     }
   },
 
+  // Notes: most recently updated across all projects
+  recentNotes: {
+    collection: 'notes',
+    where: {},
+    sort: { updatedAt: -1 },
+    limit: 20
+  },
+
   // Claude Code: all open sessions (any status - idle, running, or error)
   activeSessions: {
     collection: 'claudeSessions',

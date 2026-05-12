@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { notify } from '/imports/ui/utils/notify.js';
+import { PeopleExportModal } from '/imports/ui/People/components/PeopleExportModal.jsx';
 
-export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilter, onTeamFilterChange, subteamFilter, onSubteamFilterChange, teams, count = 0, onCopy, onImportComplete }) => {
+export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilter, onTeamFilterChange, subteamFilter, onSubteamFilterChange, teams, count = 0, onCopy, onImportComplete, people }) => {
+  const [exportOpen, setExportOpen] = useState(false);
   return (
     <div className="peopleToolbar">
       <button className="btn btn-primary" onClick={onNewPerson}>New person</button>
@@ -28,6 +30,7 @@ export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilte
       </select>
       <span className="ml8" aria-live="polite">{count} shown</span>
       <button className="btn ml8" onClick={onCopy}>Copy</button>
+      <button className="btn ml8" onClick={() => setExportOpen(true)}>Export…</button>
       <label className="btn ml8">
         Import JSON
         <input
@@ -59,6 +62,12 @@ export const PeopleFilterBar = ({ onNewPerson, filter, onFilterChange, teamFilte
           }}
         />
       </label>
+      <PeopleExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        people={people}
+        teams={teams}
+      />
     </div>
   );
 };
@@ -76,5 +85,5 @@ PeopleFilterBar.propTypes = {
   count: PropTypes.number,
   onCopy: PropTypes.func,
   onImportComplete: PropTypes.func,
+  people: PropTypes.array,
 };
-
