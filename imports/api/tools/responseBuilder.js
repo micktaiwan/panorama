@@ -195,6 +195,11 @@ export function generateSummary(data, toolName) {
     }
 
     // People & Teams
+    case 'tool_createPerson': {
+      const fullName = [data?.name, data?.lastName].filter(Boolean).join(' ');
+      return `Created person "${fullName || data?.name || 'unnamed'}"`;
+    }
+
     case 'tool_peopleList': {
       const { total, returned, hasMore } = data || {};
       if (hasMore) {

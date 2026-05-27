@@ -210,6 +210,27 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_createPerson',
+    description: 'Create a new person. Use when the user wants to add someone (colleague, contact) to Panorama. Only "name" (first name) is required.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        name: { type: 'string', description: 'First name (required)' },
+        lastName: { type: 'string', description: 'Last name (optional)' },
+        role: { type: 'string', description: 'Role / job title (optional)' },
+        email: { type: 'string', description: 'Email address (optional)' },
+        teamId: { type: 'string', description: 'Team ID (optional). Use tool_teamsList to find it' },
+        aliases: { type: 'array', items: { type: 'string' }, description: 'Alternative names/nicknames (optional)' },
+        notes: { type: 'string', description: 'Free-text notes (optional)' },
+        left: { type: 'boolean', description: 'Whether the person has left the company (optional, default false)' },
+        contactOnly: { type: 'boolean', description: 'Whether the person is an external contact only (optional, default false)' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_updatePerson',
     description: 'Update a person\'s fields (role, name, lastName, email, teamId, etc.). All fields except personId are optional — only pass the fields you want to change.',
     parameters: {
@@ -289,7 +310,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_collectionQuery',
-    description: 'Generic read-only query with sort/limit/select and a validated where DSL. The first choice for any list-style read: "recent notes", "recent tasks", "tasks since X", "people created last week", etc. — before reaching for a more specialized tool. userId scoping is applied automatically (no need to filter by user).\n\nSupported collections: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets, claudeProjects, claudeSessions, claudeMessages.\n\nwhere DSL — operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Dates accept ISO 8601 strings (auto-converted) on fields: createdAt, updatedAt, deadline, when, snoozedUntilAt. Unknown fields are silently dropped (allowlist per collection).\n\nExamples:\n• Recent notes across all projects: {collection:"notes", sort:{updatedAt:-1}, limit:20}\n• Notes updated since a date: {collection:"notes", where:{updatedAt:{gt:"2026-01-01T00:00:00Z"}}, sort:{updatedAt:-1}}\n• Recent tasks in a project: {collection:"tasks", where:{projectId:{eq:"abc"}}, sort:{updatedAt:-1}, limit:50}\n• Urgent open tasks: {collection:"tasks", where:{and:[{status:{ne:"done"}},{isUrgent:{eq:true}}]}}\n• People in a team: {collection:"people", where:{teamId:{eq:"xyz"}}, sort:{name:1}}\n\nPre-baked patterns are exposed in COMMON_QUERIES (helpers.js): recentNotes, recentSessions, costlySessions, tasksWithDeadline, urgentTasks, importantTasks, overdueTasks, todoTasks, inProgressTasks, activeTasks, activeSessions.',
+    description: 'Generic read-only query with sort/limit/select and a validated where DSL. The first choice for any list-style read: "recent notes", "recent tasks", "tasks since X", "people created last week", etc. — before reaching for a more specialized tool. userId scoping is applied automatically (no need to filter by user).\n\nSupported collections: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets, claudeProjects, claudeSessions, claudeMessages.\n\nwhere DSL — operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Dates accept ISO 8601 strings (auto-converted) on fields: createdAt, updatedAt, deadline, when, snoozedUntilAt, arrivalDate. Unknown fields are silently dropped (allowlist per collection).\n\nExamples:\n• Recent notes across all projects: {collection:"notes", sort:{updatedAt:-1}, limit:20}\n• Notes updated since a date: {collection:"notes", where:{updatedAt:{gt:"2026-01-01T00:00:00Z"}}, sort:{updatedAt:-1}}\n• Recent tasks in a project: {collection:"tasks", where:{projectId:{eq:"abc"}}, sort:{updatedAt:-1}, limit:50}\n• Urgent open tasks: {collection:"tasks", where:{and:[{status:{ne:"done"}},{isUrgent:{eq:true}}]}}\n• People in a team: {collection:"people", where:{teamId:{eq:"xyz"}}, sort:{name:1}}\n\nPre-baked patterns are exposed in COMMON_QUERIES (helpers.js): recentNotes, recentSessions, costlySessions, tasksWithDeadline, urgentTasks, importantTasks, overdueTasks, todoTasks, inProgressTasks, activeTasks, activeSessions.',
     parameters: {
       type: 'object',
       additionalProperties: false,

@@ -698,6 +698,56 @@ export const TOOL_HANDLERS = {
       'tool_peopleList'
     );
   },
+  async tool_createPerson(args, memory) {
+    const name = String(args?.name || '').trim();
+    if (!name) {
+      return buildErrorResponse('name is required', 'tool_createPerson', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide a first name, e.g., {name: "Jean"}'
+      });
+    }
+
+    const userId = getMCPUserId();
+    const fields = { name };
+
+    if (args?.lastName !== undefined) fields.lastName = String(args.lastName || '').trim();
+    if (args?.role !== undefined) fields.role = String(args.role || '').trim();
+    if (args?.email !== undefined) fields.email = String(args.email || '').trim().toLowerCase();
+    if (args?.notes !== undefined) fields.notes = String(args.notes || '');
+    if (Array.isArray(args?.aliases)) fields.aliases = args.aliases.map(a => String(a || '').trim()).filter(Boolean);
+    if (args?.left !== undefined) fields.left = !!args.left;
+    if (args?.contactOnly !== undefined) fields.contactOnly = !!args.contactOnly;
+
+    // Validate teamId if provided
+    if (args?.teamId) {
+      const teamId = String(args.teamId).trim();
+      const { TeamsCollection } = await import('/imports/api/teams/collections');
+      const existingTeam = await TeamsCollection.findOneAsync({ _id: teamId, userId }, { fields: { _id: 1 } });
+      if (!existingTeam) {
+        console.warn(`[tool_createPerson] Team not found: ${teamId}`);
+        return buildErrorResponse(`Team not found: "${teamId}"`, 'tool_createPerson', {
+          code: 'TEAM_NOT_FOUND',
+          suggestion: 'Use tool_teamsList to find the correct teamId'
+        });
+      }
+      fields.teamId = teamId;
+    }
+
+    try {
+      const personId = await callMethodAs('people.insert', userId, fields);
+      console.log(`[tool_createPerson] Successfully created person: ${personId}`);
+
+      const result = { personId, name, lastName: fields.lastName || null };
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.personId = personId;
+      }
+
+      return buildSuccessResponse(result, 'tool_createPerson', { policy: 'write' });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_createPerson');
+    }
+  },
   async tool_updatePerson(args, memory) {
     const personId = String(args?.personId || '').trim();
     if (!personId) {

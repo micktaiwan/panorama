@@ -8,12 +8,13 @@ import { searchPluginKey } from '../../prosemirror/searchPlugin.js';
 import { TaskItemView } from '../../prosemirror/taskItemView.js';
 import { ToggleBlockView } from '../../prosemirror/toggleBlockView.js';
 import { ImageResizeView } from '../../prosemirror/imageResizeView.js';
+import { noteScrollStore } from '../../noteScrollStore.js';
 import './ProseMirrorEditor.css';
 import '../BubbleMenu/BubbleMenu.css';
 import '../SlashMenu/SlashMenu.css';
 
 const DEBOUNCE_MS = 150;
-export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClose, onAskAI, onSearchInfo, searchTerm, shouldFocus, readOnly = false }, ref) => {
+export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave, onClose, onAskAI, onSearchInfo, searchTerm, shouldFocus, readOnly = false }, ref) => {
   const mountRef = useRef(null);
   const viewRef = useRef(null);
   const debounceRef = useRef(null);
@@ -98,12 +99,22 @@ export const ProseMirrorEditor = forwardRef(({ content, onChange, onSave, onClos
 
     viewRef.current = view;
 
+    // Restore the scroll position saved for this note (persists across tab-switch remounts)
+    const scrollEl = mountRef.current;
+    scrollEl.scrollTop = noteScrollStore.get(noteId);
+
+    // Persist scroll position as the user scrolls
+    const onScroll = () => noteScrollStore.set(noteId, scrollEl.scrollTop);
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+
     // Focus immediately at mount — no timeout, no race condition
     if (shouldFocusOnMount.current) {
       view.focus();
     }
 
     return () => {
+      noteScrollStore.set(noteId, scrollEl.scrollTop);
+      scrollEl.removeEventListener('scroll', onScroll);
       clearTimeout(debounceRef.current);
       view.destroy();
       viewRef.current = null;
@@ -144,6 +155,7 @@ ProseMirrorEditor.displayName = 'ProseMirrorEditor';
 
 ProseMirrorEditor.propTypes = {
   content: PropTypes.string,
+  noteId: PropTypes.string,
   onChange: PropTypes.func.isRequired,
   onSave: PropTypes.func,
   onClose: PropTypes.func,

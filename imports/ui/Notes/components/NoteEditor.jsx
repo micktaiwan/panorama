@@ -100,6 +100,7 @@ export const NoteEditor = forwardRef(({
           <ProseMirrorEditor
             ref={editorRef}
             key={activeTabId}
+            noteId={activeTabId}
             content={noteContents[activeTabId] || ''}
             onChange={(md) => {
               onContentChange(activeTabId, md);

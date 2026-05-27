@@ -217,7 +217,7 @@ export const FIELD_ALLOWLIST = {
   noteSessions: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt'],
   noteLines: ['_id', 'sessionId', 'content', 'createdAt', 'updatedAt'],
   links: ['_id', 'projectId', 'name', 'url', 'createdAt', 'updatedAt'],
-  people: ['_id', 'name', 'createdAt', 'updatedAt', 'role', 'teamId', 'email'],
+  people: ['_id', 'name', 'lastName', 'createdAt', 'updatedAt', 'role', 'teamId', 'email', 'left', 'contactOnly', 'subteam', 'arrivalDate'],
   teams: ['_id', 'name', 'createdAt', 'updatedAt'],
   files: ['_id', 'projectId', 'name', 'createdAt', 'updatedAt', 'storedFileName', 'size', 'mimeType'],
   alarms: ['_id', 'title', 'enabled', 'when', 'createdAt', 'updatedAt', 'recurrence', 'snoozedUntilAt', 'nextTriggerAt'],
@@ -281,7 +281,7 @@ export const compileWhere = (collection, where = {}) => {
   };
 
   // Date fields that should have their values converted to Date objects
-  const dateFields = ['createdAt', 'updatedAt', 'deadline', 'when', 'snoozedUntilAt'];
+  const dateFields = ['createdAt', 'updatedAt', 'deadline', 'when', 'snoozedUntilAt', 'arrivalDate'];
 
   const compileNode = (node) => {
     if (!node || typeof node !== 'object') return {};
