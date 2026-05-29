@@ -20,6 +20,9 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
   const debounceRef = useRef(null);
   const shouldFocusOnMount = useRef(shouldFocus);
   const readOnlyRef = useRef(readOnly);
+  // Scroll restoration state — see init effect for the retry logic
+  const scrollRestoredRef = useRef(false);
+  const tryRestoreScrollRef = useRef(null);
   // Track last content known to the editor (set on mount + after each onChange)
   // to distinguish external prop updates from user-edit-driven prop updates
   const lastKnownContentRef = useRef(content);
@@ -99,12 +102,36 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
 
     viewRef.current = view;
 
-    // Restore the scroll position saved for this note (persists across tab-switch remounts)
+    // Restore scroll position for this note. The doc may not be laid out yet
+    // when the editor mounts (content prop can arrive a tick later), so we
+    // retry on the next animation frame and again on each content sync until
+    // the scroll container is actually tall enough to honor the target.
     const scrollEl = mountRef.current;
-    scrollEl.scrollTop = noteScrollStore.get(noteId);
+    const tryRestoreScroll = () => {
+      if (scrollRestoredRef.current) return true;
+      const target = noteScrollStore.get(noteId);
+      if (target <= 0) { scrollRestoredRef.current = true; return true; }
+      if (scrollEl.scrollHeight <= scrollEl.clientHeight + 1) return false;
+      scrollEl.scrollTop = target;
+      scrollRestoredRef.current = true;
+      return true;
+    };
+    tryRestoreScrollRef.current = tryRestoreScroll;
+    // First attempt after layout for the initial doc has run
+    requestAnimationFrame(tryRestoreScroll);
 
-    // Persist scroll position as the user scrolls
-    const onScroll = () => noteScrollStore.set(noteId, scrollEl.scrollTop);
+    // Persist scroll position as the user scrolls (only after restore — earlier
+    // scroll events come from layout, not the user, and would overwrite the
+    // saved position with 0).
+    const onScroll = () => {
+      if (!scrollRestoredRef.current) return;
+      // Ignore scroll events triggered by layout teardown (flex parent collapsing
+      // when the user switches tab) — they fire with scrollTop=0 and would
+      // overwrite the legitimate saved position. A real scroll always implies
+      // the container still has scrollable content.
+      if (scrollEl.scrollHeight <= scrollEl.clientHeight + 1) return;
+      noteScrollStore.set(noteId, scrollEl.scrollTop);
+    };
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
 
     // Focus immediately at mount — no timeout, no race condition
@@ -113,8 +140,11 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
     }
 
     return () => {
-      noteScrollStore.set(noteId, scrollEl.scrollTop);
+      // We do NOT save scroll position on unmount: the scroll handler has already
+      // captured the latest user-driven value, and reading scrollTop at unmount
+      // can return 0 if the layout has collapsed (flex parent change on tab switch).
       scrollEl.removeEventListener('scroll', onScroll);
+      tryRestoreScrollRef.current = null;
       clearTimeout(debounceRef.current);
       view.destroy();
       viewRef.current = null;
@@ -132,6 +162,11 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
     const doc = parseMarkdown(content || '');
     const state = EditorState.create({ doc, plugins: view.state.plugins });
     view.updateState(state);
+    // Content just landed — retry scroll restore on the next frame once the
+    // new doc has been laid out.
+    if (!scrollRestoredRef.current && tryRestoreScrollRef.current) {
+      requestAnimationFrame(() => tryRestoreScrollRef.current?.());
+    }
   }, [content]);
 
   // Update editable state dynamically when readOnly prop changes
