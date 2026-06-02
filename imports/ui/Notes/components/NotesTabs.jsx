@@ -185,6 +185,13 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
     }
   };
 
+  const requestCloseSingle = (tabId) => {
+    // Closing a dirty tab is now non-destructive (the draft is kept and restored
+    // on reopen), but we still confirm so the close is never silent/surprising.
+    if (dirtySet?.has(tabId)) setConfirmClose({ type: 'single', tabId, dirtyCount: 1 });
+    else onTabClose(tabId);
+  };
+
   const requestCloseOthers = (tabId) => {
     setContextMenu({ visible: false, x: 0, y: 0, tabId: null });
     const toClose = openTabs.filter(t => t.id !== tabId).map(t => t.id);
@@ -273,7 +280,7 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
                 onClick={() => onTabClick(tab.id)}
                 onDoubleClick={() => handleRename(tab.id)}
                 onContextMenu={(e) => handleContextMenu(e, tab.id)}
-                onClose={(e) => { e.stopPropagation(); onTabClose(tab.id); }}
+                onClose={(e) => { e.stopPropagation(); requestCloseSingle(tab.id); }}
                 isEditing={editingTab === tab.id}
                 inputRef={inputRef}
                 editingTitle={editingTitle}
@@ -319,7 +326,7 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
             }}
           >
             {!isFile && <button className="context-menu-item" onClick={() => handleRename(contextMenu.tabId)} type="button">Rename</button>}
-            <button className="context-menu-item" onClick={() => { setContextMenu({ visible: false, x: 0, y: 0, tabId: null }); onTabClose(contextMenu.tabId); }} type="button">Close</button>
+            <button className="context-menu-item" onClick={() => { const id = contextMenu.tabId; setContextMenu({ visible: false, x: 0, y: 0, tabId: null }); requestCloseSingle(id); }} type="button">Close</button>
             <button className="context-menu-item" onClick={() => requestCloseOthers(contextMenu.tabId)} type="button">Close Other</button>
             <button className="context-menu-item" onClick={requestCloseAll} type="button">Close All</button>
             {!isFile && <button className="context-menu-item" onClick={() => handleDeleteRequest(contextMenu.tabId)} type="button">Delete</button>}
@@ -350,7 +357,8 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
             className="btn btn-primary"
             type="button"
             onClick={() => {
-              if (confirmClose?.type === 'others') onCloseOthers?.(confirmClose.tabId);
+              if (confirmClose?.type === 'single') onTabClose(confirmClose.tabId);
+              else if (confirmClose?.type === 'others') onCloseOthers?.(confirmClose.tabId);
               else if (confirmClose?.type === 'all') onCloseAll?.();
               setConfirmClose(null);
             }}
@@ -359,7 +367,8 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
           </button>,
         ]}
       >
-        {confirmClose?.dirtyCount > 1 ? 'Some tabs have unsaved changes. Close them anyway?' : 'One tab has unsaved changes. Close it anyway?'}
+        {confirmClose?.dirtyCount > 1 ? 'Some tabs have unsaved changes. Close them anyway?' : 'This tab has unsaved changes. Close it anyway?'}
+        {' '}Your draft is kept and restored when you reopen the note.
       </Modal>
     </>
   );

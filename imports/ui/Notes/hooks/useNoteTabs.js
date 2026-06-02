@@ -327,10 +327,10 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
       return newContents;
     });
 
-    const closingTab = openTabs.find(t => t.id === tabId);
-    if (closingTab?.type !== 'file') {
-      localStorage.removeItem(`note-content-${tabId}`);
-    }
+    // NOTE: do NOT remove the localStorage draft here. Closing a tab must never
+    // destroy unsaved content — the draft is the only copy of unsaved edits and
+    // is restored on reopen (see openNote). It is cleared on save/delete/revert,
+    // or invalidated when the DB version is newer.
     setTouchedNotes(prev => { const n = new Set(prev); n.delete(tabId); return n; });
     setFileBaselines(prev => { const next = { ...prev }; delete next[tabId]; return next; });
     setRenamedTabs(prev => {
@@ -482,7 +482,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
     const others = openTabs.filter(t => t.id !== tabId);
     others.forEach(t => {
       releaseLock(t.id);
-      if (t.type !== 'file') localStorage.removeItem(`note-content-${t.id}`);
+      // Keep drafts: closing must not destroy unsaved content (restored on reopen).
     });
     setOpenTabs(prev => prev.filter(t => t.id === tabId));
     setNoteContents(prev => ({ [tabId]: prev[tabId] }));
@@ -497,7 +497,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
   const closeAllTabs = () => {
     openTabs.forEach(t => {
       releaseLock(t.id);
-      if (t.type !== 'file') localStorage.removeItem(`note-content-${t.id}`);
+      // Keep drafts: closing must not destroy unsaved content (restored on reopen).
     });
     setOpenTabs([]);
     setNoteContents({});
