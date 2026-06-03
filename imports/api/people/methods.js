@@ -25,10 +25,14 @@ Meteor.methods({
     const contactOnly = !!fields.contactOnly;
     const subteam = typeof fields.subteam === 'string' ? fields.subteam.trim() : '';
     const teamId = fields.teamId ? String(fields.teamId) : undefined;
+    const managerId = fields.managerId ? String(fields.managerId) : undefined;
+    const githubUsername = typeof fields.githubUsername === 'string' ? fields.githubUsername.trim() : '';
     const arrivalDate = fields.arrivalDate ? new Date(fields.arrivalDate) : undefined;
     const doc = { name, lastName, normalizedName, aliases, role, email, notes, left, contactOnly, userId: this.userId, createdAt: now, updatedAt: now };
     if (teamId) doc.teamId = teamId;
     if (subteam) doc.subteam = subteam;
+    if (managerId) doc.managerId = managerId;
+    if (githubUsername) doc.githubUsername = githubUsername;
     if (arrivalDate && !isNaN(arrivalDate.getTime())) doc.arrivalDate = arrivalDate;
     const _id = await PeopleCollection.insertAsync(doc);
     return _id;
@@ -59,6 +63,14 @@ Meteor.methods({
     if ('subteam' in fields) {
       const st = typeof fields.subteam === 'string' ? fields.subteam.trim() : '';
       if (st) updates.subteam = st; else unset.subteam = 1;
+    }
+    if ('managerId' in fields) {
+      if (fields.managerId) updates.managerId = String(fields.managerId);
+      else unset.managerId = 1;
+    }
+    if ('githubUsername' in fields) {
+      const gh = typeof fields.githubUsername === 'string' ? fields.githubUsername.trim() : '';
+      if (gh) updates.githubUsername = gh; else unset.githubUsername = 1;
     }
     if ('arrivalDate' in fields) {
       const d = fields.arrivalDate ? new Date(fields.arrivalDate) : null;

@@ -190,6 +190,32 @@ export const getCalendarIcsUrlAsync = async (userId) => {
 };
 
 /**
+ * GitHub config for the staffing commit analyzer.
+ * Non-secret bits (repo, defaultBranch, windowDays) come from userPreferences.github.
+ * Auth lives SERVER-SIDE ONLY (never published to the client):
+ *   - GitHub App: Meteor.settings.github.{appId,installationId,privateKey} or GITHUB_APP_* env
+ *   - PAT fallback: env GITHUB_TOKEN / Meteor.settings.github.token (or per-user userPrefs.github.token)
+ */
+export const getGithubConfigAsync = async (userId) => {
+  const userPref = await getUserPrefs(userId);
+  const gh = userPref?.github || {};
+  const s = Meteor.settings?.github || {};
+  const app = {
+    appId: s.appId || process.env.GITHUB_APP_ID || null,
+    installationId: s.installationId || process.env.GITHUB_APP_INSTALLATION_ID || null,
+    privateKey: s.privateKey || process.env.GITHUB_APP_PRIVATE_KEY || null,
+  };
+  return {
+    repo: gh.repo?.trim() || s.repo || process.env.GITHUB_REPO || null,
+    defaultBranch: gh.defaultBranch?.trim() || null,
+    windowDays: Number.isFinite(gh.windowDays) ? gh.windowDays : 14,
+    // Auth, server-side only:
+    token: gh.token?.trim() || process.env.GITHUB_TOKEN || s.token || null,
+    app: (app.appId && app.installationId && app.privateKey) ? app : null,
+  };
+};
+
+/**
  * Read localUserId from appPreferences (for MCP server context).
  */
 export const getLocalUserId = () => {

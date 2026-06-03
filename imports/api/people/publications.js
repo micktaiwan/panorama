@@ -17,6 +17,8 @@ Meteor.publish('people.all', function () {
       teamId: 1,
       arrivalDate: 1,
       subteam: 1,
+      managerId: 1,
+      githubUsername: 1,
       createdAt: 1,
       updatedAt: 1
     }

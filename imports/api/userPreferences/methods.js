@@ -142,6 +142,16 @@ Meteor.methods({
     // MCP API key revocation
     if (modifier.mcpApiKey === null) set.mcpApiKey = null;
 
+    // GitHub config (staffing commit analyzer)
+    if (modifier.github !== null && modifier.github !== undefined && typeof modifier.github === 'object') {
+      const gh = {};
+      if (typeof modifier.github.token === 'string') gh.token = modifier.github.token.trim() || null;
+      if (typeof modifier.github.repo === 'string') gh.repo = modifier.github.repo.trim() || null;
+      if (typeof modifier.github.defaultBranch === 'string') gh.defaultBranch = modifier.github.defaultBranch.trim() || null;
+      if (Number.isFinite(modifier.github.windowDays)) gh.windowDays = modifier.github.windowDays;
+      if (Object.keys(gh).length > 0) set.github = gh;
+    }
+
     // Visible pages (admin-only optional pages)
     if (Array.isArray(modifier.visiblePages)) {
       set.visiblePages = modifier.visiblePages.filter(p => typeof p === 'string');

@@ -18,6 +18,8 @@ import { BudgetPage } from '/imports/ui/Budget/BudgetPage.jsx';
 import { ReportingPage } from '/imports/ui/Reporting/ReportingPage.jsx';
 import { SituationAnalyzer } from '/imports/ui/SituationAnalyzer/SituationAnalyzer.jsx';
 import { PeoplePage } from '/imports/ui/People/PeoplePage.jsx';
+import { Staffing } from '/imports/ui/Staffing/Staffing.jsx';
+import { OpportunityDetail } from '/imports/ui/Staffing/OpportunityDetail.jsx';
 import { useAlarmScheduler } from '/imports/ui/hooks/useAlarmScheduler.js';
 import { useIdleDetection } from '/imports/ui/hooks/useIdleDetection.js';
 import { PresenceBar } from '/imports/ui/components/PresenceBar/PresenceBar.jsx';
@@ -811,6 +813,16 @@ function App() {
             <PeoplePage highlightId={route.personId} />
           </div>
         )}
+        {route?.name === 'staffing' && canSeePage('staffing', user, userPrefs) && (
+          <div className="panel">
+            <Staffing />
+          </div>
+        )}
+        {route?.name === 'opportunity' && canSeePage('staffing', user, userPrefs) && (
+          <div className="panel">
+            <OpportunityDetail opportunityId={route.opportunityId} />
+          </div>
+        )}
         {route?.name === 'links' && (
           <div className="panel">
             <LinksPage />
@@ -1078,6 +1090,10 @@ function App() {
           </>}
           <span className="dot">·</span>
           <a href="#/people" onClick={(e) => { e.preventDefault(); goPeople(); }}>People</a>
+          {canSeePage('staffing', user, userPrefs) && <>
+            <span className="dot">·</span>
+            <a href="#/staffing" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'staffing' }); }}>Staffing</a>
+          </>}
           <span className="dot">·</span>
           <a href="#/export" onClick={(e) => { e.preventDefault(); setExportOpen(true); }}>Export</a>
           <span className="dot">·</span>

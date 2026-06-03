@@ -8,6 +8,7 @@ export const OPTIONAL_PAGES = {
   budget: 'Budget',
   notionReporting: 'Notion Reporting',
   situationAnalyzer: 'Situation Analyzer',
+  staffing: 'Staffing (CTO)',
 };
 
 export const parseHashRoute = () => {
@@ -36,6 +37,8 @@ export const parseHashRoute = () => {
   if (parts[0] === 'calendar') return { name: 'calendar' };
   if (parts[0] === 'panorama') return { name: 'panorama' };
   if (parts[0] === 'people') return { name: 'people', personId: parts[1] };
+  if (parts[0] === 'staffing') return { name: 'staffing' };
+  if (parts[0] === 'opportunity' && parts[1]) return { name: 'opportunity', opportunityId: parts[1] };
   if (parts[0] === 'situation-analyzer') return { name: 'situationAnalyzer' };
   if (parts[0] === 'budget') return { name: 'budget', tab: parts[1] || 'report' };
   if (parts[0] === 'projects' && parts[1] && parts[2] === 'delete') return { name: 'projectDelete', projectId: parts[1] };
@@ -121,6 +124,12 @@ export const navigateTo = (route) => {
       break;
     case 'people':
       window.location.hash = route.personId ? `#/people/${route.personId}` : '#/people';
+      break;
+    case 'staffing':
+      window.location.hash = '#/staffing';
+      break;
+    case 'opportunity':
+      window.location.hash = `#/opportunity/${route.opportunityId}`;
       break;
     case 'situationAnalyzer':
       window.location.hash = '#/situation-analyzer';

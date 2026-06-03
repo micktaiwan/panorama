@@ -1,0 +1,166 @@
+.oppDetail {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.oppBack {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+.oppBack:hover { color: var(--text); }
+
+.oppDetailHead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oppDetailName {
+  margin: 0;
+  font-size: 22px;
+}
+
+.oppDetailMeta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.oppStatusField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.oppNotion { color: var(--accent, #2e86de); text-decoration: none; }
+.oppNotion:hover { text-decoration: underline; }
+
+.oppKeywordsField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.oppKeywordsLabel {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.oppKwSuggest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.oppKwProposals {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.oppKwChip {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.oppKwChip.sel {
+  border-style: solid;
+  border-color: var(--accent, #2e86de);
+  color: var(--accent, #2e86de);
+  background: var(--accent-soft, rgba(46, 134, 222, 0.12));
+}
+
+.oppStats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.oppStatChip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.oppContribs {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.oppSectionTitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.oppCommits {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.oppCommits th,
+.oppCommits td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.oppCommits th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.oppCommitDate {
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.oppCommitScope {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.oppCommitMsg {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oppReassign {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+  max-width: 200px;
+}
