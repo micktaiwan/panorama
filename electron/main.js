@@ -46,16 +46,26 @@ function waitForMeteor(url, win) {
   return new Promise((resolve) => {
     const tick = () => {
       if (win.isDestroyed()) return;
+      // One attempt must schedule at most one retry: req.destroy() (on timeout)
+      // also fires 'error', which without this guard doubles the polling loops
+      // exponentially until the main process OOMs.
+      let settled = false;
+      const retry = () => {
+        if (settled) return;
+        settled = true;
+        setTimeout(tick, 500);
+      };
       const req = http.get(url, (res) => {
         res.destroy();
         if (res.statusCode && res.statusCode < 500) {
+          settled = true;
           resolve();
         } else {
-          setTimeout(tick, 500);
+          retry();
         }
       });
-      req.on('error', () => setTimeout(tick, 500));
-      req.setTimeout(2000, () => { req.destroy(); setTimeout(tick, 500); });
+      req.on('error', retry);
+      req.setTimeout(2000, () => { req.destroy(); retry(); });
     };
     tick();
   });
