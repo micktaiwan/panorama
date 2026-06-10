@@ -9,13 +9,19 @@ import { ensureLoggedIn } from '/imports/api/_shared/auth';
 const updateNoteIndex = async (noteId, userId) => {
   const { NotesCollection } = await import('/imports/api/notes/collections');
   const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
-  const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-  await upsertDoc({
+  // Same indexing scheme as notes.update: drop all existing points for this
+  // doc (chunked note:<id>#i and legacy single note:<id>) then re-chunk
+  const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+  await deleteByDocId('note', noteId);
+  await upsertDocChunks({
     kind: 'note',
     id: noteId,
     text: `${next?.title || ''} ${next?.content || ''}`.trim(),
     projectId: next?.projectId || null,
-    userId
+    userId,
+    minChars: 800,
+    maxChars: 1200,
+    overlap: 150
   });
   if (next?.projectId) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
@@ -32,6 +38,9 @@ Meteor.methods({
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const note = await NotesCollection.findOneAsync({ _id: noteId, userId: this.userId });
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
+    if (note.lockedBy && note.lockedBy !== this.userId) {
+      throw new Meteor.Error('note-locked', 'Note is being edited by another user');
+    }
 
     const original = typeof note.content === 'string' ? note.content : '';
     if (!original.trim()) {
@@ -73,6 +82,9 @@ Meteor.methods({
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const note = await NotesCollection.findOneAsync({ _id: noteId, userId: this.userId });
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
+    if (note.lockedBy && note.lockedBy !== this.userId) {
+      throw new Meteor.Error('note-locked', 'Note is being edited by another user');
+    }
 
     const original = typeof note.content === 'string' ? note.content : '';
     if (!original.trim()) {
