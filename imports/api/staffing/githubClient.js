@@ -80,13 +80,15 @@ export const fetchPullRequests = async (repo, token, { since, max = 80 } = {}) =
 
 /**
  * Commits on a branch (default: the repo default branch) within the window.
+ * Pass `author` (a GitHub login or email) to filter to a single contributor.
  * Only needs `contents: read`. Returns [{ sha, message, authorLogin, authorEmail, committedAt }].
  */
-export const fetchBranchCommits = async (repo, token, { branch = 'master', since, max = 600 } = {}) => {
+export const fetchBranchCommits = async (repo, token, { branch = 'master', since, max = 600, author } = {}) => {
   const out = [];
   const sinceParam = since ? `&since=${encodeURIComponent(since.toISOString())}` : '';
+  const authorParam = author ? `&author=${encodeURIComponent(author)}` : '';
   for (let page = 1; page <= 8 && out.length < max; page++) {
-    const data = await ghGet(`/repos/${repo}/commits?sha=${encodeURIComponent(branch)}&per_page=100&page=${page}${sinceParam}`, token);
+    const data = await ghGet(`/repos/${repo}/commits?sha=${encodeURIComponent(branch)}&per_page=100&page=${page}${sinceParam}${authorParam}`, token);
     if (!Array.isArray(data) || data.length === 0) break;
     data.forEach(c => out.push({
       sha: c.sha,
@@ -98,6 +100,36 @@ export const fetchBranchCommits = async (repo, token, { branch = 'master', since
     if (data.length < 100) break;
   }
   return out.slice(0, max);
+};
+
+/**
+ * Full detail of ONE commit: complete message, per-file change stats, totals, html url.
+ * Only needs `contents: read`. Patches are intentionally dropped (we show stats, not diffs).
+ * Returns { sha, htmlUrl, message, authorName, authorEmail, authorLogin, committedAt,
+ *           stats: { additions, deletions, total }, files: [{ filename, status, additions, deletions }] }.
+ */
+export const fetchCommitDetail = async (repo, sha, token) => {
+  const data = await ghGet(`/repos/${repo}/commits/${encodeURIComponent(sha)}`, token);
+  return {
+    sha: data.sha,
+    htmlUrl: data.html_url || null,
+    message: data.commit?.message || '',
+    authorName: data.commit?.author?.name || '',
+    authorEmail: (data.commit?.author?.email || '').toLowerCase(),
+    authorLogin: data.author?.login || null,
+    committedAt: data.commit?.author?.date ? new Date(data.commit.author.date) : null,
+    stats: {
+      additions: data.stats?.additions || 0,
+      deletions: data.stats?.deletions || 0,
+      total: data.stats?.total || 0
+    },
+    files: (data.files || []).map(f => ({
+      filename: f.filename,
+      status: f.status,
+      additions: f.additions || 0,
+      deletions: f.deletions || 0
+    }))
+  };
 };
 
 /**

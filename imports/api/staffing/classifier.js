@@ -5,6 +5,25 @@ export const normName = (s) => String(s || '')
   .normalize('NFKD').replace(/[̀-ͯ]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+// Deterministic keyword layer: which projects have a keyword literally present in `text`.
+// Token-boundary match on the normalized text (space-padded) so "api" matches "fix api bug"
+// but NOT "rapide" — guarantees a candidate when the LLM misses an obvious keyword (or fails).
+// Returns [{ opportunityId, keyword }] (first matching keyword per project).
+export const matchKeywords = (text, opportunities) => {
+  const hay = ` ${normName(text)} `;
+  const hits = [];
+  for (const o of (opportunities || [])) {
+    for (const kw of (o.keywords || [])) {
+      const k = normName(kw);
+      if (k.length >= 2 && hay.includes(` ${k} `)) { hits.push({ opportunityId: o._id, keyword: kw }); break; }
+    }
+  }
+  return hits;
+};
+
+// Score given to a deterministic keyword match (high confidence, but below a perfect 1).
+const KEYWORD_SCORE = 0.95;
+
 const summarizeCommits = (commits, max = 8) => commits
   .slice(0, max)
   .map(c => `- ${(c.message || '').split('\n')[0].slice(0, 120)}`)
@@ -90,7 +109,100 @@ export const rankCommitsBatch = async ({ commits, opportunities }, userId) => {
       .slice(0, 5);
     out.set(r.sha, candidates);
   }
+
+  // Deterministic keyword layer: guarantee a candidate whenever a project keyword literally
+  // appears in the commit message — even if the LLM omitted it or the batch failed (empty out).
+  for (const c of commits) {
+    const hits = matchKeywords(c.message, opportunities);
+    if (!hits.length) continue;
+    const byId = new Map((out.get(c.sha) || []).map(x => [x.opportunityId, x]));
+    for (const h of hits) {
+      const prev = byId.get(h.opportunityId);
+      if (prev) prev.score = Math.max(prev.score, KEYWORD_SCORE);
+      else byId.set(h.opportunityId, { opportunityId: h.opportunityId, score: KEYWORD_SCORE });
+    }
+    out.set(c.sha, [...byId.values()].sort((a, b) => b.score - a.score).slice(0, 5));
+  }
   return out;
+};
+
+/**
+ * Deep classification of ONE commit against EXISTING opportunities, reading the FULL
+ * commit message AND the list of changed files (the on-demand "analyze deeper" action).
+ * Returns [{ opportunityId, score, reasoning }] (ids validated, never invented), top 5.
+ */
+export const rankCommitDeep = async ({ message, files, opportunities }, userId) => {
+  if (!opportunities || opportunities.length === 0) return [];
+
+  const oppList = opportunities
+    .map(o => `- [id:${o._id}] ${o.name}${o.keywords?.length ? ` — mots-clés: ${o.keywords.join(', ')}` : ''}`)
+    .join('\n');
+  const fileList = (files || []).slice(0, 80).map(f => `- ${f.filename}`).join('\n') || '(aucun fichier listé)';
+
+  const system = 'You assign ONE git commit to the most likely EXISTING projects. '
+    + 'Read its FULL commit message AND the list of changed file paths (paths are a strong signal of which area/project is touched). '
+    + 'Return up to 5 candidate projects ranked by likelihood, each with a score in [0,1] and a ONE-sentence reasoning in French. '
+    + 'Only use project ids from the provided list — never invent an id. '
+    + 'If no project plausibly matches, return an empty candidates array.';
+  const user = `Projects:\n${oppList}\n\n`
+    + `Commit message:\n${String(message || '').slice(0, 2000)}\n\n`
+    + `Changed files (${(files || []).length}):\n${fileList}\n\n`
+    + 'Which existing projects does this commit most likely belong to?';
+
+  const schema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      candidates: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            opportunityId: { type: 'string' },
+            score: { type: 'number' },
+            reasoning: { type: 'string' }
+          },
+          required: ['opportunityId', 'score', 'reasoning']
+        }
+      }
+    },
+    required: ['candidates']
+  };
+
+  const result = await chatComplete({
+    system,
+    messages: [{ role: 'user', content: user }],
+    responseFormat: 'json',
+    schema,
+    temperature: 0,
+    timeoutMs: 90000,
+    route: 'classify',
+    userId
+  });
+
+  let parsed;
+  try { parsed = JSON.parse(result?.text || '{}'); } catch (_e) { parsed = {}; }
+  const validIds = new Set(opportunities.map(o => o._id));
+  const byId = new Map();
+  for (const c of (Array.isArray(parsed.candidates) ? parsed.candidates : [])) {
+    if (!c || !validIds.has(c.opportunityId)) continue;
+    byId.set(c.opportunityId, {
+      opportunityId: c.opportunityId,
+      score: Number.isFinite(c.score) ? Math.max(0, Math.min(1, c.score)) : 0,
+      reasoning: String(c.reasoning || '').trim()
+    });
+  }
+
+  // Deterministic keyword layer: match on the message AND the changed file paths.
+  const matchText = `${message || ''} ${(files || []).map(f => f.filename).join(' ')}`;
+  for (const h of matchKeywords(matchText, opportunities)) {
+    const prev = byId.get(h.opportunityId);
+    if (prev) prev.score = Math.max(prev.score, KEYWORD_SCORE);
+    else byId.set(h.opportunityId, { opportunityId: h.opportunityId, score: KEYWORD_SCORE, reasoning: `Mot-clé « ${h.keyword} » présent` });
+  }
+
+  return [...byId.values()].sort((a, b) => b.score - a.score).slice(0, 5);
 };
 
 /**

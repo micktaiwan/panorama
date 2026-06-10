@@ -20,6 +20,7 @@ import { SituationAnalyzer } from '/imports/ui/SituationAnalyzer/SituationAnalyz
 import { PeoplePage } from '/imports/ui/People/PeoplePage.jsx';
 import { Staffing } from '/imports/ui/Staffing/Staffing.jsx';
 import { OpportunityDetail } from '/imports/ui/Staffing/OpportunityDetail.jsx';
+import { StaffingPerson } from '/imports/ui/Staffing/StaffingPerson.jsx';
 import { useAlarmScheduler } from '/imports/ui/hooks/useAlarmScheduler.js';
 import { useIdleDetection } from '/imports/ui/hooks/useIdleDetection.js';
 import { PresenceBar } from '/imports/ui/components/PresenceBar/PresenceBar.jsx';
@@ -821,6 +822,11 @@ function App() {
         {route?.name === 'opportunity' && canSeePage('staffing', user, userPrefs) && (
           <div className="panel">
             <OpportunityDetail opportunityId={route.opportunityId} />
+          </div>
+        )}
+        {route?.name === 'staffingPerson' && canSeePage('staffing', user, userPrefs) && (
+          <div className="panel">
+            <StaffingPerson personId={route.personId} />
           </div>
         )}
         {route?.name === 'links' && (

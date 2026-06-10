@@ -2,11 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind, useTracker } from 'meteor/react-meteor-data';
 import { PeopleCollection } from '/imports/api/people/collections';
+import { handlesOf } from '/imports/api/people/githubHandles';
 import { TeamsCollection } from '/imports/api/teams/collections';
 import { OpportunitiesCollection } from '/imports/api/opportunities/collections';
 import { CommitsCollection } from '/imports/api/staffing/gitCollections';
 import { UserPreferencesCollection } from '/imports/api/userPreferences/collections';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { CommitAnalysisModal } from '/imports/ui/Staffing/CommitAnalysisModal/CommitAnalysisModal.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
 import { navigateTo } from '/imports/ui/router.js';
 import './Staffing.css';
@@ -58,6 +60,16 @@ const progressLabel = (p) => {
 
 const WINDOW_DAYS = 7;
 const REVIEW_PAGE_SIZE = 10;
+// Staffing only shows the technical org. "Data" is an empty top-level team today
+// (data folks live in Tech with subteam=Data) — kept for future-proofing.
+const STAFFING_TEAM_NAMES = ['tech', 'sre/devops', 'data'];
+// People always shown regardless of team, so the org tree keeps a real root (CTO above the VP/leads).
+const STAFFING_WHITELIST_EMAILS = ['mickael@lempire.co'];
+const MAX_DEPTH = 6;
+// Two roles that don't contain "lead" but should still get the lead-row background:
+// the CTO (Mickael) and the VP of Engineering (Corentin Léotard).
+const LEAD_FOND_EXCEPTIONS = new Set(['mickael@lempire.co', 'corentin@lempire.co']);
+const isWhitelisted = (p) => STAFFING_WHITELIST_EMAILS.includes(String(p?.email || '').toLowerCase());
 
 export const Staffing = () => {
   const loadingPeople = useSubscribe('people.all');
@@ -73,6 +85,8 @@ export const Staffing = () => {
   const userPrefs = useTracker(() => UserPreferencesCollection.findOne({}) || null, []);
 
   const [teamId, setTeamId] = useState('');
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverKey, setDragOverKey] = useState(null); // person _id or '__loose__'
   const [showGit, setShowGit] = useState(false);
   const [ghRepo, setGhRepo] = useState('');
   const [ghToken, setGhToken] = useState('');
@@ -83,8 +97,10 @@ export const Staffing = () => {
   const [lastResult, setLastResult] = useState(null);
   const [reviewPage, setReviewPage] = useState(0);
   const [newProjFor, setNewProjFor] = useState({}); // sha -> draft name
+  const [creatingShas, setCreatingShas] = useState(() => new Set()); // shas with an in-flight project creation
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [wiping, setWiping] = useState(false);
+  const [analyzeSha, setAnalyzeSha] = useState(null);
 
   useEffect(() => {
     if (userPrefs && !ghInit) {
@@ -104,24 +120,23 @@ export const Staffing = () => {
     return m;
   }, [people]);
 
-  const teamsById = useMemo(() => {
-    const m = new Map();
-    teams.forEach(t => m.set(t._id, t.name));
-    return m;
-  }, [teams]);
-
   const oppById = useMemo(() => {
     const m = new Map();
     opportunities.forEach(o => m.set(o._id, o.name));
     return m;
   }, [opportunities]);
+  // Alphabetical list for the project-selection dropdowns (kanban order stays for the board).
+  const sortedOpportunities = useMemo(
+    () => [...opportunities].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' })),
+    [opportunities]
+  );
 
-  // Resolve a commit author to a person: githubUsername (login) > email.
+  // Resolve a commit author to a person: GitHub login (any handle) > email.
   const resolver = useMemo(() => {
     const byLogin = new Map();
     const byEmail = new Map();
     people.forEach(p => {
-      if (p.githubUsername) byLogin.set(p.githubUsername.toLowerCase(), p._id);
+      handlesOf(p).forEach(login => byLogin.set(login, p._id));
       if (p.email) byEmail.set(p.email.toLowerCase(), p._id);
     });
     return (c) => {
@@ -167,26 +182,151 @@ export const Staffing = () => {
   const safePage = Math.min(reviewPage, pageCount - 1);
   const pageCommits = reviewCommits.slice(safePage * REVIEW_PAGE_SIZE, safePage * REVIEW_PAGE_SIZE + REVIEW_PAGE_SIZE);
 
-  // Rows: active people, optional team filter, grouped by team name.
-  const groups = useMemo(() => {
-    const rows = [...activeIds]
-      .map(id => peopleById.get(id))
-      .filter(Boolean)
-      .filter(p => !teamId || p.teamId === teamId);
-    const byTeam = new Map();
-    rows.forEach(p => {
-      const key = p.teamId || '__none__';
-      if (!byTeam.has(key)) byTeam.set(key, []);
-      byTeam.get(key).push(p);
+  // Teams shown in the Staffing org: technical org only (Tech, SRE/DevOps, Data).
+  const staffingTeamIds = useMemo(() => {
+    const wanted = new Set(STAFFING_TEAM_NAMES);
+    return new Set(teams.filter(t => wanted.has(String(t.name || '').toLowerCase())).map(t => t._id));
+  }, [teams]);
+  const staffingTeams = useMemo(
+    () => teams.filter(t => staffingTeamIds.has(t._id)).sort((a, b) => String(a.name).localeCompare(String(b.name))),
+    [teams, staffingTeamIds]
+  );
+
+  // Population = non-left people in the technical org (+ whitelist), optionally narrowed by the team filter.
+  // Whitelisted people (e.g. the CTO) always appear so the tree stays rooted, even under a team filter.
+  const population = useMemo(
+    () => people.filter(p => !p.left && (isWhitelisted(p) || ((p.teamId && staffingTeamIds.has(p.teamId)) && (!teamId || p.teamId === teamId)))),
+    [people, staffingTeamIds, teamId]
+  );
+
+  // Build the managerId tree over the population:
+  // - treeRows: DFS-flattened [{ person, depth }] for every node that belongs to a tree (root WITH reports, then descendants).
+  // - looseRows: roots WITHOUT reports (unclassified leaves) → the "Sans manager" bucket.
+  // A managerId pointing outside the population makes the person an effective root.
+  const { treeRows, looseRows } = useMemo(() => {
+    const inSet = new Set(population.map(p => p._id));
+    const parentOf = new Map(); // id -> effective parent id (within population) or null
+    population.forEach(p => parentOf.set(p._id, (p.managerId && inSet.has(p.managerId)) ? p.managerId : null));
+    const childrenOf = new Map(); // parentId -> [person]
+    population.forEach(p => {
+      const par = parentOf.get(p._id);
+      if (!par) return;
+      if (!childrenOf.has(par)) childrenOf.set(par, []);
+      childrenOf.get(par).push(p);
     });
-    const arr = [...byTeam.entries()].map(([key, members]) => ({
-      key,
-      label: key === '__none__' ? 'Sans équipe' : (teamsById.get(key) || 'Équipe'),
-      members: members.sort((a, b) => personLabel(a).localeCompare(personLabel(b)))
-    }));
-    arr.sort((a, b) => a.label.localeCompare(b.label));
-    return arr;
-  }, [activeIds, peopleById, teamId, teamsById]);
+    const sortP = (a, b) => personLabel(a).localeCompare(personLabel(b));
+    const roots = population.filter(p => parentOf.get(p._id) === null);
+    const treeHeads = roots.filter(p => childrenOf.has(p._id)).sort(sortP);
+    const loose = roots.filter(p => !childrenOf.has(p._id)).sort(sortP);
+    const rows = [];
+    const walk = (p, depth) => {
+      rows.push({ person: p, depth });
+      (childrenOf.get(p._id) || []).slice().sort(sortP).forEach(k => walk(k, depth + 1));
+    };
+    treeHeads.forEach(h => walk(h, 0));
+    return { treeRows: rows, looseRows: loose };
+  }, [population]);
+
+  // Cycle guard (client-side pre-check; server is authoritative). Walks the REAL managerId
+  // chain from the drop target: if it reaches the dragged person, the link would cycle.
+  const wouldCreateCycle = (draggedId, targetId) => {
+    if (draggedId === targetId) return true;
+    let cursor = targetId;
+    const seen = new Set();
+    while (cursor) {
+      if (cursor === draggedId) return true;
+      if (seen.has(cursor)) break;
+      seen.add(cursor);
+      cursor = peopleById.get(cursor)?.managerId || null;
+    }
+    return false;
+  };
+
+  const reattach = (personId, managerId) => {
+    Meteor.call('people.update', personId, { managerId: managerId || '' }, (err) => {
+      if (err) { notify({ message: err.reason || 'Erreur', kind: 'error' }); return; }
+      const who = personLabel(peopleById.get(personId));
+      const msg = managerId ? `${who} → ${personLabel(peopleById.get(managerId))}` : `${who} détaché`;
+      notify({ message: msg, kind: 'success' });
+    });
+  };
+
+  const onDragStartPerson = (e, personId) => {
+    setDraggingId(personId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', personId);
+  };
+  const onDragEndPerson = () => { setDraggingId(null); setDragOverKey(null); };
+  const allowDrop = (e, overKey) => { e.preventDefault(); if (dragOverKey !== overKey) setDragOverKey(overKey); };
+  const clearDropHighlight = (overKey) => setDragOverKey(prev => (prev === overKey ? null : prev));
+
+  const onDropOnPerson = (e, targetId) => {
+    e.preventDefault();
+    const dragged = draggingId || e.dataTransfer.getData('text/plain');
+    setDragOverKey(null); setDraggingId(null);
+    if (!dragged || dragged === targetId) return;
+    if (peopleById.get(dragged)?.managerId === targetId) return; // already attached there
+    if (wouldCreateCycle(dragged, targetId)) { notify({ message: 'Rattachement refusé : créerait un cycle hiérarchique', kind: 'error' }); return; }
+    reattach(dragged, targetId);
+  };
+  const onDropLoose = (e) => {
+    e.preventDefault();
+    const dragged = draggingId || e.dataTransfer.getData('text/plain');
+    setDragOverKey(null); setDraggingId(null);
+    if (!dragged || !peopleById.get(dragged)?.managerId) return; // already detached
+    reattach(dragged, '');
+  };
+
+  const renderPersonRow = (p, depth) => {
+    const dm = grid.get(p._id) || new Map();
+    const lvl = Math.min(depth, MAX_DEPTH);
+    const isLead = /lead/i.test(p.role || '') || LEAD_FOND_EXCEPTIONS.has(String(p.email || '').toLowerCase());
+    return (
+      <tr key={p._id} className={`personRow${isLead ? ' leadRow' : ''}${draggingId === p._id ? ' dragging' : ''}`}>
+        <td
+          className={`personCell lvl${lvl}${dragOverKey === p._id ? ' dropTarget' : ''}`}
+          onDragOver={(e) => allowDrop(e, p._id)}
+          onDragLeave={() => clearDropHighlight(p._id)}
+          onDrop={(e) => onDropOnPerson(e, p._id)}
+        >
+          <span className="personHandle">
+            <span
+              className="dragGrip"
+              draggable
+              onDragStart={(e) => onDragStartPerson(e, p._id)}
+              onDragEnd={onDragEndPerson}
+              title="Glisser pour rattacher à un manager (ou vers « Sans manager » pour détacher)"
+            >⋮⋮</span>
+            <button
+              type="button"
+              className="personName linklike"
+              onClick={() => navigateTo({ name: 'staffingPerson', personId: p._id })}
+              title="Voir la fiche et les commits"
+            >{personLabel(p)}</button>
+            {p.role ? <span className="personRole">{p.role}</span> : null}
+          </span>
+        </td>
+        {days.map(d => {
+          const cell = dm.get(d.key);
+          return (
+            <td key={d.key} className="dayCell">
+              {cell && [...cell.entries()].map(([oppId, chip]) => (
+                <span
+                  key={oppId}
+                  className={`projChip ${colorClass(oppId)} clickable`}
+                  title={`Projet : ${chip.label} (cliquer pour ouvrir)`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigateTo({ name: 'opportunity', opportunityId: oppId })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo({ name: 'opportunity', opportunityId: oppId }); } }}
+                >{shortName(chip.label)}</span>
+              ))}
+            </td>
+          );
+        })}
+      </tr>
+    );
+  };
 
   const saveGithubConfig = () => {
     const github = { repo: ghRepo.trim(), windowDays: Number(ghWindow) || 14 };
@@ -199,6 +339,7 @@ export const Staffing = () => {
   };
 
   const runAnalysis = () => {
+    if (running) return;
     setRunning(true);
     setProgress({ phase: 'fetching', startedAt: Date.now() });
     const poll = setInterval(() => {
@@ -226,14 +367,19 @@ export const Staffing = () => {
       setRunning(false);
       setProgress(null);
       if (err) { notify({ message: err.reason || 'Erreur recalcul', kind: 'error' }); return; }
+      if (res?.coalesced) { notify({ message: 'Recalcul déjà en cours — relance groupée', kind: 'info' }); return; }
       notify({ message: `Propositions recalculées (${res.ranked}/${res.total})`, kind: 'success' });
     });
   };
 
-  const setGithubUsername = (personId, githubUsername) => {
-    Meteor.call('people.update', personId, { githubUsername }, (err) => {
+  // Attach an unresolved git login to a person: ADD it to their handles (never overwrite),
+  // so a person can accumulate several GitHub logins.
+  const setGithubUsername = (personId, login) => {
+    const person = people.find(p => p._id === personId);
+    const next = [...handlesOf(person), String(login || '').trim().toLowerCase()];
+    Meteor.call('people.update', personId, { githubUsernames: next }, (err) => {
       if (err) { notify({ message: err.reason || 'Erreur', kind: 'error' }); return; }
-      notify({ message: `Rattaché : ${githubUsername}`, kind: 'success' });
+      notify({ message: `Rattaché : ${login}`, kind: 'success' });
     });
   };
 
@@ -243,7 +389,10 @@ export const Staffing = () => {
   const createAndAssign = (sha, name) => {
     const trimmed = String(name || '').trim();
     if (!trimmed) return;
+    if (creatingShas.has(sha)) return; // guard against double-submit (Enter + click / double Enter)
+    setCreatingShas(prev => new Set(prev).add(sha));
     Meteor.call('opportunities.insert', { name: trimmed }, (err, newId) => {
+      setCreatingShas(prev => { const n = new Set(prev); n.delete(sha); return n; });
       if (err) { notify({ message: err.reason || 'Erreur', kind: 'error' }); return; }
       classifyCommit(sha, newId);
       setNewProjFor(prev => { const n = { ...prev }; delete n[sha]; return n; });
@@ -281,8 +430,8 @@ export const Staffing = () => {
           <label className="staffingField">
             Équipe
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-              <option value="">Toutes</option>
-              {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+              <option value="">Toutes (Tech + SRE + Data)</option>
+              {staffingTeams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
             </select>
           </label>
           <button type="button" className="btn btnDanger" onClick={() => setConfirmWipe(true)}>🗑 Delete Data</button>
@@ -373,6 +522,12 @@ export const Staffing = () => {
                   </div>
                   <div className="reviewMsg" title={c.message}>{c.message}</div>
                   <div className="reviewCandidates">
+                    <button
+                      type="button"
+                      className="candChip candAnalyze"
+                      title="Analyse approfondie : récupère le commit complet (message, fichiers, stats) et propose des projets"
+                      onClick={() => setAnalyzeSha(c.sha)}
+                    >🔬 Analyser</button>
                     {cands.length === 0 && <span className="reviewNoCand">aucun candidat proposé</span>}
                     {cands.map(x => (
                       <button
@@ -391,7 +546,7 @@ export const Staffing = () => {
                         onChange={(e) => { if (e.target.value) classifyCommit(c.sha, e.target.value); }}
                       >
                         <option value="">+ autre projet…</option>
-                        {opportunities.map(o => <option key={o._id} value={o._id}>{o.name}</option>)}
+                        {sortedOpportunities.map(o => <option key={o._id} value={o._id}>{o.name}</option>)}
                       </select>
                     )}
                     <button type="button" className="candChip candNone" onClick={() => classifyCommit(c.sha, '__none__')}>Aucun</button>
@@ -405,9 +560,9 @@ export const Staffing = () => {
                           placeholder="Nom du projet"
                           value={draft}
                           onChange={(e) => setNewProjFor(prev => ({ ...prev, [c.sha]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === 'Enter') createAndAssign(c.sha, draft); if (e.key === 'Escape') setNewProjFor(prev => { const n = { ...prev }; delete n[c.sha]; return n; }); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !creatingShas.has(c.sha)) createAndAssign(c.sha, draft); if (e.key === 'Escape') setNewProjFor(prev => { const n = { ...prev }; delete n[c.sha]; return n; }); }}
                         />
-                        <button type="button" className="btn btnPrimary" disabled={!draft.trim()} onClick={() => createAndAssign(c.sha, draft)}>Créer</button>
+                        <button type="button" className="btn btnPrimary" disabled={!draft.trim() || creatingShas.has(c.sha)} onClick={() => createAndAssign(c.sha, draft)}>{creatingShas.has(c.sha) ? 'Création…' : 'Créer'}</button>
                         <button type="button" className="btn" onClick={() => setNewProjFor(prev => { const n = { ...prev }; delete n[c.sha]; return n; })}>✕</button>
                       </span>
                     )}
@@ -419,52 +574,39 @@ export const Staffing = () => {
         </div>
       )}
 
-      {activeIds.size === 0 ? (
-        <p className="muted staffingEmpty">Aucune activité Git résolue sur les {WINDOW_DAYS} derniers jours. Lance une analyse (panneau ⎇ Git) et rattache les auteurs (github login) pour peupler la timeline.</p>
+      {population.length === 0 ? (
+        <p className="muted staffingEmpty">Aucune personne dans l'org technique (Tech / SRE / Data) pour ce filtre. Vérifie les équipes dans People.</p>
       ) : (
         <div className="staffingMatrixWrap">
           <table className="staffingMatrix timeline">
             <thead>
               <tr>
-                <th className="cornerCell">Équipe / Dev</th>
+                <th className="cornerCell">Encadrement / Dev</th>
                 {days.map(d => <th key={d.key} className="dayCol">{d.label}</th>)}
               </tr>
             </thead>
             <tbody>
-              {groups.map(group => (
-                <React.Fragment key={group.key}>
-                  <tr className="squadRow">
-                    <td className="squadCell">{group.label} <span className="squadCount">· {group.members.length}</span></td>
-                    {days.map(d => <td key={d.key} className="squadAgg" />)}
-                  </tr>
-                  {group.members.map(p => {
-                    const dm = grid.get(p._id) || new Map();
-                    return (
-                      <tr key={p._id} className="personRow">
-                        <td className="personCell"><span className="personName">{personLabel(p)}</span></td>
-                        {days.map(d => {
-                          const cell = dm.get(d.key);
-                          return (
-                            <td key={d.key} className="dayCell">
-                              {cell && [...cell.entries()].map(([oppId, chip]) => (
-                                <span
-                                  key={oppId}
-                                  className={`projChip ${colorClass(oppId)} clickable`}
-                                  title={`Projet : ${chip.label} (cliquer pour ouvrir)`}
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => navigateTo({ name: 'opportunity', opportunityId: oppId })}
-                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo({ name: 'opportunity', opportunityId: oppId }); } }}
-                                >{shortName(chip.label)}</span>
-                              ))}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
+              {treeRows.map(({ person, depth }) => renderPersonRow(person, depth))}
+              <tr className="squadRow looseRow">
+                <td
+                  className={`squadCell looseCell${dragOverKey === '__loose__' ? ' dropTarget' : ''}`}
+                  onDragOver={(e) => allowDrop(e, '__loose__')}
+                  onDragLeave={() => clearDropHighlight('__loose__')}
+                  onDrop={onDropLoose}
+                >
+                  Sans manager <span className="squadCount">· {looseRows.length}</span>
+                  <span className="looseHint">déposer ici = détacher</span>
+                </td>
+                {days.map(d => (
+                  <td
+                    key={d.key}
+                    className={`squadAgg${dragOverKey === '__loose__' ? ' dropTarget' : ''}`}
+                    onDragOver={(e) => allowDrop(e, '__loose__')}
+                    onDrop={onDropLoose}
+                  />
+                ))}
+              </tr>
+              {looseRows.map(p => renderPersonRow(p, 0))}
             </tbody>
           </table>
         </div>
@@ -484,6 +626,17 @@ export const Staffing = () => {
         <p>Conserve le mapping <strong>github → personne</strong> et les équipes.</p>
         <p className="gitWarn">Action irréversible.</p>
       </Modal>
+
+      {analyzeSha && (
+        <CommitAnalysisModal
+          key={analyzeSha}
+          sha={analyzeSha}
+          headline={(reviewCommits.find(c => c.sha === analyzeSha) || {}).message}
+          opportunities={opportunities}
+          onClassify={classifyCommit}
+          onClose={() => setAnalyzeSha(null)}
+        />
+      )}
     </div>
   );
 };

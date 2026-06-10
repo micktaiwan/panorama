@@ -37,6 +37,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'calendar') return { name: 'calendar' };
   if (parts[0] === 'panorama') return { name: 'panorama' };
   if (parts[0] === 'people') return { name: 'people', personId: parts[1] };
+  if (parts[0] === 'staffing' && parts[1] === 'person' && parts[2]) return { name: 'staffingPerson', personId: parts[2] };
   if (parts[0] === 'staffing') return { name: 'staffing' };
   if (parts[0] === 'opportunity' && parts[1]) return { name: 'opportunity', opportunityId: parts[1] };
   if (parts[0] === 'situation-analyzer') return { name: 'situationAnalyzer' };
@@ -127,6 +128,9 @@ export const navigateTo = (route) => {
       break;
     case 'staffing':
       window.location.hash = '#/staffing';
+      break;
+    case 'staffingPerson':
+      window.location.hash = `#/staffing/person/${route.personId}`;
       break;
     case 'opportunity':
       window.location.hash = `#/opportunity/${route.opportunityId}`;

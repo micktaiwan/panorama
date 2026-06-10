@@ -1,0 +1,201 @@
+.staffPerson {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.staffPersonBack {
+  align-self: flex-start;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.staffPersonBack:hover { color: var(--text); }
+
+.staffPersonHead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.staffPersonName { margin: 0; }
+
+.staffPersonRole {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.staffPersonFacts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.staffPersonFacts dt {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.staffPersonFacts dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.staffSubteam { color: var(--muted); }
+.staffMono { font-family: var(--mono, monospace); }
+
+.staffPersonLink {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent, #2e86de);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.staffPersonLink:hover { text-decoration: underline; }
+
+.staffPersonStats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.staffStatChip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.staffSectionTitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.staffCommitsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.staffFetchWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.staffFetchHint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.staffFetchBtn {
+  background: var(--accent-soft, var(--panel));
+  color: var(--accent, var(--text));
+  border: 1px solid var(--accent, var(--border));
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.staffFetchBtn:hover:not(:disabled) { filter: brightness(1.05); }
+.staffFetchBtn:disabled { opacity: 0.55; cursor: default; }
+
+.staffCommits {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.staffCommits th,
+.staffCommits td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.staffCommits th {
+  background: var(--panel);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.staffCommitDate {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.staffCommitAuthor {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.staffCommitMsg {
+  max-width: 640px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Project chips (shared look with the Staffing timeline) */
+.staffCommits .projChip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.staffCommits .projChip.clickable { cursor: pointer; }
+.staffCommits .projChip.clickable:hover { filter: brightness(1.15); }
+
+.staffCommits .chip-c0 { background: #2e86de; }
+.staffCommits .chip-c1 { background: #8e44ad; }
+.staffCommits .chip-c2 { background: #16a085; }
+.staffCommits .chip-c3 { background: #d35400; }
+.staffCommits .chip-c4 { background: #c0392b; }
+.staffCommits .chip-c5 { background: #2c3e50; }
+.staffCommits .chip-c6 { background: #27ae60; }
+.staffCommits .chip-c7 { background: #b7791f; }
+
+.staffCommits .chip-unclassified {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+}
+
+.staffCommitClassify {
+  max-width: 220px;
+  padding: 2px 6px;
+  font-size: 0.85em;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}

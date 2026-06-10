@@ -5,6 +5,11 @@ import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 
 const cleanStatus = (s) => (OPPORTUNITY_STATUSES.includes(s) ? s : 'in_progress');
 
+// Normalize a project name for duplicate detection (accent/case/punctuation insensitive).
+const normName = (s) => String(s || '')
+  .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
 // Keywords: accept an array or a comma/newline-separated string -> normalized, deduped list.
 const cleanKeywords = (kw) => {
   const raw = Array.isArray(kw) ? kw : String(kw || '').split(/[,\n]/);
@@ -23,6 +28,16 @@ Meteor.methods({
     if (!fields || typeof fields !== 'object') throw new Meteor.Error('invalid-arg', 'fields must be an object');
     const name = String(fields.name || '').trim();
     if (!name) throw new Meteor.Error('invalid-arg', 'name is required');
+    // Dedup: reuse an existing project with the same normalized name instead of creating
+    // a duplicate (guards against rapid create / same-name typing from the review queue).
+    const key = normName(name);
+    if (key) {
+      const existing = await OpportunitiesCollection.find(
+        { userId: this.userId }, { fields: { name: 1 } }
+      ).fetchAsync();
+      const dup = existing.find(o => normName(o.name) === key);
+      if (dup) return dup._id;
+    }
     const now = new Date();
     // New opportunity goes to the end of the column order.
     const last = await OpportunitiesCollection.findOneAsync(

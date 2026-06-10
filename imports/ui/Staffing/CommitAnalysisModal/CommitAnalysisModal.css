@@ -1,0 +1,218 @@
+.commitAnalysisPanel {
+  max-width: 760px;
+  width: 90vw;
+}
+
+.caBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.caHeadline {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caLoading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 8px 0;
+}
+
+.caSpinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent, #2e86de);
+  border-radius: 50%;
+  animation: ca-spin 0.8s linear infinite;
+}
+
+@keyframes ca-spin {
+  to { transform: rotate(360deg); }
+}
+
+.caError {
+  color: var(--danger, #c0392b);
+  font-size: 13px;
+}
+
+.caMuted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.caMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.caStat {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.caAdd { color: var(--success, #2ecc71); }
+.caDel { color: var(--danger, #c0392b); }
+.caAuthor { font-family: var(--mono, monospace); }
+
+.caGhLink {
+  font-size: 12px;
+  color: var(--accent, #2e86de);
+  text-decoration: none;
+  margin-left: auto;
+}
+.caGhLink:hover { text-decoration: underline; }
+
+.caMessage {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.caFilesHead,
+.caProjectsHead {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.caFiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.caFile {
+  display: grid;
+  grid-template-columns: 84px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg, var(--panel));
+}
+
+.caFileStatus {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.caFileStatus.st-added { color: var(--success, #2ecc71); }
+.caFileStatus.st-removed { color: var(--danger, #c0392b); }
+.caFileStatus.st-renamed { color: var(--accent, #2e86de); }
+
+.caFileName {
+  font-family: var(--mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caFileNums {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.caProjects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.caCandidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.caCandidate {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.caCandChip {
+  border: none;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.caCandChip:hover { filter: brightness(1.15); }
+.caScore { opacity: 0.85; font-size: 11px; }
+
+.caReason {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.caManual {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.caManual select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  max-width: 280px;
+}
+
+/* Shared project-chip palette (same hues as the Staffing timeline) */
+.caCandChip.chip-c0 { background: #2e86de; }
+.caCandChip.chip-c1 { background: #8e44ad; }
+.caCandChip.chip-c2 { background: #16a085; }
+.caCandChip.chip-c3 { background: #d35400; }
+.caCandChip.chip-c4 { background: #c0392b; }
+.caCandChip.chip-c5 { background: #2c3e50; }
+.caCandChip.chip-c6 { background: #27ae60; }
+.caCandChip.chip-c7 { background: #b7791f; }

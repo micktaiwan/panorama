@@ -228,6 +228,79 @@
   color: var(--muted);
 }
 
+/* Hierarchy indentation (managerId depth) */
+.personCell.lvl0 { padding-left: 12px; }
+.personCell.lvl1 { padding-left: 32px; }
+.personCell.lvl2 { padding-left: 52px; }
+.personCell.lvl3 { padding-left: 72px; }
+.personCell.lvl4 { padding-left: 92px; }
+.personCell.lvl5 { padding-left: 112px; }
+.personCell.lvl6 { padding-left: 132px; }
+
+/* Drag-and-drop reattachment */
+.personHandle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dragGrip {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: -2px;
+  user-select: none;
+  cursor: grab;
+}
+
+.dragGrip:active { cursor: grabbing; }
+
+.personName.linklike {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.personName.linklike:hover {
+  color: var(--accent, #2e86de);
+  text-decoration: underline;
+}
+
+.personRow.dragging { opacity: 0.45; }
+
+.dropTarget {
+  outline: 2px dashed var(--accent, #2e86de);
+  outline-offset: -2px;
+  background: var(--accent-soft, rgba(46, 134, 222, 0.14)) !important;
+}
+
+.looseHint {
+  margin-left: 8px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Lead rows (role contains "lead") get a distinct background */
+.personRow.leadRow .dayCell {
+  background: var(--accent-soft, rgba(46, 134, 222, 0.10));
+}
+
+.personRow.leadRow .personCell {
+  /* Soft accent tint layered over an opaque base so the sticky cell stays readable */
+  background: linear-gradient(var(--accent-soft, rgba(46, 134, 222, 0.16)), var(--accent-soft, rgba(46, 134, 222, 0.16))), var(--bg, var(--panel));
+}
+
+.personRow.leadRow .personName {
+  font-weight: 600;
+}
+
 .idleDot {
   margin-left: auto;
   font-size: 12px;
@@ -563,6 +636,10 @@
   background: transparent;
   color: var(--accent, #2e86de);
   border: 1px solid var(--accent, #2e86de);
+}
+.candAnalyze {
+  background: var(--accent, #2e86de);
+  color: #fff;
 }
 .reviewNoCand { font-size: 11px; color: var(--muted); font-style: italic; }
 
