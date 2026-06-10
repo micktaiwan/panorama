@@ -2,6 +2,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { PeopleCollection } from './collections';
 import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
+import { normalizeHandles } from './githubHandles';
 
 const normalize = (s) => {
   const base = String(s || '').trim();
@@ -26,13 +27,18 @@ Meteor.methods({
     const subteam = typeof fields.subteam === 'string' ? fields.subteam.trim() : '';
     const teamId = fields.teamId ? String(fields.teamId) : undefined;
     const managerId = fields.managerId ? String(fields.managerId) : undefined;
-    const githubUsername = typeof fields.githubUsername === 'string' ? fields.githubUsername.trim() : '';
+    // A person can have several GitHub logins. Accept the array, and coerce the
+    // legacy singular into the array so older callers keep working.
+    const githubUsernames = normalizeHandles([
+      ...(Array.isArray(fields.githubUsernames) ? fields.githubUsernames : []),
+      ...(typeof fields.githubUsername === 'string' ? [fields.githubUsername] : [])
+    ]);
     const arrivalDate = fields.arrivalDate ? new Date(fields.arrivalDate) : undefined;
     const doc = { name, lastName, normalizedName, aliases, role, email, notes, left, contactOnly, userId: this.userId, createdAt: now, updatedAt: now };
     if (teamId) doc.teamId = teamId;
     if (subteam) doc.subteam = subteam;
     if (managerId) doc.managerId = managerId;
-    if (githubUsername) doc.githubUsername = githubUsername;
+    if (githubUsernames.length > 0) doc.githubUsernames = githubUsernames;
     if (arrivalDate && !isNaN(arrivalDate.getTime())) doc.arrivalDate = arrivalDate;
     const _id = await PeopleCollection.insertAsync(doc);
     return _id;
@@ -65,12 +71,34 @@ Meteor.methods({
       if (st) updates.subteam = st; else unset.subteam = 1;
     }
     if ('managerId' in fields) {
-      if (fields.managerId) updates.managerId = String(fields.managerId);
-      else unset.managerId = 1;
+      if (fields.managerId) {
+        const newManagerId = String(fields.managerId);
+        if (newManagerId === id) throw new Meteor.Error('invalid-manager', 'Une personne ne peut pas être son propre manager');
+        // Reject if the new manager is a descendant of this person (would create a cycle).
+        // Walk up the manager chain from the new manager: if we reach `id`, the link cycles.
+        let cursor = newManagerId;
+        const seen = new Set();
+        while (cursor) {
+          if (cursor === id) throw new Meteor.Error('invalid-manager', 'Rattachement refusé : créerait un cycle hiérarchique');
+          if (seen.has(cursor)) break; // guard against any pre-existing cycle in the data
+          seen.add(cursor);
+          const m = await PeopleCollection.findOneAsync({ _id: cursor, userId: this.userId }, { fields: { managerId: 1 } });
+          cursor = m?.managerId || null;
+        }
+        updates.managerId = newManagerId;
+      } else {
+        unset.managerId = 1;
+      }
     }
-    if ('githubUsername' in fields) {
-      const gh = typeof fields.githubUsername === 'string' ? fields.githubUsername.trim() : '';
-      if (gh) updates.githubUsername = gh; else unset.githubUsername = 1;
+    if ('githubUsernames' in fields || 'githubUsername' in fields) {
+      // Full replace of the handle list. Accept the array and/or the legacy singular.
+      const list = normalizeHandles([
+        ...(Array.isArray(fields.githubUsernames) ? fields.githubUsernames : []),
+        ...(typeof fields.githubUsername === 'string' ? [fields.githubUsername] : [])
+      ]);
+      if (list.length > 0) updates.githubUsernames = list; else unset.githubUsernames = 1;
+      // Touching handles always retires the legacy singular so the two never diverge.
+      unset.githubUsername = 1;
     }
     if ('arrivalDate' in fields) {
       const d = fields.arrivalDate ? new Date(fields.arrivalDate) : null;

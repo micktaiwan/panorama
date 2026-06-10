@@ -222,6 +222,7 @@ export const TOOL_DEFINITIONS = [
         email: { type: 'string', description: 'Email address (optional)' },
         teamId: { type: 'string', description: 'Team ID (optional). Use tool_teamsList to find it' },
         aliases: { type: 'array', items: { type: 'string' }, description: 'Alternative names/nicknames (optional)' },
+        githubUsernames: { type: 'array', items: { type: 'string' }, description: 'GitHub login(s) for commit matching — a person can have several (optional)' },
         notes: { type: 'string', description: 'Free-text notes (optional)' },
         left: { type: 'boolean', description: 'Whether the person has left the company (optional, default false)' },
         contactOnly: { type: 'boolean', description: 'Whether the person is an external contact only (optional, default false)' }
@@ -243,6 +244,10 @@ export const TOOL_DEFINITIONS = [
         role: { type: 'string', description: 'New role (optional)' },
         email: { type: 'string', description: 'New email address (optional)' },
         teamId: { type: 'string', description: 'New team ID, or empty string to unset (optional)' },
+        aliases: { type: 'array', items: { type: 'string' }, description: 'Alternative names/nicknames — replaces the whole list (optional)' },
+        githubUsernames: { type: 'array', items: { type: 'string' }, description: 'GitHub login(s) — replaces the whole list. A person can have several handles (optional)' },
+        notes: { type: 'string', description: 'Free-text notes — OVERWRITES the entire existing notes field. Use notesAppend to add to existing notes without losing them (optional)' },
+        notesAppend: { type: 'string', description: 'Text to append to existing notes (separated by a newline) — preserves current notes. Use this instead of notes when adding information (optional)' },
         left: { type: 'boolean', description: 'Whether the person has left (optional)' },
         contactOnly: { type: 'boolean', description: 'Whether the person is an external contact only (optional)' }
       },

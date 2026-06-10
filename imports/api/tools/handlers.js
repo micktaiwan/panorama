@@ -715,6 +715,7 @@ export const TOOL_HANDLERS = {
     if (args?.email !== undefined) fields.email = String(args.email || '').trim().toLowerCase();
     if (args?.notes !== undefined) fields.notes = String(args.notes || '');
     if (Array.isArray(args?.aliases)) fields.aliases = args.aliases.map(a => String(a || '').trim()).filter(Boolean);
+    if (Array.isArray(args?.githubUsernames)) fields.githubUsernames = args.githubUsernames;
     if (args?.left !== undefined) fields.left = !!args.left;
     if (args?.contactOnly !== undefined) fields.contactOnly = !!args.contactOnly;
 
@@ -759,7 +760,7 @@ export const TOOL_HANDLERS = {
 
     const userId = getMCPUserId();
     const { PeopleCollection } = await import('/imports/api/people/collections');
-    const existingPerson = await PeopleCollection.findOneAsync({ _id: personId, userId }, { fields: { _id: 1 } });
+    const existingPerson = await PeopleCollection.findOneAsync({ _id: personId, userId }, { fields: { _id: 1, notes: 1 } });
 
     if (!existingPerson) {
       console.warn(`[tool_updatePerson] Person not found: ${personId}`);
@@ -776,6 +777,17 @@ export const TOOL_HANDLERS = {
     if (args?.role !== undefined) modifier.role = String(args.role || '').trim();
     if (args?.email !== undefined) modifier.email = String(args.email || '').trim().toLowerCase();
     if (args?.teamId !== undefined) modifier.teamId = args.teamId ? String(args.teamId).trim() : null;
+    if (args?.aliases !== undefined) modifier.aliases = Array.isArray(args.aliases) ? args.aliases : [];
+    if (args?.githubUsernames !== undefined) modifier.githubUsernames = Array.isArray(args.githubUsernames) ? args.githubUsernames : [];
+    if (args?.notes !== undefined) modifier.notes = typeof args.notes === 'string' ? args.notes : '';
+    if (args?.notesAppend !== undefined) {
+      const addition = (typeof args.notesAppend === 'string' ? args.notesAppend : '').trim();
+      if (addition) {
+        // Base = the notes being set in this same call if provided, otherwise the persisted notes
+        const base = modifier.notes !== undefined ? modifier.notes : (existingPerson.notes || '');
+        modifier.notes = base ? `${base}\n${addition}` : addition;
+      }
+    }
     if (args?.left !== undefined) modifier.left = !!args.left;
     if (args?.contactOnly !== undefined) modifier.contactOnly = !!args.contactOnly;
 
@@ -798,7 +810,7 @@ export const TOOL_HANDLERS = {
     if (Object.keys(modifier).length === 0) {
       return buildErrorResponse('No fields to update', 'tool_updatePerson', {
         code: 'MISSING_PARAMETER',
-        suggestion: 'Provide at least one field to update (name, lastName, role, email, teamId, left, contactOnly)'
+        suggestion: 'Provide at least one field to update (name, lastName, role, email, teamId, aliases, githubUsernames, notes, notesAppend, left, contactOnly)'
       });
     }
 

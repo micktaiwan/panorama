@@ -414,6 +414,27 @@ Meteor.startup(async () => {
   TeamsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   PeopleCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   PeopleCollection.rawCollection().createIndex({ userId: 1, managerId: 1 }).catch(() => {});
+
+  // --- Migration: legacy singular `githubUsername` -> `githubUsernames` array (lossless, idempotent) ---
+  {
+    const legacy = await PeopleCollection.find(
+      { githubUsername: { $exists: true } },
+      { fields: { githubUsername: 1, githubUsernames: 1 } }
+    ).fetchAsync();
+    if (legacy.length > 0) {
+      const { normalizeHandles } = await import('/imports/api/people/githubHandles');
+      for (const p of legacy) {
+        const merged = normalizeHandles([
+          ...(Array.isArray(p.githubUsernames) ? p.githubUsernames : []),
+          p.githubUsername
+        ]);
+        const modifier = { $unset: { githubUsername: '' } };
+        if (merged.length > 0) modifier.$set = { githubUsernames: merged };
+        await PeopleCollection.rawCollection().updateOne({ _id: p._id }, modifier);
+      }
+      console.log(`[startup] Migrated ${legacy.length} person(s) githubUsername -> githubUsernames`);
+    }
+  }
   OpportunitiesCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   StaffingCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   StaffingCollection.rawCollection().createIndex({ userId: 1, opportunityId: 1 }).catch(() => {});

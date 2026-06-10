@@ -4,6 +4,7 @@ import { useSubscribe, useFind, useTracker } from 'meteor/react-meteor-data';
 import { OpportunitiesCollection } from '/imports/api/opportunities/collections';
 import { CommitsCollection, BranchClassificationsCollection } from '/imports/api/staffing/gitCollections';
 import { PeopleCollection } from '/imports/api/people/collections';
+import { handlesOf } from '/imports/api/people/githubHandles';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { navigateTo } from '/imports/ui/router.js';
 import { notify } from '/imports/ui/utils/notify.js';
@@ -51,12 +52,12 @@ export const OpportunityDetail = ({ opportunityId }) => {
     return m;
   }, [branchClassifications]);
 
-  // Resolve a commit author to a person: githubUsername (login) > email.
+  // Resolve a commit author to a person: GitHub login (any handle) > email.
   const resolveAuthor = useMemo(() => {
     const byLogin = new Map();
     const byEmail = new Map();
     people.forEach(p => {
-      if (p.githubUsername) byLogin.set(p.githubUsername.toLowerCase(), p._id);
+      handlesOf(p).forEach(login => byLogin.set(login, p._id));
       if (p.email) byEmail.set(p.email.toLowerCase(), p._id);
     });
     return (c) => {
