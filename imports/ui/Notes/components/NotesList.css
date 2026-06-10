@@ -165,6 +165,27 @@
   margin-bottom: 2px;
 }
 
+.notes-list-loading {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0;
+}
+
+.notes-list-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(var(--white-rgb), 0.2);
+  border-top-color: var(--info-400);
+  border-radius: 50%;
+  animation: notes-list-spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes notes-list-spinner-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .no-notes,
 .no-results {
   padding: 20px;

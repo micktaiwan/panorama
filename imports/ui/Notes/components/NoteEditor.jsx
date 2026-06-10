@@ -93,41 +93,52 @@ export const NoteEditor = forwardRef(({
     );
   }
 
+  // undefined = content not delivered by the notes.content subscription yet.
+  // Mounting the editor on an empty doc would let the user type into a blank
+  // note and later save it over the real content.
+  const activeContent = noteContents[activeTabId];
+
   return (
     <div className="note-editor-container">
       <div className="note-editor-main">
         <div className="note-editor">
-          <ProseMirrorEditor
-            ref={editorRef}
-            key={activeTabId}
-            noteId={activeTabId}
-            content={noteContents[activeTabId] || ''}
-            onChange={(md) => {
-              onContentChange(activeTabId, md);
-              setDocVersion(v => v + 1);
-            }}
-            onSave={() => onSave(activeTabId)}
-            onClose={handleClose}
-            onAskAI={handleAskAI}
-            onSearchInfo={onSearchInfo}
-            searchTerm={searchTerm}
-            shouldFocus={shouldFocus}
-            readOnly={isLockedByOther}
-          />
+          {activeContent === undefined ? (
+            <div className="note-editor-loading">
+              <span className="note-editor-spinner" aria-label="Loading note" />
+            </div>
+          ) : (
+            <ProseMirrorEditor
+              ref={editorRef}
+              key={activeTabId}
+              noteId={activeTabId}
+              content={activeContent}
+              onChange={(md) => {
+                onContentChange(activeTabId, md);
+                setDocVersion(v => v + 1);
+              }}
+              onSave={() => onSave(activeTabId)}
+              onClose={handleClose}
+              onAskAI={handleAskAI}
+              onSearchInfo={onSearchInfo}
+              searchTerm={searchTerm}
+              shouldFocus={shouldFocus}
+              readOnly={isLockedByOther}
+            />
+          )}
         </div>
 
         <div className="notes-actions">
           <div className="notes-actions-left">
             <button
               className="save-button"
-              onClick={() => onSave(activeTabId)}
+              onClick={() => { editorRef.current?.flush?.(); onSave(activeTabId); }}
               disabled={isSaving || !dirtySet.has(activeTabId) || isLockedByOther}
             >
               {isSaving ? 'Saving...' : 'Save'}
             </button>
             <button
               className="save-all-button"
-              onClick={onSaveAll}
+              onClick={() => { editorRef.current?.flush?.(); onSaveAll(); }}
               disabled={isSaving || dirtySet.size === 0}
             >
               {isSaving ? 'Saving...' : 'Save All'}

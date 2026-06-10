@@ -129,7 +129,7 @@ SortableNoteItem.propTypes = {
   onDeleteClick: PropTypes.func.isRequired,
 };
 
-export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onRequestClose, onReorderNote }) => {
+export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onRequestClose, onReorderNote, isLoading = false }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const sensors = useSensors(
@@ -189,6 +189,16 @@ export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, project
   };
 
   const renderContent = () => {
+    // Spinner only while the subscription loads with nothing cached yet —
+    // don't flash it over an already-populated list
+    if (isLoading && notes.length === 0) {
+      return (
+        <div className="notes-list-loading">
+          <span className="notes-list-spinner" aria-label="Loading notes" />
+        </div>
+      );
+    }
+
     if (filteredNotes.length === 0 && notes.length === 0) {
       return (
         <div className="no-notes">
@@ -262,4 +272,5 @@ NotesList.propTypes = {
   onNoteClick: PropTypes.func.isRequired,
   onRequestClose: PropTypes.func,
   onReorderNote: PropTypes.func,
+  isLoading: PropTypes.bool,
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { notify } from '/imports/ui/utils/notify.js';
 import { useNoteLock } from './useNoteLock.js';
@@ -27,23 +27,63 @@ const getDraftFor = (noteId) => {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object' && 'content' in parsed) {
       const savedAt = Number(parsed.savedAt) || 0;
-      return { content: String(parsed.content || ''), savedAt };
+      // null = legacy draft written before baselineUpdatedAt existed
+      const baselineUpdatedAt = 'baselineUpdatedAt' in parsed ? (Number(parsed.baselineUpdatedAt) || 0) : null;
+      return { content: String(parsed.content || ''), savedAt, baselineUpdatedAt };
     }
-    return { content: String(raw || ''), savedAt: 0 };
+    return { content: String(raw || ''), savedAt: 0, baselineUpdatedAt: null };
   } catch (e) {
     console.error('[useNoteTabs] Failed to parse draft JSON for note', noteId, e);
-    return { content: String(raw || ''), savedAt: 0 };
+    return { content: String(raw || ''), savedAt: 0, baselineUpdatedAt: null };
   }
 };
 
-const setDraftFor = (noteId, content, baselineContent) => {
+// Server-side timestamp of a note doc, in ms (0 when unknown)
+const noteTimestampMs = (note) => {
+  const d = note?.updatedAt || note?.createdAt;
+  return d ? new Date(d).getTime() : 0;
+};
+
+const setDraftFor = (noteId, content, baselineContent, baselineUpdatedAt = 0) => {
   if (String(content || '') === String(baselineContent || '')) {
     localStorage.removeItem(`note-content-${noteId}`);
     return;
   }
-  const payload = { content: String(content || ''), savedAt: Date.now() };
+  const payload = { content: String(content || ''), savedAt: Date.now(), baselineUpdatedAt };
   localStorage.setItem(`note-content-${noteId}`, JSON.stringify(payload));
 };
+
+// A draft is stale when the DB doc changed after the draft's baseline.
+// baselineUpdatedAt compares server timestamps to server timestamps; the
+// savedAt fallback (legacy drafts only) compares client clock to server
+// clock and is skew-prone — kept only so old drafts survive the upgrade.
+const draftIsStale = (draft, dbTimestampMs) => {
+  if (!draft) return true;
+  if (draft.baselineUpdatedAt !== null && draft.baselineUpdatedAt !== undefined) {
+    return dbTimestampMs > draft.baselineUpdatedAt;
+  }
+  return dbTimestampMs > (draft.savedAt || 0);
+};
+
+// Persist only tab metadata: note content lives in the DB and in per-note
+// drafts. Storing full note snapshots rewrote every open note's content to
+// localStorage on each tab change (quota + perf).
+const serializeTabsForStorage = (tabs) => JSON.stringify(tabs.map((tab) => {
+  if (tab.type === 'file') return { id: tab.id, title: tab.title, type: 'file', filePath: tab.filePath };
+  const n = tab.note;
+  return {
+    id: tab.id,
+    title: tab.title,
+    note: n ? {
+      _id: n._id,
+      title: n.title,
+      projectId: n.projectId ?? null,
+      claudeProjectId: n.claudeProjectId,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt,
+    } : undefined,
+  };
+}));
 
 /**
  * Custom hook that manages all note tab/draft/content logic.
@@ -61,6 +101,10 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
 
   // ---- Core state ----
   const [searchTerm, setSearchTerm] = useState('');
+  // Note ids whose CONTENT matches the search term (server-side lookup —
+  // contents of non-open notes are not published to the client)
+  const [contentMatchIds, setContentMatchIds] = useState(() => new Set());
+  const searchSeqRef = useRef(0);
   const [openTabs, setOpenTabs] = useState([]);
   const [activeTabId, setActiveTabId] = useState(null);
   const [noteContents, setNoteContents] = useState({});
@@ -76,6 +120,14 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
     return false;
   });
   const [fileBaselines, setFileBaselines] = useState({});
+  // Synchronous mirror of noteContents: an editor flush() right before save
+  // updates content after the current render captured noteContents, so save
+  // paths read through this ref to get the latest keystrokes
+  const noteContentsRef = useRef(noteContents);
+  noteContentsRef.current = noteContents;
+  // Mirror of openTabs for the same reason (late-flush guard in updateNoteContent)
+  const openTabsRef = useRef(openTabs);
+  openTabsRef.current = openTabs;
 
   // ---- localStorage key helpers ----
   const lsKey = useCallback((suffix) => storageKey ? `${storageKey}-${suffix}` : null, [storageKey]);
@@ -104,16 +156,12 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
           return;
         }
         const draft = getDraftFor(tab.id);
-        const snapshotUpdatedAt = tab?.note?.updatedAt ? new Date(tab.note.updatedAt).getTime() : 0;
-        if (draft) {
-          if (snapshotUpdatedAt > (draft.savedAt || 0)) {
-            contents[tab.id] = tab?.note?.content || '';
-          } else {
-            contents[tab.id] = draft.content;
-          }
-        } else {
-          contents[tab.id] = tab?.note?.content || '';
+        if (draft && !draftIsStale(draft, noteTimestampMs(tab?.note))) {
+          contents[tab.id] = draft.content;
         }
+        // else: leave unset — undefined means "content not loaded yet"; the
+        // notes.content subscription + invalidation effect fill it in, and
+        // the editor shows a loading state instead of an empty doc
       });
       setNoteContents(contents);
 
@@ -166,7 +214,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
         setOpenTabs(uniqueTabs);
         return;
       }
-      localStorage.setItem(lsKey('open-tabs'), JSON.stringify(openTabs));
+      localStorage.setItem(lsKey('open-tabs'), serializeTabsForStorage(openTabs));
     } else {
       localStorage.removeItem(lsKey('open-tabs'));
     }
@@ -196,10 +244,11 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
       if (!touchedNotes.has(noteId)) return;
       const tab = openTabs.find(t => t.id === noteId);
       if (tab?.type === 'file') return;
+      const baselineDoc = notesById.get(noteId) ?? tab?.note;
       const dbBaseline = notesById.get(noteId)?.content ?? tab?.note?.content ?? '';
-      setDraftFor(noteId, noteContents[noteId], dbBaseline);
+      setDraftFor(noteId, noteContents[noteId], dbBaseline, noteTimestampMs(baselineDoc));
     });
-  }, [noteContents, notesById, openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), touchedNotes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [noteContents, notesById, openTabs, touchedNotes]);
 
   // ---- Persist renamed tabs ----
   useEffect(() => {
@@ -217,22 +266,46 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
     const next = { ...noteContents };
     let changed = false;
     for (const tab of openTabs) {
+      if (tab.type === 'file') continue;
+      // Actively edited this session: in-memory content is authoritative.
+      // Never let a DB push (e.g. the echo of our own save) clobber live
+      // keystrokes typed during the save round-trip.
+      if (touchedNotes.has(tab.id)) continue;
       const db = notesById.get(tab.id);
       if (!db) continue;
+      // Meta-only doc: content not delivered by notes.content yet — we can't
+      // conclude anything, and overwriting with '' would blank the editor
+      if (db.content === undefined) continue;
       const draft = getDraftFor(tab.id);
-      const dbUpdatedAt = db?.updatedAt ? new Date(db.updatedAt).getTime() : 0;
-      const draftSavedAt = draft?.savedAt || 0;
-      if (dbUpdatedAt > draftSavedAt) {
-        const wanted = db.content || '';
-        if ((next[tab.id] ?? '') !== wanted) {
-          next[tab.id] = wanted;
-          changed = true;
-        }
-        localStorage.removeItem(`note-content-${tab.id}`);
+      if (!draftIsStale(draft, noteTimestampMs(db))) continue;
+      const wanted = db.content || '';
+      if (next[tab.id] !== wanted) {
+        next[tab.id] = wanted;
+        changed = true;
       }
+      if (draft) localStorage.removeItem(`note-content-${tab.id}`);
     }
     if (changed) setNoteContents(next);
-  }, [notesById, openTabs.length, openTabs.map(t => t.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [notesById, openTabs, touchedNotes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- Server-side content search (debounced, out-of-order safe) ----
+  useEffect(() => {
+    const term = searchTerm.trim();
+    const seq = ++searchSeqRef.current;
+    if (term.length < 2) {
+      setContentMatchIds(new Set());
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const ids = await Meteor.callAsync('notes.searchContent', term);
+        if (searchSeqRef.current === seq) setContentMatchIds(new Set(ids));
+      } catch (e) {
+        console.error('[useNoteTabs] content search failed', e);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // ---- Reset focus state after it has been applied ----
   useEffect(() => {
@@ -249,15 +322,18 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
     const toMs = (d) => (d ? new Date(d).getTime() : 0);
     return notes
       .filter((note) => {
+        // Title matches locally; content matches come from the server
+        // (note.content is only in minimongo for open notes)
         const matchesSearch = note.title?.toLowerCase().includes(lower) ||
-                            note.content?.toLowerCase().includes(lower);
+                            note.content?.toLowerCase().includes(lower) ||
+                            (lower && contentMatchIds.has(note._id));
         if (showOnlyOpen) {
           return matchesSearch && openTabs.some(tab => tab.id === note._id);
         }
         return matchesSearch;
       })
       .sort((a, b) => toMs(b.updatedAt || b.createdAt) - toMs(a.updatedAt || a.createdAt));
-  }, [notes, searchTerm, showOnlyOpen, openTabs]);
+  }, [notes, searchTerm, showOnlyOpen, openTabs, contentMatchIds]);
 
   const dirtySet = useMemo(() => {
     const set = new Set();
@@ -267,13 +343,16 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
         const current = noteContents[tab.id] ?? baseline;
         if (current !== baseline) set.add(tab.id);
       } else {
-        const dbBaseline = notesById.get(tab.id)?.content ?? tab?.note?.content ?? '';
+        const dbBaseline = notesById.get(tab.id)?.content ?? tab?.note?.content;
+        // Content not loaded yet: cannot judge dirtiness (editor is not
+        // mounted in that state anyway)
+        if (dbBaseline === undefined) continue;
         const current = (noteContents[tab.id] ?? dbBaseline);
         if (current !== dbBaseline) set.add(tab.id);
       }
     }
     return set;
-  }, [openTabs.length, openTabs.map(t => `${t.id}:${t?.note?.content || ''}`).join(','), Object.keys(noteContents).length, notesById, fileBaselines]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [openTabs, noteContents, notesById, fileBaselines]);
 
   // ---- Actions ----
 
@@ -287,21 +366,22 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
       setOpenTabs(prev => [...prev, newTab]);
 
       const draft = getDraftFor(note._id);
-      const dbUpdatedAt = note?.updatedAt ? new Date(note.updatedAt).getTime() : 0;
-      let nextContent = note.content || '';
-      if (draft) {
-        const draftIsNewerOrEqual = (draft.savedAt || 0) >= dbUpdatedAt;
-        nextContent = draftIsNewerOrEqual ? draft.content : (note.content || '');
+      let nextContent;
+      if (draft && !draftIsStale(draft, noteTimestampMs(note))) {
+        nextContent = draft.content;
+      } else if (note.content !== undefined) {
+        nextContent = note.content || '';
       }
+      // else: meta-only doc (content not published yet) — leave undefined,
+      // the notes.content subscription fills it in
 
-      setNoteContents(prev => {
-        const newContents = { ...prev, [note._id]: nextContent };
-        setTimeout(() => {
-          setActiveTabId(note._id);
-          if (shouldFocus) setShouldFocusNote(note._id);
-        }, 0);
-        return newContents;
-      });
+      if (nextContent !== undefined) {
+        setNoteContents(prev => ({ ...prev, [note._id]: nextContent }));
+      }
+      setTimeout(() => {
+        setActiveTabId(note._id);
+        if (shouldFocus) setShouldFocusNote(note._id);
+      }, 0);
     } else {
       setActiveTabId(note._id);
       if (shouldFocus) setShouldFocusNote(note._id);
@@ -375,14 +455,18 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
   };
 
   const saveNote = async (noteId) => {
-    if (!noteContents[noteId]) return;
+    // Read through the ref (fresh after an editor flush) and only bail when
+    // there is genuinely no content for this tab — '' is a valid save (user
+    // emptied the note)
+    const content = noteContentsRef.current[noteId];
+    if (content === undefined) return;
 
     const tab = openTabs.find(t => t.id === noteId);
     if (tab?.type === 'file') {
       setIsSaving(true);
       try {
-        await Meteor.callAsync('diskFile.write', tab.filePath, noteContents[noteId]);
-        setFileBaselines(prev => ({ ...prev, [noteId]: noteContents[noteId] }));
+        await Meteor.callAsync('diskFile.write', tab.filePath, content);
+        setFileBaselines(prev => ({ ...prev, [noteId]: content }));
         notify({ message: 'File saved', kind: 'success' });
       } catch (error) {
         console.error('Error saving file:', error);
@@ -396,8 +480,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
     setIsSaving(true);
     try {
       const note = notesById.get(noteId);
-      const content = noteContents[noteId];
-      const isFirstSave = !note?.updatedAt || note.updatedAt === note.createdAt;
+      const isFirstSave = !note?.updatedAt || new Date(note.updatedAt).getTime() === new Date(note.createdAt).getTime();
       const hasNoTitle = !note?.title || note.title === 'New note' || note.title.trim() === '';
       const updateData = { content };
 
@@ -424,7 +507,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
       releaseLock(noteId);
       localStorage.removeItem(`note-content-${noteId}`);
       setTouchedNotes(prev => { const n = new Set(prev); n.delete(noteId); return n; });
-      setOpenTabs(prev => prev.map(t => t.id === noteId ? { ...t, note: { ...(t.note || {}), content: noteContents[noteId] } } : t));
+      setOpenTabs(prev => prev.map(t => t.id === noteId ? { ...t, note: { ...(t.note || {}), content } } : t));
     } catch (error) {
       console.error('Error saving note:', error);
       notify({ message: 'Error saving note', kind: 'error' });
@@ -434,8 +517,12 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
   };
 
   const updateNoteContent = (noteId, content) => {
+    // Ignore the unmount flush of an editor whose tab was just closed —
+    // it would resurrect the content in state and re-acquire the lock
+    if (!openTabsRef.current.some(t => t.id === noteId)) return;
     // Acquire lock on first edit (idempotent if already locked)
     acquireLock(noteId);
+    noteContentsRef.current = { ...noteContentsRef.current, [noteId]: content };
     setNoteContents(prev => ({ ...prev, [noteId]: content }));
     setTouchedNotes(prev => new Set([...prev, noteId]));
   };
@@ -472,7 +559,7 @@ export function useNoteTabs({ notes, notesById, storageKey = null, defaultProjec
       const missing = prev.filter(t => !nextOrder.includes(t.id));
       const next = [...reordered, ...missing];
       if (storageKey && typeof localStorage !== 'undefined') {
-        localStorage.setItem(lsKey('open-tabs'), JSON.stringify(next));
+        localStorage.setItem(lsKey('open-tabs'), serializeTabsForStorage(next));
       }
       return next;
     });

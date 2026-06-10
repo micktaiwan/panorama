@@ -18,6 +18,8 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
   const mountRef = useRef(null);
   const viewRef = useRef(null);
   const debounceRef = useRef(null);
+  // Synchronously serialize any pending (debounced) change — set in the mount effect
+  const flushRef = useRef(null);
   const shouldFocusOnMount = useRef(shouldFocus);
   const readOnlyRef = useRef(readOnly);
   // Scroll restoration state — see init effect for the retry logic
@@ -60,6 +62,7 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
       if (!view) return;
       view.dispatch(view.state.tr.setMeta(searchPluginKey, { navigate: 'prev' }));
     },
+    flush() { flushRef.current?.(); },
   }), []);
 
   // Create the editor once on mount
@@ -68,8 +71,10 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
 
     const doc = parseMarkdown(content || '');
     const plugins = createPlugins({
-      onSave: () => onSaveRef.current?.(),
-      onClose: () => onCloseRef.current?.(),
+      // Flush the pending debounced serialization before save/close so the
+      // parent acts on the latest keystrokes, not a 150ms-stale snapshot
+      onSave: () => { flushRef.current?.(); onSaveRef.current?.(); },
+      onClose: () => { flushRef.current?.(); onCloseRef.current?.(); },
       onAskAI: (data) => onAskAIRef.current?.(data),
       onSearchInfo: (count, idx) => onSearchInfoRef.current?.(count, idx),
     });
@@ -92,6 +97,7 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
           // Debounce markdown serialization
           clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(() => {
+            debounceRef.current = null;
             const md = serializeMarkdown(newState.doc);
             lastKnownContentRef.current = md;
             onChangeRef.current?.(md);
@@ -101,6 +107,18 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
     });
 
     viewRef.current = view;
+
+    // Serialize a pending debounced change right now (save, close, unmount)
+    const flushPending = () => {
+      if (!debounceRef.current) return;
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+      const md = serializeMarkdown(view.state.doc);
+      if (md === lastKnownContentRef.current) return;
+      lastKnownContentRef.current = md;
+      onChangeRef.current?.(md);
+    };
+    flushRef.current = flushPending;
 
     // Restore scroll position for this note. The doc may not be laid out yet
     // when the editor mounts (content prop can arrive a tick later), so we
@@ -145,7 +163,10 @@ export const ProseMirrorEditor = forwardRef(({ content, noteId, onChange, onSave
       // can return 0 if the layout has collapsed (flex parent change on tab switch).
       scrollEl.removeEventListener('scroll', onScroll);
       tryRestoreScrollRef.current = null;
-      clearTimeout(debounceRef.current);
+      // Flush instead of dropping: switching tabs (remount via key) within the
+      // debounce window must not lose the last keystrokes
+      flushPending();
+      flushRef.current = null;
       view.destroy();
       viewRef.current = null;
     };

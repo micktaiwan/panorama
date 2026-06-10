@@ -4,6 +4,10 @@ import { NotesCollection } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
 
+// Fields a client may set through notes.update — everything else
+// (userId, lockedBy, createdAt, …) is server-managed
+const ALLOWED_UPDATE_FIELDS = new Set(['title', 'content', 'projectId', 'updatedAt']);
+
 // Normalize short text fields
 const sanitizeNoteDoc = (input) => {
   const out = { ...input };
@@ -79,6 +83,10 @@ Meteor.methods({
     check(noteId, String);
     check(modifier, Object);
     ensureLoggedIn(this.userId);
+    const unknownFields = Object.keys(modifier).filter((k) => !ALLOWED_UPDATE_FIELDS.has(k));
+    if (unknownFields.length > 0) {
+      throw new Meteor.Error('invalid-fields', `Fields not allowed in notes.update: ${unknownFields.join(', ')}`);
+    }
     const note = await NotesCollection.findOneAsync(noteId);
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
     if (note.projectId) {
@@ -138,6 +146,25 @@ Meteor.methods({
     }
 
     return res;
+  },
+  // Sidebar search: contents are no longer published for non-open notes,
+  // so content matching runs server-side. Returns matching note ids only.
+  async 'notes.searchContent'(term) {
+    check(term, String);
+    ensureLoggedIn(this.userId);
+    const trimmed = term.trim();
+    if (trimmed.length < 2) return [];
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const projectIds = (await ProjectsCollection.find(
+      { memberIds: this.userId }, { fields: { _id: 1 } }
+    ).fetchAsync()).map(p => p._id);
+    const matches = await NotesCollection.find({
+      $and: [
+        { $or: [{ userId: this.userId }, { projectId: { $in: projectIds } }] },
+        { content: { $regex: escaped, $options: 'i' } },
+      ],
+    }, { fields: { _id: 1 }, limit: 200 }).fetchAsync();
+    return matches.map(n => n._id);
   },
   async 'notes.remove'(noteId) {
     check(noteId, String);

@@ -23,10 +23,13 @@ export const NotesPanel = forwardRef(({
   onTabClosed,
 }, ref) => {
   // ---- Subscriptions & data ----
-  const notes = useTracker(() => {
-    Meteor.subscribe('notes');
+  const { notes, notesLoading } = useTracker(() => {
+    const sub = Meteor.subscribe('notes');
     const selector = projectId ? { projectId } : {};
-    return NotesCollection.find(selector, { sort: { updatedAt: -1, createdAt: -1 } }).fetch();
+    return {
+      notes: NotesCollection.find(selector, { sort: { updatedAt: -1, createdAt: -1 } }).fetch(),
+      notesLoading: !sub.ready(),
+    };
   }, [projectId]);
 
   const notesById = useMemo(() => {
@@ -85,6 +88,17 @@ export const NotesPanel = forwardRef(({
     handleMoveProject, handleDuplicateNote, handleReorderNote,
     handleCreateNote,
   } = tabs;
+
+  // ---- Content subscription for open notes ----
+  // The 'notes' publication is meta-only; full content is published on
+  // demand for the notes currently open in tabs
+  const openNoteIds = useMemo(
+    () => openTabs.filter(t => t.type !== 'file').map(t => t.id),
+    [openTabs]
+  );
+  useTracker(() => {
+    if (openNoteIds.length > 0) Meteor.subscribe('notes.content', openNoteIds);
+  }, [openNoteIds.join(',')]);
 
   // ---- Search match info (from ProseMirror search plugin) ----
   const [searchMatchInfo, setSearchMatchInfo] = useState({ count: 0, currentIndex: -1 });
@@ -196,6 +210,7 @@ export const NotesPanel = forwardRef(({
         </button>
         <NotesList
           notes={notes}
+          isLoading={notesLoading}
           filteredNotes={filteredNotes}
           openTabs={openTabs}
           activeTabId={activeTabId}
