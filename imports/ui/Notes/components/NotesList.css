@@ -143,6 +143,21 @@
   display: block;
 }
 
+.note-id {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--muted-2) !important;
+  display: block;
+  margin-top: 2px;
+  user-select: text;
+  cursor: pointer;
+}
+
+.note-id:hover {
+  color: var(--muted) !important;
+  text-decoration: underline;
+}
+
 .note-project {
   font-size: 11px;
   color: var(--muted) !important;

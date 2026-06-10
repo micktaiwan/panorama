@@ -92,6 +92,20 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, locke
             return '';
           })()}
         </div>
+        <span
+          className="note-id"
+          title="Click to copy ID"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(note._id).then(() => {
+              notify({ message: 'Note ID copied', kind: 'success' });
+            });
+          }}
+        >
+          {note._id}
+        </span>
       </button>
       <button
         className="note-delete-btn"
