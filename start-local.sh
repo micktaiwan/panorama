@@ -56,8 +56,40 @@ echo "  QDRANT_URL       = $QDRANT_URL"
 METEOR_PORT=$METEOR_PORT ./node_modules/.bin/electron . &
 ELECTRON_PID=$!
 
-# S'assurer qu'Electron est tué si on quitte le script
-trap "kill $ELECTRON_PID 2>/dev/null" EXIT INT TERM
+# Meteor en background aussi, pour pouvoir surveiller les deux process.
+# (auparavant Meteor tournait au premier plan : quitter Electron laissait
+#  Meteor orphelin car rien ne reliait la mort d'Electron à l'arrêt du script)
+npm run dev:meteor:4000 &
+METEOR_PID=$!
 
-# Meteor en foreground
-npm run dev:meteor:4000
+# Tue un PID et toute sa descendance (npm → meteor → node app).
+# Ciblé sur les descendants directs : ne touche pas d'autres instances Meteor
+# (ex: un `meteor test` qui tournerait en parallèle).
+kill_tree() {
+  local pid=$1 child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
+  kill "$pid" 2>/dev/null
+}
+
+# --- INSTRUMENTATION TEMPORAIRE (à retirer après diagnostic) ---
+QLOG=/tmp/panorama-quit.log
+qlog() { echo "$(date '+%H:%M:%S') $*" | tee -a "$QLOG"; }
+: > "$QLOG"
+qlog "START electron=$ELECTRON_PID meteor=$METEOR_PID (pid script=$$)"
+
+# Quoi qu'il arrive (quit Electron, Ctrl+C, arrêt de Meteor) → tout s'arrête.
+cleanup() {
+  trap - EXIT INT TERM
+  qlog "CLEANUP electron alive=$(kill -0 "$ELECTRON_PID" 2>/dev/null && echo yes || echo no) meteor alive=$(kill -0 "$METEOR_PID" 2>/dev/null && echo yes || echo no)"
+  kill_tree "$ELECTRON_PID"
+  kill_tree "$METEOR_PID"
+  qlog "CLEANUP done"
+}
+trap cleanup EXIT INT TERM
+
+# Attendre que l'un des deux se termine ; le trap EXIT tue alors l'autre.
+# (compatible bash 3.2 et zsh — pas de `wait -n`)
+while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; do
+  sleep 1
+done
+qlog "LOOP EXIT electron alive=$(kill -0 "$ELECTRON_PID" 2>/dev/null && echo yes || echo no) meteor alive=$(kill -0 "$METEOR_PID" 2>/dev/null && echo yes || echo no)"
