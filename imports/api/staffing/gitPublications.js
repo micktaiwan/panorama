@@ -1,13 +1,14 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
-import { CommitsCollection, BranchClassificationsCollection, OpportunitySuggestionsCollection } from './gitCollections';
+import { CommitsCollection, BranchClassificationsCollection } from './gitCollections';
 
 Meteor.publish('commits.recent', function (limit = 500) {
   if (!this.userId) return this.ready();
   const lim = Math.min(Number(limit) || 500, 2000);
   return CommitsCollection.find(
     { userId: this.userId },
-    { sort: { committedAt: -1 }, limit: lim }
+    // messageFull and files are server-side ranking signals (KBs/commit) — never shipped to the client.
+    { sort: { committedAt: -1 }, limit: lim, fields: { messageFull: 0, files: 0 } }
   );
 });
 
@@ -34,11 +35,6 @@ Meteor.publish('commits.byOpportunity', async function (opportunityId) {
         { opportunityId: { $exists: false }, scope: { $in: scopes } }
       ]
     },
-    { sort: { committedAt: -1 }, limit: 500 }
+    { sort: { committedAt: -1 }, limit: 500, fields: { messageFull: 0, files: 0 } }
   );
-});
-
-Meteor.publish('opportunitySuggestions.all', function () {
-  if (!this.userId) return this.ready();
-  return OpportunitySuggestionsCollection.find({ userId: this.userId }, { sort: { confidence: -1 } });
 });

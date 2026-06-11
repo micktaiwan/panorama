@@ -8,46 +8,76 @@ export const normName = (s) => String(s || '')
 // Deterministic keyword layer: which projects have a keyword literally present in `text`.
 // Token-boundary match on the normalized text (space-padded) so "api" matches "fix api bug"
 // but NOT "rapide" — guarantees a candidate when the LLM misses an obvious keyword (or fails).
+// `minLen` raises the minimum keyword length — used for file-path matching, where short
+// generic tokens ("api", "ui", "js") appear in almost every path.
 // Returns [{ opportunityId, keyword }] (first matching keyword per project).
-export const matchKeywords = (text, opportunities) => {
+export const matchKeywords = (text, opportunities, minLen = 2) => {
   const hay = ` ${normName(text)} `;
   const hits = [];
   for (const o of (opportunities || [])) {
     for (const kw of (o.keywords || [])) {
       const k = normName(kw);
-      if (k.length >= 2 && hay.includes(` ${k} `)) { hits.push({ opportunityId: o._id, keyword: kw }); break; }
+      if (k.length >= minLen && hay.includes(` ${k} `)) { hits.push({ opportunityId: o._id, keyword: kw }); break; }
     }
   }
   return hits;
 };
 
+// Minimum keyword length when matching against file paths (see matchKeywords).
+const PATH_KEYWORD_MIN_LEN = 4;
+
+// Cap on changed-file paths per commit: persisted on the doc AND listed in the deep
+// prompt — one shared value so what the deep ranker saw matches what later reranks see.
+export const MAX_COMMIT_FILES = 80;
+
+// `files` rides through two shapes: GitHub detail objects [{ filename, ... }] and
+// persisted string arrays. Normalize both to plain path strings.
+export const fileNamesOf = (files) => (files || [])
+  .map(f => (typeof f === 'string' ? f : f?.filename))
+  .filter(Boolean);
+
 // Score given to a deterministic keyword match (high confidence, but below a perfect 1).
 const KEYWORD_SCORE = 0.95;
 
-const summarizeCommits = (commits, max = 8) => commits
-  .slice(0, max)
-  .map(c => `- ${(c.message || '').split('\n')[0].slice(0, 120)}`)
+// Render the project list for the ranking prompts: name, keywords, and the few-shot
+// examples (messages of commits the user already classified into the project).
+const renderOppList = (opportunities) => opportunities
+  .map(o => {
+    const kw = o.keywords?.length ? ` — mots-clés: ${o.keywords.join(', ')}` : '';
+    const ex = o.examples?.length
+      ? `\n  déjà classés ici: ${o.examples.map(m => `« ${String(m).replace(/[«»]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120)} »`).join(' · ')}`
+      : '';
+    return `- [id:${o._id}] ${o.name}${kw}${ex}`;
+  })
   .join('\n');
 
 /**
- * Rank a BATCH of commits against the EXISTING opportunities, reading each commit's
- * full message + the projects' keywords. Returns Map(sha -> [{opportunityId, score}])
- * with at most 5 candidates per commit (ids validated, never invented).
+ * Rank a BATCH of commits against the EXISTING opportunities. The LLM reads the first
+ * 600 chars of each message + the changed file paths when known ("fichiers:") + the
+ * projects' keywords and few-shot examples (commits already classified by the user);
+ * the deterministic keyword layer scans the FULL message and file paths.
+ * Returns Map(sha -> [{opportunityId, score}]) with at most 5 candidates per commit
+ * (ids validated, never invented).
  * The model echoes back each sha so results align by sha, not by position.
  */
 export const rankCommitsBatch = async ({ commits, opportunities }, userId) => {
   if (!opportunities || opportunities.length === 0 || !commits || commits.length === 0) return new Map();
 
-  const oppList = opportunities
-    .map(o => `- [id:${o._id}] ${o.name}${o.keywords?.length ? ` — mots-clés: ${o.keywords.join(', ')}` : ''}`)
-    .join('\n');
+  const oppList = renderOppList(opportunities);
   const commitList = commits
-    .map(c => `[sha:${c.sha}] ${(c.message || '').replace(/\s+/g, ' ').trim().slice(0, 280)}`)
+    .map(c => {
+      const files = fileNamesOf(c.files).slice(0, 15).join(' ');
+      return `[sha:${c.sha}] ${(c.message || '').replace(/\s+/g, ' ').trim().slice(0, 600)}`
+        + (files ? ` | fichiers: ${files.slice(0, 400)}` : '');
+    })
     .join('\n');
 
   const system = 'You assign git commits to the most likely EXISTING projects. '
     + 'For EACH commit, return up to 5 candidate projects ranked by likelihood, each with a score in [0,1]. '
-    + 'Base your decision on the commit message text and the project keywords. '
+    + 'Base your decision on the commit message text and the project keywords. Some commits also list '
+    + 'their changed file paths ("fichiers:") — paths are a strong signal of which area/project is touched. '
+    + 'Some projects list example commits already classified into them by the user ("déjà classés ici") — '
+    + 'a strong signal alongside the keywords; the absence of examples for a project is not evidence against it. '
     + 'Only use project ids from the provided list — never invent an id. '
     + 'If no project plausibly matches a commit, return an empty candidates array for that commit. '
     + 'Echo back the exact sha of each commit so results can be aligned.';
@@ -85,19 +115,29 @@ export const rankCommitsBatch = async ({ commits, opportunities }, userId) => {
     required: ['results']
   };
 
-  const result = await chatComplete({
-    system,
-    messages: [{ role: 'user', content: user }],
-    responseFormat: 'json',
-    schema,
-    temperature: 0,
-    timeoutMs: 90000,
-    route: 'classify',
-    userId
-  });
-
-  let parsed;
-  try { parsed = JSON.parse(result?.text || '{}'); } catch (_e) { parsed = {}; }
+  // An LLM failure (timeout, provider down, invalid JSON) must not kill the batch: the
+  // deterministic keyword layer below still produces candidates for the whole slice.
+  let parsed = {};
+  let resultText = '';
+  try {
+    const result = await chatComplete({
+      system,
+      messages: [{ role: 'user', content: user }],
+      responseFormat: 'json',
+      schema,
+      temperature: 0,
+      timeoutMs: 90000,
+      route: 'classify',
+      userId
+    });
+    resultText = result?.text || '';
+    parsed = JSON.parse(resultText || '{}') || {};
+  } catch (e) {
+    // resultText set => chatComplete succeeded but returned invalid JSON: log an excerpt.
+    console.error('[classifier.rankCommitsBatch] LLM ranking failed, falling back to keywords:',
+      e?.reason || e?.message || e,
+      resultText ? `· payload: ${resultText.slice(0, 200)}` : '');
+  }
   const validIds = new Set(opportunities.map(o => o._id));
   const out = new Map();
   for (const r of (Array.isArray(parsed.results) ? parsed.results : [])) {
@@ -111,9 +151,14 @@ export const rankCommitsBatch = async ({ commits, opportunities }, userId) => {
   }
 
   // Deterministic keyword layer: guarantee a candidate whenever a project keyword literally
-  // appears in the commit message — even if the LLM omitted it or the batch failed (empty out).
+  // appears in the commit message or its file paths — even if the LLM omitted it or the
+  // batch failed (empty out). Path matching requires longer keywords (generic path tokens).
   for (const c of commits) {
-    const hits = matchKeywords(c.message, opportunities);
+    const paths = fileNamesOf(c.files).join(' ');
+    const hits = [
+      ...matchKeywords(c.message, opportunities),
+      ...(paths ? matchKeywords(paths, opportunities, PATH_KEYWORD_MIN_LEN) : [])
+    ];
     if (!hits.length) continue;
     const byId = new Map((out.get(c.sha) || []).map(x => [x.opportunityId, x]));
     for (const h of hits) {
@@ -127,26 +172,29 @@ export const rankCommitsBatch = async ({ commits, opportunities }, userId) => {
 };
 
 /**
- * Deep classification of ONE commit against EXISTING opportunities, reading the FULL
- * commit message AND the list of changed files (the on-demand "analyze deeper" action).
+ * Deep classification of ONE commit against EXISTING opportunities, reading the stored
+ * commit message (4000-char cap, same as messageFull) AND the list of changed files,
+ * plus the projects' keywords and few-shot examples (the "analyze deeper" action).
  * Returns [{ opportunityId, score, reasoning }] (ids validated, never invented), top 5.
  */
 export const rankCommitDeep = async ({ message, files, opportunities }, userId) => {
   if (!opportunities || opportunities.length === 0) return [];
 
-  const oppList = opportunities
-    .map(o => `- [id:${o._id}] ${o.name}${o.keywords?.length ? ` — mots-clés: ${o.keywords.join(', ')}` : ''}`)
-    .join('\n');
-  const fileList = (files || []).slice(0, 80).map(f => `- ${f.filename}`).join('\n') || '(aucun fichier listé)';
+  const oppList = renderOppList(opportunities);
+  const names = fileNamesOf(files);
+  const listed = names.slice(0, MAX_COMMIT_FILES);
+  const fileList = listed.map(f => `- ${f}`).join('\n') || '(aucun fichier listé)';
 
   const system = 'You assign ONE git commit to the most likely EXISTING projects. '
     + 'Read its FULL commit message AND the list of changed file paths (paths are a strong signal of which area/project is touched). '
+    + 'Projects may include example commits already classified into them by the user ("déjà classés ici") — '
+    + 'a strong signal alongside the keywords; the absence of examples for a project is not evidence against it. '
     + 'Return up to 5 candidate projects ranked by likelihood, each with a score in [0,1] and a ONE-sentence reasoning in French. '
     + 'Only use project ids from the provided list — never invent an id. '
     + 'If no project plausibly matches, return an empty candidates array.';
   const user = `Projects:\n${oppList}\n\n`
-    + `Commit message:\n${String(message || '').slice(0, 2000)}\n\n`
-    + `Changed files (${(files || []).length}):\n${fileList}\n\n`
+    + `Commit message:\n${String(message || '').slice(0, 4000)}\n\n`
+    + `Changed files (${names.length}${names.length > listed.length ? `, ${listed.length} listés` : ''}):\n${fileList}\n\n`
     + 'Which existing projects does this commit most likely belong to?';
 
   const schema = {
@@ -170,19 +218,24 @@ export const rankCommitDeep = async ({ message, files, opportunities }, userId) 
     required: ['candidates']
   };
 
+  // One commit + capped file list: a much smaller budget than the 8-commit batch call.
+  // Caps the deep-rescue worst case; the caller handles a thrown timeout/provider error.
   const result = await chatComplete({
     system,
     messages: [{ role: 'user', content: user }],
     responseFormat: 'json',
     schema,
     temperature: 0,
-    timeoutMs: 90000,
+    timeoutMs: 45000,
     route: 'classify',
     userId
   });
 
   let parsed;
-  try { parsed = JSON.parse(result?.text || '{}'); } catch (_e) { parsed = {}; }
+  try { parsed = JSON.parse(result?.text || '{}') || {}; } catch (e) {
+    console.error('[classifier.rankCommitDeep] invalid LLM JSON:', e?.message, `· payload: ${String(result?.text || '').slice(0, 200)}`);
+    parsed = {};
+  }
   const validIds = new Set(opportunities.map(o => o._id));
   const byId = new Map();
   for (const c of (Array.isArray(parsed.candidates) ? parsed.candidates : [])) {
@@ -194,9 +247,14 @@ export const rankCommitDeep = async ({ message, files, opportunities }, userId) 
     });
   }
 
-  // Deterministic keyword layer: match on the message AND the changed file paths.
-  const matchText = `${message || ''} ${(files || []).map(f => f.filename).join(' ')}`;
-  for (const h of matchKeywords(matchText, opportunities)) {
+  // Deterministic keyword layer: message (any keyword) + file paths (longer keywords only —
+  // short path tokens like "api"/"ui" are too generic). Scans `listed`, not `names`, so the
+  // MAX_COMMIT_FILES invariant holds: later reranks (persisted files) see the same signal.
+  const hits = [
+    ...matchKeywords(message, opportunities),
+    ...(listed.length ? matchKeywords(listed.join(' '), opportunities, PATH_KEYWORD_MIN_LEN) : [])
+  ];
+  for (const h of hits) {
     const prev = byId.get(h.opportunityId);
     if (prev) prev.score = Math.max(prev.score, KEYWORD_SCORE);
     else byId.set(h.opportunityId, { opportunityId: h.opportunityId, score: KEYWORD_SCORE, reasoning: `Mot-clé « ${h.keyword} » présent` });
@@ -246,7 +304,10 @@ export const suggestProjectKeywords = async ({ projectName, currentKeywords, com
   });
 
   let parsed;
-  try { parsed = JSON.parse(result?.text || '{}'); } catch (_e) { parsed = {}; }
+  try { parsed = JSON.parse(result?.text || '{}') || {}; } catch (e) {
+    console.error('[classifier.suggestProjectKeywords] invalid LLM JSON:', e?.message, `· payload: ${String(result?.text || '').slice(0, 200)}`);
+    parsed = {};
+  }
   const existing = new Set((currentKeywords || []).map(k => String(k).toLowerCase()));
   const seen = new Set();
   const out = [];
@@ -257,135 +318,3 @@ export const suggestProjectKeywords = async ({ projectName, currentKeywords, com
   return out.slice(0, 10);
 };
 
-/**
- * Classify ONE branch against the list of EXISTING opportunities.
- * Returns { opportunityId: string|null, confidence: 0..1, reasoning }.
- * opportunityId is always either one of the provided ids or null — never invented.
- */
-export const classifyBranch = async ({ branchName, commits, modules, opportunities }, userId) => {
-  if (!opportunities || opportunities.length === 0) {
-    return { opportunityId: null, confidence: 0, reasoning: 'no existing opportunities to match' };
-  }
-  const oppList = opportunities.map((o, i) => `${i + 1}. [id:${o._id}] ${o.name}${o.cycle ? ` (${o.cycle})` : ''}`).join('\n');
-  const modStr = (modules || []).map(m => `${m.module}(${m.count})`).join(', ') || 'unknown';
-
-  const system = 'You map a git branch to one of a fixed list of existing projects (opportunities). '
-    + 'You MUST either return the exact id of one listed opportunity, or null if none clearly matches. '
-    + 'Never invent an id. Be conservative: if unsure, return null with low confidence.';
-  const user = `Existing opportunities:\n${oppList}\n\n`
-    + `Branch: ${branchName}\n`
-    + `Modules touched: ${modStr}\n`
-    + `Recent commit messages:\n${summarizeCommits(commits)}\n\n`
-    + 'Which opportunity does this branch belong to?';
-
-  const schema = {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      opportunityId: { type: ['string', 'null'] },
-      confidence: { type: 'number' },
-      reasoning: { type: 'string' }
-    },
-    required: ['opportunityId', 'confidence', 'reasoning']
-  };
-
-  const result = await chatComplete({
-    system,
-    messages: [{ role: 'user', content: user }],
-    responseFormat: 'json',
-    schema,
-    temperature: 0,
-    route: 'classify',
-    userId
-  });
-
-  let parsed;
-  try { parsed = JSON.parse(result?.text || '{}'); } catch (_e) { parsed = {}; }
-  const validIds = new Set(opportunities.map(o => o._id));
-  const opportunityId = parsed.opportunityId && validIds.has(parsed.opportunityId) ? parsed.opportunityId : null;
-  const confidence = Number.isFinite(parsed.confidence) ? Math.max(0, Math.min(1, parsed.confidence)) : 0;
-  return { opportunityId, confidence, reasoning: String(parsed.reasoning || '') };
-};
-
-/**
- * From clusters of UNMATCHED branches, propose candidate NEW opportunities.
- * Dedup against existing opportunity names so near-duplicates are never proposed.
- * Returns [{ name, rationale, branches: [string], modules: [string], personIds: [string], confidence }].
- */
-export const suggestNewOpportunities = async ({ clusters, existingNames }, userId) => {
-  if (!clusters || clusters.length === 0) return [];
-  const existingSet = new Set((existingNames || []).map(normName));
-
-  const clusterText = clusters.map((c, i) => {
-    const mods = (c.modules || []).map(m => m.module).slice(0, 4).join(', ');
-    return `Cluster ${i + 1}: branch "${c.branchName}" · modules: ${mods || 'unknown'}\n  commits:\n`
-      + summarizeCommits(c.commits, 5);
-  }).join('\n\n');
-
-  const system = 'You propose candidate NEW projects from clusters of git activity that did not match any existing project. '
-    + 'Group clusters that clearly belong to the same project. Give each a short, human project name (3-6 words). '
-    + 'Do NOT propose generic buckets like "misc" or "maintenance". Only propose when the activity looks like a coherent piece of project work.';
-  const user = `These branches did not match any existing project:\n\n${clusterText}\n\n`
-    + 'Propose new projects (one per coherent group). Reference clusters by their branch names.';
-
-  const schema = {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      suggestions: {
-        type: 'array',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            name: { type: 'string' },
-            rationale: { type: 'string' },
-            branches: { type: 'array', items: { type: 'string' } },
-            confidence: { type: 'number' }
-          },
-          required: ['name', 'rationale', 'branches', 'confidence']
-        }
-      }
-    },
-    required: ['suggestions']
-  };
-
-  const result = await chatComplete({
-    system,
-    messages: [{ role: 'user', content: user }],
-    responseFormat: 'json',
-    schema,
-    temperature: 0.2,
-    route: 'classify',
-    userId
-  });
-
-  let parsed;
-  try { parsed = JSON.parse(result?.text || '{}'); } catch (_e) { parsed = {}; }
-  const raw = Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
-
-  // Map branch names back to clusters to aggregate modules + contributors.
-  const byBranch = new Map(clusters.map(c => [c.branchName, c]));
-  return raw
-    .map(s => {
-      const branches = (s.branches || []).filter(b => byBranch.has(b));
-      const mods = new Set();
-      const personIds = new Set();
-      branches.forEach(b => {
-        const c = byBranch.get(b);
-        (c.modules || []).forEach(m => mods.add(m.module));
-        (c.personIds || []).forEach(p => personIds.add(p));
-      });
-      return {
-        name: String(s.name || '').trim(),
-        rationale: String(s.rationale || '').trim(),
-        branches,
-        modules: [...mods],
-        personIds: [...personIds],
-        confidence: Number.isFinite(s.confidence) ? Math.max(0, Math.min(1, s.confidence)) : 0.5
-      };
-    })
-    .filter(s => s.name && s.branches.length > 0)
-    // Dedup safety: drop anything that looks like an existing opportunity.
-    .filter(s => !existingSet.has(normName(s.name)));
-};
