@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import {
@@ -19,7 +19,7 @@ import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
 import './NotesList.css';
 
-const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onDeleteClick }) => {
+const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onDeleteClick, onContextMenu, isEditing, editingTitle, setEditingTitle, onRenameSubmit, onRenameCancel }) => {
   const {
     attributes,
     listeners,
@@ -27,7 +27,16 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, locke
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: note._id });
+  } = useSortable({ id: note._id, disabled: isEditing });
+
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -39,6 +48,7 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, locke
       ref={setNodeRef}
       style={style}
       className={`note-item-row ${isDragging ? 'dragging' : ''}`}
+      onContextMenu={(e) => onContextMenu(e, note)}
       {...attributes}
       {...listeners}
     >
@@ -57,6 +67,22 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, locke
         type="button"
       >
         <div className="note-title">
+          {isEditing ? (
+            <input
+              ref={inputRef}
+              className="note-title-edit"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onBlur={onRenameSubmit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onRenameSubmit();
+                else if (e.key === 'Escape') onRenameCancel();
+              }}
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            />
+          ) : (<>
           {note.claudeProjectId && (
             <svg className="note-claude-icon" viewBox="0 0 16 16" aria-hidden="true">
               <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm2.5 6.5L6.5 8 4.5 6.5M8 9.5h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -77,6 +103,7 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, locke
               <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
             </svg>
           )}
+          </>)}
         </div>
         {note.projectId ? (
           <span className="note-project">{projectNamesById?.[note.projectId] || '—'}</span>
@@ -127,10 +154,52 @@ SortableNoteItem.propTypes = {
   lockedByNames: PropTypes.object,
   onNoteClick: PropTypes.func.isRequired,
   onDeleteClick: PropTypes.func.isRequired,
+  onContextMenu: PropTypes.func.isRequired,
+  isEditing: PropTypes.bool,
+  editingTitle: PropTypes.string,
+  setEditingTitle: PropTypes.func.isRequired,
+  onRenameSubmit: PropTypes.func.isRequired,
+  onRenameCancel: PropTypes.func.isRequired,
 };
 
-export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onRequestClose, onReorderNote, isLoading = false }) => {
+export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onRename, onRequestClose, onReorderNote, isLoading = false }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, note: null });
+  const [editingId, setEditingId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
+
+  const handleContextMenu = (e, note) => {
+    e.preventDefault();
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY, note });
+  };
+
+  const startRename = (note) => {
+    setEditingId(note._id);
+    setEditingTitle(note.title || '');
+    setContextMenu({ visible: false, x: 0, y: 0, note: null });
+  };
+
+  const submitRename = async () => {
+    const id = editingId;
+    const title = editingTitle.trim();
+    setEditingId(null);
+    setEditingTitle('');
+    const note = filteredNotes.find(n => n._id === id);
+    if (!id || !title || !note || title === (note.title || '') || typeof onRename !== 'function') return;
+    await onRename(id, title);
+  };
+
+  const cancelRename = () => {
+    setEditingId(null);
+    setEditingTitle('');
+  };
+
+  useEffect(() => {
+    if (!contextMenu.visible) return undefined;
+    const close = () => setContextMenu({ visible: false, x: 0, y: 0, note: null });
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [contextMenu.visible]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -236,6 +305,12 @@ export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, project
               lockedByNames={lockedByNames}
               onNoteClick={onNoteClick}
               onDeleteClick={setDeleteTarget}
+              onContextMenu={handleContextMenu}
+              isEditing={editingId === note._id}
+              editingTitle={editingTitle}
+              setEditingTitle={setEditingTitle}
+              onRenameSubmit={submitRename}
+              onRenameCancel={cancelRename}
             />
           ))}
         </SortableContext>
@@ -246,6 +321,17 @@ export const NotesList = ({ notes, filteredNotes, openTabs, activeTabId, project
   return (
     <div className="notes-list">
       {renderContent()}
+
+      {contextMenu.visible && contextMenu.note && (
+        <div
+          className="note-list-context-menu"
+          style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 1000 }}
+        >
+          <button className="context-menu-item" type="button" onClick={() => { const n = contextMenu.note; setContextMenu({ visible: false, x: 0, y: 0, note: null }); onNoteClick(n); }}>Open</button>
+          <button className="context-menu-item" type="button" onClick={() => startRename(contextMenu.note)}>Rename</button>
+          <button className="context-menu-item" type="button" onClick={() => { const n = contextMenu.note; setContextMenu({ visible: false, x: 0, y: 0, note: null }); setDeleteTarget(n); }}>Delete</button>
+        </div>
+      )}
 
       <Modal
         open={!!deleteTarget}
@@ -270,6 +356,7 @@ NotesList.propTypes = {
   projectNamesById: PropTypes.object,
   lockedByNames: PropTypes.object,
   onNoteClick: PropTypes.func.isRequired,
+  onRename: PropTypes.func,
   onRequestClose: PropTypes.func,
   onReorderNote: PropTypes.func,
   isLoading: PropTypes.bool,

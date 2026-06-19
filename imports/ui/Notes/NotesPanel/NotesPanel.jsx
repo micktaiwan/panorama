@@ -217,6 +217,7 @@ export const NotesPanel = forwardRef(({
           projectNamesById={showProjectColumn ? projectNamesById : undefined}
           lockedByNames={lockedByNames}
           onNoteClick={openNote}
+          onRename={handleTabRename}
           onRequestClose={handleCloseTab}
           onReorderNote={handleReorderNote}
         />
