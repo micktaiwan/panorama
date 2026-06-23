@@ -58,7 +58,7 @@ const progressLabel = (p) => {
   return s;
 };
 
-const WINDOW_DAYS = 7;
+const WINDOW_CHOICES = [7, 14, 30];
 const REVIEW_PAGE_SIZE = 10;
 // Staffing only shows the technical org. "Data" is an empty top-level team today
 // (data folks live in Tech with subteam=Data) — kept for future-proofing.
@@ -75,7 +75,7 @@ export const Staffing = () => {
   const loadingPeople = useSubscribe('people.all');
   const loadingTeams = useSubscribe('teams.all');
   const loadingOpps = useSubscribe('opportunities.all');
-  useSubscribe('commits.recent', 1000);
+  useSubscribe('commits.recent', 2000);
   useSubscribe('userPreferences');
 
   const people = useFind(() => PeopleCollection.find({}, { sort: { normalizedName: 1 } }));
@@ -85,6 +85,7 @@ export const Staffing = () => {
   const userPrefs = useTracker(() => UserPreferencesCollection.findOne({}) || null, []);
 
   const [teamId, setTeamId] = useState('');
+  const [windowDays, setWindowDays] = useState(7);
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverKey, setDragOverKey] = useState(null); // person _id or '__loose__'
   const [showGit, setShowGit] = useState(false);
@@ -146,7 +147,7 @@ export const Staffing = () => {
     };
   }, [people]);
 
-  const days = useMemo(() => buildDays(WINDOW_DAYS), []);
+  const days = useMemo(() => buildDays(windowDays), [windowDays]);
 
   // Timeline grid: a cell chip exists only for commits the user has CLASSIFIED
   // (commit.opportunityId). Unclassified commits keep the person active but show no chip.
@@ -167,9 +168,54 @@ export const Staffing = () => {
       const dm = g.get(pid);
       if (!dm.has(k)) dm.set(k, new Map());
       const cell = dm.get(k);
-      if (!cell.has(c.opportunityId)) cell.set(c.opportunityId, { label: oppById.get(c.opportunityId) || '(projet supprimé)', oppId: c.opportunityId });
+      if (!cell.has(c.opportunityId)) cell.set(c.opportunityId, { label: oppById.get(c.opportunityId) || '(projet supprimé)', oppId: c.opportunityId, count: 0 });
+      cell.get(c.opportunityId).count++;
     });
     return { grid: g, activeIds: active, unresolved: unres };
+  }, [commits, resolver, oppById, days]);
+
+  // Fragmentation signal: distinct classified projects per person over the window.
+  // 3+ projects in the window = likely context-switching, worth a CTO's attention.
+  const projectsPerPerson = useMemo(() => {
+    const m = new Map(); // personId -> Set(oppId)
+    grid.forEach((dm, pid) => {
+      const s = new Set();
+      dm.forEach(cell => cell.forEach((_chip, oppId) => s.add(oppId)));
+      m.set(pid, s.size);
+    });
+    return m;
+  }, [grid]);
+
+  // Effort distribution: classified commits in the window, aggregated per project.
+  // Proxy for "where does the team's time go" — share of classified commits.
+  const effort = useMemo(() => {
+    const windowKeys = new Set(days.map(d => d.key));
+    const byOpp = new Map(); // oppId -> { count, people:Set }
+    let total = 0;
+    let unclassified = 0;
+    const unclassifiedPeople = new Set();
+    commits.forEach(c => {
+      if (!c.committedAt || !windowKeys.has(dayKey(c.committedAt))) return;
+      total++;
+      if (!c.opportunityId) {
+        unclassified++;
+        const upid = resolver(c);
+        if (upid) unclassifiedPeople.add(upid);
+        return;
+      }
+      if (!byOpp.has(c.opportunityId)) byOpp.set(c.opportunityId, { count: 0, people: new Set() });
+      const e = byOpp.get(c.opportunityId);
+      e.count++;
+      const pid = resolver(c);
+      if (pid) e.people.add(pid);
+    });
+    const rows = [...byOpp.entries()]
+      .map(([oppId, e]) => ({ oppId, label: oppById.get(oppId) || '(projet supprimé)', count: e.count, devs: e.people.size, pct: total ? (e.count / total) * 100 : 0 }))
+      .sort((a, b) => b.count - a.count);
+    if (unclassified > 0) {
+      rows.push({ oppId: null, label: 'Hors projet / non classés', count: unclassified, devs: unclassifiedPeople.size, pct: total ? (unclassified / total) * 100 : 0 });
+    }
+    return { rows, total };
   }, [commits, resolver, oppById, days]);
 
   // Review queue: unclassified, not-dismissed commits, most recent first, paginated.
@@ -304,6 +350,12 @@ export const Staffing = () => {
               title="Voir la fiche et les commits"
             >{personLabel(p)}</button>
             {p.role ? <span className="personRole">{p.role}</span> : null}
+            {(projectsPerPerson.get(p._id) || 0) >= 3 && (
+              <span
+                className="fragBadge"
+                title={`${projectsPerPerson.get(p._id)} projets distincts sur ${windowDays}j — context-switching probable`}
+              >⚡ {projectsPerPerson.get(p._id)} projets</span>
+            )}
           </span>
         </td>
         {days.map(d => {
@@ -314,12 +366,12 @@ export const Staffing = () => {
                 <span
                   key={oppId}
                   className={`projChip ${colorClass(oppId)} clickable`}
-                  title={`Projet : ${chip.label} (cliquer pour ouvrir)`}
+                  title={`Projet : ${chip.label} — ${chip.count} commit${chip.count > 1 ? 's' : ''} (cliquer pour ouvrir)`}
                   role="button"
                   tabIndex={0}
                   onClick={() => navigateTo({ name: 'opportunity', opportunityId: oppId })}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo({ name: 'opportunity', opportunityId: oppId }); } }}
-                >{shortName(chip.label)}</span>
+                >{shortName(chip.label)}{chip.count > 1 ? <span className="chipCount">×{chip.count}</span> : null}</span>
               ))}
             </td>
           );
@@ -423,10 +475,16 @@ export const Staffing = () => {
       <div className="staffingHeader">
         <div className="staffingTitle">
           <h2>Staffing — qui bosse sur quoi</h2>
-          <span className="staffingHint">Activité Git, {WINDOW_DAYS} derniers jours · 1 colonne = 1 jour, chips = projets classés</span>
+          <span className="staffingHint">Activité Git, {windowDays} derniers jours · 1 colonne = 1 jour, chips = projets classés</span>
         </div>
         <div className="staffingTools">
           <button type="button" className={`gitToggle ${showGit ? 'active' : ''}`} onClick={() => setShowGit(v => !v)}>⎇ Git</button>
+          <label className="staffingField">
+            Fenêtre
+            <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))}>
+              {WINDOW_CHOICES.map(n => <option key={n} value={n}>{n} jours</option>)}
+            </select>
+          </label>
           <label className="staffingField">
             Équipe
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
@@ -439,12 +497,37 @@ export const Staffing = () => {
       </div>
 
       <div className="staffingAlerts">
-        <span className="alertChip">{activeIds.size} devs actifs ({WINDOW_DAYS}j)</span>
+        <span className="alertChip">{activeIds.size} devs actifs ({windowDays}j)</span>
         <span className="alertChip">{commits.length} commits ingérés</span>
         <span className="alertChip">{classifiedCount} classés</span>
         {reviewCommits.length > 0 && <span className="alertChip warn">{reviewCommits.length} à classer</span>}
         {unresolved.size > 0 && <span className="alertChip danger">{unresolved.size} auteurs non rattachés</span>}
       </div>
+
+      {effort.rows.length > 0 && (
+        <div className="effortPanel">
+          <div className="effortTitle">
+            Répartition de l'effort par projet ({windowDays}j) — {effort.total} commits
+          </div>
+          <div className="effortList">
+            {effort.rows.map(r => (
+              <button
+                key={r.oppId || '__unclassified__'}
+                type="button"
+                className={`effortRow${r.oppId ? '' : ' effortRowMuted'}`}
+                title={r.oppId ? `${r.label} — ${r.count} commits, ${r.devs} dev${r.devs > 1 ? 's' : ''} (cliquer pour ouvrir)` : `${r.count} commits sans projet (à classer ou marqués « Aucun »)`}
+                onClick={() => { if (r.oppId) navigateTo({ name: 'opportunity', opportunityId: r.oppId }); }}
+              >
+                <span className="effortLabel">{r.label}</span>
+                <span className="effortBarTrack">
+                  <span className={`effortBar ${r.oppId ? colorClass(r.oppId) : 'effortBarMuted'}`} style={{ width: `${Math.max(2, r.pct)}%` }} />
+                </span>
+                <span className="effortStats">{r.pct.toFixed(0)}% · {r.count} commits · {r.devs} dev{r.devs > 1 ? 's' : ''}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showGit && (
         <div className="gitPanel">

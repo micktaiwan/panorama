@@ -24,7 +24,7 @@
 
 .staffingTools {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -707,6 +707,92 @@
 .chip-c5 { background: #2c3e50; }
 .chip-c6 { background: #27ae60; }
 .chip-c7 { background: #b7791f; }
+
+.chipCount {
+  margin-left: 4px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.fragBadge {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--warning, #d39e00);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* ---- Effort distribution panel ---- */
+.effortPanel {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.effortTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.effortList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.effortRow {
+  display: grid;
+  grid-template-columns: 180px 1fr 200px;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+
+.effortRow:hover { background: var(--panel-2, rgba(128, 128, 128, 0.08)); }
+
+.effortLabel {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.effortBarTrack {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--panel-2, rgba(128, 128, 128, 0.12));
+  overflow: hidden;
+}
+
+.effortBar {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+}
+
+.effortRowMuted { cursor: default; }
+.effortRowMuted .effortLabel { color: var(--muted); font-style: italic; }
+.effortBarMuted { background: var(--muted, #888); opacity: 0.4; }
+
+.effortStats {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 
 .chip-unclassified {
   background: transparent;
