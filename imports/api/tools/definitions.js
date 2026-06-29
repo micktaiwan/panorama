@@ -399,14 +399,14 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_updateNote',
-    description: 'Update a note\'s title, content, or project association. All fields except noteId are optional. Supports partial updates - you can update just the title without reading the note first. Only pass the fields you want to change.',
+    description: 'Update a note by REPLACING whole fields (uses $set per field). WARNING: there is NO append/patch. Passing `content` OVERWRITES the entire note body — anything not included is lost. To add to an existing note, you MUST first read it with tool_noteById and resend the full existing content plus your addition. "Partial" here is field-level only: you may update title alone without touching content, or content alone without touching title. All fields except noteId are optional; at least one field must be provided.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         noteId: { type: 'string', description: 'Note ID (required)' },
         title: { type: 'string', description: 'New note title (optional)' },
-        content: { type: 'string', description: 'New note content - supports markdown (optional)' },
+        content: { type: 'string', description: 'New note body — supports markdown. REPLACES the entire existing body, NOT an append. Read current content via tool_noteById first and include it verbatim plus your changes (optional)' },
         projectId: { type: 'string', description: 'New project ID (optional)' }
       },
       required: ['noteId']

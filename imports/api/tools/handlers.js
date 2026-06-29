@@ -1143,6 +1143,10 @@ export const TOOL_HANDLERS = {
     const modifier = {};
 
     if (args?.title) modifier.title = String(args.title);
+    // WARNING: this is a full-field $set, NOT an append. Passing `content` here
+    // OVERWRITES the entire note body — anything not included is lost. To add to
+    // an existing note, the caller MUST first read it (tool_noteById) and resend
+    // the full existing content plus the addition. There is no patch/append path.
     if (args?.content !== undefined) modifier.content = String(args.content || '');
 
     // Validate projectId if provided
