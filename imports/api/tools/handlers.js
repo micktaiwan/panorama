@@ -1201,6 +1201,85 @@ export const TOOL_HANDLERS = {
 
     return buildSuccessResponse(result, 'tool_updateNote', { policy: 'write' });
   },
+  async tool_appendToNote(args, memory) {
+    const noteId = String(args?.noteId || '').trim();
+    if (!noteId) {
+      return buildErrorResponse('noteId is required', 'tool_appendToNote', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide noteId parameter'
+      });
+    }
+    if (args?.block === undefined || args?.block === null || String(args.block) === '') {
+      return buildErrorResponse('block is required', 'tool_appendToNote', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide the block text to insert (the new content only, not the existing body)'
+      });
+    }
+
+    const position = args?.position === 'top' ? 'top' : 'bottom';
+    const separator = args?.separator !== undefined ? String(args.separator) : '\n\n';
+    const block = String(args.block);
+
+    // Read the current body server-side so the (possibly huge) content never has
+    // to be resent by the caller. This is what makes append safe on large notes.
+    const userId = getMCPUserId();
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId, userId }, { fields: { content: 1 } });
+
+    if (!existingNote) {
+      console.warn(`[tool_appendToNote] Note not found: ${noteId}`);
+      return buildErrorResponse(`Note not found: "${noteId}"`, 'tool_appendToNote', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_notesByTitleOrContent or tool_noteById to find the correct noteId'
+      });
+    }
+
+    const currentContent = String(existingNote.content || '');
+
+    // Idempotency guard: skip the write if the marker is already present.
+    if (args?.skipIfContains !== undefined && String(args.skipIfContains) !== '') {
+      const marker = String(args.skipIfContains);
+      if (currentContent.includes(marker)) {
+        return buildSuccessResponse(
+          { skipped: true, noteId, reason: `Note already contains "${marker}"` },
+          'tool_appendToNote',
+          { policy: 'write' }
+        );
+      }
+    }
+
+    // Compose the new body. No separator when the note is currently empty.
+    let newContent;
+    if (currentContent === '') {
+      newContent = block;
+    } else if (position === 'top') {
+      newContent = block + separator + currentContent;
+    } else {
+      newContent = currentContent + separator + block;
+    }
+
+    // notes.update rejects if the note is locked by another user → surfaces as
+    // a note-locked error here, protecting concurrent edits.
+    const res = await callMethodAs('notes.update', userId, noteId, { content: newContent });
+
+    if (res === 0) {
+      console.error(`[tool_appendToNote] Update returned 0 for noteId: ${noteId}`);
+      return buildErrorResponse('Note append failed (0 documents modified)', 'tool_appendToNote', {
+        code: 'UPDATE_FAILED',
+        suggestion: 'The note may have been deleted between read and update'
+      });
+    }
+
+    console.log(`[tool_appendToNote] Appended ${block.length} chars (${position}) to note: ${noteId}`);
+
+    const result = { appended: true, noteId, position, blockLength: block.length, newLength: newContent.length };
+    if (memory) {
+      memory.ids = memory.ids || {};
+      memory.ids.noteId = noteId;
+    }
+
+    return buildSuccessResponse(result, 'tool_appendToNote', { policy: 'write' });
+  },
   async tool_deleteNote(args, memory) {
     const noteId = String(args?.noteId || '').trim();
     if (!noteId) {

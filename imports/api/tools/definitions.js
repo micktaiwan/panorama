@@ -399,17 +399,34 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_updateNote',
-    description: 'Update a note by REPLACING whole fields (uses $set per field). WARNING: there is NO append/patch. Passing `content` OVERWRITES the entire note body — anything not included is lost. To add to an existing note, you MUST first read it with tool_noteById and resend the full existing content plus your addition. "Partial" here is field-level only: you may update title alone without touching content, or content alone without touching title. All fields except noteId are optional; at least one field must be provided.',
+    description: 'Update a note by REPLACING whole fields (uses $set per field). WARNING: there is NO append/patch — passing `content` OVERWRITES the entire note body, so anything you do not include is lost. To rewrite content you MUST first read the note with tool_noteById and resend the full existing body verbatim plus your change.\n\nDO NOT use this to ADD to a large note. Many notes hold thousands of lines and embedded base64 images (pasted screenshots); making the model re-emit that whole body verbatim is error-prone (a single dropped character corrupts the note or an image) and expensive in tokens. To append or prepend a block, use tool_appendToNote instead — it edits the body server-side, so the existing content never has to pass back through the model.\n\nUse tool_updateNote for: renaming a note (title only), moving it to another project (projectId only), or a deliberate full-body replacement of a short note. "Partial" here is field-level only: you may set title alone without touching content, or vice-versa. All fields except noteId are optional; at least one must be provided.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         noteId: { type: 'string', description: 'Note ID (required)' },
         title: { type: 'string', description: 'New note title (optional)' },
-        content: { type: 'string', description: 'New note body — supports markdown. REPLACES the entire existing body, NOT an append. Read current content via tool_noteById first and include it verbatim plus your changes (optional)' },
+        content: { type: 'string', description: 'New note body — supports markdown. REPLACES the entire existing body, NOT an append. Read current content via tool_noteById first and include it verbatim plus your changes. For adding a block to an existing note, prefer tool_appendToNote (optional)' },
         projectId: { type: 'string', description: 'New project ID (optional)' }
       },
       required: ['noteId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_appendToNote',
+    description: 'Add a block of text to an existing note WITHOUT resending its current body. The read-modify-write happens server-side: you send only the small `block`, and the existing content (however large — thousands of lines, embedded base64 images) never passes back through the model. This is the SAFE way to grow a note; prefer it over tool_updateNote whenever you are adding rather than fully rewriting.\n\nBy default the block is added at the BOTTOM. Set position:"top" to prepend (e.g. notes kept newest-first, where each meeting/day opens a new dated section at the top).\n\nIdempotency: pass `skipIfContains` with a marker unique to your block (e.g. a dated header "### 3 juillet") — if the note body already contains that string, nothing is written and the call returns skipped:true. This makes it safe to run the same prep repeatedly and to run it from several sessions.\n\nConcurrency: the write respects the note lock. If the note is currently open/locked by another user (e.g. in the Panorama UI), the call fails with a note-locked error rather than clobbering their edit — retry once they are done.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        noteId: { type: 'string', description: 'Note ID (required)' },
+        block: { type: 'string', description: 'The markdown text to insert (required). Keep it to the new content only — do NOT include the existing note body' },
+        position: { type: 'string', enum: ['top', 'bottom'], description: 'Where to insert the block: "bottom" (default) appends at the end, "top" prepends at the start (optional)' },
+        separator: { type: 'string', description: 'String inserted between the existing body and the block. Default "\\n\\n" (one blank line). Ignored when the note is currently empty (optional)' },
+        skipIfContains: { type: 'string', description: 'Idempotency guard: if the existing note body already contains this exact substring, skip the write and return skipped:true. Use a unique marker from your block, e.g. its dated header (optional)' }
+      },
+      required: ['noteId', 'block']
     }
   },
   {
