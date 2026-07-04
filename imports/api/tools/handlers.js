@@ -1250,8 +1250,26 @@ export const TOOL_HANDLERS = {
 
     // Compose the new body. No separator when the note is currently empty.
     let newContent;
+    const afterMarker = args?.afterMarker !== undefined && String(args.afterMarker) !== ''
+      ? String(args.afterMarker)
+      : null;
     if (currentContent === '') {
       newContent = block;
+    } else if (afterMarker) {
+      // Insert right after the line that contains the first occurrence of the marker.
+      // The rest of the body is preserved verbatim (no reflow / no blank-line trimming).
+      const idx = currentContent.indexOf(afterMarker);
+      if (idx === -1) {
+        return buildErrorResponse(`afterMarker not found in note: "${afterMarker}"`, 'tool_appendToNote', {
+          code: 'MARKER_NOT_FOUND',
+          suggestion: 'Pass an afterMarker string that exists in the note body (e.g. its H1 title), or drop it to use position top/bottom'
+        });
+      }
+      const nl = currentContent.indexOf('\n', idx);
+      const cut = nl === -1 ? currentContent.length : nl; // end of the marker's line
+      const before = currentContent.slice(0, cut);
+      const after = currentContent.slice(cut); // starts with '\n' (or empty)
+      newContent = before + separator + block + after;
     } else if (position === 'top') {
       newContent = block + separator + currentContent;
     } else {
