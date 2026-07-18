@@ -266,6 +266,16 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_usersList',
+    description: 'List user accounts (id, name, email) reachable by the caller: yourself plus every account sharing at least one project with you. Use to resolve a user id for assigneeId on tool_createTask/tool_updateTask (assigneeId is a Meteor account id, NOT a person from tool_peopleList). The first entry is always yourself.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {}
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_filesByProject',
     description: 'Return files for a specific project. Use when the user asks about documents, attachments, or uploaded files within a project.',
     parameters: {

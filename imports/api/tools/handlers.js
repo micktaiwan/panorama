@@ -895,6 +895,33 @@ export const TOOL_HANDLERS = {
     if (memory) { memory.lists = memory.lists || {}; memory.lists.teams = mapped; }
     return buildSuccessResponse({ teams: mapped, total: mapped.length }, 'tool_teamsList');
   },
+  async tool_usersList(args, memory) {
+    const userId = getMCPUserId();
+    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    // Scope mirrors the users.network publication: self + accounts sharing a project.
+    const projects = await ProjectsCollection.find(
+      { memberIds: userId },
+      { fields: { memberIds: 1 } }
+    ).fetchAsync();
+    const networkIds = new Set([userId]);
+    for (const p of (projects || [])) {
+      for (const id of (p.memberIds || [])) networkIds.add(id);
+    }
+    const users = await Meteor.users.find(
+      { _id: { $in: [...networkIds] } },
+      { fields: { emails: 1, username: 1, profile: 1 } }
+    ).fetchAsync();
+    const mapped = (users || []).map(u => ({
+      id: u._id,
+      name: clampText(u.profile?.name || u.username || ''),
+      email: clampText(u.emails?.[0]?.address || ''),
+      isSelf: u._id === userId
+    }));
+    // Always surface the caller first so resolving "assign to me" is trivial.
+    mapped.sort((a, b) => (b.isSelf === true) - (a.isSelf === true));
+    if (memory) { memory.lists = memory.lists || {}; memory.lists.users = mapped; }
+    return buildSuccessResponse({ users: mapped, total: mapped.length }, 'tool_usersList');
+  },
   async tool_filesByProject(args, memory) {
     const validation = await validateProjectId(args?.projectId);
     if (!validation.valid) {
