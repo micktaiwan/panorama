@@ -30,7 +30,7 @@ export const ProjectsOverview = () => {
       return bu - au; // fallback to recent update
     });
   }, [projectsRaw]);
-  const tasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $ne: 'done' } } ] }));
+  const tasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $nin: ['done', 'idea'] } } ] }));
 
   const byProjectOpenTasks = useMemo(() => {
     const acc = {};

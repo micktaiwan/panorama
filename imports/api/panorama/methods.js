@@ -59,7 +59,7 @@ const processTasks = (allTasks, projectIds, since) => {
     const acc = tasksByProject.get(pid);
     acc.total += 1;
     const status = (t.status || 'todo');
-    const isClosed = ['done', 'cancelled'].includes(status);
+    const isClosed = ['done', 'cancelled', 'idea'].includes(status);
     if (isClosed) acc.done += 1;
     if (!isClosed) acc.open += 1;
     const dl = t.deadline ? new Date(t.deadline) : null;

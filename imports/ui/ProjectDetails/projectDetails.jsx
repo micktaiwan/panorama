@@ -74,7 +74,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
     const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
     return tasks
-      .filter(t => !['done','cancelled'].includes(t.status || 'todo'))
+      .filter(t => !['done','cancelled','idea'].includes(t.status || 'todo'))
       .sort((a, b) => {
         const ad = toTime(a.deadline);
         const bd = toTime(b.deadline);
@@ -94,6 +94,10 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     .filter(t => ['done','cancelled'].includes(t.status || 'todo'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
     .sort((a,b) => new Date((b.statusChangedAt || 0)) - new Date((a.statusChangedAt || 0))), [tasks, tasks && tasks.map(t => t.status || '').join(','), projectId]);
+  const ideaTasks = useMemo(() => tasks
+    .filter(t => (t.status || 'todo') === 'idea')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    .sort((a,b) => new Date((b.updatedAt || 0)) - new Date((a.updatedAt || 0))), [tasks, tasks && tasks.map(t => t.status || '').join(','), projectId]);
   // DnD setup for active tasks
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [order, setOrder] = useState([]);
@@ -111,6 +115,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     next.forEach((id, idx) => { Meteor.call('tasks.update', id, { priorityRank: idx }); });
   };
   const [showDone, setShowDone] = useState(false);
+  const [showIdeas, setShowIdeas] = useState(false);
   const sessions = useFind(() => NoteSessionsCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const notes = useFind(() => NotesCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const links = useFind(() => LinksCollection.find({ projectId }, { sort: { createdAt: -1 } }));
@@ -143,6 +148,10 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     if (!project?.memberIds) return [];
     return Meteor.users.find({ _id: { $in: project.memberIds } }).fetch();
   }, [project?.memberIds]);
+  const memberOptions = useMemo(() => members.map(m => ({
+    value: m._id,
+    label: m.username || m.profile?.name || m.emails?.[0]?.address || m._id
+  })), [members]);
 
   // Improve description (AI) modal state
   const [isImproveOpen, setIsImproveOpen] = useState(false);
@@ -411,6 +420,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           showClearDeadline
                           showDelete
                           showUrgentImportant
+                          showAssignee
+                          memberOptions={memberOptions}
                           inlineActions={false}
                           titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
                           onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
@@ -418,6 +429,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
                           onClearDeadline={() => updateTaskDeadline(t._id, '')}
                           onRemove={() => removeTask(t._id)}
+                          onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
                           onToggleUrgent={(task) => Meteor.call('tasks.update', task._id, { isUrgent: !task.isUrgent })}
                           onToggleImportant={(task) => Meteor.call('tasks.update', task._id, { isImportant: !task.isImportant })}
                         />
@@ -427,6 +439,48 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                 </ul>
               </SortableContext>
             </DndContext>
+
+            {ideaTasks.length > 0 ? (
+              <div className="doneSection">
+                <h3 className="tasksHeader doneHeader">
+                  <button className="btn-link" onClick={() => setShowIdeas(v => !v)} aria-expanded={showIdeas} aria-controls="ideaTasksList">
+                    {showIdeas ? '▼' : '▶'} Ideas ({ideaTasks.length})
+                  </button>
+                </h3>
+                {showIdeas ? (
+                  <ul id="ideaTasksList" className="tasksList">
+                    {ideaTasks.map(t => (
+                      <li key={t._id}>
+                        <TaskRow
+                          as="div"
+                          task={t}
+                          showProject={false}
+                          allowProjectChange
+                          showMoveProjectButton
+                          projectOptions={projectOptions}
+                          onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
+                          showStatusSelect
+                          showDeadline
+                          editableDeadline
+                          showClearDeadline={false}
+                          showDelete
+                          showUrgentImportant={false}
+                          showAssignee
+                          memberOptions={memberOptions}
+                          inlineActions={false}
+                          titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
+                          onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                          onUpdateTitle={(next) => updateTaskTitle(t._id, next)}
+                          onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
+                          onRemove={() => removeTask(t._id)}
+                          onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
 
             {doneTasks.length > 0 ? (
               <div className="doneSection">
@@ -453,12 +507,15 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           showClearDeadline={false}
                           showDelete
                           showUrgentImportant={false}
+                          showAssignee
+                          memberOptions={memberOptions}
                           inlineActions={false}
                           titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
                           onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
                           onUpdateTitle={(next) => updateTaskTitle(t._id, next)}
                           onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
                           onRemove={() => removeTask(t._id)}
+                          onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
                         />
                       </li>
                     ))}

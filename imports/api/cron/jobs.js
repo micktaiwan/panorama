@@ -35,7 +35,7 @@ async function urgentTasksReporting() {
       isUrgent: true,
       $or: [
         { status: { $exists: false } },
-        { status: { $nin: ['done', 'cancelled'] } }
+        { status: { $nin: ['done', 'cancelled', 'idea'] } }
       ]
     }, {
       fields: {

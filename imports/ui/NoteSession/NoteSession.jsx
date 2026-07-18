@@ -60,7 +60,7 @@ export const NoteSession = ({ sessionId, onBack }) => {
   const pid = session && session.projectId ? session.projectId : '__none__';
   const openTasks = useFind(() => (
     TasksCollection.find(
-      { projectId: pid, $or: [ { status: { $exists: false } }, { status: { $ne: 'done' } } ] },
+      { projectId: pid, $or: [ { status: { $exists: false } }, { status: { $nin: ['done', 'idea'] } } ] },
       { sort: { deadline: 1, createdAt: 1 } }
     )
   ), [pid]);

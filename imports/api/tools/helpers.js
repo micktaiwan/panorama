@@ -41,15 +41,15 @@ export const mapToolCallsForChatCompletions = (toolCalls, toolResults) => {
 // Additional tool helper builders (pure)
 export const buildOverdueSelector = (nowIso) => {
   const d = new Date(nowIso || new Date().toISOString());
-  if (Number.isNaN(d.getTime())) return { status: { $ne: 'done' } };
+  if (Number.isNaN(d.getTime())) return { status: { $nin: ['done', 'idea'] } };
   const ymd = d.toISOString().slice(0, 10);
-  return { status: { $ne: 'done' }, $or: [ { deadline: { $lte: d } }, { deadline: { $lte: ymd } } ] };
+  return { status: { $nin: ['done', 'idea'] }, $or: [ { deadline: { $lte: d } }, { deadline: { $lte: ymd } } ] };
 };
 
 export const buildByProjectSelector = (projectId) => {
   const id = String(projectId || '').trim();
   const sel = id ? { projectId: id } : {};
-  return { ...sel, status: { $ne: 'done' } };
+  return { ...sel, status: { $nin: ['done', 'idea'] } };
 };
 
 export const buildFilterSelector = (filters = {}) => {
@@ -345,7 +345,7 @@ export const COMMON_QUERIES = {
   urgentTasks: {
     where: {
       and: [
-        { status: { ne: 'done' } },
+        { status: { nin: ['done', 'idea'] } },
         { isUrgent: { eq: true } }
       ]
     }
@@ -355,7 +355,7 @@ export const COMMON_QUERIES = {
   importantTasks: {
     where: {
       and: [
-        { status: { ne: 'done' } },
+        { status: { nin: ['done', 'idea'] } },
         { isImportant: { eq: true } }
       ]
     }
@@ -365,7 +365,7 @@ export const COMMON_QUERIES = {
   overdueTasks: {
     where: {
       and: [
-        { status: { ne: 'done' } },
+        { status: { nin: ['done', 'idea'] } },
         { deadline: { lt: new Date().toISOString() } }
       ]
     },

@@ -20,7 +20,7 @@ export const Eisenhower = () => {
   }, [projects]);
 
   const [projFilters, setProjFilters] = React.useState({});
-  const openTasks = tasks.filter(t => !['done','cancelled'].includes(t.status || 'todo')).filter(t => {
+  const openTasks = tasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo')).filter(t => {
     const pid = t.projectId || '';
     const state = projFilters[pid];
     if (state === -1) return false; // excluded

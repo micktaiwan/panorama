@@ -1,5 +1,6 @@
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
+import { useTracker } from 'meteor/react-meteor-data';
 import PropTypes from 'prop-types';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { InlineDate } from '/imports/ui/InlineDate/InlineDate.jsx';
@@ -31,6 +32,9 @@ export const TaskRow = ({
   showMarkDone = false,
   showUrgentImportant = false,
   editableDeadline = false,
+  // Assignee (optional)
+  showAssignee = false,
+  memberOptions = EMPTY_ARRAY,
   // Typography
   textSize = 'normal', // 'normal' | 'small'
   // Layout
@@ -44,13 +48,22 @@ export const TaskRow = ({
   onRemove,
   onMarkDone,
   onToggleUrgent,
-  onToggleImportant
+  onToggleImportant,
+  onUpdateAssignee
 }) => {
   const Container = as || 'li';
   const [showMoveSelect, setShowMoveSelect] = React.useState(false);
   // Notes modal state
   const [isNotesOpen, setIsNotesOpen] = React.useState(false);
   const [notesDraft, setNotesDraft] = React.useState('');
+  // Resolve the assignee's display name (network users are published app-wide)
+  const assigneeName = useTracker(() => {
+    const id = task?.assigneeId;
+    if (!id) return '';
+    const u = Meteor.users.findOne(id, { fields: { username: 1, profile: 1, emails: 1 } });
+    if (!u) return '';
+    return u.username || u.profile?.name || u.emails?.[0]?.address || '';
+  }, [task?.assigneeId]);
   if (!task) return null;
   const status = task.status || 'todo';
   const sev = task.deadline ? deadlineSeverity(task.deadline) : '';
@@ -122,7 +135,8 @@ export const TaskRow = ({
                 { value: 'todo', label: 'to do' },
                 { value: 'in_progress', label: 'in progress' },
                 { value: 'done', label: 'done' },
-                { value: 'cancelled', label: 'cancelled' }
+                { value: 'cancelled', label: 'cancelled' },
+                { value: 'idea', label: 'idea' }
               ]}
               onSubmit={(next) => { if (typeof onUpdateStatus === 'function') onUpdateStatus(next); }}
             />
@@ -161,6 +175,26 @@ export const TaskRow = ({
             ) : null}
             <button className={`iconButton taskNotesButton${task.notes ? ' hasNotes' : ''}`} title={task.notes || 'Add notes'} aria-label="Notes" onClick={openNotes}>…</button>
           </span>
+          {(() => {
+            const canEdit = showAssignee && typeof onUpdateAssignee === 'function' && Array.isArray(memberOptions) && memberOptions.length > 0;
+            if (canEdit) {
+              const options = [{ value: '', label: '(no assignee)' }, ...memberOptions];
+              return (
+                <InlineEditable
+                  as="select"
+                  value={task.assigneeId || ''}
+                  options={options}
+                  className="taskAssignee"
+                  inputClassName="taskAssignee"
+                  onSubmit={(next) => { onUpdateAssignee(next || null); }}
+                />
+              );
+            }
+            if (assigneeName) {
+              return (<span className="taskAssignee taskAssigneeReadonly" title={`Assignee: ${assigneeName}`}>{assigneeName}</span>);
+            }
+            return null;
+          })()}
           {task.notes ? (
             <button
               type="button"
@@ -298,6 +332,7 @@ TaskRow.propTypes = {
     createdAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
     statusChangedAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
     projectId: PropTypes.string,
+    assigneeId: PropTypes.string,
     isUrgent: PropTypes.bool,
     isImportant: PropTypes.bool,
   }).isRequired,
@@ -318,6 +353,10 @@ TaskRow.propTypes = {
   showMarkDone: PropTypes.bool,
   showUrgentImportant: PropTypes.bool,
   editableDeadline: PropTypes.bool,
+  // Assignee (optional)
+  showAssignee: PropTypes.bool,
+  memberOptions: PropTypes.arrayOf(PropTypes.shape({ value: PropTypes.string, label: PropTypes.string })),
+  onUpdateAssignee: PropTypes.func,
   // Typography
   textSize: PropTypes.oneOf(['normal', 'small']),
   // Layout

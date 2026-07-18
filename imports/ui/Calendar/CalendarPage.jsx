@@ -198,7 +198,7 @@ export const CalendarPage = () => {
       .sort((a, b) => a.start - b.start);
 
     // 2) Candidate tasks (open only, and not already scheduled)
-    const openTasks = tasks.filter(t => !['done','cancelled'].includes(t.status || '') && !t.scheduledAt);
+    const openTasks = tasks.filter(t => !['done','cancelled','idea'].includes(t.status || '') && !t.scheduledAt);
     const DAY = 24 * 60 * 60 * 1000;
     const HOUR = 60 * 60 * 1000;
     const score = (t) => {

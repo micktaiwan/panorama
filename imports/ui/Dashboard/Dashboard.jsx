@@ -18,7 +18,7 @@ export const Dashboard = () => {
   useSubscribe('projects');
   useSubscribe('noteSessions');
   useSubscribe('notes');
-  const rawTasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ] }, { sort: { createdAt: 1 } }));
+  const rawTasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ] }, { sort: { createdAt: 1 } }));
   const allTasks = useFind(() => TasksCollection.find({}, { fields: { status: 1, deadline: 1, createdAt: 1, statusChangedAt: 1, title: 1, projectId: 1 } }));
   // flags are not needed on this screen beyond status/deadline metrics
   const projects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1, colorLabel: 1, isFavorite: 1, favoriteRank: 1 } }));
@@ -60,11 +60,11 @@ export const Dashboard = () => {
 
   const stats = useMemo(() => {
     const total = allTasks.length;
-    const open = allTasks.filter(t => !['done','cancelled'].includes(t.status || 'todo')).length;
+    const open = allTasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo')).length;
     const closed = total - open;
-    const withDeadline = allTasks.filter(t => !['done','cancelled'].includes(t.status || 'todo') && !!t.deadline).length;
+    const withDeadline = allTasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo') && !!t.deadline).length;
     // Overdue counts only open tasks due today or earlier
-    const overdue = allTasks.filter(t => !['done','cancelled'].includes(t.status || 'todo') && t.deadline && deadlineSeverity(t.deadline) === 'dueNow').length;
+    const overdue = allTasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo') && t.deadline && deadlineSeverity(t.deadline) === 'dueNow').length;
     return { total, open, closed, withDeadline, overdue };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(allTasks.map(t => [(t.status || 'todo') !== 'done' ? 'o' : 'c', t.deadline ? new Date(t.deadline).toDateString() : ''].join(':')))]);

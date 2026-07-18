@@ -22,6 +22,15 @@ const sanitizeTaskDoc = (input) => {
   return out;
 };
 
+// Resolve the set of user ids a task may be assigned to.
+// With a project: its members. Without a project: only the owner.
+const allowedAssigneeIds = async (projectId, ownerId) => {
+  if (!projectId) return [String(ownerId)];
+  const project = await ProjectsCollection.findOneAsync(String(projectId), { fields: { memberIds: 1 } });
+  const ids = Array.isArray(project?.memberIds) ? project.memberIds.map(String) : [];
+  return ids.length > 0 ? ids : [String(ownerId)];
+};
+
 Meteor.methods({
   async 'tasks.insert'(doc) {
     check(doc, Object);
@@ -38,11 +47,23 @@ Meteor.methods({
       const openSelector = {
         projectId,
         userId: this.userId,
-        $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ]
+        $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ]
       };
       // Shift all open tasks down by 1 in a single multi-update, then insert at rank 0
       await TasksCollection.updateAsync(openSelector, { $inc: { priorityRank: 1 } }, { multi: true });
       sanitized.priorityRank = 0;
+    }
+    // Optional assignee: must be a member of the target project (or the owner when no project)
+    if (Object.prototype.hasOwnProperty.call(sanitized, 'assigneeId')) {
+      if (!sanitized.assigneeId) {
+        delete sanitized.assigneeId;
+      } else {
+        const allowed = await allowedAssigneeIds(sanitized.projectId, this.userId);
+        if (!allowed.includes(String(sanitized.assigneeId))) {
+          throw new Meteor.Error('invalid-assignee', 'Assignee must be a member of the project');
+        }
+        sanitized.assigneeId = String(sanitized.assigneeId);
+      }
     }
     // Duplicate guard for userLog provenance
     if (doc?.source && doc.source.kind === 'userLog' && Array.isArray(doc.source.logEntryIds) && doc.source.logEntryIds.length > 0) {
@@ -94,6 +115,19 @@ Meteor.methods({
     }
     const set = { ...sanitizeTaskDoc(modifier), updatedAt: new Date() };
     const unset = {};
+    // Optional assignee: clear when empty, otherwise validate project membership
+    if (Object.prototype.hasOwnProperty.call(modifier, 'assigneeId')) {
+      if (!modifier.assigneeId) {
+        delete set.assigneeId;
+        unset.assigneeId = 1;
+      } else {
+        const allowed = await allowedAssigneeIds(task.projectId, task.userId);
+        if (!allowed.includes(String(modifier.assigneeId))) {
+          throw new Meteor.Error('invalid-assignee', 'Assignee must be a member of the project');
+        }
+        set.assigneeId = String(modifier.assigneeId);
+      }
+    }
     if (Object.prototype.hasOwnProperty.call(modifier, 'status')) {
       const nextStatus = modifier.status;
       if (!task || task.status !== nextStatus) {
@@ -157,7 +191,7 @@ Meteor.methods({
     // Get all open tasks for THIS USER sorted by current priorityRank
     const globalOpenSelector = {
       userId: this.userId,
-      $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ]
+      $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ]
     };
     
     const allOpenTasks = await TasksCollection.find(globalOpenSelector).fetchAsync();

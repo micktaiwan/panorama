@@ -55,7 +55,7 @@ Meteor.publish('tasks.calendar.open', function publishTasksForCalendarOpen(inclu
           { userId: this.userId },
           { projectId: { $in: projectIds } },
         ] },
-        { $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ] },
+        { $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ] },
         { $or: [ { scheduledAt: { $exists: false } }, { scheduledAt: null } ] },
         projectSel
       ]
@@ -118,7 +118,7 @@ Meteor.publish('tasks.calendar.open.unfiltered', function publishTasksForCalenda
           { userId: this.userId },
           { projectId: { $in: projectIds } },
         ] },
-        { $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled'] } } ] },
+        { $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ] },
         { $or: [ { scheduledAt: { $exists: false } }, { scheduledAt: null } ] }
       ]
     };

@@ -113,3 +113,10 @@
     line-height: 18px;
   }
 }
+
+/* Assignee (responsible person) */
+.taskAssignee { flex-shrink: 0; font-size: 11px; color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; width: auto; max-width: 160px; }
+.taskAssigneeReadonly { padding: 1px 6px; border-radius: 999px; background: rgba(var(--black-rgb),0.06); }
+.taskAssigneeReadonly::before { content: "@"; opacity: 0.6; }
+/* Keep the assignee select compact so its native dropdown doesn't span the row */
+select.inlineEditableSelect.taskAssignee { flex: 0 0 auto; width: auto; min-width: 0; max-width: 160px; }
