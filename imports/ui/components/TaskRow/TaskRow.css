@@ -1,4 +1,4 @@
-.taskRowC { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--task-col-gap, 12px); padding: 8px 0; border-bottom: 1px solid var(--border); position: relative; width: 100%; }
+.taskRowC { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--task-col-gap, 12px); padding: 8px 0 8px 10px; border-bottom: 1px solid var(--border); position: relative; width: 100%; }
 .taskRowC:hover { background: var(--row-hover); }
 .taskRowC.withProject { grid-template-columns: var(--task-project-col-width, 160px) 1fr auto; }
 .taskRowC.smallText { font-size: 12px; padding: 4px 0; gap: var(--task-col-gap, 8px); --task-project-col-width: 120px; }
@@ -114,9 +114,45 @@
   }
 }
 
-/* Assignee (responsible person) */
-.taskAssignee { flex-shrink: 0; font-size: 11px; color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; width: auto; max-width: 160px; }
-.taskAssigneeReadonly { padding: 1px 6px; border-radius: 999px; background: rgba(var(--black-rgb),0.06); }
-.taskAssigneeReadonly::before { content: "@"; opacity: 0.6; }
-/* Keep the assignee select compact so its native dropdown doesn't span the row */
-select.inlineEditableSelect.taskAssignee { flex: 0 0 auto; width: auto; min-width: 0; max-width: 160px; }
+/* Assignee (responsible person): colored initials avatar chip */
+.taskAssignee {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(var(--black-rgb), 0.08);
+  color: var(--muted);
+  user-select: none;
+}
+.taskRowC.smallText .taskAssignee { width: 20px; height: 20px; font-size: 9px; }
+.taskAssignee[data-hue="0"] { background: rgba(var(--info-rgb), 0.15); color: var(--info); }
+.taskAssignee[data-hue="1"] { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.taskAssignee[data-hue="2"] { background: rgba(var(--purple-rgb), 0.15); color: var(--purple); }
+.taskAssignee[data-hue="3"] { background: rgba(var(--warning-rgb), 0.15); color: var(--warning); }
+.taskAssignee[data-hue="4"] { background: rgba(var(--danger-rgb), 0.15); color: var(--danger-400); }
+.taskAssignee[data-hue="5"] { background: rgba(var(--primary-rgb), 0.15); color: var(--primary); }
+/* Empty state (assignable but no assignee yet) */
+.taskAssigneeAdd { background: transparent; border: 1px dashed var(--border); color: var(--muted); font-weight: 400; }
+/* Editable: transparent native select overlaid on the chip (click chip -> native picker) */
+.taskAssigneeEdit { position: relative; display: inline-flex; flex-shrink: 0; }
+.taskAssigneeEdit .taskAssignee { cursor: pointer; }
+.taskAssigneeNativeSelect { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0; }
+
+/* Row accent when the task is assigned to the current user */
+.taskRowC.assignedToMe { position: relative; background: rgba(var(--primary-rgb), 0.05); border-radius: 6px; }
+.taskRowC.assignedToMe::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--primary);
+}

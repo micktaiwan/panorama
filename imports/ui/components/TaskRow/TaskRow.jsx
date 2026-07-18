@@ -10,6 +10,10 @@ import './TaskRow.css';
 
 const EMPTY_ARRAY = [];
 
+// Avatar helpers (kept in sync with the project members list)
+const initialsFor = (name) => name.split(/[\s@]/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase() || '?';
+const hueFor = (name) => name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 6;
+
 export const TaskRow = ({
   as = 'li',
   task,
@@ -56,15 +60,18 @@ export const TaskRow = ({
   // Notes modal state
   const [isNotesOpen, setIsNotesOpen] = React.useState(false);
   const [notesDraft, setNotesDraft] = React.useState('');
-  // Resolve the assignee's display name (network users are published app-wide)
-  const assigneeName = useTracker(() => {
+  // Resolve the assignee's display name + whether it is the current user
+  // (network users are published app-wide via users.network)
+  const assignee = useTracker(() => {
     const id = task?.assigneeId;
-    if (!id) return '';
+    if (!id) return { name: '', isMe: false };
     const u = Meteor.users.findOne(id, { fields: { username: 1, profile: 1, emails: 1 } });
-    if (!u) return '';
-    return u.username || u.profile?.name || u.emails?.[0]?.address || '';
+    const name = u ? (u.username || u.profile?.name || u.emails?.[0]?.address || '') : '';
+    return { name, isMe: id === Meteor.userId() };
   }, [task?.assigneeId]);
   if (!task) return null;
+  const assigneeName = assignee.name;
+  const assignedToMe = assignee.isMe;
   const status = task.status || 'todo';
   const sev = task.deadline ? deadlineSeverity(task.deadline) : '';
   const metaCls = sev ? ` ${sev}` : ' taskMetaDefault';
@@ -84,9 +91,33 @@ export const TaskRow = ({
     setIsNotesOpen(false);
   };
 
+  const canEditAssignee = showAssignee && typeof onUpdateAssignee === 'function' && Array.isArray(memberOptions) && memberOptions.length > 0;
+  const assigneeChip = assigneeName ? (
+    <span className="taskAssignee" data-hue={hueFor(assigneeName)} title={`Assignee: ${assigneeName}`}>{initialsFor(assigneeName)}</span>
+  ) : null;
+  const assigneeEl = (() => {
+    if (!canEditAssignee) return assigneeChip; // read-only contexts: only show when assigned
+    return (
+      <span className="taskAssigneeEdit">
+        {assigneeChip || (<span className="taskAssignee taskAssigneeAdd" title="Assign to…">+</span>)}
+        <select
+          className="taskAssigneeNativeSelect"
+          value={task.assigneeId || ''}
+          onChange={(e) => onUpdateAssignee(e.target.value || null)}
+          title="Assign to…"
+          aria-label="Assign to"
+        >
+          <option value="">(no assignee)</option>
+          {memberOptions.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
+        </select>
+      </span>
+    );
+  })();
+
   return (
-    <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}`} style={containerStyle}>
+    <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}${assignedToMe ? ' assignedToMe' : ''}`} style={containerStyle}>
       <div className="taskLeft">
+        {assigneeEl}
         {showMarkDone ? (
           <input
             type="checkbox"
@@ -175,26 +206,6 @@ export const TaskRow = ({
             ) : null}
             <button className={`iconButton taskNotesButton${task.notes ? ' hasNotes' : ''}`} title={task.notes || 'Add notes'} aria-label="Notes" onClick={openNotes}>…</button>
           </span>
-          {(() => {
-            const canEdit = showAssignee && typeof onUpdateAssignee === 'function' && Array.isArray(memberOptions) && memberOptions.length > 0;
-            if (canEdit) {
-              const options = [{ value: '', label: '(no assignee)' }, ...memberOptions];
-              return (
-                <InlineEditable
-                  as="select"
-                  value={task.assigneeId || ''}
-                  options={options}
-                  className="taskAssignee"
-                  inputClassName="taskAssignee"
-                  onSubmit={(next) => { onUpdateAssignee(next || null); }}
-                />
-              );
-            }
-            if (assigneeName) {
-              return (<span className="taskAssignee taskAssigneeReadonly" title={`Assignee: ${assigneeName}`}>{assigneeName}</span>);
-            }
-            return null;
-          })()}
           {task.notes ? (
             <button
               type="button"

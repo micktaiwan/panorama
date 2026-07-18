@@ -60,7 +60,7 @@ export const ProjectFilters = ({ projects, storageKey = 'dashboard_proj_filters'
         return (
           <Tooltip key={p._id} content={fullName} placement="top">
             <button
-              className={`projChip${cls}`}
+              className={`projFilterChip${cls}`}
               onClick={() => toggle(p._id)}
             >
               {label}
