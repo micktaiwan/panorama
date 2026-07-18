@@ -41,7 +41,33 @@ const clampText = (s, max = 300) => {
   return str.slice(0, max - 1) + '…';
 };
 
-// Validate projectId exists before querying
+// Project access mirrors the web publications: a user may access any project
+// they are a MEMBER of (memberIds), not only projects they own (userId). Docs
+// living inside a shared project (tasks, notes, links, files, sessions) are
+// therefore visible to every member, regardless of which member created them.
+// See imports/api/projects/publications.js and imports/api/_shared/auth.js
+// (ensureProjectAccess), which enforce the same rule for the web/method layer.
+
+// True if the caller can access `docProjectId` (owns nothing to check when the
+// doc has no project; project docs require membership).
+const canAccessProject = async (projectId, userId) => {
+  if (!projectId) return false;
+  const { ProjectsCollection } = await import('/imports/api/projects/collections');
+  const p = await ProjectsCollection.findOneAsync(
+    { _id: String(projectId), memberIds: userId }, { fields: { _id: 1 } }
+  );
+  return !!p;
+};
+
+// True if the caller may read/write `doc`: they own it, or they are a member of
+// its project. Mirrors the web/method auth (owner or ensureProjectAccess).
+const canAccessDoc = async (doc, userId) => {
+  if (!doc) return false;
+  if (doc.userId === userId) return true;
+  return canAccessProject(doc.projectId, userId);
+};
+
+// Validate projectId exists and is accessible (owned or shared) before querying
 const validateProjectId = async (projectId) => {
   if (!projectId) return { valid: false, error: 'projectId is required' };
   const id = String(projectId).trim();
@@ -51,7 +77,7 @@ const validateProjectId = async (projectId) => {
   }
   const { ProjectsCollection } = await import('/imports/api/projects/collections');
   const userId = getMCPUserId();
-  const exists = await ProjectsCollection.findOneAsync({ _id: id, userId }, { fields: { _id: 1 } });
+  const exists = await ProjectsCollection.findOneAsync({ _id: id, memberIds: userId }, { fields: { _id: 1 } });
   if (!exists) {
     return { valid: false, error: `Project not found: "${id}". Use tool_projectByName to find the correct ID.` };
   }
@@ -177,8 +203,9 @@ export const TOOL_HANDLERS = {
     }
 
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const userId = getMCPUserId();
-    const selector = { ...buildByProjectSelector(validation.id), userId };
+    // Project membership already checked by validateProjectId — return every
+    // task in the project, whichever member created it (matches the web view).
+    const selector = buildByProjectSelector(validation.id);
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
@@ -214,7 +241,7 @@ export const TOOL_HANDLERS = {
   async tool_projectsList(args, memory) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     const userId = getMCPUserId();
-    const projects = await ProjectsCollection.find({ userId }, { fields: { name: 1, description: 1 } }).fetchAsync();
+    const projects = await ProjectsCollection.find({ memberIds: userId }, { fields: { name: 1, description: 1 } }).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
     const compact = (projects || []).map(p => ({ id: p._id, name: clampText(p.name || ''), description: clampText(p.description || '') }));
     if (memory) {
@@ -229,7 +256,7 @@ export const TOOL_HANDLERS = {
   async tool_projectByName(args, memory) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
     const userId = getMCPUserId();
-    const selector = { ...buildProjectByNameSelector(args?.name), userId };
+    const selector = { ...buildProjectByNameSelector(args?.name), memberIds: userId };
     const projects = await ProjectsCollection.find(selector, { fields: { name: 1, description: 1 } }).fetchAsync();
 
     // Map results to compact format
@@ -403,9 +430,15 @@ export const TOOL_HANDLERS = {
 
     try {
       const selector = compileWhere(collection, where);
-      // If not a global collection, add userId filter
+      // Scope by user. The `projects` collection is scoped by membership
+      // (memberIds) so shared projects are visible, matching the web
+      // publications; other collections stay owner-scoped (userId).
       if (!GLOBAL_COLLECTIONS.includes(collection)) {
-        selector.userId = getMCPUserId();
+        if (collection === 'projects') {
+          selector.memberIds = getMCPUserId();
+        } else {
+          selector.userId = getMCPUserId();
+        }
       }
       let cursor;
       if (collection === 'tasks') {
@@ -506,8 +539,8 @@ export const TOOL_HANDLERS = {
     }
 
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const userId = getMCPUserId();
-    const notes = await NotesCollection.find({ projectId: validation.id, userId }, { fields: { title: 1 } }).fetchAsync();
+    // Project membership already checked by validateProjectId — every member sees all notes.
+    const notes = await NotesCollection.find({ projectId: validation.id }, { fields: { title: 1 } }).fetchAsync();
     const mapped = (notes || []).map(n => ({ id: n._id, title: clampText(n.title || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.notes = mapped; }
     return buildSuccessResponse({ notes: mapped, total: mapped.length }, 'tool_notesByProject');
@@ -523,10 +556,10 @@ export const TOOL_HANDLERS = {
     }
     const userId = getMCPUserId();
     const note = await NotesCollection.findOneAsync(
-      { _id: noteId, userId },
-      { fields: { title: 1, content: 1, projectId: 1, createdAt: 1, updatedAt: 1 } }
+      { _id: noteId },
+      { fields: { title: 1, content: 1, projectId: 1, userId: 1, createdAt: 1, updatedAt: 1 } }
     );
-    if (!note) {
+    if (!note || !(await canAccessDoc(note, userId))) {
       return buildSuccessResponse({ note: null }, 'tool_noteById', {
         customSummary: 'Note not found'
       });
@@ -630,28 +663,49 @@ export const TOOL_HANDLERS = {
     );
   },
   async tool_noteSessionsByProject(args, memory) {
+    const validation = await validateProjectId(args?.projectId);
+    if (!validation.valid) {
+      return buildErrorResponse(validation.error, 'tool_noteSessionsByProject', {
+        code: 'INVALID_PROJECT_ID',
+        suggestion: 'Use tool_projectByName({"name": "..."}) to find the correct project ID first.'
+      });
+    }
     const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
-    const projectId = String(args?.projectId || '').trim();
-    const userId = getMCPUserId();
-    const sessions = await NoteSessionsCollection.find({ projectId, userId }, { fields: { name: 1 } }).fetchAsync();
+    // Project membership already checked — every member sees all sessions.
+    const sessions = await NoteSessionsCollection.find({ projectId: validation.id }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (sessions || []).map(s => ({ id: s._id, name: clampText(s.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.noteSessions = mapped; }
     return buildSuccessResponse({ sessions: mapped, total: mapped.length }, 'tool_noteSessionsByProject');
   },
   async tool_noteLinesBySession(args, memory) {
     const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
+    const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
     const sessionId = String(args?.sessionId || '').trim();
     const userId = getMCPUserId();
-    const lines = await NoteLinesCollection.find({ sessionId, userId }, { fields: { content: 1 } }).fetchAsync();
+    // Access the session's lines if the caller owns the session or is a member
+    // of its project (a shared session's lines can be authored by any member).
+    const session = await NoteSessionsCollection.findOneAsync(
+      { _id: sessionId }, { fields: { userId: 1, projectId: 1 } }
+    );
+    if (!session || !(await canAccessDoc(session, userId))) {
+      return buildSuccessResponse({ lines: [], total: 0 }, 'tool_noteLinesBySession', { customSummary: 'Session not found' });
+    }
+    const lines = await NoteLinesCollection.find({ sessionId }, { fields: { content: 1 } }).fetchAsync();
     const mapped = (lines || []).map(l => ({ id: l._id, content: clampText(l.content || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.noteLines = mapped; }
     return buildSuccessResponse({ lines: mapped, total: mapped.length }, 'tool_noteLinesBySession');
   },
   async tool_linksByProject(args, memory) {
+    const validation = await validateProjectId(args?.projectId);
+    if (!validation.valid) {
+      return buildErrorResponse(validation.error, 'tool_linksByProject', {
+        code: 'INVALID_PROJECT_ID',
+        suggestion: 'Use tool_projectByName({"name": "..."}) to find the correct project ID first.'
+      });
+    }
     const { LinksCollection } = await import('/imports/api/links/collections');
-    const projectId = String(args?.projectId || '').trim();
-    const userId = getMCPUserId();
-    const links = await LinksCollection.find({ projectId, userId }, { fields: { name: 1, url: 1 } }).fetchAsync();
+    // Project membership already checked — every member sees all links.
+    const links = await LinksCollection.find({ projectId: validation.id }, { fields: { name: 1, url: 1 } }).fetchAsync();
     const mapped = (links || []).map(l => ({ id: l._id, name: clampText(l.name || ''), url: l.url || null }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.links = mapped; }
     return buildSuccessResponse({ links: mapped, total: mapped.length }, 'tool_linksByProject');
@@ -842,10 +896,16 @@ export const TOOL_HANDLERS = {
     return buildSuccessResponse({ teams: mapped, total: mapped.length }, 'tool_teamsList');
   },
   async tool_filesByProject(args, memory) {
+    const validation = await validateProjectId(args?.projectId);
+    if (!validation.valid) {
+      return buildErrorResponse(validation.error, 'tool_filesByProject', {
+        code: 'INVALID_PROJECT_ID',
+        suggestion: 'Use tool_projectByName({"name": "..."}) to find the correct project ID first.'
+      });
+    }
     const { FilesCollection } = await import('/imports/api/files/collections');
-    const projectId = String(args?.projectId || '').trim();
-    const userId = getMCPUserId();
-    const files = await FilesCollection.find({ projectId, userId }, { fields: { name: 1 } }).fetchAsync();
+    // Project membership already checked — every member sees all files.
+    const files = await FilesCollection.find({ projectId: validation.id }, { fields: { name: 1 } }).fetchAsync();
     const mapped = (files || []).map(f => ({ id: f._id, name: clampText(f.name || '') }));
     if (memory) { memory.lists = memory.lists || {}; memory.lists.files = mapped; }
     return buildSuccessResponse({ files: mapped, total: mapped.length }, 'tool_filesByProject');
@@ -919,7 +979,7 @@ export const TOOL_HANDLERS = {
       const userId = getMCPUserId();
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
       const existingProject = await ProjectsCollection.findOneAsync(
-        { _id: projectId, userId },
+        { _id: projectId, memberIds: userId },
         { fields: { _id: 1 } }
       );
 
@@ -961,12 +1021,12 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    // Validate that the task exists before attempting update
+    // Validate that the task exists and is accessible (owned or shared project)
     const userId = getMCPUserId();
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const existingTask = await TasksCollection.findOneAsync({ _id: taskId, userId }, { fields: { _id: 1 } });
+    const existingTask = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { userId: 1, projectId: 1 } });
 
-    if (!existingTask) {
+    if (!existingTask || !(await canAccessDoc(existingTask, userId))) {
       console.warn(`[tool_updateTask] Task not found: ${taskId}`);
       return buildErrorResponse(`Task not found: "${taskId}"`, 'tool_updateTask', {
         code: 'NOT_FOUND',
@@ -989,7 +1049,7 @@ export const TOOL_HANDLERS = {
       if (projectIdValue) {
         const { ProjectsCollection } = await import('/imports/api/projects/collections');
         const existingProject = await ProjectsCollection.findOneAsync(
-          { _id: projectIdValue, userId },
+          { _id: projectIdValue, memberIds: userId },
           { fields: { _id: 1 } }
         );
 
@@ -1047,12 +1107,12 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    // Validate that the task exists before attempting delete
+    // Validate that the task exists and is accessible (owned or shared project)
     const userId = getMCPUserId();
     const { TasksCollection } = await import('/imports/api/tasks/collections');
-    const existingTask = await TasksCollection.findOneAsync({ _id: taskId, userId }, { fields: { _id: 1 } });
+    const existingTask = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { userId: 1, projectId: 1 } });
 
-    if (!existingTask) {
+    if (!existingTask || !(await canAccessDoc(existingTask, userId))) {
       console.warn(`[tool_deleteTask] Task not found: ${taskId}`);
       return buildErrorResponse(`Task not found: "${taskId}"`, 'tool_deleteTask', {
         code: 'NOT_FOUND',
@@ -1097,7 +1157,7 @@ export const TOOL_HANDLERS = {
 
       const { ProjectsCollection } = await import('/imports/api/projects/collections');
       const existingProject = await ProjectsCollection.findOneAsync(
-        { _id: projectId, userId: mcpUserId },
+        { _id: projectId, memberIds: mcpUserId },
         { fields: { _id: 1 } }
       );
 
@@ -1131,12 +1191,12 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    // Validate that the note exists before attempting update
+    // Validate that the note exists and is accessible (owned or shared project)
     const userId = getMCPUserId();
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const existingNote = await NotesCollection.findOneAsync({ _id: noteId, userId }, { fields: { _id: 1 } });
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { userId: 1, projectId: 1 } });
 
-    if (!existingNote) {
+    if (!existingNote || !(await canAccessDoc(existingNote, userId))) {
       console.warn(`[tool_updateNote] Note not found: ${noteId}`);
       return buildErrorResponse(`Note not found: "${noteId}"`, 'tool_updateNote', {
         code: 'NOT_FOUND',
@@ -1161,7 +1221,7 @@ export const TOOL_HANDLERS = {
       if (projectIdValue) {
         const { ProjectsCollection } = await import('/imports/api/projects/collections');
         const existingProject = await ProjectsCollection.findOneAsync(
-          { _id: projectIdValue, userId },
+          { _id: projectIdValue, memberIds: userId },
           { fields: { _id: 1 } }
         );
 
@@ -1228,9 +1288,9 @@ export const TOOL_HANDLERS = {
     // to be resent by the caller. This is what makes append safe on large notes.
     const userId = getMCPUserId();
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const existingNote = await NotesCollection.findOneAsync({ _id: noteId, userId }, { fields: { content: 1 } });
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { content: 1, userId: 1, projectId: 1 } });
 
-    if (!existingNote) {
+    if (!existingNote || !(await canAccessDoc(existingNote, userId))) {
       console.warn(`[tool_appendToNote] Note not found: ${noteId}`);
       return buildErrorResponse(`Note not found: "${noteId}"`, 'tool_appendToNote', {
         code: 'NOT_FOUND',
@@ -1311,12 +1371,12 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    // Validate that the note exists before attempting delete
+    // Validate that the note exists and is accessible (owned or shared project)
     const userId = getMCPUserId();
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const existingNote = await NotesCollection.findOneAsync({ _id: noteId, userId }, { fields: { _id: 1 } });
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { userId: 1, projectId: 1 } });
 
-    if (!existingNote) {
+    if (!existingNote || !(await canAccessDoc(existingNote, userId))) {
       console.warn(`[tool_deleteNote] Note not found: ${noteId}`);
       return buildErrorResponse(`Note not found: "${noteId}"`, 'tool_deleteNote', {
         code: 'NOT_FOUND',
