@@ -26,6 +26,7 @@ import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { ActivitySummary } from '../components/ActivitySummary/ActivitySummary.jsx';
 import { NotesPanel } from '../Notes/NotesPanel/NotesPanel.jsx';
+import { useDeferredTaskRemoval } from '../hooks/useDeferredTaskRemoval.js';
 
 /** Return '#000' or '#fff' depending on which has better contrast against hex color */
 function contrastText(hex) {
@@ -121,6 +122,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const links = useFind(() => LinksCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const files = useFind(() => FilesCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const { hiddenTaskIds, requestRemoveTask } = useDeferredTaskRemoval();
 
   // Color picker: local state + debounced save
   const [localColor, setLocalColor] = useState(null);
@@ -152,6 +154,21 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     value: m._id,
     label: m.username || m.profile?.name || m.emails?.[0]?.address || m._id
   })), [members]);
+
+  // Distinct tags used across this project's tasks (autocomplete suggestions)
+  const tagSuggestions = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const t of tasks) {
+      for (const tag of (Array.isArray(t.tags) ? t.tags : [])) {
+        const key = tag.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(tag);
+      }
+    }
+    return out.sort((a, b) => a.localeCompare(b));
+  }, [tasks]);
 
   // Improve description (AI) modal state
   const [isImproveOpen, setIsImproveOpen] = useState(false);
@@ -193,11 +210,9 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     Meteor.call('tasks.update', taskId, { deadline: parsed });
   };
 
-  const removeTask = (taskId) => {
-    // Prevent layout jump: remove from local order immediately, server update follows
-    setOrder(prev => prev.filter(id => id !== taskId));
-    Meteor.call('tasks.remove', taskId);
-  };
+  // Deferred deletion with Undo toast; the row is hidden via hiddenTaskIds
+  // (which also prevents the layout jump) until the undo window elapses.
+  const removeTask = requestRemoveTask;
 
   const deleteProject = () => setShowDeleteModal(true);
   const confirmDeleteProject = () => {
@@ -402,6 +417,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
               <SortableContext items={order} strategy={verticalListSortingStrategy}>
                 <ul className="tasksList">
                   {order.map(id => {
+                    if (hiddenTaskIds.has(id)) return null;
                     const t = activeTasks.find(x => x._id === id);
                     if (!t) return null;
                     return (
@@ -422,6 +438,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           showUrgentImportant
                           showAssignee
                           memberOptions={memberOptions}
+                          showTags
+                          tagSuggestions={tagSuggestions}
                           inlineActions={false}
                           titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
                           onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
@@ -430,6 +448,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           onClearDeadline={() => updateTaskDeadline(t._id, '')}
                           onRemove={() => removeTask(t._id)}
                           onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
+                          onUpdateTags={(next) => Meteor.call('tasks.update', t._id, { tags: next })}
                           onToggleUrgent={(task) => Meteor.call('tasks.update', task._id, { isUrgent: !task.isUrgent })}
                           onToggleImportant={(task) => Meteor.call('tasks.update', task._id, { isImportant: !task.isImportant })}
                         />
@@ -449,7 +468,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                 </h3>
                 {showIdeas ? (
                   <ul id="ideaTasksList" className="tasksList">
-                    {ideaTasks.map(t => (
+                    {ideaTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
                       <li key={t._id}>
                         <TaskRow
                           as="div"
@@ -467,6 +486,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           showUrgentImportant={false}
                           showAssignee
                           memberOptions={memberOptions}
+                          showTags
+                          tagSuggestions={tagSuggestions}
                           inlineActions={false}
                           titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
                           onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
@@ -474,6 +495,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
                           onRemove={() => removeTask(t._id)}
                           onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
+                          onUpdateTags={(next) => Meteor.call('tasks.update', t._id, { tags: next })}
                         />
                       </li>
                     ))}
@@ -491,7 +513,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                 </h3>
                 {showDone ? (
                   <ul id="doneTasksList" className="tasksList">
-                    {doneTasks.map(t => (
+                    {doneTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
                       <li key={t._id} className={(t.status || 'todo') === 'done' ? 'taskDone' : ''}>
                         <TaskRow
                           as="div"
@@ -509,6 +531,8 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           showUrgentImportant={false}
                           showAssignee
                           memberOptions={memberOptions}
+                          showTags
+                          tagSuggestions={tagSuggestions}
                           inlineActions={false}
                           titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
                           onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
@@ -516,6 +540,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
                           onRemove={() => removeTask(t._id)}
                           onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
+                          onUpdateTags={(next) => Meteor.call('tasks.update', t._id, { tags: next })}
                         />
                       </li>
                     ))}

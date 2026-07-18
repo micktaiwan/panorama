@@ -14,9 +14,9 @@ export const NotifyProvider = ({ children, max = 4, defaultDurationMs = 3000 }) 
 
   const enqueue = React.useCallback((payload) => {
     const id = Math.random().toString(36).slice(2);
-    const { message, kind = 'info', durationMs } = payload || {};
+    const { message, kind = 'info', durationMs, action } = payload || {};
     setItems(prev => {
-      const next = [...prev, { id, message, kind, durationMs: typeof durationMs === 'number' ? durationMs : defaultDurationMs }];
+      const next = [...prev, { id, message, kind, action, durationMs: typeof durationMs === 'number' ? durationMs : defaultDurationMs }];
       if (next.length > max) next.shift();
       return next;
     });
@@ -44,6 +44,7 @@ export const NotifyProvider = ({ children, max = 4, defaultDurationMs = 3000 }) 
             message={it.message}
             kind={it.kind}
             durationMs={it.durationMs}
+            action={it.action}
             onClose={() => remove(it.id)}
             stacked
           />

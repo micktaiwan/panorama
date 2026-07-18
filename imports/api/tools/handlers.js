@@ -938,6 +938,8 @@ export const TOOL_HANDLERS = {
     if (args?.deadline) doc.deadline = String(args.deadline);
     if (typeof args?.isUrgent === 'boolean') doc.isUrgent = args.isUrgent;
     if (typeof args?.isImportant === 'boolean') doc.isImportant = args.isImportant;
+    if (Array.isArray(args?.tags)) doc.tags = args.tags.map(t => String(t));
+    if (args?.assigneeId) doc.assigneeId = String(args.assigneeId).trim();
 
     const mcpUserId = getMCPUserId();
     const taskId = await callMethodAs('tasks.insert', mcpUserId, doc);
@@ -1005,6 +1007,8 @@ export const TOOL_HANDLERS = {
 
     if (typeof args?.isUrgent === 'boolean') modifier.isUrgent = args.isUrgent;
     if (typeof args?.isImportant === 'boolean') modifier.isImportant = args.isImportant;
+    if (Array.isArray(args?.tags)) modifier.tags = args.tags.map(t => String(t));
+    if (args?.assigneeId !== undefined) modifier.assigneeId = args.assigneeId ? String(args.assigneeId).trim() : '';
 
     if (Object.keys(modifier).length === 0) {
       return buildErrorResponse('No fields to update', 'tool_updateTask', {

@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { playBeep } from '../../utils/sound.js';
 import './Notify.css';
 
-export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, className = '', leftPanel = null, stacked = false }) => {
+export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, className = '', leftPanel = null, stacked = false, action = null }) => {
   const [isClosing, setIsClosing] = useState(false);
   const [shouldUseInApp, setShouldUseInApp] = useState(true);
   const onCloseRef = useRef(onClose);
@@ -67,6 +67,14 @@ export const Notify = ({ message, kind = 'info', onClose, durationMs = 3000, cla
         </aside>
         <div className="notifyMain">
           <span>{message}</span>
+          {action?.label ? (
+            <button
+              className="notifyAction ml8"
+              onClick={() => { action.onClick?.(); setIsClosing(true); setTimeout(() => { onCloseRef.current?.(); }, 160); }}
+            >
+              {action.label}
+            </button>
+          ) : null}
           <button className="iconButton ml8" aria-label="Close" onClick={() => { setIsClosing(true); setTimeout(() => { onCloseRef.current?.(); }, 160); }}>✕</button>
         </div>
       </div>
@@ -81,5 +89,6 @@ Notify.propTypes = {
   durationMs: PropTypes.number,
   className: PropTypes.string,
   leftPanel: PropTypes.oneOfType([PropTypes.node, PropTypes.string, PropTypes.bool]),
-  stacked: PropTypes.bool
+  stacked: PropTypes.bool,
+  action: PropTypes.shape({ label: PropTypes.string, onClick: PropTypes.func })
 };

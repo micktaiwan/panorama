@@ -39,6 +39,9 @@ export const TaskRow = ({
   // Assignee (optional)
   showAssignee = false,
   memberOptions = EMPTY_ARRAY,
+  // Tags (optional)
+  showTags = false,
+  tagSuggestions = EMPTY_ARRAY,
   // Typography
   textSize = 'normal', // 'normal' | 'small'
   // Layout
@@ -53,13 +56,17 @@ export const TaskRow = ({
   onMarkDone,
   onToggleUrgent,
   onToggleImportant,
-  onUpdateAssignee
+  onUpdateAssignee,
+  onUpdateTags
 }) => {
   const Container = as || 'li';
   const [showMoveSelect, setShowMoveSelect] = React.useState(false);
   // Notes modal state
   const [isNotesOpen, setIsNotesOpen] = React.useState(false);
   const [notesDraft, setNotesDraft] = React.useState('');
+  // Tag editing state
+  const [tagDraft, setTagDraft] = React.useState('');
+  const [addingTag, setAddingTag] = React.useState(false);
   // Resolve the assignee's display name + whether it is the current user
   // (network users are published app-wide via users.network)
   const assignee = useTracker(() => {
@@ -113,6 +120,57 @@ export const TaskRow = ({
       </span>
     );
   })();
+
+  // Tags: free-text labels stored as an array of strings on the task
+  const tags = Array.isArray(task.tags) ? task.tags : EMPTY_ARRAY;
+  const canEditTags = showTags && typeof onUpdateTags === 'function';
+  const addTag = (raw) => {
+    const t = String(raw || '').trim();
+    if (!t) return;
+    if (tags.some(x => x.toLowerCase() === t.toLowerCase())) return;
+    onUpdateTags([...tags, t]);
+  };
+  const removeTag = (t) => onUpdateTags(tags.filter(x => x !== t));
+  const tagListId = `tags-${task._id || 'new'}`;
+  // Add-tag trigger lives in the inline actions row (line 1) so an empty task
+  // never reserves a second line just for the "+" affordance.
+  const tagAddButton = canEditTags ? (
+    <button type="button" className="iconButton taskTagAddBtn" title="Add tag" aria-label="Add tag" onClick={() => setAddingTag(true)}>#</button>
+  ) : null;
+  // Chips (+ inline input while adding) render on their own line under the
+  // title, and only when there is something to show.
+  const tagsEl = (showTags && (tags.length > 0 || addingTag)) ? (
+    <span className="taskTags">
+      {tags.map(t => (
+        <span key={t} className="taskTag" data-hue={hueFor(t)}>
+          {t}
+          {canEditTags ? (
+            <button type="button" className="taskTagRemove" title="Remove tag" onClick={() => removeTag(t)}>×</button>
+          ) : null}
+        </span>
+      ))}
+      {canEditTags && addingTag ? (
+        <input
+          className="taskTagInput"
+          autoFocus
+          value={tagDraft}
+          list={tagListId}
+          placeholder="tag…"
+          onChange={(e) => setTagDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); addTag(tagDraft); setTagDraft(''); }
+            else if (e.key === 'Escape') { setAddingTag(false); setTagDraft(''); }
+          }}
+          onBlur={() => { addTag(tagDraft); setTagDraft(''); setAddingTag(false); }}
+        />
+      ) : null}
+      {canEditTags && Array.isArray(tagSuggestions) && tagSuggestions.length > 0 ? (
+        <datalist id={tagListId}>
+          {tagSuggestions.map(s => (<option key={s} value={s} />))}
+        </datalist>
+      ) : null}
+    </span>
+  ) : null;
 
   return (
     <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}${assignedToMe ? ' assignedToMe' : ''}`} style={containerStyle}>
@@ -205,6 +263,7 @@ export const TaskRow = ({
               </>
             ) : null}
             <button className={`iconButton taskNotesButton${task.notes ? ' hasNotes' : ''}`} title={task.notes || 'Add notes'} aria-label="Notes" onClick={openNotes}>…</button>
+            {tagAddButton}
           </span>
           {task.notes ? (
             <button
@@ -214,6 +273,7 @@ export const TaskRow = ({
               onClick={openNotes}
             >{task.notes}</button>
           ) : null}
+          {tagsEl}
         </div>
       </div>
       {!inlineActions ? (
@@ -344,6 +404,7 @@ TaskRow.propTypes = {
     statusChangedAt: PropTypes.oneOfType([PropTypes.instanceOf(Date), PropTypes.string, PropTypes.number]),
     projectId: PropTypes.string,
     assigneeId: PropTypes.string,
+    tags: PropTypes.arrayOf(PropTypes.string),
     isUrgent: PropTypes.bool,
     isImportant: PropTypes.bool,
   }).isRequired,
@@ -368,6 +429,10 @@ TaskRow.propTypes = {
   showAssignee: PropTypes.bool,
   memberOptions: PropTypes.arrayOf(PropTypes.shape({ value: PropTypes.string, label: PropTypes.string })),
   onUpdateAssignee: PropTypes.func,
+  // Tags (optional)
+  showTags: PropTypes.bool,
+  tagSuggestions: PropTypes.arrayOf(PropTypes.string),
+  onUpdateTags: PropTypes.func,
   // Typography
   textSize: PropTypes.oneOf(['normal', 'small']),
   // Layout

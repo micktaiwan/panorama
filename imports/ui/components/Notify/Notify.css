@@ -69,6 +69,26 @@
 
 .ml8 { margin-left: 8px; }
 
+.notifyAction {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid rgba(var(--white-rgb), 0.25);
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 600;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.notifyAction:hover { background: rgba(var(--white-rgb), 0.12); }
+
+:root[data-theme="light"] .notifyAction {
+  border-color: var(--border);
+}
+:root[data-theme="light"] .notifyAction:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
 /* When the chat is docked, move the toast to the left of the sidebar */
 body.withDockedChat .notify {
   right: calc(var(--docked-chat-width, 420px) + 24px);

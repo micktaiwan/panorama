@@ -343,7 +343,9 @@ export const TOOL_DEFINITIONS = [
         status: { type: 'string', enum: ['todo', 'doing', 'done'], description: 'Task status (default: todo)' },
         deadline: { type: 'string', description: 'Deadline as ISO date string (optional)' },
         isUrgent: { type: 'boolean', description: 'Mark as urgent (optional)' },
-        isImportant: { type: 'boolean', description: 'Mark as important (optional)' }
+        isImportant: { type: 'boolean', description: 'Mark as important (optional)' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Free-text tags/labels (optional)' },
+        assigneeId: { type: 'string', description: 'User id of the person responsible for the task. Must be a member of the project (or the owner when no project). Different from ownership: the task always belongs to the caller, assigneeId marks who is responsible (optional)' }
       },
       required: ['title']
     }
@@ -363,7 +365,9 @@ export const TOOL_DEFINITIONS = [
         deadline: { type: 'string', description: 'New deadline as ISO date string (optional)' },
         projectId: { type: 'string', description: 'New project ID - use to move task to another project (optional)' },
         isUrgent: { type: 'boolean', description: 'Update urgency flag (optional)' },
-        isImportant: { type: 'boolean', description: 'Update importance flag (optional)' }
+        isImportant: { type: 'boolean', description: 'Update importance flag (optional)' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Replace the full tags/labels array. Pass [] to clear all tags (optional)' },
+        assigneeId: { type: 'string', description: 'User id of the person responsible for the task. Must be a member of the project (or the owner when no project). Pass an empty string to clear the assignee (optional)' }
       },
       required: ['taskId']
     }

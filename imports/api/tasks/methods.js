@@ -5,9 +5,32 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
 
 // Normalize short text fields
+// Normalize free-text tags: array of non-empty trimmed strings, deduped
+// case-insensitively while keeping the first-seen casing. Returns [] for
+// non-array input so callers can decide to store or unset.
+const normalizeTags = (input) => {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of input) {
+    if (typeof raw !== 'string') continue;
+    const t = raw.trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+};
+
 const sanitizeTaskDoc = (input) => {
   const out = { ...input };
   if (typeof out.title === 'string') out.title = out.title.trim();
+  if (Object.prototype.hasOwnProperty.call(out, 'tags')) {
+    const tags = normalizeTags(out.tags);
+    if (tags.length > 0) out.tags = tags; else delete out.tags;
+  }
   if (typeof out.status === 'string') out.status = out.status.trim();
   if (typeof out.priorityRank !== 'undefined') {
     const n = Number(out.priorityRank);
@@ -93,7 +116,7 @@ Meteor.methods({
     let vectorError;
     try {
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
-      const text = `${sanitized.title || ''} ${sanitized.notes || ''}`.trim();
+      const text = `${sanitized.title || ''} ${sanitized.notes || ''} ${(sanitized.tags || []).join(' ')}`.trim();
       await upsertDoc({ kind: 'task', id: _id, text, projectId: sanitized.projectId || null, userId: this.userId });
     } catch (e) {
       console.error('[search][tasks.insert] upsert failed', e);
@@ -115,6 +138,11 @@ Meteor.methods({
     }
     const set = { ...sanitizeTaskDoc(modifier), updatedAt: new Date() };
     const unset = {};
+    // Optional tags: clear when empty, otherwise store the normalized array
+    if (Object.prototype.hasOwnProperty.call(modifier, 'tags')) {
+      const tags = normalizeTags(modifier.tags);
+      if (tags.length === 0) { delete set.tags; unset.tags = 1; } else { set.tags = tags; }
+    }
     // Optional assignee: clear when empty, otherwise validate project membership
     if (Object.prototype.hasOwnProperty.call(modifier, 'assigneeId')) {
       if (!modifier.assigneeId) {
@@ -144,11 +172,11 @@ Meteor.methods({
     }
     // Only re-index in vector store when searchable fields change
     let vectorError;
-    const shouldReindex = Object.hasOwn(modifier, 'title') || Object.hasOwn(modifier, 'notes') || Object.hasOwn(modifier, 'projectId');
+    const shouldReindex = Object.hasOwn(modifier, 'title') || Object.hasOwn(modifier, 'notes') || Object.hasOwn(modifier, 'projectId') || Object.hasOwn(modifier, 'tags');
     if (shouldReindex) {
       try {
-        const next = await TasksCollection.findOneAsync(taskId, { fields: { title: 1, notes: 1, projectId: 1 } });
-        const text = `${next?.title || ''} ${next?.notes || ''}`.trim();
+        const next = await TasksCollection.findOneAsync(taskId, { fields: { title: 1, notes: 1, projectId: 1, tags: 1 } });
+        const text = `${next?.title || ''} ${next?.notes || ''} ${(next?.tags || []).join(' ')}`.trim();
         const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
         await upsertDoc({ kind: 'task', id: taskId, text, projectId: next && next.projectId, userId: this.userId });
       } catch (e) {

@@ -377,6 +377,7 @@ Meteor.startup(async () => {
   ProjectsCollection.rawCollection().createIndex({ memberIds: 1 }).catch(() => {});
   TasksCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   TasksCollection.rawCollection().createIndex({ userId: 1, done: 1 }).catch(() => {});
+  TasksCollection.rawCollection().createIndex({ userId: 1, tags: 1 }).catch(() => {});
   NotesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   NotesCollection.rawCollection().createIndex({ userId: 1, updatedAt: -1 }).catch(() => {});
   NoteSessionsCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});

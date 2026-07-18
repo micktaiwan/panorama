@@ -11,6 +11,7 @@ import { ProjectsOverview } from '/imports/ui/Dashboard/ProjectsOverview.jsx';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { TaskRow } from '/imports/ui/components/TaskRow/TaskRow.jsx';
 import { NoteRow } from '/imports/ui/components/NoteRow/NoteRow.jsx';
+import { useDeferredTaskRemoval } from '/imports/ui/hooks/useDeferredTaskRemoval.js';
 
 export const Dashboard = () => {
   
@@ -102,15 +103,7 @@ export const Dashboard = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, JSON.stringify(projFilters)]);
 
-  const removeTask = (taskId) => {
-    if (!taskId) return;
-    Meteor.call('tasks.remove', taskId, (err) => {
-      if (err) {
-        // eslint-disable-next-line no-alert -- simple feedback, no toast in Dashboard yet
-        alert(err.reason || err.message || 'Failed to delete task');
-      }
-    });
-  };
+  const { hiddenTaskIds, requestRemoveTask: removeTask } = useDeferredTaskRemoval();
 
   // no toggleFlag on dashboard; use inline controls in TaskRow
 
@@ -206,7 +199,7 @@ export const Dashboard = () => {
       <ProjectFilters projects={projectsForFilter} storageKey="dashboard_proj_filters" onChange={setProjFilters} />
       <div className="tasksScroll scrollArea">
       <ul className="taskList">
-        {filteredTasks.map(t => (
+        {filteredTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
           <TaskRow
             key={t._id}
             task={t}
@@ -248,11 +241,11 @@ export const Dashboard = () => {
           </ul>
         </div>
       )}
-      {unassignedTasks.length > 0 && (
+      {unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).length > 0 && (
         <div className="unassignedTasks" style={{ marginTop: 24 }}>
-          <h2>Tasks without project ({unassignedTasks.length})</h2>
+          <h2>Tasks without project ({unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).length})</h2>
           <ul className="taskList">
-            {unassignedTasks.map(t => (
+            {unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
               <TaskRow
                 key={`u-${t._id}`}
                 task={t}
