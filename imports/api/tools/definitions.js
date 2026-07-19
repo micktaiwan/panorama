@@ -33,7 +33,7 @@ export const TOOL_DEFINITIONS = [
       additionalProperties: false,
       properties: {
         dueBefore: { type: 'string', description: 'ISO date/time upper bound for deadline - returns tasks with deadline <= this date' },
-        status: { type: 'string', description: 'Task status to filter (e.g., todo, doing, done)' },
+        status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'cancelled', 'idea'], description: 'Task status to filter (todo, in_progress, done, cancelled, idea)' },
         tag: { type: 'string', description: 'Tag value to filter' },
         projectId: { type: 'string', description: 'Optional project id to scope the filter' },
         important: { type: 'boolean', description: 'Filter by importance flag (true for important tasks only)' },
@@ -342,7 +342,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_createTask',
-    description: 'Create a new task. Optionally associate with a project, set status (todo/doing/done), add notes, deadline, and urgency/importance flags.',
+    description: 'Create a new task. Optionally associate with a project, set status (todo/in_progress/done/cancelled/idea), add notes, deadline, and urgency/importance flags.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -350,7 +350,7 @@ export const TOOL_DEFINITIONS = [
         title: { type: 'string', description: 'Task title (required)' },
         projectId: { type: 'string', description: 'Project ID to associate task with (optional)' },
         notes: { type: 'string', description: 'Task notes or description (optional)' },
-        status: { type: 'string', enum: ['todo', 'doing', 'done'], description: 'Task status (default: todo)' },
+        status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'cancelled', 'idea'], description: 'Task status (default: todo)' },
         deadline: { type: 'string', description: 'Deadline as ISO date string (optional)' },
         isUrgent: { type: 'boolean', description: 'Mark as urgent (optional)' },
         isImportant: { type: 'boolean', description: 'Mark as important (optional)' },
@@ -371,7 +371,7 @@ export const TOOL_DEFINITIONS = [
         taskId: { type: 'string', description: 'Task ID (required)' },
         title: { type: 'string', description: 'New task title (optional)' },
         notes: { type: 'string', description: 'New task notes (optional)' },
-        status: { type: 'string', enum: ['todo', 'doing', 'done'], description: 'New status - use "done" to mark as completed (optional)' },
+        status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'cancelled', 'idea'], description: 'New status - use "done" to mark as completed (optional)' },
         deadline: { type: 'string', description: 'New deadline as ISO date string (optional)' },
         projectId: { type: 'string', description: 'New project ID - use to move task to another project (optional)' },
         isUrgent: { type: 'boolean', description: 'Update urgency flag (optional)' },
