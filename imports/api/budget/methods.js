@@ -224,6 +224,7 @@ Meteor.methods({
       const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
       if (base) {
         const selector = {
+          userId: this.userId,
           _id: { $ne: lineId },
           department: { $ne: 'parked' }
         };
@@ -236,6 +237,7 @@ Meteor.methods({
       const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
       if (base) {
         const selector = {
+          userId: this.userId,
           _id: { $ne: lineId },
           department: { $ne: 'parked' }
         };
@@ -248,6 +250,7 @@ Meteor.methods({
       const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
       if (base) {
         const selector = {
+          userId: this.userId,
           _id: { $ne: lineId },
           department: { $ne: 'parked' }
         };
@@ -260,6 +263,7 @@ Meteor.methods({
       const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
       if (base) {
         const selector = {
+          userId: this.userId,
           _id: { $ne: lineId },
           department: { $ne: 'parked' }
         };
@@ -301,6 +305,7 @@ Meteor.methods({
     const base = await BudgetLinesCollection.findOneAsync({ _id: lineId });
     if (!base) return { ok: 1, bulkUpdated: 0 };
     const selector = {
+      userId: this.userId,
       _id: { $ne: lineId },
       department: { $ne: 'parked' }
     };
@@ -584,7 +589,7 @@ Meteor.methods({
 Meteor.methods({
   async 'budget.fetchPennylaneLastUpdates'(startDate, perPage) {
     ensureLoggedIn(this.userId);
-    const cfg = (Meteor.settings && Meteor.settings.pennylane) || {};
+    const cfg = await getPennylaneConfigAsync(this.userId);
     const baseUrlRaw = typeof cfg.baseUrl === 'string' ? cfg.baseUrl : '';
     const baseUrl = baseUrlRaw.replace(/\/+$/g, '/');
     const token = cfg.token || cfg.apiKey;

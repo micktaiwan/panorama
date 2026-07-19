@@ -18,8 +18,8 @@ if (!MONGO_USER || !MONGO_PASS) {
 }
 
 // Docker internal network — no TLS needed (container-to-container)
+// No MONGO_OPLOG_URL: on Mongo 6 + Meteor 3.5, reactivity uses Change Streams.
 const MONGO_URL = `mongodb://${MONGO_USER}:${MONGO_PASS}@organizer-mongodb:27017/panorama?authSource=admin`;
-const MONGO_OPLOG_URL = `mongodb://${MONGO_USER}:${MONGO_PASS}@organizer-mongodb:27017/local?authSource=admin`;
 
 module.exports = {
   servers: {
@@ -48,7 +48,6 @@ module.exports = {
     env: {
       ROOT_URL: 'https://panorama.mickaelfm.me',
       MONGO_URL,
-      MONGO_OPLOG_URL,
       PANORAMA_MODE: 'remote',
       PANORAMA_FILES_DIR: '/var/www/panorama/files',
       QDRANT_URL: 'http://organizer-qdrant:6333',

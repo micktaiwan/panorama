@@ -14,7 +14,6 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
 
   const vendorsIgnoreData = useTracker(() => {
     const data = VendorsIgnoreCollection.find({}).fetch();
-    console.log('VendorsIgnore subscription data updated:', data);
     return data;
   }, [vendorsIgnoreSubscription]);
   
@@ -236,14 +235,9 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         // Apply ignore rules client-side
         // Use subscription data if available, otherwise fallback to method call
         if (memoizedIgnoreData && memoizedIgnoreData.length >= 0) {
-          console.log('Using subscription data for filtering:', memoizedIgnoreData);
-          console.log('Items to filter:', mapped.length);
-          
           const filtered = filterIgnoredItems(mapped, { items: memoizedIgnoreData });
           const removed = mapped.length - filtered.length;
-          
-          console.log('After filtering:', filtered.length, 'removed:', removed);
-          
+
           // Calculate examples
           const exampleNames = [];
           const seenExamples = new Set();
@@ -271,14 +265,9 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
               return; 
             }
             
-            console.log('VendorsIgnore data received:', resIg);
-            console.log('Items to filter:', mapped.length);
-            
             const filtered = filterIgnoredItems(mapped, resIg);
             const removed = mapped.length - filtered.length;
-            
-            console.log('After filtering:', filtered.length, 'removed:', removed);
-            
+
             // Calculate examples
             const exampleNames = [];
             const seenExamples = new Set();
@@ -355,8 +344,6 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
         // Apply ignore rules on the newly fetched page, then merge
         // Use subscription data if available, otherwise fallback to method call
         if (vendorsIgnoreData && vendorsIgnoreData.length >= 0) {
-          console.log('Using subscription data for loadMore filtering:', vendorsIgnoreData);
-          
           const filteredNew = filterIgnoredItems(mapped, { items: vendorsIgnoreData });
           const removedDelta = mapped.length - filteredNew.length;
           
@@ -572,8 +559,6 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                 });
                 // Use subscription data if available, otherwise fallback to method call
                 if (vendorsIgnoreData && vendorsIgnoreData.length >= 0) {
-                  console.log('Using subscription data for last updates filtering:', vendorsIgnoreData);
-                  
                   const filtered = filterIgnoredItems(mapped, { items: memoizedIgnoreData });
                   const removed = mapped.length - filtered.length;
                   

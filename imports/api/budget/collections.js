@@ -5,6 +5,7 @@ export const VendorsCacheCollection = new Mongo.Collection('vendorsCache');
 export const VendorsIgnoreCollection = new Mongo.Collection('vendorsIgnore');
 
 if (Meteor.isServer) {
+  BudgetLinesCollection.rawCollection().createIndex({ userId: 1 });
   BudgetLinesCollection.rawCollection().createIndex({ date: 1, category: 1, vendor: 1 });
   BudgetLinesCollection.rawCollection().createIndex({ importBatch: 1 });
   BudgetLinesCollection.rawCollection().createIndex({ projectId: 1 });
