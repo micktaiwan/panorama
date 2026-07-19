@@ -33,9 +33,15 @@ fi
 # heartbeatFrequencyMS=10000 : sonde le serveur toutes les 10s (réduit les faux positifs au réveil)
 MONGO_OPTS="tls=true&authSource=admin&serverSelectionTimeoutMS=60000&heartbeatFrequencyMS=10000"
 MONGO_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?${MONGO_OPTS}"
-MONGO_OPLOG_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/local?${MONGO_OPTS}"
+# MONGO_OPLOG_URL volontairement NON défini : depuis Mongo 6 + Meteor 3.5, la
+# réactivité passe par les Change Streams (driver par défaut). Définir cette URL
+# recréerait un handle oplog (mongo/mongo_connection.js) qui tail l'oplog
+# cluster-wide — ce qui réintroduisait l'erreur "Unknown command ... drop
+# tempusers" déclenchée par des ops étrangères d'autres bases du replica set.
+# Sans oplog, les rares curseurs non gérés par les change streams (observeChanges
+# ordonnés, curseurs skip/limit) retombent sur le polling au lieu de l'oplog.
 
-export MONGO_URL MONGO_OPLOG_URL
+export MONGO_URL
 export QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}"
 export PANORAMA_FILES_URL="https://panorama.mickaelfm.me"
 export PANORAMA_FILES_API_KEY="${PANORAMA_FILES_API_KEY:?Définir PANORAMA_FILES_API_KEY dans ~/.env.secrets}"
@@ -45,10 +51,25 @@ if [ -n "$MAIL_USER" ] && [ -n "$MAIL_PASS" ]; then
   export MAIL_URL="smtp://$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MAIL_USER', safe=''))"):$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MAIL_PASS', safe=''))")@mail.mickaelfm.me:587"
 fi
 
+# The Meteor tool process is hard-capped at --max-old-space-size=4096 in the
+# launcher (~/.meteor/meteor). On 2026-07-18 it hit that 4 GB ceiling after a
+# long dev session and OOM-crashed, killing the whole tree (Electron + MCP).
+# TOOL_NODE_FLAGS is appended after the built-in flag, and Node applies the last
+# duplicate flag, so this overrides the cap to 8 GB. Only widens the ceiling —
+# if a real memory leak is confirmed, the root cause still needs fixing.
+export TOOL_NODE_FLAGS="--max-old-space-size=8192"
+
 echo "→ Lancement Electron (splash) + Meteor (port $METEOR_PORT)..."
 echo "  MONGO_URL        = mongodb://${MONGO_USER}:***@${MONGO_HOST}/panorama?${MONGO_OPTS}"
-echo "  MONGO_OPLOG_URL  = mongodb://${MONGO_USER}:***@${MONGO_HOST}/local?${MONGO_OPTS}"
+echo "  reactivity       = Change Streams (Mongo 6 ; oplog désactivé)"
 echo "  QDRANT_URL       = $QDRANT_URL"
+
+# Job control ON : chaque commande lancée en `&` ci-dessous devient le leader
+# de son PROPRE process group (son PGID == le PID rapporté par $!). C'est la clé
+# du cleanup fiable : on tue ensuite le groupe entier d'un coup (npm → meteor →
+# node app → workers rspack), là où l'ancien `pgrep -P` snapshot ratait la
+# descendance de npm et laissait Meteor orphelin après Ctrl+C.
+set -m
 
 # Lancer Electron immédiatement en background (le splash apparaît tout de suite,
 # pendant que Meteor compile et se connecte). Electron poll Meteor et bascule
@@ -62,14 +83,15 @@ ELECTRON_PID=$!
 npm run dev:meteor:4000 &
 METEOR_PID=$!
 
-# Tue un PID et toute sa descendance (npm → meteor → node app).
-# Ciblé sur les descendants directs : ne touche pas d'autres instances Meteor
-# (ex: un `meteor test` qui tournerait en parallèle).
-kill_tree() {
-  local pid=$1 child
-  for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
-  kill "$pid" 2>/dev/null
-}
+# Les deux process groups sont créés ; on coupe le monitor mode (évite les
+# notifications de jobs) — les groupes déjà établis persistent.
+set +m
+
+# Le cleanup ci-dessous tue chaque process group en entier via `kill -SIG -PGID`
+# (PID négatif = tout le groupe). Grâce à `set -m`, le leader du groupe == le PID
+# capturé dans $!, donc on frappe npm, meteor, node app et les workers rspack d'un
+# coup — sans toucher une autre instance Meteor lancée hors de ces groupes
+# (ex: un `meteor test` en parallèle, qui a son propre groupe).
 
 # --- INSTRUMENTATION TEMPORAIRE (à retirer après diagnostic) ---
 QLOG=/tmp/panorama-quit.log
@@ -81,8 +103,13 @@ qlog "START electron=$ELECTRON_PID meteor=$METEOR_PID (pid script=$$)"
 cleanup() {
   trap - EXIT INT TERM
   qlog "CLEANUP electron alive=$(kill -0 "$ELECTRON_PID" 2>/dev/null && echo yes || echo no) meteor alive=$(kill -0 "$METEOR_PID" 2>/dev/null && echo yes || echo no)"
-  kill_tree "$ELECTRON_PID"
-  kill_tree "$METEOR_PID"
+  # SIGTERM aux deux groupes entiers (PID négatif = le groupe ; leader==PID via set -m)
+  kill -TERM -"$ELECTRON_PID" 2>/dev/null
+  kill -TERM -"$METEOR_PID" 2>/dev/null
+  sleep 2
+  # SIGKILL pour achever tout récalcitrant (workers rspack qui traînent, etc.)
+  kill -KILL -"$ELECTRON_PID" 2>/dev/null
+  kill -KILL -"$METEOR_PID" 2>/dev/null
   qlog "CLEANUP done"
 }
 trap cleanup EXIT INT TERM
