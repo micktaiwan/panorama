@@ -147,6 +147,61 @@ Meteor.methods({
 
     return res;
   },
+  // Atomic content replacement with compare-and-swap: the $set only applies if
+  // the body still equals `expectedContent` (i.e. nothing was written between
+  // the caller's read and this update). Returns the number of modified
+  // documents — 0 means the CAS failed because of a concurrent write; the
+  // caller should re-read, recompose and retry.
+  async 'notes.updateContentCAS'(noteId, newContent, expectedContent) {
+    check(noteId, String);
+    check(newContent, String);
+    check(expectedContent, String);
+    ensureLoggedIn(this.userId);
+    const note = await NotesCollection.findOneAsync(noteId, { fields: { userId: 1, projectId: 1, lockedBy: 1 } });
+    if (!note) throw new Meteor.Error('not-found', 'Note not found');
+    if (note.projectId) {
+      await ensureProjectAccess(note.projectId, this.userId);
+    } else if (note.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Note not found');
+    }
+
+    // Lock guard: reject update if locked by another user
+    if (note.lockedBy && note.lockedBy !== this.userId) {
+      throw new Meteor.Error('note-locked', 'Note is being edited by another user');
+    }
+
+    // '' must also match notes whose content field is missing or null
+    const contentFilter = expectedContent === '' ? { $in: [null, ''] } : expectedContent;
+    const res = await NotesCollection.updateAsync(
+      { _id: noteId, content: contentFilter },
+      { $set: { content: newContent, updatedAt: new Date() } }
+    );
+    if (res === 0) return 0;
+
+    // Fire-and-forget side effects, same as notes.update: Qdrant re-indexing,
+    // own-lock release, project timestamp
+    const userId = this.userId;
+    (async () => {
+      try {
+        const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
+        const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+        await deleteByDocId('note', noteId);
+        await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId, minChars: 800, maxChars: 1200, overlap: 150 });
+      } catch (e) {
+        console.error('[search][notes.updateContentCAS] upsert failed', e);
+      }
+    })();
+
+    if (note.lockedBy === userId) {
+      NotesCollection.updateAsync(noteId, { $unset: { lockedBy: '', lockedAt: '' } }).catch(e => console.error('[notes.updateContentCAS] lock release failed', e));
+    }
+
+    if (note.projectId) {
+      ProjectsCollection.updateAsync(note.projectId, { $set: { updatedAt: new Date() } }).catch(e => console.error('[notes.updateContentCAS] project timestamp failed', e));
+    }
+
+    return res;
+  },
   // Sidebar search: contents are no longer published for non-open notes,
   // so content matching runs server-side. Returns matching note ids only.
   async 'notes.searchContent'(term) {

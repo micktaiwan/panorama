@@ -413,7 +413,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_updateNote',
-    description: 'Update a note by REPLACING whole fields (uses $set per field). WARNING: there is NO append/patch — passing `content` OVERWRITES the entire note body, so anything you do not include is lost.\n\nMANDATORY: you MUST NOT call this with `content` unless you have just read the note with tool_noteById in the current conversation and are resending its full existing body verbatim plus your change. Never write `content` from memory, from an earlier/stale read, or from an assumption about what the note contains — always re-read immediately before overwriting, or you will silently destroy content you never saw.\n\nDO NOT use this to ADD to a large note. Many notes hold thousands of lines and embedded base64 images (pasted screenshots); making the model re-emit that whole body verbatim is error-prone (a single dropped character corrupts the note or an image) and expensive in tokens. To append or prepend a block, use tool_appendToNote instead — it edits the body server-side, so the existing content never has to pass back through the model.\n\nUse tool_updateNote for: renaming a note (title only), moving it to another project (projectId only), or a deliberate full-body replacement of a short note. "Partial" here is field-level only: you may set title alone without touching content, or vice-versa. All fields except noteId are optional; at least one must be provided.',
+    description: 'Update a note by REPLACING whole fields (uses $set per field). WARNING: passing `content` OVERWRITES the entire note body, so anything you do not include is lost.\n\nMANDATORY: you MUST NOT call this with `content` unless you have just read the note with tool_noteById in the current conversation and are resending its full existing body verbatim plus your change. Never write `content` from memory, from an earlier/stale read, or from an assumption about what the note contains — always re-read immediately before overwriting, or you will silently destroy content you never saw.\n\nDO NOT use this to MODIFY a large note. Many notes hold thousands of lines and embedded base64 images (pasted screenshots); making the model re-emit that whole body verbatim is error-prone (a single dropped character corrupts the note or an image) and expensive in tokens. Both alternatives edit the body server-side, so the existing content never has to pass back through the model: to append or prepend a block, use tool_appendToNote; to change existing text in place, use tool_editNote (anchored find-replace).\n\nUse tool_updateNote for: renaming a note (title only), moving it to another project (projectId only), or a deliberate full-body replacement of a short note. "Partial" here is field-level only: you may set title alone without touching content, or vice-versa. All fields except noteId are optional; at least one must be provided.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -442,6 +442,21 @@ export const TOOL_DEFINITIONS = [
         skipIfContains: { type: 'string', description: 'Idempotency guard: if the existing note body already contains this exact substring, skip the write and return skipped:true. Use a unique marker from your block, e.g. its dated header (optional)' }
       },
       required: ['noteId', 'block']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_editNote',
+    description: 'Edit a note in place by replacing ONE exact occurrence of `oldText` with `newText`, server-side — the find-replace counterpart of tool_appendToNote. You send only the fragment to change; the rest of the body (however large — thousands of lines, embedded base64 images) never passes back through the model. Prefer this over tool_updateNote for ANY in-place modification of an existing note: fixing a line, updating a status, rewriting a paragraph, or deleting a block (newText: "").\n\nMatching rules: `oldText` must occur EXACTLY ONCE in the note body.\n• 0 matches → error OLD_TEXT_NOT_FOUND, nothing is written. Re-read the note with tool_noteById and copy the anchor verbatim (whitespace included).\n• 2+ matches → error AMBIGUOUS_MATCH, nothing is written. Extend oldText with surrounding lines until unique.\nAnchor on human-readable text — NEVER on a fragment of a base64 image.\n\nIdempotency: if oldText is absent but newText is already present in the body, the call returns skipped:true instead of an error, so the same edit is safe to retry from several sessions.\n\nConcurrency: the write is compare-and-swap — it only applies if the body is unchanged since the server read it. On conflict with a parallel writer the server re-reads and retries automatically (up to 3 times). The note lock is respected: if another user is editing the note (e.g. in the Panorama UI), the call fails with a note-locked error rather than clobbering their edit.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        noteId: { type: 'string', description: 'Note ID (required)' },
+        oldText: { type: 'string', description: 'Exact text to replace, copied verbatim from the note body (whitespace included). Must occur exactly once; extend it with surrounding lines if needed to make it unique (required)' },
+        newText: { type: 'string', description: 'Replacement text. Pass "" to delete oldText (required)' }
+      },
+      required: ['noteId', 'oldText', 'newText']
     }
   },
   {

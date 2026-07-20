@@ -7,16 +7,16 @@ import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
 import { LinksCollection } from '/imports/api/links/collections';
 import { FilesCollection } from '/imports/api/files/collections';
+// Import methods so they're registered. Rspack/swc only accepts top-level
+// imports (the legacy Babel nested-import form broke the test build).
+import '/imports/api/projects/methods';
+import '/imports/api/tasks/methods';
+import '/imports/api/notes/methods';
+import '/imports/api/noteSessions/methods';
+import '/imports/api/noteLines/methods';
+import '/imports/api/links/methods';
 
 if (Meteor.isServer) {
-  // Import methods so they're registered
-  import '/imports/api/projects/methods';
-  import '/imports/api/tasks/methods';
-  import '/imports/api/notes/methods';
-  import '/imports/api/noteSessions/methods';
-  import '/imports/api/noteLines/methods';
-  import '/imports/api/links/methods';
-
   describe('Project Sharing', function () {
     const ownerUserId = 'owner-user-id';
     const memberUserId = 'member-user-id';

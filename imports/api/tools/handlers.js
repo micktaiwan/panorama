@@ -1235,9 +1235,9 @@ export const TOOL_HANDLERS = {
 
     if (args?.title) modifier.title = String(args.title);
     // WARNING: this is a full-field $set, NOT an append. Passing `content` here
-    // OVERWRITES the entire note body — anything not included is lost. To add to
-    // an existing note, the caller MUST first read it (tool_noteById) and resend
-    // the full existing content plus the addition. There is no patch/append path.
+    // OVERWRITES the entire note body — anything not included is lost. Callers
+    // wanting to add or modify without resending the body should use
+    // tool_appendToNote (insert) or tool_editNote (anchored find-replace).
     if (args?.content !== undefined) modifier.content = String(args.content || '');
 
     // Validate projectId if provided
@@ -1388,6 +1388,116 @@ export const TOOL_HANDLERS = {
     }
 
     return buildSuccessResponse(result, 'tool_appendToNote', { policy: 'write' });
+  },
+  async tool_editNote(args, memory) {
+    const noteId = String(args?.noteId || '').trim();
+    if (!noteId) {
+      return buildErrorResponse('noteId is required', 'tool_editNote', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide noteId parameter'
+      });
+    }
+    if (args?.oldText === undefined || args?.oldText === null || String(args.oldText) === '') {
+      return buildErrorResponse('oldText is required and must be non-empty', 'tool_editNote', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide the exact text to replace, copied verbatim from the note body'
+      });
+    }
+    if (args?.newText === undefined || args?.newText === null) {
+      return buildErrorResponse('newText is required', 'tool_editNote', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide the replacement text (pass "" to delete oldText)'
+      });
+    }
+    const oldText = String(args.oldText);
+    const newText = String(args.newText);
+    if (oldText === newText) {
+      return buildErrorResponse('oldText and newText are identical', 'tool_editNote', {
+        code: 'NO_OP',
+        suggestion: 'Provide a newText different from oldText'
+      });
+    }
+
+    const userId = getMCPUserId();
+    const { NotesCollection } = await import('/imports/api/notes/collections');
+
+    // Count exact (non-overlapping) occurrences of needle in haystack
+    const countOccurrences = (haystack, needle) => {
+      let count = 0;
+      let idx = haystack.indexOf(needle);
+      while (idx !== -1) {
+        count += 1;
+        idx = haystack.indexOf(needle, idx + needle.length);
+      }
+      return count;
+    };
+
+    // Read-compose-write with compare-and-swap: the write only applies if the
+    // body is unchanged since our read. On conflict (concurrent writer), we
+    // re-read the fresh body and recompose — all server-side, so retries are
+    // cheap and the caller never resends anything.
+    const MAX_CAS_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_CAS_RETRIES; attempt++) {
+      const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { content: 1, userId: 1, projectId: 1 } });
+
+      if (!existingNote || !(await canAccessDoc(existingNote, userId))) {
+        console.warn(`[tool_editNote] Note not found: ${noteId}`);
+        return buildErrorResponse(`Note not found: "${noteId}"`, 'tool_editNote', {
+          code: 'NOT_FOUND',
+          suggestion: 'Use tool_notesByTitleOrContent or tool_noteById to find the correct noteId'
+        });
+      }
+
+      const currentContent = String(existingNote.content || '');
+      const occurrences = countOccurrences(currentContent, oldText);
+
+      if (occurrences === 0) {
+        // Idempotency: if the replacement is already in place, report skipped
+        // instead of failing, so the same edit can be retried safely.
+        if (newText !== '' && currentContent.includes(newText)) {
+          return buildSuccessResponse(
+            { skipped: true, noteId, reason: 'oldText not found but newText already present — edit appears already applied' },
+            'tool_editNote',
+            { policy: 'write' }
+          );
+        }
+        return buildErrorResponse('oldText not found in note (nothing was written)', 'tool_editNote', {
+          code: 'OLD_TEXT_NOT_FOUND',
+          suggestion: 'Re-read the note with tool_noteById and copy the anchor text verbatim, including whitespace and punctuation'
+        });
+      }
+
+      if (occurrences > 1) {
+        return buildErrorResponse(`oldText matches ${occurrences} times — it must match exactly once (nothing was written)`, 'tool_editNote', {
+          code: 'AMBIGUOUS_MATCH',
+          suggestion: 'Extend oldText with surrounding lines until it is unique in the note body'
+        });
+      }
+
+      const idx = currentContent.indexOf(oldText);
+      const newContent = currentContent.slice(0, idx) + newText + currentContent.slice(idx + oldText.length);
+
+      // notes.updateContentCAS rejects if locked by another user (note-locked)
+      // and returns 0 if the body changed since our read (CAS conflict).
+      const res = await callMethodAs('notes.updateContentCAS', userId, noteId, newContent, currentContent);
+
+      if (res > 0) {
+        console.log(`[tool_editNote] Replaced ${oldText.length} chars with ${newText.length} chars in note: ${noteId} (attempt ${attempt + 1})`);
+        const result = { edited: true, noteId, oldTextLength: oldText.length, newTextLength: newText.length, newLength: newContent.length, casRetries: attempt };
+        if (memory) {
+          memory.ids = memory.ids || {};
+          memory.ids.noteId = noteId;
+        }
+        return buildSuccessResponse(result, 'tool_editNote', { policy: 'write' });
+      }
+
+      console.warn(`[tool_editNote] CAS conflict on note ${noteId} (attempt ${attempt + 1}/${MAX_CAS_RETRIES + 1})`);
+    }
+
+    return buildErrorResponse('Concurrent writes kept changing the note body (CAS failed after retries, nothing was written)', 'tool_editNote', {
+      code: 'CONCURRENT_MODIFICATION',
+      suggestion: 'Another session is actively writing to this note — retry in a moment'
+    });
   },
   async tool_deleteNote(args, memory) {
     const noteId = String(args?.noteId || '').trim();

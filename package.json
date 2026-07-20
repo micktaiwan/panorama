@@ -58,6 +58,9 @@
       "client": "client/main.jsx",
       "server": "server/main.js"
     },
+    "testModule": {
+      "server": "tests/main.server.js"
+    },
     "modern": true
   },
   "devDependencies": {

@@ -24,6 +24,7 @@ export const TOOL_SCHEMAS = {
   tool_createNote: { required: ['title'], readOnly: false },
   tool_updateNote: { required: ['noteId'], readOnly: false },
   tool_appendToNote: { required: ['noteId', 'block'], readOnly: false },
+  tool_editNote: { required: ['noteId', 'oldText', 'newText'], readOnly: false },
   tool_userLogsFilter: { required: [], readOnly: true },
   tool_claudeProjectsList: { required: [], readOnly: true },
   tool_claudeSessionsByProject: { required: ['projectId'], readOnly: true },
