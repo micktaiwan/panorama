@@ -418,6 +418,7 @@ Meteor.methods({
     return results;
   },
   async 'qdrant.health'() {
+    this.unblock(); // external I/O, fires at app mount — must never block the connection's write queue
     ensureLoggedIn(this.userId);
     const url = getQdrantUrl();
     if (!url) {

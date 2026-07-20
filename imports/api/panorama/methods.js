@@ -186,6 +186,7 @@ const calculateProjectActivity = (project, tasksData, notesData, notesLastByProj
 
 Meteor.methods({
   async 'panorama.getOverview'(filters = {}) {
+    this.unblock(); // read-only report — must never block the connection's write queue
     check(filters, Object);
     ensureLoggedIn(this.userId);
 
@@ -304,6 +305,7 @@ Meteor.methods({
   },
 
   async 'ai.healthcheck'() {
+    this.unblock(); // external I/O — must never block the connection's write queue
     return await getHealthStatus();
   },
 

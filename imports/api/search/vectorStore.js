@@ -64,7 +64,10 @@ export const getQdrantClient = async () => {
   const url = getQdrantUrl();
   if (!url) throw new Meteor.Error('config-missing', 'qdrantUrl missing in settings');
   const { QdrantClient } = await import('@qdrant/js-client-rest');
-  singletonClient = new QdrantClient({ url });
+  // Bound every request: without this the client defaults to a 300s timeout,
+  // so an unreachable Qdrant (e.g. tunnel down at boot) makes calls hang for
+  // minutes and freezes the caller's DDP method queue.
+  singletonClient = new QdrantClient({ url, timeout: 15000 });
   return singletonClient;
 };
 

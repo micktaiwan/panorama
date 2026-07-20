@@ -460,6 +460,7 @@ Meteor.methods({
   },
 
   async 'claudeSessions.countInterrupted'() {
+    this.unblock(); // read-only, fires at app mount — must never block the connection's write queue
     ensureLoggedIn(this.userId);
     return ClaudeSessionsCollection.find({ status: 'interrupted', userId: this.userId }).countAsync();
   },
