@@ -47,6 +47,9 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
+// Post-sleep MongoDB recovery watchdog (restarts a wedged process after wake).
+import '/server/wakeRecovery';
+
 // Accounts configuration (auth, rate limiting, email templates)
 import '/server/accounts';
 
