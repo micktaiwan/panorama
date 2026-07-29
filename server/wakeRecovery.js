@@ -38,7 +38,7 @@ const TICK_MS = 5000;             // heartbeat cadence
 const WAKE_DRIFT_MS = 20000;      // extra gap beyond TICK_MS that means "the machine slept"
 const PROBE_TIMEOUT_MS = 8000;    // bound a single ping so it can't hang for serverSelectionTimeoutMS
 const RECOVERY_RETRY_MS = 5000;   // re-probe cadence while waiting for the network to return
-const RECOVERY_GRACE_MS = 120000; // stop waiting and restart anyway after this
+const WAIT_LOG_EVERY_MS = 60000;  // how often to report that we are still waiting for Mongo
 const EXIT_CODE = 0;              // clean restart; relaunched by the docker restart policy (production)
 const DEV_EXIT_FALLBACK_MS = 10000; // dev: exit anyway if the watcher restart didn't kill us by then
 
@@ -105,8 +105,16 @@ async function onWake(sleptMs) {
   // certainly wedged. Wait for the network to come back, then restart clean.
   recovering = true;
   console.warn('[wake-recovery] Mongo unreachable after wake — waiting for network, will restart to recover.');
+  // Wait as long as it takes: restarting while Mongo is still unreachable buys
+  // nothing and actively hurts. The fresh process runs its startup createIndex
+  // calls against a closed topology, throws, and exits 1 — which under
+  // `meteor run` is terminal ("Your application is crashing. Waiting for file
+  // change."), so the app stays dead until a human touches a file. Seen on
+  // 2026-07-29 after four consecutive sleeps: the last one restarted on the
+  // 120s grace window with the network still down and killed the dev server.
   const startedAt = Date.now();
   let probing = false;
+  let lastLoggedAt = Date.now();
   const wait = setInterval(async () => {
     if (probing) return; // don't overlap probes if one runs long
     probing = true;
@@ -114,9 +122,10 @@ async function onWake(sleptMs) {
       if (await pingMongo()) {
         clearInterval(wait);
         restart('Mongo reachable again');
-      } else if (Date.now() - startedAt > RECOVERY_GRACE_MS) {
-        clearInterval(wait);
-        restart('grace window elapsed — restarting to retry from a fresh process');
+      } else if (Date.now() - lastLoggedAt >= WAIT_LOG_EVERY_MS) {
+        lastLoggedAt = Date.now();
+        const waitedS = Math.round((Date.now() - startedAt) / 1000);
+        console.warn(`[wake-recovery] Mongo still unreachable after ${waitedS}s — still waiting, will restart once it answers.`);
       }
     } finally {
       probing = false;

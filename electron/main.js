@@ -380,6 +380,31 @@ function createWindow(savedState) {
   win.on('close', () => saveWindowState(win));
 }
 
+// Quitting goes through the renderer so the app can show its confirmation modal.
+// But the renderer is not always the app: on a server crash it shows the Meteor
+// error page, which listens to nothing — the request then falls in the void and
+// the app becomes impossible to quit. So the confirmation is asked for, never
+// trusted: without an acknowledgement from a live renderer, quit outright.
+const QUIT_ACK_TIMEOUT_MS = 1000;
+let quitAckTimer = null;
+
+function requestQuitConfirmation(win) {
+  if (quitAckTimer) clearTimeout(quitAckTimer);
+  quitAckTimer = setTimeout(() => {
+    quitAckTimer = null;
+    app.quit();
+  }, QUIT_ACK_TIMEOUT_MS);
+  win.webContents.send('app:confirmQuit');
+}
+
+// Sent by preload as soon as the app's quit handler receives the request, which
+// proves the renderer is alive and will decide itself whether to quit.
+ipcMain.on('app:confirmQuitAck', () => {
+  if (!quitAckTimer) return;
+  clearTimeout(quitAckTimer);
+  quitAckTimer = null;
+});
+
 app.whenReady().then(() => {
   app.setName('Panorama');
 
@@ -418,7 +443,7 @@ app.whenReady().then(() => {
                 click: () => {
                   const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
                   if (win) {
-                    win.webContents.send('app:confirmQuit');
+                    requestQuitConfirmation(win);
                   } else {
                     app.quit();
                   }

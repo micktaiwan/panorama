@@ -50,6 +50,9 @@ process.on('unhandledRejection', (reason) => {
 // Post-sleep MongoDB recovery watchdog (restarts a wedged process after wake).
 import '/server/wakeRecovery';
 
+// Liveness probe answering the client-side zombie-DDP detector (ddpKeepAlive.js).
+import '/server/ddpPing';
+
 // Accounts configuration (auth, rate limiting, email templates)
 import '/server/accounts';
 

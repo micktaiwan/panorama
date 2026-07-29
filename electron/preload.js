@@ -29,9 +29,15 @@ contextBridge.exposeInMainWorld('electron', {
   // Quit the app
   quit: () => ipcRenderer.invoke('app:quit'),
 
-  // Listen for quit confirmation request (from menu Cmd+Q)
+  // Listen for quit confirmation request (from menu Cmd+Q). The ack tells the
+  // main process a live renderer took the request, which cancels its quit
+  // fallback — without it the app would be unquittable whenever the renderer
+  // shows something else than the app (server crash, error page).
   onConfirmQuit: (callback) => {
-    const handler = () => callback();
+    const handler = () => {
+      ipcRenderer.send('app:confirmQuitAck');
+      callback();
+    };
     ipcRenderer.on('app:confirmQuit', handler);
     return () => ipcRenderer.removeListener('app:confirmQuit', handler);
   }

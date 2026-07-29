@@ -118,7 +118,8 @@ Meteor.methods({
 });
 
 // Import people from a Google Workspace JSON export
-// Deduplicate by email (primary) or last name lowercased (fallback)
+// Deduplicate by email (primary) or full name lowercased (fallback, only
+// against records that have no email — a differing email means a different person)
 Meteor.methods({
   async 'people.importGoogleWorkspace'(records) {
     check(records, Array);
@@ -132,17 +133,19 @@ Meteor.methods({
     const cursor = PeopleCollection.find({ userId: this.userId }, { fields: { _id: 1, email: 1, name: 1, lastName: 1, left: 1 } });
     const existingPeople = typeof cursor.fetchAsync === 'function' ? await cursor.fetchAsync() : cursor.fetch();
     const emailToPerson = new Map();
-    const lastLowerToPerson = new Map();
+    const nameKeyToPerson = new Map();
+    const buildNameKey = (first, last) =>
+      `${String(first || '').trim().toLowerCase()}|${String(last || '').trim().toLowerCase()}`;
     existingPeople.forEach(p => {
       const email = String(p.email || '').trim().toLowerCase();
       if (email && !emailToPerson.has(email)) emailToPerson.set(email, p);
-      const lastLower = String(p.lastName || '').trim().toLowerCase();
-      if (lastLower && !lastLowerToPerson.has(lastLower)) lastLowerToPerson.set(lastLower, p);
+      const nameKey = buildNameKey(p.name, p.lastName);
+      if (nameKey !== '|' && !nameKeyToPerson.has(nameKey)) nameKeyToPerson.set(nameKey, p);
     });
 
     // Deduplicate inside the incoming dataset as well
     const seenEmails = new Set();
-    const seenLastLowers = new Set();
+    const seenNameKeys = new Set();
 
     let inserted = 0;
     let updated = 0;
@@ -163,21 +166,26 @@ Meteor.methods({
       // Skip empty rows
       if (!firstName && !lastName && !email) { skipped++; continue; }
 
-      const lastLower = lastName.toLowerCase();
+      const nameKey = buildNameKey(firstName, lastName);
 
       // Intra-file dedupe
       if (email) {
         if (seenEmails.has(email)) { skipped++; continue; }
         seenEmails.add(email);
-      } else if (lastLower) {
-        if (seenLastLowers.has(lastLower)) { skipped++; continue; }
-        seenLastLowers.add(lastLower);
+      } else if (nameKey !== '|') {
+        if (seenNameKeys.has(nameKey)) { skipped++; continue; }
+        seenNameKeys.add(nameKey);
       }
 
       // Find existing
       let existing = null;
       if (email && emailToPerson.has(email)) existing = emailToPerson.get(email);
-      if (!existing && lastLower && lastLowerToPerson.has(lastLower)) existing = lastLowerToPerson.get(lastLower);
+      if (!existing && nameKey !== '|') {
+        const byName = nameKeyToPerson.get(nameKey);
+        // Name fallback only against a record with no email: if the existing
+        // record has one, a non-matching email means a different person.
+        if (byName && !String(byName.email || '').trim()) existing = byName;
+      }
 
       if (existing) {
         const updates = {};
@@ -207,8 +215,8 @@ Meteor.methods({
         };
         const _id = await PeopleCollection.insertAsync(doc);
         // Update maps to avoid duplicate subsequent inserts within this run
-        if (email) emailToPerson.set(email, { _id, email, lastName });
-        if (lastLower) lastLowerToPerson.set(lastLower, { _id, email, lastName });
+        if (email) emailToPerson.set(email, { _id, email, name: doc.name, lastName });
+        if (nameKey !== '|') nameKeyToPerson.set(nameKey, { _id, email, name: doc.name, lastName });
         inserted++;
       }
     }

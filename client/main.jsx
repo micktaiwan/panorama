@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Meteor } from 'meteor/meteor';
 import { Accounts } from 'meteor/accounts-base';
 import '/imports/ui/utils/globalErrors.js';
+import '/imports/ui/ddpKeepAlive.js'; // revive zombie DDP connections after sleep/network change
 
 // Meteor accounts-base clears window.location.hash for reset-password / verify-email
 // during package init, then calls registered callbacks inside Meteor.startup().
