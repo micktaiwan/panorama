@@ -9,7 +9,7 @@ import { SituationQuestionsCollection } from '/imports/api/situationQuestions/co
 import { SituationSummariesCollection } from '/imports/api/situationSummaries/collections';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
-import { notify, setNotifyHandler } from '/imports/ui/utils/notify.js';
+import { notify } from '/imports/ui/utils/notify.js';
 import { PeopleCollection } from '/imports/api/people/collections';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 
@@ -60,10 +60,6 @@ export const SituationAnalyzer = () => {
 
   const current = situations.find(s => s._id === currentId) || null;
 
-  useEffect(() => {
-    setNotifyHandler((t) => notify(t));
-    return () => setNotifyHandler(null);
-  }, []);
   useEffect(() => {
     if (!toast) return;
     notify(toast);

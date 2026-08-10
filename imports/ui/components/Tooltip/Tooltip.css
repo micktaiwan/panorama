@@ -1,13 +1,20 @@
-.tooltip {
+/* Class names are prefixed `tooltipTrigger`/`tooltipBubble` on purpose: the
+   generic `.tooltip`/`.tooltipContent` names are taken by the hand-rolled
+   CSS-only tooltips in the Emails pages. */
+.tooltipTrigger {
   position: relative;
   display: inline-flex;
   align-items: center;
 }
 
-.tooltipContent {
+/* The bubble lives in a body portal: fixed so scrollable containers cannot
+   clip it, positioned from the trigger rect measured on hover. */
+.tooltipBubble {
   pointer-events: none;
-  position: absolute;
-  z-index: 1000;
+  position: fixed;
+  left: var(--tooltip-x, 0);
+  top: var(--tooltip-y, 0);
+  z-index: 10040;
   background: var(--tooltip-bg);
   color: var(--tooltip-color, var(--text));
   border: 1px solid var(--border);
@@ -16,55 +23,67 @@
   border-radius: 6px;
   font-size: 12px;
   line-height: 1.2;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity .12s ease, transform .12s ease;
   white-space: pre-wrap;
   display: inline-block;
   width: max-content;
-  max-width: 440px;
+  max-width: min(440px, calc(100vw - 16px));
   word-break: normal;
   overflow-wrap: break-word;
+  animation: tooltipIn .12s ease both;
 }
 
-.tooltip-lg .tooltipContent {
+.tooltipBubble-lg {
   font-size: 14px;
   line-height: 1.35;
 }
 
-.tooltipContent.visible {
-  opacity: 1;
-  transform: translateY(0);
+@keyframes tooltipIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.tooltip-top .tooltipContent {
-  bottom: 100%;
-  left: 50%;
-  transform: translate(-50%, 6px);
-  margin-bottom: 8px; /* extra vertical space from trigger */
-}
-.tooltip-top .tooltipContent.visible {
-  transform: translate(-50%, 0);
-}
+.tooltipBubble-top { transform: translate(-50%, calc(-100% - 8px)); }
+.tooltipBubble-bottom { transform: translate(-50%, 8px); }
+.tooltipBubble-right { transform: translate(8px, -50%); }
+.tooltipBubble-left { transform: translate(calc(-100% - 8px), -50%); }
 
 .tooltipArrow {
   position: absolute;
   width: 8px;
   height: 8px;
   background: var(--tooltip-bg);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
   transform: rotate(45deg);
-  left: 50%;
-  margin-left: -4px;
-  bottom: -4px;
 }
 
-.tooltip-right .tooltipContent {
-  left: 100%;
-  top: 50%;
-  transform: translate(8px, -50%);
+/* The arrow stays over the trigger even when the bubble was nudged sideways */
+.tooltipBubble-top .tooltipArrow,
+.tooltipBubble-bottom .tooltipArrow {
+  left: calc(50% - var(--tooltip-shift, 0px));
+  margin-left: -4px;
 }
-.tooltip-right .tooltipContent.visible {
-  transform: translate(4px, -50%);
+.tooltipBubble-top .tooltipArrow {
+  bottom: -4px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.tooltipBubble-bottom .tooltipArrow {
+  top: -4px;
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.tooltipBubble-right .tooltipArrow,
+.tooltipBubble-left .tooltipArrow {
+  top: 50%;
+  margin-top: -4px;
+}
+.tooltipBubble-right .tooltipArrow {
+  left: -4px;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.tooltipBubble-left .tooltipArrow {
+  right: -4px;
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
 }

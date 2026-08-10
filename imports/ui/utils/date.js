@@ -120,3 +120,56 @@ export const timeUntilPrecise = (date) => {
   const base = parts.join(' ');
   return past ? `${base} ago` : `in ${base}`;
 };
+
+// --- Snooze presets ------------------------------------------------------
+// A snoozed task wakes up at 08:00 local time on the target day.
+export const SNOOZE_WAKE_HOUR = 8;
+
+const atWakeHour = (date) => {
+  const d = new Date(date);
+  d.setHours(SNOOZE_WAKE_HOUR, 0, 0, 0);
+  return d;
+};
+
+// Next occurrence of a weekday (0 = Sunday … 6 = Saturday), always in the
+// future: asking for "next Saturday" on a Saturday returns the week after.
+const nextWeekday = (targetDow, from) => {
+  const d = new Date(from);
+  const delta = ((targetDow - d.getDay()) + 7) % 7 || 7;
+  d.setDate(d.getDate() + delta);
+  return atWakeHour(d);
+};
+
+export const SNOOZE_PRESETS = [
+  { key: 'tomorrow', label: 'Tomorrow 8am' },
+  { key: 'nextSaturday', label: 'Next Saturday 8am' },
+  { key: 'nextMonday', label: 'Next Monday 8am' },
+  { key: 'in30days', label: 'In 30 days' }
+];
+
+// Resolve a preset key to an absolute wake-up date. Returns null for an
+// unknown key so callers never store a bogus date.
+export const snoozeDateFor = (key, from = new Date()) => {
+  switch (key) {
+    case 'tomorrow': {
+      const d = new Date(from);
+      d.setDate(d.getDate() + 1);
+      return atWakeHour(d);
+    }
+    case 'nextSaturday': return nextWeekday(6, from);
+    case 'nextMonday': return nextWeekday(1, from);
+    case 'in30days': {
+      const d = new Date(from);
+      d.setDate(d.getDate() + 30);
+      return atWakeHour(d);
+    }
+    default: return null;
+  }
+};
+
+// A task counts as snoozed only while its wake-up date is still ahead.
+export const isSnoozed = (task, nowMs = Date.now()) => {
+  const until = task?.snoozedUntil;
+  if (!until) return false;
+  return new Date(until).getTime() > nowMs;
+};

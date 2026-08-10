@@ -6,12 +6,14 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
 import './Dashboard.css';
-import { formatDateTime, deadlineSeverity } from '/imports/ui/utils/date.js';
+import { formatDateTime, deadlineSeverity, isSnoozed } from '/imports/ui/utils/date.js';
 import { ProjectsOverview } from '/imports/ui/Dashboard/ProjectsOverview.jsx';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { TaskRow } from '/imports/ui/components/TaskRow/TaskRow.jsx';
 import { NoteRow } from '/imports/ui/components/NoteRow/NoteRow.jsx';
 import { useDeferredTaskRemoval } from '/imports/ui/hooks/useDeferredTaskRemoval.js';
+import { useNow } from '/imports/ui/hooks/useNow.js';
+import { Collapsible } from '/imports/ui/components/Collapsible/Collapsible.jsx';
 
 export const Dashboard = () => {
   
@@ -37,6 +39,10 @@ export const Dashboard = () => {
       { sort: { createdAt: -1 } }
     )
   ));
+
+  // Ticks every minute so a snoozed task returns to the main list on its own
+  // once its wake-up date has passed, without a reload.
+  const now = useNow();
 
   const tasks = useMemo(() => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
@@ -86,8 +92,8 @@ export const Dashboard = () => {
   }, [JSON.stringify(allTasks.map(t => [(t.status || 'todo'), t.statusChangedAt ? new Date(t.statusChangedAt).toISOString().slice(0,10) : ''].join(':')))]);
 
   const unassignedTasks = useMemo(() => (
-    tasks.filter(t => !t.projectId)
-  ), [tasks]);
+    tasks.filter(t => !t.projectId && !isSnoozed(t, now))
+  ), [tasks, now]);
 
   // Project filters (tri-state per project: include -> 1, exclude -> -1, neutral -> 0/undefined)
   const [projFilters, setProjFilters] = useState({});
@@ -102,6 +108,14 @@ export const Dashboard = () => {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, JSON.stringify(projFilters)]);
+
+  // Snoozed tasks are pulled out of the main list into their own section
+  const activeTasks = useMemo(() => filteredTasks.filter(t => !isSnoozed(t, now)), [filteredTasks, now]);
+  const snoozedTasks = useMemo(() => (
+    filteredTasks
+      .filter(t => isSnoozed(t, now))
+      .sort((a, b) => new Date(a.snoozedUntil).getTime() - new Date(b.snoozedUntil).getTime())
+  ), [filteredTasks, now]);
 
   const { hiddenTaskIds, requestRemoveTask: removeTask } = useDeferredTaskRemoval();
 
@@ -120,6 +134,16 @@ export const Dashboard = () => {
       localStorage.setItem('dashboard_recent_done_open', showRecent ? '1' : '0');
     }
   }, [showRecent]);
+
+  // Snoozed section stays collapsed unless explicitly opened
+  const [showSnoozed, setShowSnoozed] = useState(() => (
+    typeof localStorage !== 'undefined' && localStorage.getItem('dashboard_snoozed_open') === '1'
+  ));
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('dashboard_snoozed_open', showSnoozed ? '1' : '0');
+    }
+  }, [showSnoozed]);
 
   return (
     <div className="dashboard">
@@ -199,7 +223,7 @@ export const Dashboard = () => {
       <ProjectFilters projects={projectsForFilter} storageKey="dashboard_proj_filters" onChange={setProjFilters} />
       <div className="tasksScroll scrollArea">
       <ul className="taskList">
-        {filteredTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
+        {activeTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
           <TaskRow
             key={t._id}
             task={t}
@@ -214,6 +238,7 @@ export const Dashboard = () => {
             showDeadline
             showClearDeadline
             showDelete
+            showSnooze
             onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
             onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
             onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}
@@ -222,6 +247,39 @@ export const Dashboard = () => {
         ))}
       </ul>
       </div>
+      {snoozedTasks.filter(t => !hiddenTaskIds.has(t._id)).length > 0 && (
+        <Collapsible
+          className="snoozedTasks"
+          title={`Snoozed (${snoozedTasks.filter(t => !hiddenTaskIds.has(t._id)).length})`}
+          open={showSnoozed}
+          onToggle={setShowSnoozed}
+        >
+          <ul className="taskList">
+            {snoozedTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
+              <TaskRow
+                key={`s-${t._id}`}
+                task={t}
+                showProject={true}
+                allowProjectChange
+                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
+                onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
+                projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
+                projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
+                projectColor={(projects.find(p => p._id === t.projectId)?.colorLabel) || '#6b7280'}
+                showStatusSelect
+                showDeadline
+                showClearDeadline
+                showDelete
+                showSnooze
+                onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
+                onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}
+                onRemove={() => removeTask(t._id)}
+              />
+            ))}
+          </ul>
+        </Collapsible>
+      )}
       {standaloneSessions.length > 0 && (
         <div className="standaloneSessions">
           <h2>Standalone Note Sessions ({standaloneSessions.length})</h2>
@@ -260,6 +318,7 @@ export const Dashboard = () => {
                 showDeadline
                 showClearDeadline
                 showDelete
+                showSnooze
                 onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
                 onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
                 onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}

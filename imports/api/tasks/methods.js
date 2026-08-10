@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { check } from 'meteor/check';
+import { check, Match } from 'meteor/check';
 import { TasksCollection } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
@@ -186,6 +186,24 @@ Meteor.methods({
     }
     if (vectorError) throw vectorError;
     return res;
+  },
+  // Snooze a task until a given date: it leaves the main list and shows up in
+  // the "Snoozed" section until then. Pass null to wake it up immediately.
+  async 'tasks.snooze'(taskId, until) {
+    check(taskId, String);
+    check(until, Match.OneOf(Date, null));
+    ensureLoggedIn(this.userId);
+    const task = await TasksCollection.findOneAsync(taskId);
+    if (!task) throw new Meteor.Error('not-found', 'Task not found');
+    if (task.projectId) {
+      await ensureProjectAccess(task.projectId, this.userId);
+    } else if (task.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Task not found');
+    }
+    const modifier = until
+      ? { $set: { snoozedUntil: until, updatedAt: new Date() } }
+      : { $set: { updatedAt: new Date() }, $unset: { snoozedUntil: 1 } };
+    return TasksCollection.updateAsync(taskId, modifier);
   },
   // Removed legacy setDone/unsetDone methods
   async 'tasks.remove'(taskId) {

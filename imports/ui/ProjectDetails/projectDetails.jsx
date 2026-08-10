@@ -13,7 +13,7 @@ import { Meteor } from 'meteor/meteor';
 import { navigateTo } from '../router.js';
 import './ProjectDetails.css';
 import { Card } from '../components/Card/Card.jsx';
-import { deadlineSeverity, timeAgo } from '../utils/date.js';
+import { deadlineSeverity, timeAgo, isSnoozed } from '../utils/date.js';
 import { InlineDate } from '../InlineDate/InlineDate.jsx';
 import { TaskRow } from '../components/TaskRow/TaskRow.jsx';
 import { createNewLink } from '../utils/links.js';
@@ -27,6 +27,7 @@ import { Modal } from '../components/Modal/Modal.jsx';
 import { ActivitySummary } from '../components/ActivitySummary/ActivitySummary.jsx';
 import { NotesPanel } from '../Notes/NotesPanel/NotesPanel.jsx';
 import { useDeferredTaskRemoval } from '../hooks/useDeferredTaskRemoval.js';
+import { useNow } from '../hooks/useNow.js';
 
 /** Return '#000' or '#fff' depending on which has better contrast against hex color */
 function contrastText(hex) {
@@ -71,11 +72,15 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     [allProjects]
   );
   const tasks = useFind(() => TasksCollection.find({ projectId }, { sort: { updatedAt: -1 } }));
+  // Ticks every minute so a snoozed task returns to the active list on its own
+  // once its wake-up date has passed, without a reload.
+  const now = useNow();
   const activeTasks = useMemo(() => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
     const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
     return tasks
       .filter(t => !['done','cancelled','idea'].includes(t.status || 'todo'))
+      .filter(t => !isSnoozed(t, now))
       .sort((a, b) => {
         const ad = toTime(a.deadline);
         const bd = toTime(b.deadline);
@@ -90,7 +95,12 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
         const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return ac - bc;
       });
-  }, [tasks]);
+  }, [tasks, now]);
+  // Snoozed open tasks get their own collapsed section, soonest wake-up first
+  const snoozedTasks = useMemo(() => tasks
+    .filter(t => !['done','cancelled','idea'].includes(t.status || 'todo'))
+    .filter(t => isSnoozed(t, now))
+    .sort((a, b) => new Date(a.snoozedUntil).getTime() - new Date(b.snoozedUntil).getTime()), [tasks, now]);
   const doneTasks = useMemo(() => tasks
     .filter(t => ['done','cancelled'].includes(t.status || 'todo'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,6 +127,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   };
   const [showDone, setShowDone] = useState(false);
   const [showIdeas, setShowIdeas] = useState(false);
+  const [showSnoozed, setShowSnoozed] = useState(false);
   const sessions = useFind(() => NoteSessionsCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const notes = useFind(() => NotesCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const links = useFind(() => LinksCollection.find({ projectId }, { sort: { createdAt: -1 } }));
@@ -435,6 +446,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           editableDeadline
                           showClearDeadline
                           showDelete
+                          showSnooze
                           showUrgentImportant
                           showAssignee
                           memberOptions={memberOptions}
@@ -458,6 +470,53 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                 </ul>
               </SortableContext>
             </DndContext>
+
+            {snoozedTasks.length > 0 ? (
+              <div className="doneSection">
+                <h3 className="tasksHeader doneHeader">
+                  <button className="btn-link" onClick={() => setShowSnoozed(v => !v)} aria-expanded={showSnoozed} aria-controls="snoozedTasksList">
+                    {showSnoozed ? '▼' : '▶'} Snoozed ({snoozedTasks.length})
+                  </button>
+                </h3>
+                {showSnoozed ? (
+                  <ul id="snoozedTasksList" className="tasksList">
+                    {snoozedTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
+                      <li key={t._id}>
+                        <TaskRow
+                          as="div"
+                          task={t}
+                          showProject={false}
+                          allowProjectChange
+                          showMoveProjectButton
+                          projectOptions={projectOptions}
+                          onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
+                          showStatusSelect
+                          showDeadline
+                          editableDeadline
+                          showClearDeadline
+                          showDelete
+                          showSnooze
+                          showUrgentImportant={false}
+                          showAssignee
+                          memberOptions={memberOptions}
+                          showTags
+                          tagSuggestions={tagSuggestions}
+                          inlineActions={false}
+                          titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
+                          onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                          onUpdateTitle={(next) => updateTaskTitle(t._id, next)}
+                          onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
+                          onClearDeadline={() => updateTaskDeadline(t._id, '')}
+                          onRemove={() => removeTask(t._id)}
+                          onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
+                          onUpdateTags={(next) => Meteor.call('tasks.update', t._id, { tags: next })}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
 
             {ideaTasks.length > 0 ? (
               <div className="doneSection">

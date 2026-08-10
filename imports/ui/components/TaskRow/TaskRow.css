@@ -1,4 +1,6 @@
-.taskRowC { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--task-col-gap, 12px); padding: 8px 0 8px 10px; border-bottom: 1px solid var(--border); position: relative; width: 100%; }
+/* box-sizing is required: width 100% + horizontal padding would otherwise push
+   the row past its container and add a horizontal scrollbar to the task lists. */
+.taskRowC { box-sizing: border-box; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--task-col-gap, 12px); padding: 8px 10px; border-bottom: 1px solid var(--border); position: relative; width: 100%; }
 .taskRowC:hover { background: var(--row-hover); }
 .taskRowC.withProject { grid-template-columns: var(--task-project-col-width, 160px) 1fr auto; }
 .taskRowC.smallText { font-size: 12px; padding: 4px 0; gap: var(--task-col-gap, 8px); --task-project-col-width: 120px; }
@@ -22,6 +24,11 @@
 .taskTitleArea .inlineEditableInput { width: 100%; }
 .taskNotes { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-basis: 100%; min-width: 0; }
 .taskNotesClickable { cursor: pointer; background: transparent; border: none; padding: 0; text-align: left; }
+/* Tooltip wrappers are the flex items now, so they carry the layout of what
+   they wrap: the notes line takes its own row, chips never shrink. */
+.taskTitleArea > .taskNotesTip { flex-basis: 100%; min-width: 0; }
+.taskNotesTip .taskNotes { max-width: 100%; }
+.taskLeft > .tooltipTrigger, .taskTitleArea > .tooltipTrigger, .taskRight > .tooltipTrigger { flex-shrink: 0; }
 .taskNotesClickable:hover { text-decoration: underline; color: var(--text); }
 .taskInlineActions { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; }
 .taskNotesButton { font-size: 12px; color: var(--muted); transition: opacity 120ms ease-in-out; }
@@ -176,3 +183,48 @@
 .taskTagRemove:hover { opacity: 1; }
 .taskTagAdd { background: transparent; border: 1px dashed var(--border); color: var(--muted); cursor: pointer; }
 .taskTagInput { height: 18px; width: 80px; padding: 0 6px; border: 1px solid var(--border); border-radius: 9px; font-size: 11px; background: var(--panel); color: var(--text); }
+
+/* Snooze: button + dropdown of wake-up presets */
+.taskSnooze { position: relative; display: inline-flex; align-items: center; }
+.taskSnoozeBtn { font-size: 12px; opacity: 0.55; transition: opacity 120ms ease-in-out; }
+.taskSnoozeBtn:hover { opacity: 1; }
+.taskSnoozeBtn.snoozed { opacity: 1; }
+.taskSnoozeMenu {
+  position: fixed;
+  top: var(--snooze-menu-top, 0);
+  left: var(--snooze-menu-left, 0);
+  width: var(--snooze-menu-width, 180px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(var(--black-rgb), 0.18);
+}
+.taskSnoozeItem {
+  background: transparent;
+  border: 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.taskSnoozeItem:hover { background: var(--row-hover); }
+.taskSnoozeItem.wake { color: var(--muted); border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
+
+/* Wake-up time shown next to the title of a snoozed task */
+.taskSnoozedChip {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--muted);
+  background: rgba(var(--black-rgb), 0.1);
+  padding: 1px 6px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+.taskRowC.snoozedRow .taskTitleArea .inlineEditable { color: var(--muted); }

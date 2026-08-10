@@ -17,7 +17,7 @@ import { ImportTab } from '/imports/ui/Budget/tabs/ImportTab/ImportTab.jsx';
 import { ImportSettings } from '/imports/ui/Budget/tabs/ImportSettings/ImportSettings.jsx';
 import { filterByQuery, applyDepartmentFilter, applyTeamFilter, filterByDateRange, applyCurrencyFilter } from '/imports/ui/Budget/utils/filters.js';
 import { useBudgetData } from '/imports/ui/Budget/hooks/useBudgetData.js';
-import { notify, setNotifyHandler } from '/imports/ui/utils/notify.js';
+import { notify } from '/imports/ui/utils/notify.js';
 
 const _safe = (v) => (v === undefined || v === null ? '' : v);
 
@@ -43,10 +43,6 @@ export const BudgetPage = () => {
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-  React.useEffect(() => {
-    setNotifyHandler((t) => setToast(t));
-    return () => setNotifyHandler(null);
   }, []);
   React.useEffect(() => {
     if (!toast) return;

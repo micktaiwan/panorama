@@ -244,3 +244,7 @@
 
 /* Eisenhower Matrix styles moved to imports/ui/Eisenhower/Eisenhower.css */
 
+
+/* Snoozed tasks: collapsed section under the main task list */
+.snoozedTasks { margin-top: 16px; }
+.snoozedTasks .collapsiblePanel { max-height: 320px; overflow: auto; }
