@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useFind } from 'meteor/react-meteor-data';
 import { UserPreferencesCollection } from '../../api/userPreferences/collections';
 import { notify } from '../utils/notify.js';
+import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
 import './WebPage.css';
 import { marked } from 'marked';
 import { Meteor } from 'meteor/meteor';
@@ -148,11 +149,13 @@ export const WebPage = () => {
 
       <div className="webSearchSection">
         <div className="webSearchInputContainer">
-          <textarea
+          <ClearableInput
+            multiline
+            fill
             className="input searchInput"
             placeholder="Ask your question or describe what you're looking for..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             onKeyPress={handleKeyPress}
             rows={3}
             disabled={isLoading}

@@ -1,0 +1,60 @@
+.clearableInput {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Two classes on purpose: beat the callers' own single-class padding shorthands */
+.clearableInput .clearableInputField {
+  padding-right: 28px;
+}
+
+/* Stretch inside a flex/grid parent instead of hugging the field */
+.clearableInput--fill {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.clearableInput--fill .clearableInputField {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+/* On a textarea the button sits at the top, not vertically centered */
+.clearableInput--multiline .clearableInputClear {
+  top: 8px;
+  transform: none;
+}
+
+.clearableInputClear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.clearableInputClear:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+  opacity: 1;
+}
+
+.clearableInputClear:focus-visible {
+  outline: 1px solid var(--border);
+  outline-offset: 1px;
+}

@@ -114,9 +114,117 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# --- Watchdog de reprise ---
+#
+# Pourquoi ici et pas dans le serveur : quand le serveur Meteor meurt (typiquement
+# un démarrage pendant que le Wi-Fi est coupé — le driver Mongo ferme la topology,
+# la création d'index de la collection `users` par accounts-base échoue et tue le
+# process), l'outil meteor n'essaie PAS de relancer. Il passe en mode error page et
+# attend un changement de fichier. Rien de ce qui tourne dans le process mort ne
+# peut réparer ça : la reprise doit venir de l'extérieur, d'ici.
+#
+# Le déclencheur est un état observable, pas une forme d'erreur particulière : le
+# proxy de dev (meteor-tool/tools/runners/run-proxy.js, showErrorPage) sert en 200
+# une page qui contient le log du serveur, où figure la ligne « Your application is
+# crashing » (run-app.js). On ne relance que si Mongo répond — relancer sur un
+# réseau encore coupé rejoue exactement le crash.
+#
+# La relance se fait en réécrivant server/devRestartTrigger.js : le watcher de
+# meteor voit le hash changer, rebuild et relance. Même mécanisme (et même ligne
+# marqueur) que server/wakeRecovery.js, pour que les deux écrivains restent
+# idempotents sur ce fichier.
+WATCHDOG_CHECK_EVERY_S=5    # cadence des sondes HTTP
+WATCHDOG_GRACE_S=20         # durée d'erreur continue avant d'agir
+WATCHDOG_COOLDOWN_S=180     # attente minimale entre deux relances (rebuild + boot)
+WATCHDOG_MAX_RESTARTS=3     # au-delà sans retour à la normale, on arrête d'insister
+TRIGGER_FILE="$(dirname "$0")/server/devRestartTrigger.js"
+
+# healthy : l'app sert ses pages · crashed : le serveur est mort, meteor attend
+# un changement de fichier · error : page d'erreur sans crash serveur (erreur de
+# build : relancer ne servirait à rien) · unknown : rebuild en cours (le proxy
+# retient la connexion) ou port fermé — dans ce cas on ne conclut rien.
+app_state() {
+  body=$(curl -s --max-time 5 "http://127.0.0.1:${METEOR_PORT}/" 2>/dev/null) || { echo unknown; return; }
+  case "$body" in
+    "") echo unknown ;;
+    *"Your application is crashing"*) echo crashed ;;
+    *"Meteor App - Error"*) echo error ;;
+    *) echo healthy ;;
+  esac
+}
+
+mongo_is_reachable() {
+  nc -z -G 3 "${MONGO_HOST%%:*}" "${MONGO_HOST##*:}" >/dev/null 2>&1
+}
+
+# Réécrit la ligne marqueur (au lieu de l'ajouter) pour que le fichier ne grossisse pas.
+# Le fichier temporaire vit hors de l'arbre source : un fichier qui apparaît puis
+# disparaît dans server/ serait vu par le watcher de meteor.
+TRIGGER_TMP="${TMPDIR:-/tmp}/panorama-devRestartTrigger.$$"
+touch_restart_trigger() {
+  grep -v '^// last wake-recovery restart:' "$TRIGGER_FILE" > "$TRIGGER_TMP" \
+    && printf '// last wake-recovery restart: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$TRIGGER_TMP" \
+    && cat "$TRIGGER_TMP" > "$TRIGGER_FILE" \
+    && rm -f "$TRIGGER_TMP"
+}
+
+crash_seconds=0
+restart_count=0
+last_restart_epoch=0
+last_wait_log_epoch=0
+tick=0
+
 # Attendre que l'un des deux se termine ; le trap EXIT tue alors l'autre.
 # (compatible bash 3.2 et zsh — pas de `wait -n`)
 while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; do
   sleep 1
+  tick=$((tick + 1))
+  [ $((tick % WATCHDOG_CHECK_EVERY_S)) -eq 0 ] || continue
+
+  state=$(app_state)
+  if [ "$state" = "healthy" ]; then
+    # Retour à la normale : on repart d'une ardoise vierge, y compris le quota.
+    if [ "$restart_count" -gt 0 ] || [ "$crash_seconds" -gt 0 ]; then
+      echo "[watchdog] l'app répond de nouveau."
+    fi
+    crash_seconds=0
+    restart_count=0
+    continue
+  fi
+  if [ "$state" != "crashed" ]; then
+    crash_seconds=0
+    continue
+  fi
+
+  crash_seconds=$((crash_seconds + WATCHDOG_CHECK_EVERY_S))
+  [ "$crash_seconds" -ge "$WATCHDOG_GRACE_S" ] || continue
+
+  now=$(date +%s)
+  [ $((now - last_restart_epoch)) -ge "$WATCHDOG_COOLDOWN_S" ] || continue
+
+  if [ "$restart_count" -ge "$WATCHDOG_MAX_RESTARTS" ]; then
+    echo "[watchdog] serveur toujours mort après $WATCHDOG_MAX_RESTARTS relances — j'arrête d'insister, la cause n'est pas le réseau."
+    last_restart_epoch=$now
+    continue
+  fi
+
+  if ! mongo_is_reachable; then
+    # Une nuit sans réseau ne doit pas noyer le terminal : une ligne par minute.
+    if [ $((now - last_wait_log_epoch)) -ge 60 ]; then
+      last_wait_log_epoch=$now
+      echo "[watchdog] serveur mort mais Mongo ($MONGO_HOST) injoignable — j'attends le réseau."
+    fi
+    crash_seconds=0
+    continue
+  fi
+
+  restart_count=$((restart_count + 1))
+  if touch_restart_trigger; then
+    echo "[watchdog] serveur mort depuis ${crash_seconds}s et Mongo répond — relance ($restart_count/$WATCHDOG_MAX_RESTARTS) via $TRIGGER_FILE"
+  else
+    echo "[watchdog] échec de réécriture de $TRIGGER_FILE — relance impossible."
+  fi
+  last_restart_epoch=$now
+  crash_seconds=0
 done
 qlog "LOOP EXIT electron alive=$(kill -0 "$ELECTRON_PID" 2>/dev/null && echo yes || echo no) meteor alive=$(kill -0 "$METEOR_PID" 2>/dev/null && echo yes || echo no)"

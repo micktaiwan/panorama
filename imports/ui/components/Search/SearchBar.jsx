@@ -2,16 +2,17 @@ import React from 'react';
 
 import './Search.css';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
 
 export const SearchBar = ({ value, onChange, onSearch, resultsCount = 0, placeholder = 'Search (semantic)…', autoFocus = false, cached = false, armSelectFirst = false, onSelectFirst = null, cacheSize = 0, loading = false, onEscape = null }) => {
   return (
     <div className="searchSection">
-      <input
+      <ClearableInput
         className="afInput searchInput"
         placeholder={placeholder}
         autoFocus={autoFocus}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             if (armSelectFirst && resultsCount > 0 && typeof onSelectFirst === 'function') {

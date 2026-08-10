@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
 import './NotesSearch.css';
 
 export const NotesSearch = ({
@@ -10,11 +11,12 @@ export const NotesSearch = ({
 
   return (
     <div className="notes-search">
-      <input
+      <ClearableInput
+        fill
         type="text"
         placeholder="Search for a note..."
         value={searchTerm}
-        onChange={(e) => onSearchChange(e.target.value)}
+        onChange={onSearchChange}
         className="search-input"
       />
 

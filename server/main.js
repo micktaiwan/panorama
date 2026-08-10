@@ -1,6 +1,10 @@
 import { Meteor } from 'meteor/meteor';
 import { WebApp } from 'meteor/webapp';
 
+// Post-sleep MongoDB recovery watchdog (restarts a wedged process after wake).
+// Also provides the wait-then-restart used by the crash handlers below.
+import { waitForMongoThenRestart } from '/server/wakeRecovery';
+
 // Inject data-theme on <html> from cookie — MUST be top-level (before Meteor.startup)
 // so it's registered before the first HTTP response is sent.
 WebApp.addHtmlAttributeHook((request) => {
@@ -12,10 +16,11 @@ WebApp.addHtmlAttributeHook((request) => {
   return {};
 });
 
-// --- Transient MongoDB error handler ---
+// --- Transient network error handler ---
 // When the Mac sleeps, TCP connections to the remote MongoDB die.
 // On wake, the driver throws PoolClearedOnNetworkError / MongoNetworkTimeoutError
-// as unhandled rejections, which crash Node.js before the driver can reconnect.
+// as unhandled rejections, and the dying TLS sockets throw raw ETIMEDOUT /
+// ECONNRESET errors — all of which crash Node.js before anything can reconnect.
 const TRANSIENT_MONGO_ERRORS = new Set([
   'PoolClearedOnNetworkError',
   'MongoNetworkTimeoutError',
@@ -23,23 +28,83 @@ const TRANSIENT_MONGO_ERRORS = new Set([
   'MongoServerSelectionError',
 ]);
 
-function isTransientMongoError(err) {
+// Socket-level failures raised by libuv. They surface as a plain `Error` with
+// `errno`/`code`/`syscall` set, and an asynchronous stack (TLSWrap.onStreamRead,
+// Socket.onread…) that never mentions the MongoDB driver — so the error name and
+// the stack are both useless to identify them. The `syscall` property is what
+// makes them recognisable as network noise rather than an application bug.
+const TRANSIENT_SOCKET_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNABORTED',
+  'EPIPE',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENETDOWN',
+  'ENOTCONN',
+  'EAI_AGAIN',
+]);
+
+function isTransientNetworkError(err) {
   if (!err) return false;
   const name = err.constructor?.name || err.name || '';
   if (TRANSIENT_MONGO_ERRORS.has(name)) return true;
-  // EPIPE/ECONNRESET from the MongoDB TLS socket (broken pipe after sleep/wake)
-  if (err.code === 'EPIPE' || err.code === 'ECONNRESET') {
-    const stack = err.stack || '';
-    if (stack.includes('mongodb') || stack.includes('Connection.')) return true;
-  }
+  // A Node.js system error: `syscall` is set only by libuv-originated failures.
+  if (err.syscall && TRANSIENT_SOCKET_CODES.has(err.code)) return true;
   // Also check the cause chain (PoolClearedOnNetworkError wraps MongoNetworkTimeoutError)
-  if (err.cause && isTransientMongoError(err.cause)) return true;
+  if (err.cause && isTransientNetworkError(err.cause)) return true;
   return false;
 }
 
+// --- Fatal "Mongo was unreachable at boot" detector ---
+// A process that starts while the network is down never recovers: the driver
+// closes the topology, and every later query throws "Topology is closed". The
+// first victim is the index bootstrap — accounts-base creates the `users` indexes
+// at load time (accounts-base/server_main.js, `Accounts.init()`), and the Meteor
+// mongo package rethrows the driver failure as a Meteor.Error. That rejection
+// kills the process, and under `meteor run` a dead process is terminal ("Your
+// application is crashing. Waiting for file change.") — the app stays down until
+// a human saves a file. So instead of dying we hold the process and restart it
+// once the network is back.
+const MONGO_DEAD_CLIENT_ERRORS = new Set([
+  'MongoTopologyClosedError',
+  'MongoNotConnectedError',
+]);
+
+function isMongoUnrecoverableError(err) {
+  if (!err) return false;
+  const name = err.constructor?.name || err.name || '';
+  if (MONGO_DEAD_CLIENT_ERRORS.has(name)) return true;
+  const message = typeof err.message === 'string' ? err.message : '';
+  // The driver text survives inside the Meteor.Error wrapper, so match on it.
+  if (/Topology is closed|MongoNotConnectedError|Client must be connected/i.test(message)) return true;
+  // Meteor's index bootstrap failing at all means Mongo was unreachable at boot.
+  if (message.includes('An error occurred when creating an index')) return true;
+  if (err.cause && isMongoUnrecoverableError(err.cause)) return true;
+  return false;
+}
+
+function transientLabel(err) {
+  return err.syscall ? `${err.code} on ${err.syscall}` : err.constructor?.name || err.name;
+}
+
+// A dead client makes every collection fail in turn, so log the reason once only.
+let holdingForMongo = false;
+function holdForMongo(err, source) {
+  if (!holdingForMongo) {
+    holdingForMongo = true;
+    console.error(`[mongo] Unrecoverable client state (${source}), holding the process instead of dying:`, err?.message || err);
+  }
+  waitForMongoThenRestart('Mongo client is dead, only a restart can rebuild it');
+}
+
 process.on('unhandledRejection', (reason) => {
-  if (isTransientMongoError(reason)) {
-    console.warn(`[mongo] Transient network error (${reason.constructor?.name}), driver will reconnect: ${reason.message}`);
+  if (isMongoUnrecoverableError(reason)) {
+    holdForMongo(reason, 'unhandled rejection');
+    return;
+  }
+  if (isTransientNetworkError(reason)) {
+    console.warn(`[network] Transient error (${transientLabel(reason)}), connection will be re-established: ${reason.message}`);
     return;
   }
   // Let Node.js handle non-transient rejections normally
@@ -47,8 +112,19 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-// Post-sleep MongoDB recovery watchdog (restarts a wedged process after wake).
-import '/server/wakeRecovery';
+process.on('uncaughtException', (err) => {
+  if (isMongoUnrecoverableError(err)) {
+    holdForMongo(err, 'uncaught exception');
+    return;
+  }
+  if (isTransientNetworkError(err)) {
+    console.warn(`[network] Transient error (${transientLabel(err)}), connection will be re-established: ${err.message}`);
+    return;
+  }
+  // Anything else is a real bug: keep the default "crash loudly" behaviour.
+  console.error('[uncaughtException]', err);
+  process.exit(1);
+});
 
 // Liveness probe answering the client-side zombie-DDP detector (ddpKeepAlive.js).
 import '/server/ddpPing';

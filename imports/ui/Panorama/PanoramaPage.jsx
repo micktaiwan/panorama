@@ -5,6 +5,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from 
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { formatDate } from '/imports/ui/utils/date.js';
+import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
 import './PanoramaPage.css';
 
 // Utility functions to reduce code duplication
@@ -293,17 +294,18 @@ export const PanoramaPage = () => {
   return (
     <div className="PanoramaPage">
       <div className="panoramaToolbar">
-        <div className="searchWrap">
-          <svg className="searchIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            className="input searchInput"
-            placeholder="Filter by name or tag..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <ClearableInput
+          wrapClassName="searchWrap"
+          className="input searchInput"
+          placeholder="Filter by name or tag..."
+          value={query}
+          onChange={setQuery}
+          icon={(
+            <svg className="searchIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+            </svg>
+          )}
+        />
 
         <div className="toolbarSep" />
 

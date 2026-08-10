@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
 
 export const EmailsToolbar = ({ 
   searchQuery, 
@@ -18,11 +19,12 @@ export const EmailsToolbar = ({
   return (
     <div className="emailsToolbar">
       <form onSubmit={onSearch} className="searchForm">
-        <input
+        <ClearableInput
+          fill
           type="text"
           placeholder="Search emails..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={setSearchQuery}
           className="searchInput"
         />
         <button type="submit" className="btn">

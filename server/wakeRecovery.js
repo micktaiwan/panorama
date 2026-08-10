@@ -1,4 +1,5 @@
 import fs from 'fs';
+import net from 'net';
 import path from 'path';
 import { Meteor } from 'meteor/meteor';
 import { MongoInternals } from 'meteor/mongo';
@@ -39,6 +40,7 @@ const WAKE_DRIFT_MS = 20000;      // extra gap beyond TICK_MS that means "the ma
 const PROBE_TIMEOUT_MS = 8000;    // bound a single ping so it can't hang for serverSelectionTimeoutMS
 const RECOVERY_RETRY_MS = 5000;   // re-probe cadence while waiting for the network to return
 const WAIT_LOG_EVERY_MS = 60000;  // how often to report that we are still waiting for Mongo
+const STABLE_PROBES = 3;          // consecutive good probes required before restarting
 const EXIT_CODE = 0;              // clean restart; relaunched by the docker restart policy (production)
 const DEV_EXIT_FALLBACK_MS = 10000; // dev: exit anyway if the watcher restart didn't kill us by then
 
@@ -57,6 +59,35 @@ async function pingMongo() {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Host:port of the Mongo server, read from MONGO_URL (first host of the list).
+// `mongodb+srv://` URLs carry no port and need an SRV lookup, so they get no endpoint.
+function mongoEndpoint() {
+  const match = /^mongodb:\/\/(?:[^@/]*@)?([^/?,]+)/.exec(process.env.MONGO_URL || '');
+  if (!match) return null;
+  const [host, port] = match[1].split(':');
+  if (!host) return null;
+  return { host, port: Number(port) || 27017 };
+}
+
+// Can we open a TCP connection to the Mongo host? Unlike pingMongo this does not
+// go through the driver, so it still answers once the driver client is closed for
+// good ("Topology is closed") — which is exactly the state we recover from.
+function probeNetwork() {
+  const endpoint = mongoEndpoint();
+  if (!endpoint) return pingMongo(); // no parsable endpoint: fall back to the driver
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host: endpoint.host, port: endpoint.port });
+    const finish = (ok) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(PROBE_TIMEOUT_MS);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+  });
 }
 
 // Rewrite the dev restart trigger so the Meteor file watcher relaunches us.
@@ -94,6 +125,52 @@ function restart(reason) {
 
 let recovering = false;
 
+// Wait for the network to come back, then restart. Idempotent: the first caller
+// wins, later ones are no-ops.
+//
+// Waiting is not optional: restarting while Mongo is still unreachable buys
+// nothing and actively hurts. The fresh process runs its startup index creation
+// against a closed topology, throws, and exits 1 — which under `meteor run` is
+// terminal ("Your application is crashing. Waiting for file change."), so the app
+// stays dead until a human touches a file. Seen on 2026-07-29 after four
+// consecutive sleeps, and again on 2026-08-10 when Wi-Fi went back down during
+// the rebuild that followed a restart.
+//
+// Hence STABLE_PROBES: one lucky packet on a half-associated Wi-Fi link is not a
+// working network. We require several consecutive good probes so the link has
+// been up for ~15s before we spend a restart on it.
+export function waitForMongoThenRestart(reason) {
+  if (recovering) return;
+  recovering = true;
+  console.warn(`[wake-recovery] ${reason} — waiting for the network, will restart once Mongo answers.`);
+  const startedAt = Date.now();
+  let probing = false;
+  let lastLoggedAt = Date.now();
+  let goodProbes = 0;
+  const wait = setInterval(async () => {
+    if (probing) return; // don't overlap probes if one runs long
+    probing = true;
+    try {
+      if (await probeNetwork()) {
+        goodProbes += 1;
+        if (goodProbes >= STABLE_PROBES) {
+          clearInterval(wait);
+          restart(reason);
+        }
+        return;
+      }
+      goodProbes = 0; // the link flapped: start the stability count over
+      if (Date.now() - lastLoggedAt >= WAIT_LOG_EVERY_MS) {
+        lastLoggedAt = Date.now();
+        const waitedS = Math.round((Date.now() - startedAt) / 1000);
+        console.warn(`[wake-recovery] Mongo still unreachable after ${waitedS}s — still waiting, will restart once it answers.`);
+      }
+    } finally {
+      probing = false;
+    }
+  }, RECOVERY_RETRY_MS);
+}
+
 async function onWake(sleptMs) {
   if (recovering) return;
   console.warn(`[wake-recovery] wake detected (slept ~${Math.round(sleptMs / 1000)}s), probing Mongo…`);
@@ -103,34 +180,7 @@ async function onWake(sleptMs) {
   }
   // The connection dropped across the sleep: the change-stream layer is almost
   // certainly wedged. Wait for the network to come back, then restart clean.
-  recovering = true;
-  console.warn('[wake-recovery] Mongo unreachable after wake — waiting for network, will restart to recover.');
-  // Wait as long as it takes: restarting while Mongo is still unreachable buys
-  // nothing and actively hurts. The fresh process runs its startup createIndex
-  // calls against a closed topology, throws, and exits 1 — which under
-  // `meteor run` is terminal ("Your application is crashing. Waiting for file
-  // change."), so the app stays dead until a human touches a file. Seen on
-  // 2026-07-29 after four consecutive sleeps: the last one restarted on the
-  // 120s grace window with the network still down and killed the dev server.
-  const startedAt = Date.now();
-  let probing = false;
-  let lastLoggedAt = Date.now();
-  const wait = setInterval(async () => {
-    if (probing) return; // don't overlap probes if one runs long
-    probing = true;
-    try {
-      if (await pingMongo()) {
-        clearInterval(wait);
-        restart('Mongo reachable again');
-      } else if (Date.now() - lastLoggedAt >= WAIT_LOG_EVERY_MS) {
-        lastLoggedAt = Date.now();
-        const waitedS = Math.round((Date.now() - startedAt) / 1000);
-        console.warn(`[wake-recovery] Mongo still unreachable after ${waitedS}s — still waiting, will restart once it answers.`);
-      }
-    } finally {
-      probing = false;
-    }
-  }, RECOVERY_RETRY_MS);
+  waitForMongoThenRestart('Mongo unreachable after wake');
 }
 
 Meteor.startup(() => {
