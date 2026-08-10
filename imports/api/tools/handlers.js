@@ -15,11 +15,20 @@ const getMCPUserId = () => {
   return id;
 };
 
-// Call a Meteor method with a simulated userId context (for MCP server-to-server calls)
+// Call a Meteor method with a simulated userId context (for MCP server-to-server calls).
+// The context mimics DDPCommon.MethodInvocation: there is no DDP session here, so unblock()
+// and setUserId() are no-ops, but methods must be able to call them without crashing.
 const callMethodAs = async (methodName, userId, ...args) => {
   const handler = Meteor.server.method_handlers[methodName];
   if (!handler) throw new Meteor.Error('method-not-found', `Method ${methodName} not found`);
-  return handler.call({ userId }, ...args);
+  const invocation = {
+    userId,
+    isSimulation: false,
+    connection: null,
+    unblock: () => {},
+    setUserId: (id) => { invocation.userId = id; }
+  };
+  return handler.call(invocation, ...args);
 };
 import {
   buildProjectByNameSelector,
