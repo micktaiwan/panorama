@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import { Meteor } from 'meteor/meteor';
 import { notify } from '../utils/notify.js';
 
@@ -125,13 +126,12 @@ export const EmailRow = ({ message, threadCount, onOpen, onArchive, onDelete, on
         </span>
         <span className="emailSnippet">{snippet}</span>
         {threadCount > 1 && (
-          <span 
-            className="threadCount" 
-            title={`Conversation with ${threadCount} messages`}
-          >
-            <span className="threadIcon">💬</span>
-            {threadCount}
-          </span>
+          <Tooltip content={`Conversation with ${threadCount} messages`}>
+            <span className="threadCount">
+              <span className="threadIcon">💬</span>
+              {threadCount}
+            </span>
+          </Tooltip>
         )}
         <span className="emailDate">{formatDate(gmailDate)}</span>
       </div>
@@ -140,11 +140,11 @@ export const EmailRow = ({ message, threadCount, onOpen, onArchive, onDelete, on
         {message.ctaPrepared && message.ctaSuggestion && (
           <div className="ctaSection">
             {/* Main suggested action button */}
+            <Tooltip content={`AI suggests: ${message.ctaSuggestion.rationale} (${Math.round(message.ctaSuggestion.confidence * 100)}% confidence)`} size="large">
             <button
               className={`ctaButton ${getActionButtonClass(message.ctaSuggestion.action)}`}
               onClick={handleSuggestedAction}
               disabled={isProcessing}
-              title={`AI suggests: ${message.ctaSuggestion.rationale} (${Math.round(message.ctaSuggestion.confidence * 100)}% confidence)`}
             >
               {getActionIcon(message.ctaSuggestion.action)}
               {message.ctaSuggestion.action.charAt(0).toUpperCase() + message.ctaSuggestion.action.slice(1)}
@@ -152,6 +152,7 @@ export const EmailRow = ({ message, threadCount, onOpen, onArchive, onDelete, on
                 ({Math.round(message.ctaSuggestion.confidence * 100)}%)
               </span>
             </button>
+            </Tooltip>
 
             {/* Dropdown for other actions */}
             <div className="ctaDropdown">
@@ -179,16 +180,20 @@ export const EmailRow = ({ message, threadCount, onOpen, onArchive, onDelete, on
             </div>
 
             {/* Tooltip with rationale */}
-            <div className="tooltip">
+            <Tooltip
+              size="large"
+              content={(
+                <>
+                  <strong>AI Suggestion:</strong> {message.ctaSuggestion.rationale}
+                  <br />
+                  <strong>Confidence:</strong> {Math.round(message.ctaSuggestion.confidence * 100)}%
+                  <br />
+                  <strong>Model:</strong> {message.ctaSuggestion.model}
+                </>
+              )}
+            >
               <span>ℹ️</span>
-              <div className="tooltipContent">
-                <strong>AI Suggestion:</strong> {message.ctaSuggestion.rationale}
-                <br />
-                <strong>Confidence:</strong> {Math.round(message.ctaSuggestion.confidence * 100)}%
-                <br />
-                <strong>Model:</strong> {message.ctaSuggestion.model}
-              </div>
-            </div>
+            </Tooltip>
           </div>
         )}
 

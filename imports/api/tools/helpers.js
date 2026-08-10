@@ -1,5 +1,7 @@
 // Pure helpers for tools. No Meteor imports here.
 
+import { OPEN_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
+
 export const buildTasksSelector = (search = {}) => {
   const selector = {};
   if (search && typeof search.projectId === 'string' && search.projectId.trim()) selector.projectId = search.projectId.trim();
@@ -334,7 +336,7 @@ export const COMMON_QUERIES = {
   tasksWithDeadline: {
     where: {
       and: [
-        { status: { in: ['todo', 'in_progress'] } },
+        { status: { in: OPEN_TASK_STATUSES } },
         { deadline: { ne: null } }
       ]
     },
@@ -386,10 +388,17 @@ export const COMMON_QUERIES = {
     }
   },
 
-  // Active tasks (todo or in_progress)
+  // Active tasks (todo, in_progress or testing)
   activeTasks: {
     where: {
-      status: { in: ['todo', 'in_progress'] }
+      status: { in: OPEN_TASK_STATUSES }
+    }
+  },
+
+  // Tasks waiting for validation
+  testingTasks: {
+    where: {
+      status: { eq: 'testing' }
     }
   },
 

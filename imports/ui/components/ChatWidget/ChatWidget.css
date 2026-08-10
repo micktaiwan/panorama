@@ -40,15 +40,21 @@
 }
 
 /* Resize handle for docked mode */
-.ChatWidget__resizeHandle {
+/* The tooltip wrapper is the flow element, so it carries the overlay placement
+   and the handle inside it fills it. */
+.ChatWidget__resizeHandleTip {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
   width: 6px;
+  z-index: 10;
+}
+.ChatWidget__resizeHandle {
+  width: 100%;
+  height: 100%;
   cursor: ew-resize;
   background: transparent;
-  z-index: 10;
   transition: background 0.15s;
 }
 .ChatWidget__resizeHandle:hover,

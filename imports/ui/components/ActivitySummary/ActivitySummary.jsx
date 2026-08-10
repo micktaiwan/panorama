@@ -8,6 +8,13 @@ import './ActivitySummary.css';
 const EMPTY_OBJECT = {};
 const EMPTY_ARRAY = [];
 
+const SECTION_TITLES = {
+  project_created: 'Projects created',
+  task_done: 'Tasks completed',
+  task_deleted: 'Tasks deleted',
+  note_created: 'Notes added'
+};
+
 export const ActivitySummary = ({
   projectFilters = EMPTY_OBJECT,
   windowKey: initialWindowKey = '24h',
@@ -25,6 +32,7 @@ export const ActivitySummary = ({
 
     if (e.type === 'project_created') return `New project: ${e.title}${e.createdBy ? ` (by ${e.createdBy})` : ''}`;
     if (e.type === 'task_done') return `Task done: ${e.title}${projectSuffix}`;
+    if (e.type === 'task_deleted') return `Task deleted: ${e.title}${projectSuffix}`;
     if (e.type === 'note_created') return `Note added: ${e.title}${projectSuffix}`;
     return e.title || '';
   };
@@ -64,10 +72,10 @@ export const ActivitySummary = ({
         {!rp.loading && (rp.data?.events || []).length === 0 ? (
           <div className="muted">No activity in this window.</div>
         ) : null}
-        {['project_created', 'task_done', 'note_created'].filter(s => !excludeTypes.includes(s)).map(section => (
+        {['project_created', 'task_done', 'task_deleted', 'note_created'].filter(s => !excludeTypes.includes(s)).map(section => (
           <div key={section} className="activitySummarySection">
             <h3>
-              {section === 'project_created' ? 'Projects created' : section === 'task_done' ? 'Tasks completed' : 'Notes added'}
+              {SECTION_TITLES[section]}
             </h3>
             <ul className="activitySummaryList">
               {(rp.grouped[section] || []).map(e => (

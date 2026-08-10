@@ -248,3 +248,14 @@
 /* Snoozed tasks: collapsed section under the main task list */
 .snoozedTasks { margin-top: 16px; }
 .snoozedTasks .collapsiblePanel { max-height: 320px; overflow: auto; }
+
+/* Testing: tasks waiting for validation, out of the main list */
+.testingTasks { margin-top: 16px; }
+.testingTasks .collapsiblePanel { max-height: 320px; overflow: auto; }
+
+/* Trash: deleted tasks still restorable until the purge cron runs */
+.trashedTasks { margin-top: 16px; }
+.trashedTasks .collapsiblePanel { max-height: 320px; overflow: auto; }
+.trashedTaskRow { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.trashedTaskTitle { flex: 1; min-width: 0; color: var(--muted); text-decoration: line-through; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trashedTaskMeta { color: var(--muted); font-size: 11px; white-space: nowrap; }

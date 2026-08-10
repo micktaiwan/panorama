@@ -23,17 +23,22 @@
   min-width: 0;
 }
 
+/* The tooltip wrapper is the flow element, so it carries the overlay placement
+   and the button inside it stays static. */
+.clearableInputClearTip {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 /* On a textarea the button sits at the top, not vertically centered */
-.clearableInput--multiline .clearableInputClear {
+.clearableInput--multiline .clearableInputClearTip {
   top: 8px;
   transform: none;
 }
 
 .clearableInputClear {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;

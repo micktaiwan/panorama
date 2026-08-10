@@ -50,12 +50,20 @@ Meteor.methods({
     }
 
     const projectSelector = { _id: { $in: accessibleIds }, createdAt: { $gte: since } };
-    const taskSelector = { projectId: { $in: accessibleIds }, status: 'done', statusChangedAt: { $gte: since } };
+    // Deleting a task is how work often gets closed here, so a task trashed in
+    // the window counts as activity, exactly like one marked done.
+    const taskSelector = {
+      projectId: { $in: accessibleIds },
+      $or: [
+        { status: 'done', statusChangedAt: { $gte: since } },
+        { deletedAt: { $gte: since } }
+      ]
+    };
     const noteSelector = { projectId: { $in: accessibleIds }, createdAt: { $gte: since } };
 
     const [projects, tasksDone, notes] = await Promise.all([
       ProjectsCollection.find(projectSelector, { fields: { name: 1, userId: 1, createdAt: 1 } }).fetchAsync(),
-      TasksCollection.find(taskSelector, { fields: { title: 1, projectId: 1, statusChangedAt: 1, updatedAt: 1 } }).fetchAsync(),
+      TasksCollection.find(taskSelector, { fields: { title: 1, projectId: 1, statusChangedAt: 1, updatedAt: 1, deletedAt: 1 } }).fetchAsync(),
       NotesCollection.find(noteSelector, { fields: { title: 1, projectId: 1, createdAt: 1 } }).fetchAsync()
     ]);
 
@@ -82,11 +90,11 @@ Meteor.methods({
     }
     for (const t of tasksDone) {
       events.push({
-        type: 'task_done',
+        type: t.deletedAt ? 'task_deleted' : 'task_done',
         id: t._id,
         projectId: t.projectId || null,
         title: t.title || '(untitled task)',
-        when: t.statusChangedAt || t.updatedAt || new Date()
+        when: t.deletedAt || t.statusChangedAt || t.updatedAt || new Date()
       });
     }
     for (const n of notes) {

@@ -36,6 +36,8 @@
 .noteRowTitle {
   font-weight: 500;
 }
+/* The tooltip wrapper is the flex item now, so the preview keeps its width */
+.noteTitleArea > .tooltipTrigger { display: block; min-width: 0; }
 .notePreview {
   color: var(--muted-2);
   overflow: hidden;

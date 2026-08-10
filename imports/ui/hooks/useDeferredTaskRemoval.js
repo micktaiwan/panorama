@@ -8,8 +8,10 @@ const STORAGE_KEY = 'panorama.pendingTaskRemovals';
 
 /**
  * Deferred task deletion with an Undo toast.
- * The task is hidden immediately; the actual server removal (`tasks.remove`)
- * fires after UNDO_WINDOW_MS unless the user clicks Undo.
+ * The task is hidden immediately; the call to `tasks.remove` fires after
+ * UNDO_WINDOW_MS unless the user clicks Undo. Past that window the task is
+ * still recoverable server-side: `tasks.remove` only moves it to the trash,
+ * which a cron purges after 7 days (imports/api/tasks/collections.js).
  *
  * State lives at module level, not in the component, for two reasons:
  *  - navigating away and back must not un-hide a task whose removal is still
@@ -125,7 +127,7 @@ const requestRemoveTask = (taskId) => {
   timers.set(taskId, timer);
 
   notify({
-    message: 'Task deleted',
+    message: 'Task deleted — kept in the trash for 7 days',
     kind: 'info',
     durationMs: UNDO_WINDOW_MS,
     action: { label: 'Undo', onClick: () => cancelRemoval(taskId) },

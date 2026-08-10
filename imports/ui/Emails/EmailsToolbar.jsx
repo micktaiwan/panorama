@@ -1,4 +1,5 @@
 import React from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import PropTypes from 'prop-types';
 import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
 
@@ -41,36 +42,40 @@ export const EmailsToolbar = ({
           <span>Search via Gmail API</span>
         </label>
       </div>
-      <button 
-        className="btn" 
-        onClick={onRefresh}
-        disabled={isRefreshing}
-        title="Refresh emails"
-      >
-        {isRefreshing ? '⏳ Refreshing...' : '↻ Refresh'}
-      </button>
-      <button 
-        className="btn" 
-        onClick={onSyncLabels}
-        disabled={isSyncingLabels}
-        title="Synchronize labels with Gmail"
-      >
-        {isSyncingLabels ? '⏳ Syncing...' : '🏷️ Sync Labels'}
-      </button>
-      <button 
-        className="btn" 
-        onClick={onToggleApiStats}
-        title="Toggle API statistics"
-      >
-        📊 API Stats
-      </button>
-      <button 
-        className="btn btn-primary" 
-        onClick={onNavigateToInboxZero}
-        title="Open Inbox Zero mode"
-      >
-        🎯 Inbox Zero
-      </button>
+      <Tooltip content="Refresh emails">
+        <button
+          className="btn"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? '⏳ Refreshing...' : '↻ Refresh'}
+        </button>
+      </Tooltip>
+      <Tooltip content="Synchronize labels with Gmail">
+        <button
+          className="btn"
+          onClick={onSyncLabels}
+          disabled={isSyncingLabels}
+        >
+          {isSyncingLabels ? '⏳ Syncing...' : '🏷️ Sync Labels'}
+        </button>
+      </Tooltip>
+      <Tooltip content="Toggle API statistics">
+        <button
+          className="btn"
+          onClick={onToggleApiStats}
+        >
+          📊 API Stats
+        </button>
+      </Tooltip>
+      <Tooltip content="Open Inbox Zero mode">
+        <button
+          className="btn btn-primary"
+          onClick={onNavigateToInboxZero}
+        >
+          🎯 Inbox Zero
+        </button>
+      </Tooltip>
     </div>
   );
 };

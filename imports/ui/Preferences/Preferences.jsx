@@ -4,6 +4,7 @@ import { useSubscribe, useFind, useTracker } from 'meteor/react-meteor-data';
 import { AppPreferencesCollection } from '../../api/appPreferences/collections';
 import { UserPreferencesCollection } from '../../api/userPreferences/collections';
 import { navigateTo } from '../router.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './Preferences.css';
 
 import { PrefsSecrets } from './PrefsSecrets.jsx';
@@ -59,7 +60,11 @@ export const Preferences = ({ tab }) => {
                 }}
               >
                 {t.label}
-                {t.adminOnly && <span className="prefsAdminBadge" title="Admin only">⛨</span>}
+                {t.adminOnly && (
+                  <Tooltip content="Admin only">
+                    <span className="prefsAdminBadge">⛨</span>
+                  </Tooltip>
+                )}
               </a>
             </li>
           ))}

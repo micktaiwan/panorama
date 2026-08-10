@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './Link.css';
 
 export const LinkItem = ({ link, startEditing = false, hoverActions = false }) => {
@@ -27,25 +28,34 @@ export const LinkItem = ({ link, startEditing = false, hoverActions = false }) =
               onSubmit={(next) => { if (link._id) Meteor.call('links.update', link._id, { url: next }); }}
             />
             <span className="linkActions">
-              <button className="iconButton" title="Done" onClick={() => setIsEditing(false)}>✓</button>
-              <button className="iconButton" title="Delete" onClick={() => setConfirmOpen(true)}>🗑</button>
+              <Tooltip content="Done">
+                <button className="iconButton" aria-label="Done" onClick={() => setIsEditing(false)}>✓</button>
+              </Tooltip>
+              <Tooltip content="Delete">
+                <button className="iconButton" aria-label="Delete" onClick={() => setConfirmOpen(true)}>🗑</button>
+              </Tooltip>
             </span>
           </>
         ) : (
           <>
-            <a
-              className="linkAnchor"
-              href={link.url || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => { if (link._id) Meteor.call('links.registerClick', link._id); }}
-              title={urlVal}
-            >
-              {nameVal || urlVal || '(link)'}
-            </a>
+            <Tooltip content={urlVal}>
+              <a
+                className="linkAnchor"
+                href={link.url || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => { if (link._id) Meteor.call('links.registerClick', link._id); }}
+              >
+                {nameVal || urlVal || '(link)'}
+              </a>
+            </Tooltip>
             <span className="linkActions">
-              <button className="iconButton" title="Edit" onClick={() => setIsEditing(true)}>✎</button>
-              <button className="iconButton" title="Delete" onClick={() => setConfirmOpen(true)}>🗑</button>
+              <Tooltip content="Edit">
+                <button className="iconButton" aria-label="Edit" onClick={() => setIsEditing(true)}>✎</button>
+              </Tooltip>
+              <Tooltip content="Delete">
+                <button className="iconButton" aria-label="Delete" onClick={() => setConfirmOpen(true)}>🗑</button>
+              </Tooltip>
             </span>
           </>
         )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { ProseMirrorEditor } from '/imports/ui/Notes/components/ProseMirrorEditor/ProseMirrorEditor.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './DiskFileEditor.css';
 
 const basename = (filePath) => {
@@ -129,7 +130,9 @@ export const DiskFileEditor = ({ filePath, onClose, onDirtyChange }) => {
         <div className="disk-file-editor-title">
           <span className="disk-file-editor-badge">F</span>
           <span className="disk-file-editor-name">{basename(filePath)}</span>
-          <span className="disk-file-editor-path" title={filePath}>{shortenPath(filePath)}</span>
+          <Tooltip content={filePath}>
+            <span className="disk-file-editor-path">{shortenPath(filePath)}</span>
+          </Tooltip>
           {dirty && <span className="disk-file-editor-dirty">unsaved</span>}
         </div>
         <div className="disk-file-editor-actions">

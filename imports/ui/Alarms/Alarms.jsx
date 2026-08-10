@@ -3,6 +3,7 @@ import { useTracker } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { AlarmsCollection } from '/imports/api/alarms/collections';
 import { timeUntilPrecise, formatCompactDateTime } from '/imports/ui/utils/date.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './Alarms.css';
 
 export const Alarms = () => {
@@ -161,11 +162,11 @@ export const Alarms = () => {
         <tbody>
           {alarms.map(a => (
             <tr key={a._id} className={(a.done || !a.enabled) ? 'rowDone' : ''}>
-              <td className="colTitle" title={a.title}>
+              <td className="colTitle">
                 {editingId === a._id ? (
                   <input className="afInput afTitle" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                 ) : (
-                  a.title
+                  <Tooltip content={a.title} className="tooltipTriggerBlock">{a.title}</Tooltip>
                 )}
               </td>
               <td className="colNext">

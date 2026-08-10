@@ -7,11 +7,12 @@ import './Eisenhower.css';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { TaskRow } from '/imports/ui/components/TaskRow/TaskRow.jsx';
 import { deadlineSeverity } from '/imports/ui/utils/date.js';
+import { taskStatusRank, CLOSED_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
 
 export const Eisenhower = () => {
   useSubscribe('tasks');
   useSubscribe('projects');
-  const tasks = useFind(() => TasksCollection.find({}, { fields: { isUrgent: 1, isImportant: 1, status: 1, title: 1, projectId: 1, deadline: 1, createdAt: 1 } }));
+  const tasks = useFind(() => TasksCollection.find({ deletedAt: { $exists: false } }, { fields: { isUrgent: 1, isImportant: 1, status: 1, title: 1, projectId: 1, deadline: 1, createdAt: 1 } }));
   const projects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1, isFavorite: 1, favoriteRank: 1 } }));
   const projectById = React.useMemo(() => {
     const acc = {};
@@ -20,7 +21,7 @@ export const Eisenhower = () => {
   }, [projects]);
 
   const [projFilters, setProjFilters] = React.useState({});
-  const openTasks = tasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo')).filter(t => {
+  const openTasks = tasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo')).filter(t => {
     const pid = t.projectId || '';
     const state = projFilters[pid];
     if (state === -1) return false; // excluded
@@ -32,7 +33,7 @@ export const Eisenhower = () => {
   // Sort open tasks: deadline asc (nulls last), in_progress first, createdAt asc
   const sortedOpenTasks = React.useMemo(() => {
     const toTime = (d) => d ? new Date(d).getTime() : Number.POSITIVE_INFINITY;
-    const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
+    const statusRank = taskStatusRank;
     return [...openTasks].sort((a, b) => {
       const ad = toTime(a.deadline); const bd = toTime(b.deadline);
       if (ad !== bd) return ad - bd;

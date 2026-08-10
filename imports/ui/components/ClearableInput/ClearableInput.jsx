@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './ClearableInput.css';
 
 /**
@@ -49,18 +50,19 @@ export const ClearableInput = ({
         {...fieldProps}
       />
       {hasValue ? (
-        <button
-          type="button"
-          className="clearableInputClear"
-          aria-label={clearLabel}
-          title={clearLabel}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={handleClear}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-          </svg>
-        </button>
+        <Tooltip content={clearLabel} className="clearableInputClearTip">
+          <button
+            type="button"
+            className="clearableInputClear"
+            aria-label={clearLabel}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleClear}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </Tooltip>
       ) : null}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import { Meteor } from 'meteor/meteor';
 import { useTracker } from 'meteor/react-meteor-data';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
@@ -123,8 +124,8 @@ export const AdminUsers = () => {
               <tr key={u._id}>
                 <td>{u.name}</td>
                 <td>{u.email}</td>
-                <td title={formatDateTime(u.createdAt)}>{timeAgo(u.createdAt) || '-'}</td>
-                <td title={formatDateTime(u.lastLoginAt)}>{timeAgo(u.lastLoginAt) || '-'}</td>
+                <td><Tooltip content={formatDateTime(u.createdAt)}>{timeAgo(u.createdAt) || '-'}</Tooltip></td>
+                <td><Tooltip content={formatDateTime(u.lastLoginAt)}>{timeAgo(u.lastLoginAt) || '-'}</Tooltip></td>
                 <td>
                   <input
                     type="checkbox"

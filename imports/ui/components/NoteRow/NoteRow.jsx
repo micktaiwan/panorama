@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { formatDateTime } from '/imports/ui/utils/date.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './NoteRow.css';
 
 const EMPTY_ARRAY = [];
@@ -35,20 +36,22 @@ export const NoteRow = ({
           if (allowProjectChange) {
             const options = Array.isArray(projectOptions) ? projectOptions : [];
             return (
-              <select
-                className="noteProjectLink"
-                value={note.projectId || ''}
-                onChange={(e) => {
-                  const val = e.target.value || null;
-                  if (typeof onMoveProject === 'function') onMoveProject(val);
-                }}
-                title="Move to project"
-              >
-                <option value="">(no project)</option>
-                {options.map((o) => (
-                  <option key={o?.value || '__none__'} value={o?.value || ''}>{o?.label || ''}</option>
-                ))}
-              </select>
+              <Tooltip content="Move to project">
+                <select
+                  className="noteProjectLink"
+                  value={note.projectId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    if (typeof onMoveProject === 'function') onMoveProject(val);
+                  }}
+                  aria-label="Move to project"
+                >
+                  <option value="">(no project)</option>
+                  {options.map((o) => (
+                    <option key={o?.value || '__none__'} value={o?.value || ''}>{o?.label || ''}</option>
+                  ))}
+                </select>
+              </Tooltip>
             );
           }
           if (projectHref) {
@@ -75,14 +78,18 @@ export const NoteRow = ({
             onSubmit={(next) => { onUpdateTitle?.(String(next || '').trim()); }}
           />
           {note.content ? (
-            <div className="notePreview" title={note.content}>{note.content}</div>
+            <Tooltip content={note.content} size="large">
+              <div className="notePreview">{note.content}</div>
+            </Tooltip>
           ) : null}
         </div>
       </div>
       <div className="noteRight">
         <div className="noteMeta">{formatDateTime(note?.createdAt)}</div>
         {showDelete ? (
-          <button className="iconButton" title="Delete note" onClick={() => onRemove?.()}>🗑</button>
+          <Tooltip content="Delete note">
+            <button className="iconButton" aria-label="Delete note" onClick={() => onRemove?.()}>🗑</button>
+          </Tooltip>
         ) : null}
       </div>
     </Container>

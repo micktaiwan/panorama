@@ -1,8 +1,9 @@
 import { Meteor } from 'meteor/meteor';
 import { check, Match } from 'meteor/check';
-import { TasksCollection } from './collections';
+import { TasksCollection, NOT_DELETED } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { taskStatusRank, CLOSED_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
 
 // Normalize short text fields
 // Normalize free-text tags: array of non-empty trimmed strings, deduped
@@ -70,7 +71,8 @@ Meteor.methods({
       const openSelector = {
         projectId,
         userId: this.userId,
-        $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ]
+        ...NOT_DELETED,
+        $or: [ { status: { $exists: false } }, { status: { $nin: CLOSED_TASK_STATUSES } } ]
       };
       // Shift all open tasks down by 1 in a single multi-update, then insert at rank 0
       await TasksCollection.updateAsync(openSelector, { $inc: { priorityRank: 1 } }, { multi: true });
@@ -131,6 +133,7 @@ Meteor.methods({
     ensureLoggedIn(this.userId);
     const task = await TasksCollection.findOneAsync(taskId);
     if (!task) throw new Meteor.Error('not-found', 'Task not found');
+    if (task.deletedAt) throw new Meteor.Error('task-deleted', 'This task is in the trash. Restore it first.');
     if (task.projectId) {
       await ensureProjectAccess(task.projectId, this.userId);
     } else if (task.userId !== this.userId) {
@@ -206,6 +209,8 @@ Meteor.methods({
     return TasksCollection.updateAsync(taskId, modifier);
   },
   // Removed legacy setDone/unsetDone methods
+  // Soft delete: the task leaves every list right away but stays in the
+  // database for TRASH_RETENTION_DAYS. The cron purge does the real removal.
   async 'tasks.remove'(taskId) {
     check(taskId, String);
     ensureLoggedIn(this.userId);
@@ -216,11 +221,47 @@ Meteor.methods({
     } else if (task.userId !== this.userId) {
       throw new Meteor.Error('not-found', 'Task not found');
     }
-    const res = await TasksCollection.removeAsync(taskId);
+    if (task.deletedAt) return 0; // already in the trash, nothing to do
+    const res = await TasksCollection.updateAsync(taskId, {
+      $set: { deletedAt: new Date(), deletedBy: this.userId, updatedAt: new Date() }
+    });
+    // Drop it from semantic search immediately: a trashed task must not surface
+    // in results. tasks.restore re-indexes it.
     try { const { deleteDoc } = await import('/imports/api/search/vectorStore.js'); await deleteDoc('task', taskId); } catch (e) { console.error('[search][tasks.remove] delete failed', e); }
     if (task && task.projectId) {
       await ProjectsCollection.updateAsync(task.projectId, { $set: { updatedAt: new Date() } });
     }
+    return res;
+  },
+  // Pull a task back out of the trash (before the cron purge removed it).
+  async 'tasks.restore'(taskId) {
+    check(taskId, String);
+    ensureLoggedIn(this.userId);
+    const task = await TasksCollection.findOneAsync(taskId);
+    if (!task) throw new Meteor.Error('not-found', 'Task not found');
+    if (task.projectId) {
+      await ensureProjectAccess(task.projectId, this.userId);
+    } else if (task.userId !== this.userId) {
+      throw new Meteor.Error('not-found', 'Task not found');
+    }
+    if (!task.deletedAt) return 0;
+    const res = await TasksCollection.updateAsync(taskId, {
+      $set: { updatedAt: new Date() },
+      $unset: { deletedAt: 1, deletedBy: 1 }
+    });
+    let vectorError;
+    try {
+      const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
+      const text = `${task.title || ''} ${task.notes || ''} ${(task.tags || []).join(' ')}`.trim();
+      await upsertDoc({ kind: 'task', id: taskId, text, projectId: task.projectId || null, userId: task.userId });
+    } catch (e) {
+      console.error('[search][tasks.restore] upsert failed', e);
+      vectorError = e instanceof Meteor.Error ? e : new Meteor.Error('vectorization-failed', 'Search indexing failed, but your task was restored.');
+    }
+    if (task.projectId) {
+      await ProjectsCollection.updateAsync(task.projectId, { $set: { updatedAt: new Date() } });
+    }
+    if (vectorError) throw vectorError;
     return res;
   },
   async 'tasks.promoteToTop'(taskId) {
@@ -237,15 +278,16 @@ Meteor.methods({
     // Get all open tasks for THIS USER sorted by current priorityRank
     const globalOpenSelector = {
       userId: this.userId,
-      $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ]
+      ...NOT_DELETED,
+      $or: [ { status: { $exists: false } }, { status: { $nin: CLOSED_TASK_STATUSES } } ]
     };
     
     const allOpenTasks = await TasksCollection.find(globalOpenSelector).fetchAsync();
     
     // Sort using the original logic: deadline -> status -> priorityRank -> createdAt
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
-    const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
-    
+    const statusRank = taskStatusRank;
+
     allOpenTasks.sort((a, b) => {
       const ad = toTime(a.deadline);
       const bd = toTime(b.deadline);

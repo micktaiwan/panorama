@@ -11,6 +11,7 @@ import { AskAiSidebar } from './AskAiSidebar/AskAiSidebar.jsx';
 import { NoteToc } from './NoteToc/NoteToc.jsx';
 import { NoteAIActions } from './NoteAIActions/NoteAIActions.jsx';
 import { useNoteAI } from '../hooks/useNoteAI.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './NoteEditor.css';
 
 const EMPTY_ARRAY = [];
@@ -162,13 +163,14 @@ export const NoteEditor = forwardRef(({
 
           <div className="notes-actions-right">
             {activeNote?.claudeProjectId && (
-              <button
-                className="action-button claude-project-button"
-                onClick={() => navigateTo({ name: 'claude', projectId: activeNote.claudeProjectId })}
-                title="Open Claude Code project"
-              >
-                Claude Code
-              </button>
+              <Tooltip content="Open Claude Code project">
+                <button
+                  className="action-button claude-project-button"
+                  onClick={() => navigateTo({ name: 'claude', projectId: activeNote.claudeProjectId })}
+                >
+                  Claude Code
+                </button>
+              </Tooltip>
             )}
 
             {projectOptions.length > 0 && (
@@ -183,13 +185,14 @@ export const NoteEditor = forwardRef(({
             )}
 
             {activeNote?.projectId && (
-              <button
-                className="action-button go-to-project-button"
-                onClick={() => navigateTo({ name: 'project', projectId: activeNote.projectId })}
-                title="Go to project"
-              >
-                Go to project
-              </button>
+              <Tooltip content="Go to project">
+                <button
+                  className="action-button go-to-project-button"
+                  onClick={() => navigateTo({ name: 'project', projectId: activeNote.projectId })}
+                >
+                  Go to project
+                </button>
+              </Tooltip>
             )}
 
             {!isLockedByOther && (
@@ -205,14 +208,15 @@ export const NoteEditor = forwardRef(({
               />
             )}
 
-            <button
-              className="action-button duplicate-button"
-              onClick={handleDuplicateNote}
-              disabled={!activeTabId}
-              title="Duplicate note"
-            >
-              Duplicate
-            </button>
+            <Tooltip content="Duplicate note">
+              <button
+                className="action-button duplicate-button"
+                onClick={handleDuplicateNote}
+                disabled={!activeTabId}
+              >
+                Duplicate
+              </button>
+            </Tooltip>
           </div>
         </div>
 

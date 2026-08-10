@@ -1,6 +1,6 @@
 import TurndownService from 'turndown';
 
-// Instance singleton configurée
+// Configured singleton instance
 const turndown = new TurndownService({
   headingStyle: 'atx',        // # style headings
   bulletListMarker: '-',      // - for lists

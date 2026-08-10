@@ -7,6 +7,7 @@ import { InlineDate } from '/imports/ui/InlineDate/InlineDate.jsx';
 import { formatDate, formatDateTime, deadlineSeverity, SNOOZE_PRESETS, snoozeDateFor, isSnoozed } from '/imports/ui/utils/date.js';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { TASK_STATUS_OPTIONS } from '/imports/api/_shared/taskStatus';
 import './TaskRow.css';
 
 const EMPTY_ARRAY = [];
@@ -278,7 +279,7 @@ export const TaskRow = ({
   ) : null;
 
   return (
-    <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}${assignedToMe ? ' assignedToMe' : ''}${snoozed ? ' snoozedRow' : ''}`} style={containerStyle}>
+    <Container className={`taskRowC${status === 'in_progress' ? ' inProgress' : ''}${status === 'testing' ? ' testing' : ''}${showProject ? ' withProject' : ''}${textSize === 'small' ? ' smallText' : ''}${inlineActions ? ' inlineActions' : ''}${assignedToMe ? ' assignedToMe' : ''}${snoozed ? ' snoozedRow' : ''}`} style={containerStyle}>
       <div className="taskLeft">
         {assigneeEl}
         {showMarkDone ? (
@@ -327,13 +328,7 @@ export const TaskRow = ({
             <InlineEditable
               as="select"
               value={status}
-              options={[
-                { value: 'todo', label: 'to do' },
-                { value: 'in_progress', label: 'in progress' },
-                { value: 'done', label: 'done' },
-                { value: 'cancelled', label: 'cancelled' },
-                { value: 'idea', label: 'idea' }
-              ]}
+              options={TASK_STATUS_OPTIONS}
               onSubmit={(next) => { if (typeof onUpdateStatus === 'function') onUpdateStatus(next); }}
             />
           </span>

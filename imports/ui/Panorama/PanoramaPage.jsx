@@ -6,6 +6,7 @@ import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { formatDate } from '/imports/ui/utils/date.js';
 import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './PanoramaPage.css';
 
 // Utility functions to reduce code duplication
@@ -106,7 +107,9 @@ const ProjectCardItem = ({ p, index, sortMode, onSetData }) => {
       <div className="header">
         <div className="title">
           {sortMode === 'custom' ? (
-            <span className="dragHandle" title="Drag to reorder" {...attributes} {...listeners}>⠿</span>
+            <Tooltip content="Drag to reorder">
+              <span className="dragHandle" {...attributes} {...listeners}>⠿</span>
+            </Tooltip>
           ) : null}
           <button
             type="button"
@@ -117,17 +120,18 @@ const ProjectCardItem = ({ p, index, sortMode, onSetData }) => {
           </button>
         </div>
         <div className="badges">
+          <Tooltip content={
+            status === 'red' ? 'Important — click for Orange' :
+            status === 'orange' ? 'Attention — click for Green' :
+            status === 'green' ? 'All good — click to clear' :
+            'No status — click for Red'
+          }>
           <button
             type="button"
             className={`statusDot${status ? ` s-${status}` : ''}`}
-            title={
-              status === 'red' ? 'Important — click for Orange' :
-              status === 'orange' ? 'Attention — click for Green' :
-              status === 'green' ? 'All good — click to clear' :
-              'No status — click for Red'
-            }
             onClick={cycleStatus}
           />
+          </Tooltip>
           {!!p?.tasks?.overdue && <span className="chip danger">{p.tasks.overdue} overdue</span>}
           {p.isInactive && <span className="chip idle">Inactive</span>}
         </div>
@@ -310,7 +314,8 @@ export const PanoramaPage = () => {
         <div className="toolbarSep" />
 
         <div className="toolbarGroup">
-          <select className="select" value={sortMode} onChange={(e) => setSortMode(e.target.value)} title="Sort projects">
+          <Tooltip content="Sort projects">
+          <select className="select" value={sortMode} onChange={(e) => setSortMode(e.target.value)} aria-label="Sort projects">
             <option value="custom">Custom</option>
             <option value="createdAtAsc">Created &#8593;</option>
             <option value="createdAtDesc">Created &#8595;</option>
@@ -319,6 +324,7 @@ export const PanoramaPage = () => {
             <option value="heatDesc">Heat &#8595;</option>
             <option value="healthDesc">Health &#8595;</option>
           </select>
+          </Tooltip>
         </div>
 
         <div className="pillGroup" role="radiogroup" aria-label="Activity filter">

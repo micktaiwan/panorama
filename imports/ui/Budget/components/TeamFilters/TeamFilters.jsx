@@ -1,4 +1,5 @@
 import React from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './TeamFilters.css';
 
 // Tri-state team filters: 1 include, -1 exclude, undefined neutral
@@ -39,14 +40,14 @@ export const TeamFilters = ({ teams = ['lemapp','sre','data','pony','cto'], stor
         const state = filters[key];
         const cls = state === 1 ? ' include' : state === -1 ? ' exclude' : '';
         return (
-          <button
-            key={key}
-            className={`teamChip${cls}`}
-            onClick={() => toggle(key)}
-            title={`${key.toUpperCase()} — ${state === 1 ? 'Included' : state === -1 ? 'Excluded' : 'Neutral'}`}
-          >
-            {key.toUpperCase()}
-          </button>
+          <Tooltip key={key} content={`${key.toUpperCase()} — ${state === 1 ? 'Included' : state === -1 ? 'Excluded' : 'Neutral'}`}>
+            <button
+              className={`teamChip${cls}`}
+              onClick={() => toggle(key)}
+            >
+              {key.toUpperCase()}
+            </button>
+          </Tooltip>
         );
       })}
     </div>

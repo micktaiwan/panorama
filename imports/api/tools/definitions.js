@@ -1,5 +1,9 @@
 // Tool definitions in OpenAI function calling format
 // Used by both Chat (Claude SDK) and MCP server
+import { TASK_STATUSES } from '/imports/api/_shared/taskStatus';
+
+const TASK_STATUS_LIST = TASK_STATUSES.join(', ');
+
 export const TOOL_DEFINITIONS = [
   {
     type: 'function',
@@ -33,7 +37,7 @@ export const TOOL_DEFINITIONS = [
       additionalProperties: false,
       properties: {
         dueBefore: { type: 'string', description: 'ISO date/time upper bound for deadline - returns tasks with deadline <= this date' },
-        status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'cancelled', 'idea'], description: 'Task status to filter (todo, in_progress, done, cancelled, idea)' },
+        status: { type: 'string', enum: TASK_STATUSES, description: `Task status to filter (${TASK_STATUS_LIST})` },
         tag: { type: 'string', description: 'Tag value to filter' },
         projectId: { type: 'string', description: 'Optional project id to scope the filter' },
         important: { type: 'boolean', description: 'Filter by importance flag (true for important tasks only)' },
@@ -93,6 +97,47 @@ export const TOOL_DEFINITIONS = [
         status: { type: 'string', description: 'New project status (optional, e.g., active, archived)' }
       },
       required: ['projectId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_projectMembers',
+    description: 'List the members of a project (userId, username, email). Use before assigning a task, since assigneeId must be a project member.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        projectId: { type: 'string', description: 'Project ID (required)' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_addProjectMember',
+    description: 'Add a user to a project by email. The user must already have a Panorama account (see tool_usersList). Only the project owner can add members. Required before a task can be assigned to that user.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        projectId: { type: 'string', description: 'Project ID (required)' },
+        email: { type: 'string', description: 'Email address of the user to add (required)' }
+      },
+      required: ['projectId', 'email']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_removeProjectMember',
+    description: 'Remove a member from a project by user id. Only the project owner can remove members, and the owner cannot be removed.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        projectId: { type: 'string', description: 'Project ID (required)' },
+        memberId: { type: 'string', description: 'User id of the member to remove (required)' }
+      },
+      required: ['projectId', 'memberId']
     }
   },
   {
@@ -256,6 +301,21 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_personContext',
+    description: 'Everything Panorama knows about one person, in a single call: their record, the tasks and notes that mention them, their emails, and the calendar events they take part in. Use when the user asks "what do we have on X", "X is contacting me", or before a meeting with someone.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        name: { type: 'string', description: 'Person name, alias or fragment of it (required unless personId is given)' },
+        personId: { type: 'string', description: 'Person id, when already known (optional)' },
+        limitPerKind: { type: 'number', description: 'Max items returned per category (default 15, max 50)' },
+        sinceDays: { type: 'number', description: 'Only look at emails and events from the last N days (default 365)' }
+      }
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_teamsList',
     description: 'List all teams in the workspace. Use when the user asks about teams, groups, or organizational structure.',
     parameters: {
@@ -342,7 +402,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_createTask',
-    description: 'Create a new task. Optionally associate with a project, set status (todo/in_progress/done/cancelled/idea), add notes, deadline, and urgency/importance flags.',
+    description: `Create a new task. Optionally associate with a project, set status (${TASK_STATUS_LIST}), add notes, deadline, and urgency/importance flags.`,
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -350,7 +410,7 @@ export const TOOL_DEFINITIONS = [
         title: { type: 'string', description: 'Task title (required)' },
         projectId: { type: 'string', description: 'Project ID to associate task with (optional)' },
         notes: { type: 'string', description: 'Task notes or description (optional)' },
-        status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'cancelled', 'idea'], description: 'Task status (default: todo)' },
+        status: { type: 'string', enum: TASK_STATUSES, description: 'Task status (default: todo). Workflow: todo -> in_progress -> testing -> done' },
         deadline: { type: 'string', description: 'Deadline as ISO date string (optional)' },
         isUrgent: { type: 'boolean', description: 'Mark as urgent (optional)' },
         isImportant: { type: 'boolean', description: 'Mark as important (optional)' },
@@ -371,7 +431,7 @@ export const TOOL_DEFINITIONS = [
         taskId: { type: 'string', description: 'Task ID (required)' },
         title: { type: 'string', description: 'New task title (optional)' },
         notes: { type: 'string', description: 'New task notes (optional)' },
-        status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'cancelled', 'idea'], description: 'New status - use "done" to mark as completed (optional)' },
+        status: { type: 'string', enum: TASK_STATUSES, description: 'New status - use "testing" while validating, "done" to mark as completed (optional)' },
         deadline: { type: 'string', description: 'New deadline as ISO date string (optional)' },
         projectId: { type: 'string', description: 'New project ID - use to move task to another project (optional)' },
         isUrgent: { type: 'boolean', description: 'Update urgency flag (optional)' },
@@ -385,7 +445,20 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_deleteTask',
-    description: 'Delete a task by ID. Use when the user wants to remove/delete a task permanently.',
+    description: 'Delete a task by ID. The task moves to the trash: it disappears from every list immediately and is permanently removed after 7 days.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (required)' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_restoreTask',
+    description: 'Restore a task from the trash (possible for 7 days after deletion, before the purge cron removes it).',
     parameters: {
       type: 'object',
       additionalProperties: false,

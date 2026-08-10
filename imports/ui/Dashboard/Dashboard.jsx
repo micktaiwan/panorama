@@ -9,11 +9,15 @@ import './Dashboard.css';
 import { formatDateTime, deadlineSeverity, isSnoozed } from '/imports/ui/utils/date.js';
 import { ProjectsOverview } from '/imports/ui/Dashboard/ProjectsOverview.jsx';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
+import { TagFilters, applyTagFilters, collectTags } from '/imports/ui/components/TagFilters/TagFilters.jsx';
 import { TaskRow } from '/imports/ui/components/TaskRow/TaskRow.jsx';
 import { NoteRow } from '/imports/ui/components/NoteRow/NoteRow.jsx';
 import { useDeferredTaskRemoval } from '/imports/ui/hooks/useDeferredTaskRemoval.js';
 import { useNow } from '/imports/ui/hooks/useNow.js';
 import { Collapsible } from '/imports/ui/components/Collapsible/Collapsible.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { notify } from '/imports/ui/utils/notify.js';
+import { taskStatusRank, CLOSED_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
 
 export const Dashboard = () => {
   
@@ -21,8 +25,11 @@ export const Dashboard = () => {
   useSubscribe('projects');
   useSubscribe('noteSessions');
   useSubscribe('notes');
-  const rawTasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ] }, { sort: { createdAt: 1 } }));
-  const allTasks = useFind(() => TasksCollection.find({}, { fields: { status: 1, deadline: 1, createdAt: 1, statusChangedAt: 1, title: 1, projectId: 1 } }));
+  useSubscribe('tasks.trashed');
+  const rawTasks = useFind(() => TasksCollection.find({ deletedAt: { $exists: false }, $or: [ { status: { $exists: false } }, { status: { $nin: CLOSED_TASK_STATUSES } } ] }, { sort: { createdAt: 1 } }));
+  const allTasks = useFind(() => TasksCollection.find({ deletedAt: { $exists: false } }, { fields: { status: 1, deadline: 1, createdAt: 1, statusChangedAt: 1, title: 1, projectId: 1 } }));
+  // Deleted tasks still around until the purge cron runs
+  const trashedTasks = useFind(() => TasksCollection.find({ deletedAt: { $exists: true } }, { sort: { deletedAt: -1 } }));
   // flags are not needed on this screen beyond status/deadline metrics
   const projects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1, colorLabel: 1, isFavorite: 1, favoriteRank: 1 } }));
   const projectsForFilter = projects; // ordering handled in ProjectFilters
@@ -46,7 +53,7 @@ export const Dashboard = () => {
 
   const tasks = useMemo(() => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
-    const statusRank = (s) => (s === 'in_progress' ? 0 : 1); // in_progress before other statuses
+    const statusRank = taskStatusRank; // in_progress, then testing, then the rest
     return [...rawTasks].sort((a, b) => {
       // First sort by priorityRank (lower rank = higher priority)
       const ar = Number.isFinite(a.priorityRank) ? a.priorityRank : Number.POSITIVE_INFINITY;
@@ -67,11 +74,11 @@ export const Dashboard = () => {
 
   const stats = useMemo(() => {
     const total = allTasks.length;
-    const open = allTasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo')).length;
+    const open = allTasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo')).length;
     const closed = total - open;
-    const withDeadline = allTasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo') && !!t.deadline).length;
+    const withDeadline = allTasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo') && !!t.deadline).length;
     // Overdue counts only open tasks due today or earlier
-    const overdue = allTasks.filter(t => !['done','cancelled','idea'].includes(t.status || 'todo') && t.deadline && deadlineSeverity(t.deadline) === 'dueNow').length;
+    const overdue = allTasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo') && t.deadline && deadlineSeverity(t.deadline) === 'dueNow').length;
     return { total, open, closed, withDeadline, overdue };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(allTasks.map(t => [(t.status || 'todo') !== 'done' ? 'o' : 'c', t.deadline ? new Date(t.deadline).toDateString() : ''].join(':')))]);
@@ -97,20 +104,31 @@ export const Dashboard = () => {
 
   // Project filters (tri-state per project: include -> 1, exclude -> -1, neutral -> 0/undefined)
   const [projFilters, setProjFilters] = useState({});
+  // Tags cut across projects: they are how a task gets grouped by context
+  // (errands, phone calls, home) rather than by project.
+  const [tagFilters, setTagFilters] = useState({});
+  const availableTags = useMemo(() => collectTags(tasks), [tasks]);
   const filteredTasks = useMemo(() => {
     const includeIds = new Set(Object.entries(projFilters).filter(([,v]) => v === 1).map(([k]) => k));
     const excludeIds = new Set(Object.entries(projFilters).filter(([,v]) => v === -1).map(([k]) => k));
-    return tasks.filter(t => {
+    const byProject = tasks.filter(t => {
       const pid = t.projectId || '';
       if (excludeIds.has(pid)) return false;
       if (includeIds.size > 0) return includeIds.has(pid);
       return true;
     });
+    return applyTagFilters(byProject, tagFilters);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, JSON.stringify(projFilters)]);
+  }, [tasks, JSON.stringify(projFilters), JSON.stringify(tagFilters)]);
 
-  // Snoozed tasks are pulled out of the main list into their own section
-  const activeTasks = useMemo(() => filteredTasks.filter(t => !isSnoozed(t, now)), [filteredTasks, now]);
+  // Snoozed tasks and tasks under validation are pulled out of the main list
+  // into their own collapsed sections
+  const activeTasks = useMemo(() => filteredTasks.filter(t => !isSnoozed(t, now) && (t.status || 'todo') !== 'testing'), [filteredTasks, now]);
+  const testingTasks = useMemo(() => (
+    filteredTasks
+      .filter(t => (t.status || 'todo') === 'testing')
+      .sort((a, b) => new Date(b.statusChangedAt || 0) - new Date(a.statusChangedAt || 0))
+  ), [filteredTasks]);
   const snoozedTasks = useMemo(() => (
     filteredTasks
       .filter(t => isSnoozed(t, now))
@@ -144,6 +162,26 @@ export const Dashboard = () => {
       localStorage.setItem('dashboard_snoozed_open', showSnoozed ? '1' : '0');
     }
   }, [showSnoozed]);
+
+  // Testing section stays collapsed unless explicitly opened
+  const [showTesting, setShowTesting] = useState(() => (
+    typeof localStorage !== 'undefined' && localStorage.getItem('dashboard_testing_open') === '1'
+  ));
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('dashboard_testing_open', showTesting ? '1' : '0');
+    }
+  }, [showTesting]);
+
+  // Trash section stays collapsed unless explicitly opened
+  const [showTrash, setShowTrash] = useState(() => (
+    typeof localStorage !== 'undefined' && localStorage.getItem('dashboard_trash_open') === '1'
+  ));
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('dashboard_trash_open', showTrash ? '1' : '0');
+    }
+  }, [showTrash]);
 
   return (
     <div className="dashboard">
@@ -221,6 +259,8 @@ export const Dashboard = () => {
       )}
       {/* Project filter chips (tri-state) */}
       <ProjectFilters projects={projectsForFilter} storageKey="dashboard_proj_filters" onChange={setProjFilters} />
+      {/* Tag filter chips (tri-state), across every project */}
+      <TagFilters tags={availableTags} storageKey="dashboard_tag_filters" onChange={setTagFilters} />
       <div className="tasksScroll scrollArea">
       <ul className="taskList">
         {activeTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
@@ -239,14 +279,51 @@ export const Dashboard = () => {
             showClearDeadline
             showDelete
             showSnooze
+            showTags
             onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
             onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
+            onUpdateTags={(next) => Meteor.call('tasks.update', t._id, { tags: next })}
             onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}
             onRemove={() => removeTask(t._id)}
           />
         ))}
       </ul>
       </div>
+      {testingTasks.filter(t => !hiddenTaskIds.has(t._id)).length > 0 && (
+        <Collapsible
+          className="testingTasks"
+          title={`Testing (${testingTasks.filter(t => !hiddenTaskIds.has(t._id)).length})`}
+          open={showTesting}
+          onToggle={setShowTesting}
+        >
+          <ul className="taskList">
+            {testingTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
+              <TaskRow
+                key={`test-${t._id}`}
+                task={t}
+                showProject={true}
+                allowProjectChange
+                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
+                onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
+                projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
+                projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
+                projectColor={(projects.find(p => p._id === t.projectId)?.colorLabel) || '#6b7280'}
+                showStatusSelect
+                showDeadline
+                showClearDeadline
+                showDelete
+                showSnooze
+                showTags
+                onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
+                onUpdateTags={(next) => Meteor.call('tasks.update', t._id, { tags: next })}
+                onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}
+                onRemove={() => removeTask(t._id)}
+              />
+            ))}
+          </ul>
+        </Collapsible>
+      )}
       {snoozedTasks.filter(t => !hiddenTaskIds.has(t._id)).length > 0 && (
         <Collapsible
           className="snoozedTasks"
@@ -280,19 +357,44 @@ export const Dashboard = () => {
           </ul>
         </Collapsible>
       )}
+      {trashedTasks.length > 0 && (
+        <Collapsible
+          className="trashedTasks"
+          title={`Trash (${trashedTasks.length}) — purged after 7 days`}
+          open={showTrash}
+          onToggle={setShowTrash}
+        >
+          <ul className="taskList">
+            {trashedTasks.map(t => (
+              <li key={`trash-${t._id}`} className="trashedTaskRow">
+                <span className="trashedTaskTitle">{t.title || '(untitled task)'}</span>
+                <span className="trashedTaskMeta">
+                  {t.projectId ? `${projectById[t.projectId] || 'project'} · ` : ''}
+                  deleted {formatDateTime(t.deletedAt)}
+                </span>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => Meteor.call('tasks.restore', t._id, (err) => {
+                    if (err) notify({ message: err.reason || 'Failed to restore task', kind: 'error' });
+                  })}
+                >Restore</button>
+              </li>
+            ))}
+          </ul>
+        </Collapsible>
+      )}
       {standaloneSessions.length > 0 && (
         <div className="standaloneSessions">
           <h2>Standalone Note Sessions ({standaloneSessions.length})</h2>
           <ul className="sessionList">
             {standaloneSessions.map(s => (
               <li key={s._id} className="sessionItem">
-                <a
-                  href={`#/sessions/${s._id}`}
-                  className="sessionTitle"
-                  title={s.name?.trim() ? s.name : '(untitled session)'}
-                >
-                  {s.name?.trim() ? s.name : '(untitled session)'}
-                </a>
+                <Tooltip content={s.name?.trim() ? s.name : '(untitled session)'}>
+                  <a href={`#/sessions/${s._id}`} className="sessionTitle">
+                    {s.name?.trim() ? s.name : '(untitled session)'}
+                  </a>
+                </Tooltip>
                 <span className="sessionMeta"> · {formatDateTime(s.createdAt)}</span>
               </li>
             ))}

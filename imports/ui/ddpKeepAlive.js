@@ -17,7 +17,7 @@ import { Meteor } from 'meteor/meteor';
 // re-runs subscriptions, so stuck saves complete instead of hanging forever.
 //
 // Ported from mystreams (imports/ui/ddpKeepAlive.js); documented in
-// self/files/vps-ovh.md ("Connexion DDP zombie après veille").
+// self/files/vps-ovh.md (section "Connexion DDP zombie après veille").
 
 const PROBE_TIMEOUT_MS = 4000;
 const MIN_INTERVAL_MS = 3000; // don't probe more than once every few seconds

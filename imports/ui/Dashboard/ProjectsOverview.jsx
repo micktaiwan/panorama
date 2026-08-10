@@ -4,6 +4,7 @@ import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { timeAgo } from '/imports/ui/utils/date.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 
 const withinDays = (date, n) => {
   if (!date) return false;
@@ -30,7 +31,7 @@ export const ProjectsOverview = () => {
       return bu - au; // fallback to recent update
     });
   }, [projectsRaw]);
-  const tasks = useFind(() => TasksCollection.find({ $or: [ { status: { $exists: false } }, { status: { $nin: ['done', 'idea'] } } ] }));
+  const tasks = useFind(() => TasksCollection.find({ deletedAt: { $exists: false }, $or: [ { status: { $exists: false } }, { status: { $nin: ['done', 'idea'] } } ] }));
 
   const byProjectOpenTasks = useMemo(() => {
     const acc = {};
@@ -87,22 +88,24 @@ export const ProjectsOverview = () => {
             return (
               <tr key={p._id}>
                 <td className="projName">
-                  <button
-                    className={`starBtn${p.isFavorite ? ' active' : ''}`}
-                    title={p.isFavorite ? 'Unfavorite project' : 'Mark as favorite'}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      const next = !p.isFavorite;
-                      const modifier = next && (typeof p.favoriteRank === 'undefined' || p.favoriteRank === null)
-                        ? { isFavorite: true, favoriteRank: Date.now() }
-                        : { isFavorite: next };
-                      Meteor.call('projects.update', p._id, modifier);
-                    }}
-                  >
-                    <svg className="starIcon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                    </svg>
-                  </button>
+                  <Tooltip content={p.isFavorite ? 'Unfavorite project' : 'Mark as favorite'}>
+                    <button
+                      className={`starBtn${p.isFavorite ? ' active' : ''}`}
+                      aria-label={p.isFavorite ? 'Unfavorite project' : 'Mark as favorite'}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const next = !p.isFavorite;
+                        const modifier = next && (typeof p.favoriteRank === 'undefined' || p.favoriteRank === null)
+                          ? { isFavorite: true, favoriteRank: Date.now() }
+                          : { isFavorite: next };
+                        Meteor.call('projects.update', p._id, modifier);
+                      }}
+                    >
+                      <svg className="starIcon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                      </svg>
+                    </button>
+                  </Tooltip>
                   <a href={`#/projects/${p._id}`}>
                     <svg className="projFlag" viewBox="0 0 16 16" aria-hidden="true">
                       <path fill={color} d="M2 2v12h2V9h5l1 1h4V3h-3l-1-1H4V2H2z" />
@@ -111,12 +114,12 @@ export const ProjectsOverview = () => {
                   </a>
                 </td>
                 <td><span className={`statusBadge ${status}`}>{p.status || 'n/a'}</span></td>
-                <td className={sev} title={p.targetDate ? new Date(p.targetDate).toLocaleString() : ''}>
+                <td className={sev}>
                   {p.targetDate ? (
-                    <>
+                    <Tooltip content={new Date(p.targetDate).toLocaleString()}>
                       {new Date(p.targetDate).toLocaleDateString()}
                       <span className="muted"> · {timeAgo(p.targetDate)}</span>
-                    </>
+                    </Tooltip>
                   ) : '—'}
                 </td>
                 <td>
@@ -125,7 +128,11 @@ export const ProjectsOverview = () => {
                   ) : '—'}
                 </td>
                 <td className="alignCenter">{open}</td>
-                <td className="alignRight" title={p.updatedAt ? new Date(p.updatedAt).toLocaleString() : ''}>{lastUpd}</td>
+                <td className="alignRight">
+                  {p.updatedAt ? (
+                    <Tooltip content={new Date(p.updatedAt).toLocaleString()}>{lastUpd}</Tooltip>
+                  ) : lastUpd}
+                </td>
               </tr>
             );
           })}

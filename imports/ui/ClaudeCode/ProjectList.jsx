@@ -11,6 +11,7 @@ import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { shortenPath } from './useHomeDir.js';
 import { AgentTeams } from './AgentTeams.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './ProjectList.css';
 
 const EMPTY_ARRAY = [];
@@ -194,11 +195,13 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
                 return (
                   <>
                     <div className="ccProjectItemTop">
-                      <button
-                        className={`ccChevron ${isExpanded ? 'ccChevronOpen' : ''}`}
-                        onClick={(e) => toggleCollapse(e, p._id)}
-                        title={isExpanded ? 'Collapse' : 'Expand'}
-                      >&#9656;</button>
+                      <Tooltip content={isExpanded ? 'Collapse' : 'Expand'}>
+                        <button
+                          className={`ccChevron ${isExpanded ? 'ccChevronOpen' : ''}`}
+                          onClick={(e) => toggleCollapse(e, p._id)}
+                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                        >&#9656;</button>
+                      </Tooltip>
                       <span className={`ccStatusDot ccStatus-${status}`} />
                       <InlineEditable
                         value={p.name}
@@ -209,11 +212,13 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
                           });
                         }}
                       />
-                      <button
-                        className="ccProjectItemRemove"
-                        onClick={(e) => handleRemoveClick(e, p._id)}
-                        title="Delete project"
-                      >&times;</button>
+                      <Tooltip content="Delete project">
+                        <button
+                          className="ccProjectItemRemove"
+                          onClick={(e) => handleRemoveClick(e, p._id)}
+                          aria-label="Delete project"
+                        >&times;</button>
+                      </Tooltip>
                     </div>
                     {p.cwd && <span className="ccProjectItemCwd muted">{shortenPath(p.cwd, homeDir)}</span>}
                     {(() => {
@@ -221,12 +226,13 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
                       return (
                         <span className="ccLinkedProject muted">
                           {linked ? (
-                            <a
-                              href={`#/projects/${linked._id}`}
-                              className="ccLinkedProjectLink"
-                              onClick={(e) => e.stopPropagation()}
-                              title={`Open project: ${linked.name || '(untitled)'}`}
-                            >{linked.name || '(untitled)'}</a>
+                            <Tooltip content={`Open project: ${linked.name || '(untitled)'}`}>
+                              <a
+                                href={`#/projects/${linked._id}`}
+                                className="ccLinkedProjectLink"
+                                onClick={(e) => e.stopPropagation()}
+                              >{linked.name || '(untitled)'}</a>
+                            </Tooltip>
                           ) : null}
                           {p._id === activeProjectId && (
                             <select
@@ -308,18 +314,18 @@ export const ProjectList = ({ activeProjectId, homeDir, activePanel, sidebarItem
                           </div>
                         ))}
                         {p._id === activeProjectId && sidebarItems.filter(id => id.startsWith('file:')).map((id) => (
-                          <div
-                            key={id}
-                            className={`ccSessionItem ccFileItem ${activeSidebarId === id ? 'ccSessionItemActive' : ''}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSidebarToggle?.(id);
-                            }}
-                            title={id.slice(5)}
-                          >
-                            <span className="ccFileIcon">F</span>
-                            <span className="ccSessionItemName">{id.slice(5).split('/').pop()}</span>
-                          </div>
+                          <Tooltip key={id} content={id.slice(5)} className="ccSessionItemTip">
+                            <div
+                              className={`ccSessionItem ccFileItem ${activeSidebarId === id ? 'ccSessionItemActive' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSidebarToggle?.(id);
+                              }}
+                            >
+                              <span className="ccFileIcon">F</span>
+                              <span className="ccSessionItemName">{id.slice(5).split('/').pop()}</span>
+                            </div>
+                          </Tooltip>
                         ))}
                       </div>
                     )}

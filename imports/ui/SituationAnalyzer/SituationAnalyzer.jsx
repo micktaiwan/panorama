@@ -9,6 +9,7 @@ import { SituationQuestionsCollection } from '/imports/api/situationQuestions/co
 import { SituationSummariesCollection } from '/imports/api/situationSummaries/collections';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
 import { PeopleCollection } from '/imports/api/people/collections';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
@@ -199,7 +200,9 @@ export const SituationAnalyzer = () => {
                   <div className="actorHeader">
                     <div className="actorInline">
                       {a.personId ? (
-                        <a href={`#/people/${a.personId}`} title="Open in People">{a.name || ''}</a>
+                        <Tooltip content="Open in People">
+                          <a href={`#/people/${a.personId}`}>{a.name || ''}</a>
+                        </Tooltip>
                       ) : (
                         <span>{a.name || ''}</span>
                       )}
@@ -214,37 +217,41 @@ export const SituationAnalyzer = () => {
                       
                     </div>
                     <div className="actorActions">
-                      <button
-                        className="addNoteBtn"
-                        aria-label="Add note"
-                        title="Add note"
-                        onClick={() => addNote(a._id)}
-                      >
-                        ＋
-                      </button>
+                      <Tooltip content="Add note">
+                        <button
+                          className="addNoteBtn"
+                          aria-label="Add note"
+                          onClick={() => addNote(a._id)}
+                        >
+                          ＋
+                        </button>
+                      </Tooltip>
                       
                       {!a.personId && (
-                        <button
-                          className="linkBtn"
-                          aria-label="Create person from actor"
-                          title="Create person from actor"
-                          onClick={() => {
-                            const parts = String(a.name || '').trim().split(/\s+/);
-                            const first = parts[0] || '';
-                            const last = parts.slice(1).join(' ');
-                            Meteor.call('people.insert', { name: first, lastName: last }, (err, pid) => {
-                              if (err || !pid) { notify({ message: 'Create person failed', kind: 'error' }); return; }
-                              Meteor.call('situationActors.update', a._id, { personId: pid }, (e2) => {
-                                if (e2) { notify({ message: 'Link failed', kind: 'error' }); return; }
-                                notify({ message: 'Person created and linked', kind: 'success' });
+                        <Tooltip content="Create person from actor">
+                          <button
+                            className="linkBtn"
+                            aria-label="Create person from actor"
+                            onClick={() => {
+                              const parts = String(a.name || '').trim().split(/\s+/);
+                              const first = parts[0] || '';
+                              const last = parts.slice(1).join(' ');
+                              Meteor.call('people.insert', { name: first, lastName: last }, (err, pid) => {
+                                if (err || !pid) { notify({ message: 'Create person failed', kind: 'error' }); return; }
+                                Meteor.call('situationActors.update', a._id, { personId: pid }, (e2) => {
+                                  if (e2) { notify({ message: 'Link failed', kind: 'error' }); return; }
+                                  notify({ message: 'Person created and linked', kind: 'success' });
+                                });
                               });
-                            });
-                          }}
-                        >
-                          🔗
-                        </button>
+                            }}
+                          >
+                            🔗
+                          </button>
+                        </Tooltip>
                       )}
-                      <button className="deleteActorBtn" aria-label="Delete actor" title="Delete actor" onClick={() => setDeleteActorId(a._id)}>×</button>
+                      <Tooltip content="Delete actor">
+                        <button className="deleteActorBtn" aria-label="Delete actor" onClick={() => setDeleteActorId(a._id)}>×</button>
+                      </Tooltip>
                     </div>
                   </div>
                 </li>
@@ -256,14 +263,15 @@ export const SituationAnalyzer = () => {
                 <li key={n._id} className="row block">
                   <div className="noteHeader">
                     {(() => { const a = actors.find(x => x._id === n.actorId); return <span className="noteActor">{a ? a.name : 'General'}</span>; })()}
-                    <button
-                      className="deleteNoteBtn"
-                      aria-label="Delete note"
-                      title="Delete note"
-                      onClick={() => setDeleteNoteId(n._id)}
-                    >
-                      ×
-                    </button>
+                    <Tooltip content="Delete note">
+                      <button
+                        className="deleteNoteBtn"
+                        aria-label="Delete note"
+                        onClick={() => setDeleteNoteId(n._id)}
+                      >
+                        ×
+                      </button>
+                    </Tooltip>
                   </div>
                   <InlineEditable
                     value={n.content || ''}
@@ -292,22 +300,23 @@ export const SituationAnalyzer = () => {
                 <div key={q._id} className="card">
                   <div className="cardHeader">
                     <span>{actor ? actor.name : '(unknown actor)'}</span>
-                    <button
-                      className="copyQuestionsBtn"
-                      aria-label="Copy questions"
-                      title="Copy questions"
-                      onClick={() => {
-                        const lines = (Array.isArray(q.questions) ? q.questions : [])
-                          .map(item => (typeof item === 'string' ? item : (item && item.q) || ''))
-                          .map(s => String(s || '').trim())
-                          .filter(Boolean)
-                          .map(s => `- ${s}`)
-                          .join('\n');
-                        if (lines) writeClipboard(lines);
-                      }}
-                    >
-                      📋
-                    </button>
+                    <Tooltip content="Copy questions">
+                      <button
+                        className="copyQuestionsBtn"
+                        aria-label="Copy questions"
+                        onClick={() => {
+                          const lines = (Array.isArray(q.questions) ? q.questions : [])
+                            .map(item => (typeof item === 'string' ? item : (item && item.q) || ''))
+                            .map(s => String(s || '').trim())
+                            .filter(Boolean)
+                            .map(s => `- ${s}`)
+                            .join('\n');
+                          if (lines) writeClipboard(lines);
+                        }}
+                      >
+                        📋
+                      </button>
+                    </Tooltip>
                   </div>
                   <div className="questionsLines">
                     {(q.questions || []).map((item, idx) => (
@@ -323,23 +332,24 @@ export const SituationAnalyzer = () => {
                             }}
                             fullWidth
                           />
-                          <button
-                            className="deleteQuestionBtn"
-                            aria-label="Delete question"
-                            title="Delete question"
-                            onClick={() => {
-                              const next = Array.isArray(q.questions) ? q.questions.slice() : [];
-                              next.splice(idx, 1);
-                              Meteor.call('situationQuestions.upsertForActor', q.situationId, q.actorId, next);
-                            }}
-                          >
-                            ×
-                          </button>
+                          <Tooltip content="Delete question">
+                            <button
+                              className="deleteQuestionBtn"
+                              aria-label="Delete question"
+                              onClick={() => {
+                                const next = Array.isArray(q.questions) ? q.questions.slice() : [];
+                                next.splice(idx, 1);
+                                Meteor.call('situationQuestions.upsertForActor', q.situationId, q.actorId, next);
+                              }}
+                            >
+                              ×
+                            </button>
+                          </Tooltip>
                         </div>
                         <div className="replyRow">
                           <InlineEditable
                             value={(typeof item === 'object' && item && item.r) ? item.r : ''}
-                            placeholder="Réponse"
+                            placeholder="Answer"
                             as="textarea"
                             rows={3}
                             onSubmit={(v) => {

@@ -515,7 +515,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
               }
               setApiDateFrom(v);
             }}
-            title="From (start_date for last updates)"
+            aria-label="From (start_date for last updates)"
           />
           <select className="budgetSelect" value={apiLimit} onChange={(e) => setApiLimit(Number(e.target.value))}>
             <option value={5}>5</option>
@@ -627,7 +627,9 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                 onChange={(e) => setApiSearchVendor(e.target.value)}
               />
               {apiSearchVendor ? (
-                <button className="btn" title="Clear" onClick={() => setApiSearchVendor('')} style={{ padding: '4px 8px' }}>×</button>
+                <Tooltip content="Clear">
+                  <button className="btn" aria-label="Clear" onClick={() => setApiSearchVendor('')} style={{ padding: '4px 8px' }}>×</button>
+                </Tooltip>
               ) : null}
             </span>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -665,9 +667,9 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                 <tr key={rowKey(r)}>
                   <td>{r.date}</td>
                   <td>
+                    <Tooltip content={`Ignore ${r.vendor}`}>
                     <button
                       className="btn"
-                      title={`Ignore ${r.vendor}`}
                       onClick={() => {
                         // Prevent multiple simultaneous ignore operations
                         if (isProcessingIgnore) return;
@@ -711,6 +713,7 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                     >
                       Ignore
                     </button>
+                    </Tooltip>
                   </td>
                   <td>
                     {r.publicFileUrl ? (
@@ -749,16 +752,17 @@ export const ImportTab = ({ fileName, rows, importing, totalPreview, onChooseFil
                   </td>
                   <td>
                     {r.publicFileUrl ? (
-                      <a
-                        className="btn mr8"
-                        href={r.publicFileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Open document"
-                        onClick={(e) => { e.stopPropagation(); }}
-                      >
-                        Open doc
-                      </a>
+                      <Tooltip content="Open document">
+                        <a
+                          className="btn mr8"
+                          href={r.publicFileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => { e.stopPropagation(); }}
+                        >
+                          Open doc
+                        </a>
+                      </Tooltip>
                     ) : null}
                     <button
                       className="btn"

@@ -7,6 +7,7 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import './CalendarPage.css';
 import { notify } from '/imports/ui/utils/notify.js';
+import { CLOSED_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
 import {
   WORK_START_HOUR,
   WORK_END_HOUR,
@@ -40,7 +41,7 @@ export const CalendarPage = () => {
   const subProjects = useSubscribe('projects');
   const projects = useFind(() => ProjectsCollection.find({}, { fields: { name: 1, isFavorite: 1, favoriteRank: 1 } }));
   // Server publishes: top 20 open unscheduled tasks and scheduled tasks within 7 days (via two subscriptions)
-  const tasks = useFind(() => TasksCollection.find({}, { fields: { title: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, projectId: 1, createdAt: 1, scheduledAt: 1, scheduledDurationMin: 1 } }));
+  const tasks = useFind(() => TasksCollection.find({ deletedAt: { $exists: false } }, { fields: { title: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, projectId: 1, createdAt: 1, scheduledAt: 1, scheduledDurationMin: 1 } }));
   const [syncing, setSyncing] = React.useState(false);
   const [showRaw, setShowRaw] = React.useState(false);
   const [editEstimateTaskId, setEditEstimateTaskId] = React.useState('');
@@ -198,7 +199,7 @@ export const CalendarPage = () => {
       .sort((a, b) => a.start - b.start);
 
     // 2) Candidate tasks (open only, and not already scheduled)
-    const openTasks = tasks.filter(t => !['done','cancelled','idea'].includes(t.status || '') && !t.scheduledAt);
+    const openTasks = tasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || '') && !t.scheduledAt);
     const DAY = 24 * 60 * 60 * 1000;
     const HOUR = 60 * 60 * 1000;
     const score = (t) => {
@@ -206,7 +207,9 @@ export const CalendarPage = () => {
       const urgentBias = t.isUrgent ? (-2 * DAY) : 0;
       const importantBias = t.isImportant ? (-12 * HOUR) : 0;
       const inProgressBias = (t.status === 'in_progress') ? (-6 * HOUR) : 0;
-      return dueMs + urgentBias + importantBias + inProgressBias;
+      // A task under validation is nearly finished: give it a small nudge too.
+      const testingBias = (t.status === 'testing') ? (-3 * HOUR) : 0;
+      return dueMs + urgentBias + importantBias + inProgressBias + testingBias;
     };
     const top = [...openTasks]
       .sort((a, b) => score(a) - score(b))

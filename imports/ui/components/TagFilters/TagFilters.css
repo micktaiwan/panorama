@@ -1,0 +1,5 @@
+.tagFilterBar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; align-items: center; }
+.tagFilterChip { background: var(--surface); border: 1px solid var(--border); color: var(--muted); padding: 4px 8px; border-radius: 0; font-size: 12px; }
+.tagFilterChip.include { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+.tagFilterChip.exclude { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+.tagFilterClear { background: transparent; border: none; color: var(--muted); font-size: 11px; text-decoration: underline; cursor: pointer; padding: 4px; }

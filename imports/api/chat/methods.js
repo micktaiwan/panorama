@@ -7,12 +7,37 @@ import { runChatAgent, isClaudeAgentAvailable } from './claudeAgent';
 import { ensureLoggedIn } from '/imports/api/_shared/auth';
 import { mcpRequestContext } from '/imports/api/mcp/server/requestContext';
 
+// Client-supplied page context is untrusted: drop anything that is not a short
+// string field, so it can never smuggle a payload into the system prompt.
+const PAGE_CONTEXT_FIELDS = [
+  'page', 'route', 'hash', 'tab',
+  'projectId', 'projectName',
+  'noteId', 'noteTitle',
+  'sessionId', 'sessionName',
+  'personId', 'personName'
+];
+
+const sanitizePageContext = (raw) => {
+  if (!raw || typeof raw !== 'object') return null;
+  const out = {};
+  for (const key of PAGE_CONTEXT_FIELDS) {
+    const value = raw[key];
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    out[key] = trimmed.slice(0, 200);
+  }
+  return Object.keys(out).length > 0 ? out : null;
+};
+
 Meteor.methods({
   async 'chat.ask'(payload) {
     ensureLoggedIn(this.userId);
     const userId = this.userId;
     const query = String(payload?.query || '').trim();
     const history = Array.isArray(payload?.history) ? payload.history : [];
+    // Page context comes from the client: keep only short scalar fields.
+    const context = sanitizePageContext(payload?.context);
 
     if (!query) {
       throw new Meteor.Error('bad-request', 'query is required');
@@ -48,6 +73,7 @@ Meteor.methods({
     try {
       // Run the Claude agent with callbacks for real-time feedback
       const { text, citations, actions } = await mcpRequestContext.run({ userId }, () => runChatAgent(query, history, {
+        context,
         // Called when tool execution starts
         onToolStart: async (tools) => {
           const toolList = tools.map(t => `${t.displayName}${t.args}`).join(', ');

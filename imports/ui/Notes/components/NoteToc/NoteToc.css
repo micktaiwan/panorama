@@ -18,6 +18,8 @@
   color: var(--muted);
 }
 
+/* The tooltip wrapper is the flow element, so the entry still spans the column */
+.note-toc-item-tip { display: block; }
 .note-toc-item {
   display: block;
   width: 100%;

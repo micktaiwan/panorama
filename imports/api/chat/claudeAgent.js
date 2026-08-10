@@ -47,10 +47,23 @@ function getToolDefinitions() {
 /**
  * Build system prompt for Claude agent
  */
-function buildSystemPrompt() {
+function buildSystemPrompt(pageContext) {
   const now = new Date();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const userContext = buildUserContextBlock();
+
+  const pageBlock = pageContext ? [
+    'CONTEXTE DE NAVIGATION (ce que l\'utilisateur a sous les yeux):',
+    `- Page: ${pageContext.page || pageContext.route || 'inconnue'}${pageContext.tab ? ` (onglet ${pageContext.tab})` : ''}`,
+    pageContext.projectId ? `- Projet ouvert: ${pageContext.projectName || '(nom inconnu)'} (id ${pageContext.projectId})` : null,
+    pageContext.noteId ? `- Note ouverte: ${pageContext.noteTitle || '(titre inconnu)'} (id ${pageContext.noteId})` : null,
+    pageContext.sessionId ? `- Session de notes ouverte: ${pageContext.sessionName || '(nom inconnu)'} (id ${pageContext.sessionId})` : null,
+    pageContext.personId ? `- Personne ouverte: ${pageContext.personName || '(nom inconnu)'} (id ${pageContext.personId})` : null,
+    '- Quand l\'utilisateur dit "ce projet", "cette note", "ici", il parle de ces éléments.',
+    '- Ces ids viennent de la page courante et sont fiables: tu peux les utiliser directement, sans passer par tool_projectByName.',
+    '- Ce contexte ne dit RIEN du contenu: pour les données, appelle quand même les outils.',
+    ''
+  ].filter(Boolean) : [];
 
   return [
     "Tu es l'assistant de Panorama, une application de gestion de projets, tâches et notes.",
@@ -58,6 +71,7 @@ function buildSystemPrompt() {
     userContext,
     `CONTEXTE TEMPOREL: Nous sommes le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (${tz}).`,
     "",
+    ...pageBlock,
     "Tu as accès à des outils pour interroger et modifier les données de l'utilisateur.",
     "Utilise les outils quand tu as besoin de récupérer ou mettre à jour des données.",
     "Sois concis dans tes réponses. Ne fabrique pas d'informations.",
@@ -284,6 +298,7 @@ function formatToolArgs(toolName, args) {
  * @param {Function} options.onToolStart - Called when tool execution starts
  * @param {Function} options.onToolEnd - Called when tool execution ends
  * @param {Function} options.onText - Called with text chunks during streaming
+ * @param {object} options.context - Page the user is currently looking at (see buildPageContext)
  * @returns {Promise<{text: string, citations: Array}>}
  */
 export async function runChatAgent(query, history = [], options = {}) {
@@ -297,7 +312,7 @@ export async function runChatAgent(query, history = [], options = {}) {
   const tools = getToolDefinitions();
   const model = options.model || DEFAULT_MODEL;
   const maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS;
-  const system = buildSystemPrompt();
+  const system = buildSystemPrompt(options.context);
   const messages = buildMessages(query, history);
 
   const { onToolStart, onToolEnd, onText } = options;

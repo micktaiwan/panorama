@@ -62,7 +62,7 @@ const collectDocs = async (userId) => {
     docs.push({ id: `${kind}:${id}`, projectId: projectId || null, kind, content, meta, userId: userId || null });
   };
   const { ProjectsCollection } = await import('/imports/api/projects/collections');
-  const { TasksCollection } = await import('/imports/api/tasks/collections');
+  const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
   const { NotesCollection } = await import('/imports/api/notes/collections');
   const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
   const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
@@ -72,7 +72,7 @@ const collectDocs = async (userId) => {
 
   const projects = await ProjectsCollection.find(sel, { fields: { name: 1, description: 1 } }).fetchAsync();
   projects.forEach(p => pushDoc(p._id, p._id, 'project', `${p.name || ''} ${p.description || ''}`));
-  const tasks = await TasksCollection.find(sel, { fields: { title: 1, notes: 1, projectId: 1 } }).fetchAsync();
+  const tasks = await TasksCollection.find({ ...sel, ...NOT_DELETED }, { fields: { title: 1, notes: 1, projectId: 1 } }).fetchAsync();
   tasks.forEach(t => pushDoc(t._id, t.projectId, 'task', `${t.title || ''} ${t.notes || ''}`));
   const notes = await NotesCollection.find(sel, { fields: { content: 1, projectId: 1, title: 1 } }).fetchAsync();
   notes.forEach(n => {
@@ -116,8 +116,8 @@ const collectDocsByKind = async (kind, userId) => {
       break;
     }
     case 'task': {
-      const { TasksCollection } = await import('/imports/api/tasks/collections');
-      const items = await TasksCollection.find(sel, { fields: { title: 1, notes: 1, projectId: 1 } }).fetchAsync();
+      const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+      const items = await TasksCollection.find({ ...sel, ...NOT_DELETED }, { fields: { title: 1, notes: 1, projectId: 1 } }).fetchAsync();
       items.forEach(t => pushDoc(t._id, t.projectId, 'task', `${t.title || ''} ${t.notes || ''}`));
       break;
     }
@@ -327,9 +327,9 @@ Meteor.methods({
     const taskProjectIds = new Set();
     let taskRows = [];
     if (want.has('task')) {
-      const { TasksCollection } = await import('/imports/api/tasks/collections');
+      const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
       taskRows = await TasksCollection.find(
-        { userId, title: re },
+        { userId, title: re, ...NOT_DELETED },
         { fields: { title: 1, projectId: 1, status: 1 }, limit: limitPerKind }
       ).fetchAsync();
       taskRows.forEach(t => { if (t.projectId) taskProjectIds.add(String(t.projectId)); });
@@ -673,8 +673,8 @@ Meteor.methods({
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       for (const it of items) { await upsertDoc({ kind: 'project', id: it._id, text: `${it.name || ''} ${it.description || ''}`, projectId: it._id, userId }); processed += 1; }
     } else if (kind === 'task') {
-      const { TasksCollection } = await import('/imports/api/tasks/collections');
-      const items = await TasksCollection.find(sel, { fields: { title: 1, notes: 1, projectId: 1 } }).fetchAsync();
+      const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+      const items = await TasksCollection.find({ ...sel, ...NOT_DELETED }, { fields: { title: 1, notes: 1, projectId: 1 } }).fetchAsync();
       const { upsertDoc } = await import('/imports/api/search/vectorStore.js');
       for (const it of items) { await upsertDoc({ kind: 'task', id: it._id, text: `${it.title || ''} ${it.notes || ''}`, projectId: it.projectId || null, userId }); processed += 1; }
     } else if (kind === 'note') {

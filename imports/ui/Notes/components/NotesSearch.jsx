@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './NotesSearch.css';
 
 export const NotesSearch = ({
@@ -31,22 +32,26 @@ export const NotesSearch = ({
               <span className="notes-search-nav-count">
                 {currentMatch + 1} of {matchCount}
               </span>
-              <button
-                type="button"
-                className="notes-search-nav-btn"
-                onClick={onPrevMatch}
-                title="Previous match"
-              >
-                &#9650;
-              </button>
-              <button
-                type="button"
-                className="notes-search-nav-btn"
-                onClick={onNextMatch}
-                title="Next match"
-              >
-                &#9660;
-              </button>
+              <Tooltip content="Previous match">
+                <button
+                  type="button"
+                  className="notes-search-nav-btn"
+                  onClick={onPrevMatch}
+                  aria-label="Previous match"
+                >
+                  &#9650;
+                </button>
+              </Tooltip>
+              <Tooltip content="Next match">
+                <button
+                  type="button"
+                  className="notes-search-nav-btn"
+                  onClick={onNextMatch}
+                  aria-label="Next match"
+                >
+                  &#9660;
+                </button>
+              </Tooltip>
             </>
           )}
         </div>

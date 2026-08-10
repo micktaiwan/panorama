@@ -121,7 +121,7 @@ export const useReportingData = ({
 
   // Group events by type
   const grouped = useMemo(() => {
-    const groups = { project_created: [], task_done: [], note_created: [] };
+    const groups = { project_created: [], task_done: [], task_deleted: [], note_created: [] };
     for (const e of (data?.events || [])) {
       if (!groups[e.type]) groups[e.type] = [];
       groups[e.type].push(e);
@@ -133,6 +133,7 @@ export const useReportingData = ({
   // Stats
   const stats = useMemo(() => ({
     tasksCompleted: (grouped.task_done || []).length,
+    tasksDeleted: (grouped.task_deleted || []).length,
     projectsCreated: (grouped.project_created || []).length,
     notesAdded: (grouped.note_created || []).length,
   }), [grouped]);

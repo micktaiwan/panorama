@@ -1,4 +1,5 @@
 import React from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './NoteAIActions.css';
 
 export const NoteAIActions = ({
@@ -12,31 +13,34 @@ export const NoteAIActions = ({
   onUndo,
 }) => (
   <>
-    <button
-      className="action-button clean-button"
-      onClick={onClean}
-      disabled={isCleaning || !noteId || isDirty}
-      title={isDirty ? 'Save the note before cleaning' : 'Clean note with AI'}
-    >
-      {isCleaning ? 'Cleaning...' : 'Clean'}
-    </button>
+    <Tooltip content={isDirty ? 'Save the note before cleaning' : 'Clean note with AI'}>
+      <button
+        className="action-button clean-button"
+        onClick={onClean}
+        disabled={isCleaning || !noteId || isDirty}
+      >
+        {isCleaning ? 'Cleaning...' : 'Clean'}
+      </button>
+    </Tooltip>
 
-    <button
-      className="action-button summarize-button"
-      onClick={onSummarize}
-      disabled={isSummarizing || !noteId || isDirty}
-      title={isDirty ? 'Save the note before summarizing' : 'Summarize note with AI'}
-    >
-      {isSummarizing ? 'Summarizing...' : 'Summarize'}
-    </button>
+    <Tooltip content={isDirty ? 'Save the note before summarizing' : 'Summarize note with AI'}>
+      <button
+        className="action-button summarize-button"
+        onClick={onSummarize}
+        disabled={isSummarizing || !noteId || isDirty}
+      >
+        {isSummarizing ? 'Summarizing...' : 'Summarize'}
+      </button>
+    </Tooltip>
 
-    <button
-      className="action-button undo-button"
-      onClick={onUndo}
-      disabled={!noteId || !undoAvailable}
-      title={undoAvailable ? 'Undo last AI action' : 'No undo data available'}
-    >
-      Undo
-    </button>
+    <Tooltip content={undoAvailable ? 'Undo last AI action' : 'No undo data available'}>
+      <button
+        className="action-button undo-button"
+        onClick={onUndo}
+        disabled={!noteId || !undoAvailable}
+      >
+        Undo
+      </button>
+    </Tooltip>
   </>
 );

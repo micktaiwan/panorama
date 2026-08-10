@@ -6,6 +6,7 @@ import { ClaudeMessagesCollection } from '/imports/api/claudeMessages/collection
 import { ClaudeSessionsCollection } from '/imports/api/claudeSessions/collections';
 import { MessageBubble } from '/imports/ui/ClaudeCode/MessageBubble.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './AskAiSidebar.css';
 
 export const AskAiSidebar = ({ sessionId, onClose, getNoteContent, getSelectedText, onReplace, onInsertBelow }) => {
@@ -95,9 +96,11 @@ export const AskAiSidebar = ({ sessionId, onClose, getNoteContent, getSelectedTe
     <div className="ask-ai-sidebar">
       <div className="ask-ai-header">
         <span className="ask-ai-title">Ask AI</span>
-        <button className="ask-ai-close" onClick={handleClose} title="Close sidebar">
-          &times;
-        </button>
+        <Tooltip content="Close sidebar">
+          <button className="ask-ai-close" onClick={handleClose} aria-label="Close sidebar">
+            &times;
+          </button>
+        </Tooltip>
       </div>
 
       <div className="ask-ai-messages scrollArea">
@@ -111,27 +114,30 @@ export const AskAiSidebar = ({ sessionId, onClose, getNoteContent, getSelectedTe
             <MessageBubble message={toDisplayMessage(msg)} />
             {msg.role === 'assistant' && !msg.isStreaming && (
               <div className="ask-ai-actions">
-                <button
-                  className="ask-ai-action-btn"
-                  onClick={() => onReplace(getAssistantText(msg))}
-                  title="Replace selected text"
-                >
-                  Replace
-                </button>
-                <button
-                  className="ask-ai-action-btn"
-                  onClick={() => onInsertBelow(getAssistantText(msg))}
-                  title="Insert below selection"
-                >
-                  Insert below
-                </button>
-                <button
-                  className="ask-ai-action-btn"
-                  onClick={() => handleCopy(getAssistantText(msg))}
-                  title="Copy to clipboard"
-                >
-                  Copy
-                </button>
+                <Tooltip content="Replace selected text">
+                  <button
+                    className="ask-ai-action-btn"
+                    onClick={() => onReplace(getAssistantText(msg))}
+                  >
+                    Replace
+                  </button>
+                </Tooltip>
+                <Tooltip content="Insert below selection">
+                  <button
+                    className="ask-ai-action-btn"
+                    onClick={() => onInsertBelow(getAssistantText(msg))}
+                  >
+                    Insert below
+                  </button>
+                </Tooltip>
+                <Tooltip content="Copy to clipboard">
+                  <button
+                    className="ask-ai-action-btn"
+                    onClick={() => handleCopy(getAssistantText(msg))}
+                  >
+                    Copy
+                  </button>
+                </Tooltip>
               </div>
             )}
           </div>
@@ -157,14 +163,15 @@ export const AskAiSidebar = ({ sessionId, onClose, getNoteContent, getSelectedTe
           disabled={isRunning}
           rows={2}
         />
-        <button
-          className="ask-ai-send"
-          onClick={handleSend}
-          disabled={!input.trim() || isRunning}
-          title="Send (Enter)"
-        >
-          Send
-        </button>
+        <Tooltip content="Send (Enter)">
+          <button
+            className="ask-ai-send"
+            onClick={handleSend}
+            disabled={!input.trim() || isRunning}
+          >
+            Send
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

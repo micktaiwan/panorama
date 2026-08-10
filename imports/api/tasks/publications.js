@@ -1,5 +1,6 @@
 import { Meteor } from 'meteor/meteor';
-import { TasksCollection } from './collections';
+import { TasksCollection, NOT_DELETED } from './collections';
+import { CLOSED_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 
 Meteor.publish('tasks', function publishTasks() {
@@ -9,12 +10,26 @@ Meteor.publish('tasks', function publishTasks() {
       { memberIds: this.userId }, { fields: { _id: 1 } }
     ).fetchAsync()).map(p => p._id);
     return TasksCollection.find({
+      ...NOT_DELETED,
       $or: [
         { userId: this.userId },
         { projectId: { $in: projectIds } },
       ]
     });
   });
+});
+
+// Trash: tasks deleted but not yet purged by the cron, most recent first.
+Meteor.publish('tasks.trashed', function publishTrashedTasks() {
+  if (!this.userId) return this.ready();
+  return TasksCollection.find(
+    { userId: this.userId, deletedAt: { $exists: true } },
+    {
+      sort: { deletedAt: -1 },
+      limit: 100,
+      fields: { title: 1, projectId: 1, status: 1, deletedAt: 1, deadline: 1 }
+    }
+  );
 });
 
 // Minimal publication for UserLog linking UI
@@ -27,6 +42,7 @@ Meteor.publish('tasks.userLogLinks', function publishTaskLinks() {
     return TasksCollection.find(
       {
         'source.kind': 'userLog',
+        ...NOT_DELETED,
         $or: [
           { userId: this.userId },
           { projectId: { $in: projectIds } },
@@ -50,12 +66,13 @@ Meteor.publish('tasks.calendar.open', function publishTasksForCalendarOpen(inclu
       ? { projectId: { $in: include } }
       : (exclude.length > 0 ? { projectId: { $nin: exclude } } : {});
     const openSelector = {
+      ...NOT_DELETED,
       $and: [
         { $or: [
           { userId: this.userId },
           { projectId: { $in: projectIds } },
         ] },
-        { $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ] },
+        { $or: [ { status: { $exists: false } }, { status: { $nin: CLOSED_TASK_STATUSES } } ] },
         { $or: [ { scheduledAt: { $exists: false } }, { scheduledAt: null } ] },
         projectSel
       ]
@@ -87,7 +104,7 @@ Meteor.publish('tasks.calendar.scheduled', function publishTasksForCalendarSched
     const projectSel = include.length > 0
       ? { projectId: { $in: include } }
       : (exclude.length > 0 ? { projectId: { $nin: exclude } } : {});
-    const schedSelector = { $and: [
+    const schedSelector = { ...NOT_DELETED, $and: [
       { $or: [
         { userId: this.userId },
         { projectId: { $in: projectIds } },
@@ -113,12 +130,13 @@ Meteor.publish('tasks.calendar.open.unfiltered', function publishTasksForCalenda
       { memberIds: this.userId }, { fields: { _id: 1 } }
     ).fetchAsync()).map(p => p._id);
     const openSelector = {
+      ...NOT_DELETED,
       $and: [
         { $or: [
           { userId: this.userId },
           { projectId: { $in: projectIds } },
         ] },
-        { $or: [ { status: { $exists: false } }, { status: { $nin: ['done','cancelled','idea'] } } ] },
+        { $or: [ { status: { $exists: false } }, { status: { $nin: CLOSED_TASK_STATUSES } } ] },
         { $or: [ { scheduledAt: { $exists: false } }, { scheduledAt: null } ] }
       ]
     };

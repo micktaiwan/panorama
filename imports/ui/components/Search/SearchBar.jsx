@@ -42,18 +42,18 @@ export const SearchBar = ({ value, onChange, onSearch, resultsCount = 0, placeho
             <>
               Results: {resultsCount}
               {cached ? (
-                <Tooltip content={`Vecteur en cache · Cache size: ${cacheSize}`}>
+                <Tooltip content={`Vector served from cache · Cache size: ${cacheSize}`}>
                   <span className="cachedDot">●</span>
                 </Tooltip>
               ) : (
-                <Tooltip content={`Vecteur recalculé · Cache size: ${cacheSize}`}>
+                <Tooltip content={`Vector recomputed · Cache size: ${cacheSize}`}>
                   <span className="uncachedDot">●</span>
                 </Tooltip>
               )}
             </>
           ) : null}
           {loading ? (
-            <Tooltip content="Recherche en cours…">
+            <Tooltip content="Searching…">
               <span className="searchSpinner" aria-live="polite" aria-busy="true" aria-label="Loading" />
             </Tooltip>
           ) : null}

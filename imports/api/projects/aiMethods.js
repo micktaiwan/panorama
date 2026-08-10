@@ -16,6 +16,35 @@ function cleanJsonResponse(text) {
   return cleaned.trim();
 }
 
+const NOTES_FOR_CONTEXT = 8;
+const NOTE_EXCERPT_CHARS = 1200;
+
+/**
+ * Most recent notes of a project, as prompt-ready excerpts.
+ * What the user already wrote down is the best material to avoid asking
+ * questions already answered, and to write a description that matches reality.
+ */
+async function buildProjectNotesBlock(projectId) {
+  const { NotesCollection } = await import('/imports/api/notes/collections');
+  const notes = await NotesCollection.find(
+    { projectId },
+    { sort: { updatedAt: -1, createdAt: -1 }, limit: NOTES_FOR_CONTEXT, fields: { title: 1, content: 1, kind: 1 } }
+  ).fetchAsync();
+
+  const usable = (notes || [])
+    // AI-generated summaries would make the model paraphrase itself
+    .filter(n => n.kind !== 'aiSummary')
+    .map(n => {
+      const title = String(n.title || '(untitled note)').trim();
+      const body = String(n.content || '').trim().slice(0, NOTE_EXCERPT_CHARS);
+      return body ? `### ${title}\n${body}` : null;
+    })
+    .filter(Boolean);
+
+  if (usable.length === 0) return '(no notes yet)';
+  return usable.join('\n\n');
+}
+
 Meteor.methods({
   async 'ai.project.improvementQuestions'(projectId) {
     check(projectId, String);
@@ -29,14 +58,19 @@ Meteor.methods({
 
     const userContext = buildUserContextBlock();
     const system = `You are a product discovery assistant. Ask clarifying questions to improve a project description.\n\n${userContext}`;
+    const notesBlock = await buildProjectNotesBlock(projectId);
     const user = [
       'Given the project below, ask up to 6 high-signal questions that would help clarify scope, outcomes, constraints, and first steps.',
       'Keep questions concise and concrete. Use the same language as the user content when possible (often French).',
+      'Do NOT ask about anything the existing notes already answer: read them first, then ask about what is still missing.',
       'Return STRICT JSON with this exact structure: {"questions": ["question 1", "question 2", ...]}',
       'The questions array should contain 3-6 strings.',
       '',
       `Project name: ${name || '(untitled)'}`,
-      `Current description: ${desc || '(empty)'}`
+      `Current description: ${desc || '(empty)'}`,
+      '',
+      'Existing notes in this project (most recent first):',
+      notesBlock
     ].join('\n');
 
     const schema = {
@@ -95,11 +129,15 @@ Meteor.methods({
       'Task suggestions must be concrete, short, and feasible as first steps (3–8 items). Do not invent deadlines.'
     ].join(' ');
 
+    const notesBlock = await buildProjectNotesBlock(projectId);
     const user = [
       rules,
       '',
       `Project name: ${name || '(untitled)'}`,
       `Current description: ${desc || '(empty)'}`,
+      '',
+      'Existing notes in this project (most recent first) — ground the description and the tasks in what is already written here, do not contradict it and do not repeat it verbatim:',
+      notesBlock,
       '',
       'User answers to clarifying questions (free text merged):',
       (answers.filter(Boolean).join('\n') || '(none)'),
@@ -153,7 +191,7 @@ Meteor.methods({
     const bullets = (tasks || []).filter(t => t && t.title).map(t => `- ${t.title}${t.notes ? ` — ${t.notes}` : ''}`).join('\n');
     if (bullets) {
       const content = `Task suggestions to kickstart the project:\n\n${bullets}`;
-      await NotesCollection.insertAsync({ projectId, title: 'AI tasks suggestions', content, kind: 'aiSummary', createdAt: new Date(), updatedAt: new Date() });
+      await NotesCollection.insertAsync({ projectId, title: 'AI tasks suggestions', content, kind: 'aiSummary', userId: this.userId, createdAt: new Date(), updatedAt: new Date() });
     }
 
     return { appendedDescription: appended, tasksCount: Array.isArray(tasks) ? tasks.length : 0 };

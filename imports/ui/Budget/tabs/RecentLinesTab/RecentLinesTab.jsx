@@ -96,26 +96,27 @@ const NotesEditor = ({ lineId, initialNotes, setToast }) => {
   }
 
   return (
-    <button 
-      onClick={() => setIsEditing(true)}
-      onKeyDown={(e) => e.key === 'Enter' && setIsEditing(true)}
-      style={{
-        minWidth: '200px',
-        minHeight: '20px',
-        padding: '4px',
-        border: '1px dashed var(--border)',
-        borderRadius: '3px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        backgroundColor: notes ? '#10141b' : '#0e1420',
-        color: 'var(--text)',
-        textAlign: 'left',
-        width: '100%'
-      }}
-      title={notes ? `Notes: ${notes}` : 'Click to add notes'}
-    >
-      {notes || 'Click to add notes...'}
-    </button>
+    <Tooltip content={notes ? `Notes: ${notes}` : 'Click to add notes'} size="large" className="tooltipTriggerBlock">
+      <button
+        onClick={() => setIsEditing(true)}
+        onKeyDown={(e) => e.key === 'Enter' && setIsEditing(true)}
+        style={{
+          minWidth: '200px',
+          minHeight: '20px',
+          padding: '4px',
+          border: '1px dashed var(--border)',
+          borderRadius: '3px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          backgroundColor: notes ? '#10141b' : '#0e1420',
+          color: 'var(--text)',
+          textAlign: 'left',
+          width: '100%'
+        }}
+      >
+        {notes || 'Click to add notes...'}
+      </button>
+    </Tooltip>
   );
 };
 
@@ -285,15 +286,16 @@ export const RecentLinesTab = ({ rows, search, onSearchChange, departmentFilter,
                         </button>
                       )}
                       {r.publicFileUrl ? (
-                        <a
-                          className="btn ml8"
-                          href={r.publicFileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Open document"
-                        >
-                          Open doc
-                        </a>
+                        <Tooltip content="Open document">
+                          <a
+                            className="btn ml8"
+                            href={r.publicFileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open doc
+                          </a>
+                        </Tooltip>
                       ) : null}
                       <button
                         className="btn btn-danger ml8"

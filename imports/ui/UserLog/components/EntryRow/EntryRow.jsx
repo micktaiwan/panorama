@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './EntryRow.css';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 
@@ -15,29 +16,32 @@ export const EntryRow = ({
 }) => {
   return (
     <div className="UserLog__entry">
-      <button
-        className="iconButton UserLog__action"
-        disabled={!!isCleaning}
-        onClick={() => onClean(entry)}
-        aria-label={isCleaning ? 'Correction en cours' : 'Corriger la ligne'}
-        title={isCleaning ? 'Correction en cours…' : 'Corriger l\'orthographe (IA)'}
-      >{isCleaning ? '⏳' : '🪄'}</button>
+      <Tooltip content={isCleaning ? 'Fixing…' : 'Fix spelling (AI)'}>
+        <button
+          className="iconButton UserLog__action"
+          disabled={!!isCleaning}
+          onClick={() => onClean(entry)}
+          aria-label={isCleaning ? 'Fixing' : 'Fix this line'}
+        >{isCleaning ? '⏳' : '🪄'}</button>
+      </Tooltip>
       <div className="UserLog__entryBody">
         <div className="UserLog__entryClock">
           {formatHms(entry.createdAt)}
           {isLinked ? (
-            <button
-              type="button"
-              className="UserLog__linkedIcon"
-              title="Open project for linked task"
-              onClick={() => onOpenLinkedProject(entry)}
-            >🔗</button>
+            <Tooltip content="Open project for linked task">
+              <button
+                type="button"
+                className="UserLog__linkedIcon"
+                aria-label="Open project for linked task"
+                onClick={() => onOpenLinkedProject(entry)}
+              >🔗</button>
+            </Tooltip>
           ) : null}
         </div>
         <div className="UserLog__entryText">
           <InlineEditable
             value={entry.content || ''}
-            placeholder="(vide)"
+            placeholder="(empty)"
             onSubmit={(next) => onUpdateContent(entry, String(next || '').trim())}
             fullWidth
           />

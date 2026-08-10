@@ -4,6 +4,7 @@ import { FilesCollection } from '../../api/files/collections';
 import { ProjectsCollection } from '../../api/projects/collections';
 import { Card } from '../components/Card/Card.jsx';
 import { FileItem } from '../components/File/File.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './FilesPage.css';
 import { navigateTo } from '../router.js';
 
@@ -45,14 +46,15 @@ export const FilesPage = () => {
                     <div key={g.projectId || '__none__'}>
                       <div className="fileGroupHeader">
                         {g.projectId ? (
-                          <a
-                            className="fileProject"
-                            href={`#/projects/${g.projectId}`}
-                            onClick={(e) => { e.preventDefault(); navigateTo({ name: 'project', projectId: g.projectId }); }}
-                            title={g.name}
-                          >
-                            {g.name}
-                          </a>
+                          <Tooltip content={g.name}>
+                            <a
+                              className="fileProject"
+                              href={`#/projects/${g.projectId}`}
+                              onClick={(e) => { e.preventDefault(); navigateTo({ name: 'project', projectId: g.projectId }); }}
+                            >
+                              {g.name}
+                            </a>
+                          </Tooltip>
                         ) : (
                           <span className="fileProject">(no project)</span>
                         )}

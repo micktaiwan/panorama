@@ -112,3 +112,25 @@ dialog.modalPanel {
   border-top: 1px solid var(--border);
 }
 
+/* Mobile: use the whole screen and drop the decorative side panel, which
+   otherwise eats 100px of a 375px-wide viewport. */
+@media (max-width: 768px) {
+  .modalOverlay {
+    align-items: flex-end;
+  }
+  .modalPanel,
+  .modalPanel.wide {
+    width: 100%;
+    max-width: 100vw;
+    max-height: 92vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-bottom: none;
+  }
+  .modalAside {
+    display: none;
+  }
+  .modalMain {
+    padding: 12px;
+  }
+}
+

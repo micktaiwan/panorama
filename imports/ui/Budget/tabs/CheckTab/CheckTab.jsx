@@ -5,6 +5,7 @@ import { fmtDisplayNoCents, fmtCopyNoCents } from '/imports/ui/Budget/utils/form
 import { filterByQuery } from '/imports/ui/Budget/utils/filters.js';
 import { Meteor } from 'meteor/meteor';
 import { writeClipboard } from '/imports/ui/utils/clipboard.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 
 // Notes Editor Component (reused from RecentLinesTab)
 const NotesEditor = ({ lineId, initialNotes, setToast }) => {
@@ -92,26 +93,27 @@ const NotesEditor = ({ lineId, initialNotes, setToast }) => {
   }
 
   return (
-    <button 
-      onClick={() => setIsEditing(true)}
-      onKeyDown={(e) => e.key === 'Enter' && setIsEditing(true)}
-      style={{
-        minWidth: '200px',
-        minHeight: '20px',
-        padding: '4px',
-        border: '1px dashed var(--border)',
-        borderRadius: '3px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        backgroundColor: notes ? '#10141b' : '#0e1420',
-        color: 'var(--text)',
-        textAlign: 'left',
-        width: '100%'
-      }}
-      title={notes ? `Notes: ${notes}` : 'Click to add notes'}
-    >
-      {notes || 'Click to add notes...'}
-    </button>
+    <Tooltip content={notes ? `Notes: ${notes}` : 'Click to add notes'} size="large" className="tooltipTriggerBlock">
+      <button
+        onClick={() => setIsEditing(true)}
+        onKeyDown={(e) => e.key === 'Enter' && setIsEditing(true)}
+        style={{
+          minWidth: '200px',
+          minHeight: '20px',
+          padding: '4px',
+          border: '1px dashed var(--border)',
+          borderRadius: '3px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          backgroundColor: notes ? '#10141b' : '#0e1420',
+          color: 'var(--text)',
+          textAlign: 'left',
+          width: '100%'
+        }}
+      >
+        {notes || 'Click to add notes...'}
+      </button>
+    </Tooltip>
   );
 };
 
@@ -180,14 +182,16 @@ export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onT
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <input className="budgetSearch" placeholder="Search vendor" value={search} onChange={(e) => onSearchChange(e.target.value)} />
             {search ? (
-              <button
-                className="btn"
-                title="Clear"
-                onClick={() => onSearchChange('')}
-                style={{ padding: '4px 8px' }}
-              >
-                ×
-              </button>
+              <Tooltip content="Clear">
+                <button
+                  className="btn"
+                  aria-label="Clear"
+                  onClick={() => onSearchChange('')}
+                  style={{ padding: '4px 8px' }}
+                >
+                  ×
+                </button>
+              </Tooltip>
             ) : null}
           </span>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -227,14 +231,15 @@ export const CheckTab = ({ rows, filter, teamFilter, search, onFilterChange, onT
                   <tr key={`${r._id}`}>
                     <td>{String(r.date || '').slice(0,10)}</td>
                     <td>
-                      <button
-                        className="linkLike"
-                        onClick={() => onSearchChange(String(r.vendor || ''))}
-                        title="Filter by this vendor"
-                        style={{ background: 'none', border: 'none', padding: 0, color: '#0b76da', cursor: 'pointer' }}
-                      >
-                        {String(r.vendor || '')}
-                      </button>
+                      <Tooltip content="Filter by this vendor">
+                        <button
+                          className="linkLike"
+                          onClick={() => onSearchChange(String(r.vendor || ''))}
+                          style={{ background: 'none', border: 'none', padding: 0, color: '#0b76da', cursor: 'pointer' }}
+                        >
+                          {String(r.vendor || '')}
+                        </button>
+                      </Tooltip>
                     </td>
                     <td>{fmtDisplayNoCents(r.amountCents)}</td>
                     <td>{r.currency || 'EUR'}</td>

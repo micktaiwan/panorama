@@ -320,45 +320,6 @@
   color: var(--primary);
 }
 
-/* Tooltip styles */
-.inboxZero-tooltip {
-  position: relative;
-  display: inline-block;
-}
-
-.inboxZero-tooltipContent {
-  visibility: hidden;
-  width: 350px;
-  background: var(--panel-dark);
-  color: var(--text);
-  text-align: left;
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  position: absolute;
-  z-index: 1001;
-  bottom: 125%;
-  left: 50%;
-  margin-left: -175px;
-  box-shadow: 0 8px 32px rgba(var(--black-rgb), 0.3);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.inboxZero-tooltipContent::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -8px;
-  border-width: 8px;
-  border-style: solid;
-  border-color: var(--panel-dark) transparent transparent transparent;
-}
-
-.inboxZero-tooltip:hover .inboxZero-tooltipContent {
-  visibility: visible;
-}
-
 .inboxZero-confidenceScore {
   font-weight: 700;
   margin-left: 6px;

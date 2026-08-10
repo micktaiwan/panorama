@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './NoteToc.css';
 
 function extractHeadings(view) {
@@ -84,14 +85,14 @@ export function NoteToc({ editorRef, docVersion, noteId }) {
     <div className="note-toc">
       <div className="note-toc-title">Contents</div>
       {headings.map((h, i) => (
-        <button
-          key={`${h.pos}-${i}`}
-          className={`note-toc-item note-toc-level-${h.level}${i === activeIndex ? ' active' : ''}`}
-          onClick={() => handleClick(i)}
-          title={h.text}
-        >
-          {h.text}
-        </button>
+        <Tooltip key={`${h.pos}-${i}`} content={h.text} placement="right" className="note-toc-item-tip">
+          <button
+            className={`note-toc-item note-toc-level-${h.level}${i === activeIndex ? ' active' : ''}`}
+            onClick={() => handleClick(i)}
+          >
+            {h.text}
+          </button>
+        </Tooltip>
       ))}
     </div>
   );

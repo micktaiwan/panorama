@@ -8,12 +8,15 @@ import './ReportingPage.css';
 
 const SECTIONS = [
   { key: 'task_done', label: 'Tasks completed', color: 'var(--success)' },
+  // Deleting a task is a common way to close it here, so it belongs in the report.
+  { key: 'task_deleted', label: 'Tasks deleted', color: 'var(--warning)' },
   { key: 'project_created', label: 'Projects created', color: 'var(--primary)' },
   { key: 'note_created', label: 'Notes added', color: 'var(--info)' },
 ];
 
 const STAT_CARDS = [
   { key: 'tasksCompleted', label: 'Tasks completed', color: 'var(--success)' },
+  { key: 'tasksDeleted', label: 'Tasks deleted', color: 'var(--warning)' },
   { key: 'projectsCreated', label: 'Projects created', color: 'var(--primary)' },
   { key: 'notesAdded', label: 'Notes added', color: 'var(--info)' },
 ];

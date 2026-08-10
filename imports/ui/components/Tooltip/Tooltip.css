@@ -1,11 +1,29 @@
 /* Class names are prefixed `tooltipTrigger`/`tooltipBubble` on purpose: the
    generic `.tooltip`/`.tooltipContent` names are taken by the hand-rolled
    CSS-only tooltips in the Emails pages. */
+/* Deliberately not positioned: the bubble is placed from the measured trigger
+   rect, so a `position: relative` here would only steal the containing block
+   of an absolutely positioned child. */
 .tooltipTrigger {
-  position: relative;
   display: inline-flex;
   align-items: center;
 }
+
+/* Pass `className="tooltipTriggerBlock"` when the trigger replaces its child as
+   the layout box of a cell that truncates: it fills the parent and keeps the
+   ellipsis the child used to get. */
+.tooltipTriggerBlock {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Browsers swallow pointer events on disabled controls, so the trigger would
+   never see the hover — and a disabled button is exactly where the tooltip
+   explaining why is needed most. */
+.tooltipTrigger > :disabled { pointer-events: none; }
 
 /* The bubble lives in a body portal: fixed so scrollable containers cannot
    clip it, positioned from the trigger rect measured on hover. */

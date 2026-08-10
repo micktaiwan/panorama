@@ -7,7 +7,9 @@ Meteor.methods({
     const userFilter = { userId: this.userId };
     // Export remote collections filtered by userId
     const projects = await (await import('/imports/api/projects/collections')).ProjectsCollection.find(userFilter).fetchAsync();
-    const tasks = await (await import('/imports/api/tasks/collections')).TasksCollection.find(userFilter).fetchAsync();
+    // Trashed tasks are on their way out: exporting them would resurrect them on import.
+    const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+    const tasks = await TasksCollection.find({ ...userFilter, ...NOT_DELETED }).fetchAsync();
     const notes = await (await import('/imports/api/notes/collections')).NotesCollection.find(userFilter).fetchAsync();
     const sessions = await (await import('/imports/api/noteSessions/collections')).NoteSessionsCollection.find(userFilter).fetchAsync();
     const lines = await (await import('/imports/api/noteLines/collections')).NoteLinesCollection.find(userFilter).fetchAsync();

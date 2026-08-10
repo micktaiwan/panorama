@@ -17,6 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { navigateTo } from '/imports/ui/router.js';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { notify } from '/imports/ui/utils/notify.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './NotesList.css';
 
 const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, lockedByNames, onNoteClick, onDeleteClick, onContextMenu, isEditing, editingTitle, setEditingTitle, onRenameSubmit, onRenameCancel }) => {
@@ -90,18 +91,20 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, locke
           )}
           {note.title || 'Untitled'}
           {note.lockedBy && note.lockedBy !== Meteor.userId() && (
-            <svg className="note-lock-icon other" viewBox="0 0 16 16" title={`Editing by ${lockedByNames?.[note.lockedBy] || 'someone'}`} aria-hidden="true">
-              <title>{`Editing by ${lockedByNames?.[note.lockedBy] || 'someone'}`}</title>
-              <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
-            </svg>
+            <Tooltip content={`Editing by ${lockedByNames?.[note.lockedBy] || 'someone'}`}>
+              <svg className="note-lock-icon other" viewBox="0 0 16 16" role="img" aria-label={`Editing by ${lockedByNames?.[note.lockedBy] || 'someone'}`}>
+                <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
+              </svg>
+            </Tooltip>
           )}
           {note.lockedBy && note.lockedBy === Meteor.userId() && (
-            <svg className="note-lock-icon self" viewBox="0 0 16 16" aria-hidden="true">
-              <title>Locked by you</title>
-              <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
-            </svg>
+            <Tooltip content="Locked by you">
+              <svg className="note-lock-icon self" viewBox="0 0 16 16" role="img" aria-label="Locked by you">
+                <path d="M11.5 7V4.5a3.5 3.5 0 0 0-7 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/>
+              </svg>
+            </Tooltip>
           )}
           </>)}
         </div>
@@ -119,29 +122,32 @@ const SortableNoteItem = ({ note, openTabs, activeTabId, projectNamesById, locke
             return '';
           })()}
         </div>
-        <span
-          className="note-id"
-          title="Click to copy ID"
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(note._id).then(() => {
-              notify({ message: 'Note ID copied', kind: 'success' });
-            });
-          }}
+        <Tooltip content="Click to copy ID">
+          <span
+            className="note-id"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(note._id).then(() => {
+                notify({ message: 'Note ID copied', kind: 'success' });
+              });
+            }}
+          >
+            {note._id}
+          </span>
+        </Tooltip>
+      </button>
+      <Tooltip content="Delete note">
+        <button
+          className="note-delete-btn"
+          onClick={(e) => { e.stopPropagation(); onDeleteClick(note); }}
+          aria-label="Delete note"
+          type="button"
         >
-          {note._id}
-        </span>
-      </button>
-      <button
-        className="note-delete-btn"
-        onClick={(e) => { e.stopPropagation(); onDeleteClick(note); }}
-        title="Delete note"
-        type="button"
-      >
-        &#128465;
-      </button>
+          &#128465;
+        </button>
+      </Tooltip>
     </div>
   );
 };

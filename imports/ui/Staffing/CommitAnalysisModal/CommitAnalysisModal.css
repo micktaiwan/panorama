@@ -216,3 +216,6 @@
 .caCandChip.chip-c5 { background: #2c3e50; }
 .caCandChip.chip-c6 { background: #27ae60; }
 .caCandChip.chip-c7 { background: #b7791f; }
+
+/* The tooltip wrapper is the grid item now, so the file name keeps its ellipsis */
+.caFileNameTip { display: block; min-width: 0; }

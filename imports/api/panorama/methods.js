@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { ProjectsCollection } from '/imports/api/projects/collections';
-import { TasksCollection } from '/imports/api/tasks/collections';
+import { TasksCollection, NOT_DELETED } from '/imports/api/tasks/collections';
 import { NotesCollection } from '/imports/api/notes/collections';
 import { NoteSessionsCollection } from '/imports/api/noteSessions/collections';
 import { NoteLinesCollection } from '/imports/api/noteLines/collections';
@@ -13,6 +13,7 @@ import { getHealthStatus, testProvider } from '/imports/api/_shared/llmProxy';
 import { getAIConfig } from '/imports/api/_shared/config';
 import { AppPreferencesCollection } from '/imports/api/appPreferences/collections';
 import { ensureLoggedIn } from '/imports/api/_shared/auth';
+import { taskStatusRank, CLOSED_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
 
 // Constants to replace magic numbers
 const CONSTANTS = {
@@ -59,7 +60,7 @@ const processTasks = (allTasks, projectIds, since) => {
     const acc = tasksByProject.get(pid);
     acc.total += 1;
     const status = (t.status || 'todo');
-    const isClosed = ['done', 'cancelled', 'idea'].includes(status);
+    const isClosed = CLOSED_TASK_STATUSES.includes(status);
     if (isClosed) acc.done += 1;
     if (!isClosed) acc.open += 1;
     const dl = t.deadline ? new Date(t.deadline) : null;
@@ -93,7 +94,7 @@ const processTasks = (allTasks, projectIds, since) => {
   // Sort next tasks for each project
   for (const [, acc] of tasksByProject) {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
-    const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
+    const statusRank = taskStatusRank;
     acc.next.sort((a, b) => {
       const ad = toTime(a.deadline); const bd = toTime(b.deadline);
       if (ad !== bd) return ad - bd;
@@ -211,7 +212,7 @@ Meteor.methods({
 
     // Fetch and process tasks (security ensured by projectIds scoped to member projects)
     const taskFields = { fields: { projectId: 1, status: 1, deadline: 1, updatedAt: 1, title: 1, statusChangedAt: 1, createdAt: 1, priorityRank: 1 } };
-    const allTasks = await TasksCollection.find({ projectId: { $in: projectIds } }, taskFields).fetchAsync();
+    const allTasks = await TasksCollection.find({ projectId: { $in: projectIds }, ...NOT_DELETED }, taskFields).fetchAsync();
     const tasksByProject = processTasks(allTasks, projectIds, since);
 
     // Fetch and process notes

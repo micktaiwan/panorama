@@ -266,7 +266,7 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
           <div className="prefsLabel">API Key</div>
           <div className="prefsValue">
             <span style={{ color: 'var(--muted)' }}>
-              Configurez la clé OpenAI dans l'onglet « Secrets ».
+              Set the OpenAI key in the "Secrets" tab.
             </span>
           </div>
         </div>

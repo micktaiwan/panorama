@@ -5,6 +5,7 @@ import { MCPServersCollection } from '../../api/mcpServers/collections.js';
 import { notify } from '../utils/notify.js';
 import { Modal } from '../components/Modal/Modal.jsx';
 import { MCPServerForm } from './MCPServerForm.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './MCPServers.css';
 
 /**
@@ -179,35 +180,39 @@ export function MCPServers() {
                         )}
                       </div>
                       <div className="mcpServer-actions">
-                        <button
-                          className="btn btn-sm btn-secondary"
-                          onClick={() => handleTestConnection(server._id, server.name)}
-                          disabled={testingServer === server._id || !server.enabled}
-                          title="Test connection"
-                        >
-                          {testingServer === server._id ? 'Testing...' : 'Test'}
-                        </button>
-                        <button
-                          className="btn btn-sm btn-secondary"
-                          onClick={() => handleToggleEnabled(server._id, server.enabled)}
-                          title={server.enabled ? 'Disable' : 'Enable'}
-                        >
-                          {server.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                        <button
-                          className="btn btn-sm btn-secondary"
-                          onClick={() => handleEdit(server)}
-                          title="Edit configuration"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={() => handleRemoveClick(server)}
-                          title="Remove server"
-                        >
-                          Remove
-                        </button>
+                        <Tooltip content="Test connection">
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => handleTestConnection(server._id, server.name)}
+                            disabled={testingServer === server._id || !server.enabled}
+                          >
+                            {testingServer === server._id ? 'Testing...' : 'Test'}
+                          </button>
+                        </Tooltip>
+                        <Tooltip content={server.enabled ? 'Disable' : 'Enable'}>
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => handleToggleEnabled(server._id, server.enabled)}
+                          >
+                            {server.enabled ? 'Disable' : 'Enable'}
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="Edit configuration">
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => handleEdit(server)}
+                          >
+                            Edit
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="Remove server">
+                          <button
+                            className="btn btn-sm btn-danger"
+                            onClick={() => handleRemoveClick(server)}
+                          >
+                            Remove
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
 

@@ -21,6 +21,8 @@
 .taskRowC.smallText .taskTitleArea { column-gap: 6px; }
 .taskTitleArea .inlineEditable { flex: 1; min-width: 0; display: block; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
 .taskTitleArea .inlineEditable.inProgress, .taskRowTitle.inProgress { color: var(--success); }
+/* Waiting for validation: same "still open" signal as in progress, other hue. */
+.taskRowC.testing .taskTitleArea .inlineEditable, .taskRowC.testing .taskRowTitle { color: var(--info); }
 .taskTitleArea .inlineEditableInput { width: 100%; }
 .taskNotes { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-basis: 100%; min-width: 0; }
 .taskNotesClickable { cursor: pointer; background: transparent; border: none; padding: 0; text-align: left; }

@@ -9,6 +9,7 @@ import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { MessageBubble, ToolGroupBlock } from './MessageBubble.jsx';
 import { CommandPopup } from './CommandPopup.jsx';
 import { shortenPath } from './useHomeDir.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './SessionView.css';
 
 const formatDuration = (ms) => {
@@ -802,9 +803,11 @@ export const SessionView = ({ sessionId, homeDir, isActive, onFocus: _onFocus, o
           </>
         )}
         {displayModel && (
-          <span className="ccModelBadge" title={displayModel}>
-            {displayModel.replace(/^claude-/, '').replace(/-\d{8}$/, '')}
-          </span>
+          <Tooltip content={displayModel}>
+            <span className="ccModelBadge">
+              {displayModel.replace(/^claude-/, '').replace(/-\d{8}$/, '')}
+            </span>
+          </Tooltip>
         )}
         <span className={`ccStatusBadge ccStatus-${session.status}`}>{session.status}</span>
         <div className="ccStatusBarSpacer" />

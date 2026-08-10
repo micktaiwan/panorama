@@ -40,7 +40,14 @@ Meteor.methods({
     const includeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === 1).map(([k]) => k));
     const excludeIds = new Set(Object.entries(projFilters || {}).filter(([, v]) => v === -1).map(([k]) => k));
     const projectSelector = { userId, createdAt: { $gte: since } };
-    const taskSelector = { userId, status: 'done', statusChangedAt: { $gte: since } };
+    // A task deleted in the window closed some work too: count it like a done one.
+    const taskSelector = {
+      userId,
+      $or: [
+        { status: 'done', statusChangedAt: { $gte: since } },
+        { deletedAt: { $gte: since } }
+      ]
+    };
     const noteSelector = { userId, createdAt: { $gte: since } };
     if (excludeIds.size > 0 || includeIds.size > 0) {
       const idCond = includeIds.size > 0 ? { $in: Array.from(includeIds) } : { $nin: Array.from(excludeIds) };
@@ -51,14 +58,17 @@ Meteor.methods({
 
     const [projects, tasksDone, notes] = await Promise.all([
       ProjectsCollection.find(projectSelector, { fields: { name: 1, createdAt: 1 } }).fetchAsync(),
-      TasksCollection.find(taskSelector, { fields: { title: 1, projectId: 1, statusChangedAt: 1 } }).fetchAsync(),
+      TasksCollection.find(taskSelector, { fields: { title: 1, projectId: 1, statusChangedAt: 1, deletedAt: 1 } }).fetchAsync(),
       NotesCollection.find(noteSelector, { fields: { title: 1, content: 1, projectId: 1, createdAt: 1 } }).fetchAsync()
     ]);
 
     const rows = [];
     const push = (type, whenIso, title, projectId) => rows.push({ type, whenIso, title, projectId });
     for (const p of projects) push('project_created', new Date(p.createdAt).toISOString(), p.name || '(untitled project)', p._id);
-    for (const t of tasksDone) push('task_done', new Date(t.statusChangedAt).toISOString(), t.title || '(untitled task)', t.projectId || '');
+    for (const t of tasksDone) {
+      const when = t.deletedAt || t.statusChangedAt;
+      push(t.deletedAt ? 'task_deleted' : 'task_done', new Date(when).toISOString(), t.title || '(untitled task)', t.projectId || '');
+    }
     for (const n of notes) push('note_created', new Date(n.createdAt).toISOString(), n.title || '(note)', n.projectId || '');
 
     // Fallback: if no rows, return a simple rendering respecting format
@@ -80,9 +90,11 @@ Meteor.methods({
       const tProjects = lang === 'en' ? 'Projects created' : 'Projets créés';
       const tTasks = lang === 'en' ? 'Tasks completed' : 'Tâches terminées';
       const tNotes = lang === 'en' ? 'Notes added' : 'Notes ajoutées';
+      const tDeleted = lang === 'en' ? 'Tasks deleted' : 'Tâches supprimées';
       const sectionsMd = [
         render(tProjects, byType.project_created),
         render(tTasks, byType.task_done),
+        render(tDeleted, byType.task_deleted),
         render(tNotes, byType.note_created)
       ].filter(Boolean).join('\n\n');
       const sectionsText = sectionsMd

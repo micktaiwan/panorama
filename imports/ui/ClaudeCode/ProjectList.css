@@ -351,3 +351,6 @@
 [data-theme="light"] .ccStatusDot.ccStatus-error {
   box-shadow: 0 0 4px rgba(var(--danger-rgb), 0.4);
 }
+
+/* The tooltip wrapper is the flow element, so the row still spans the list */
+.ccSessionItemTip { display: block; }

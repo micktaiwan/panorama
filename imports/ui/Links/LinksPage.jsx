@@ -5,6 +5,7 @@ import { ProjectsCollection } from '../../api/projects/collections';
 import { Card } from '../components/Card/Card.jsx';
 import { LinkItem } from '../components/Link/Link.jsx';
 import { createNewLink } from '../utils/links.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './LinksPage.css';
 import { navigateTo } from '../router.js';
 
@@ -52,14 +53,15 @@ export const LinksPage = () => {
                     <div key={g.projectId || '__none__'}>
                       <div className="linkGroupHeader">
                         {g.projectId ? (
-                          <a
-                            className="linkProject"
-                            href={`#/projects/${g.projectId}`}
-                            onClick={(e) => { e.preventDefault(); navigateTo({ name: 'project', projectId: g.projectId }); }}
-                            title={g.name}
-                          >
-                            {g.name}
-                          </a>
+                          <Tooltip content={g.name}>
+                            <a
+                              className="linkProject"
+                              href={`#/projects/${g.projectId}`}
+                              onClick={(e) => { e.preventDefault(); navigateTo({ name: 'project', projectId: g.projectId }); }}
+                            >
+                              {g.name}
+                            </a>
+                          </Tooltip>
                         ) : (
                           <span className="linkProject">(no project)</span>
                         )}

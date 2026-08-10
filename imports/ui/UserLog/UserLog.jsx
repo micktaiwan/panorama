@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Meteor } from 'meteor/meteor';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './UserLog.css';
 import { useTracker } from 'meteor/react-meteor-data';
 import { UserLogsCollection } from '/imports/api/userLogs/collections';
@@ -259,10 +260,10 @@ export default function UserLog() {
       setCleaningIds(prev => ({ ...prev, [entry._id]: false }));
       if (err) {
         console.error('ai.cleanUserLog failed', err);
-        notify({ message: 'Correction échouée', kind: 'error' });
+        notify({ message: 'Fix failed', kind: 'error' });
         return;
       }
-      notify({ message: 'Entrée corrigée', kind: 'success' });
+      notify({ message: 'Entry fixed', kind: 'success' });
     });
   }, []);
 
@@ -382,11 +383,11 @@ export default function UserLog() {
                 onKeyDown={onPromptKeyDown}
               />
               {summaryPrompt ? (
+                <Tooltip content="Clear">
                 <button
                   type="button"
                   className="UserLog__promptClear"
                   aria-label="Clear prompt"
-                  title="Clear"
                   onClick={() => {
                     setSummaryPrompt('');
                     setTimeout(() => {
@@ -395,6 +396,7 @@ export default function UserLog() {
                     }, 0);
                   }}
                 >×</button>
+                </Tooltip>
               ) : null}
             </div>
             <button

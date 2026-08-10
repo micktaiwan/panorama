@@ -11,6 +11,7 @@ import { DiskFileEditor } from '/imports/ui/components/DiskFileEditor/DiskFileEd
 import { useHomeDir } from './useHomeDir.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { navigateTo } from '/imports/ui/router.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './ClaudeCodePage.css';
 
 const STORAGE_KEY = 'claude-activePanel';
@@ -474,22 +475,26 @@ export const ClaudeCodePage = ({ projectId }) => {
               </button>
             ))}
             {sidebarItems.filter(isFileItem).map((id) => (
-              <button
-                key={id}
-                className={`ccSessionTab ccFileTab ${activeSidebarId === id ? 'ccSessionTabActive' : ''}`}
-                onClick={() => { setActiveSidebarId(id); setLastFocus('sidebar'); }}
-                title={filePathFromId(id)}
-              >
-                <span className="ccFileTabIcon">F</span>
-                {filePathFromId(id).split('/').pop()}
-              </button>
+              <Tooltip key={id} content={filePathFromId(id)}>
+                <button
+                  className={`ccSessionTab ccFileTab ${activeSidebarId === id ? 'ccSessionTabActive' : ''}`}
+                  onClick={() => { setActiveSidebarId(id); setLastFocus('sidebar'); }}
+                >
+                  <span className="ccFileTabIcon">F</span>
+                  {filePathFromId(id).split('/').pop()}
+                </button>
+              </Tooltip>
             ))}
-            <button className="ccSessionTab ccNewNoteTab" onClick={handleCreateNote} title="New note">
-              + Note
-            </button>
-            <button className="ccSessionTab ccNewNoteTab" onClick={handleOpenFile} title="Open file">
-              + File
-            </button>
+            <Tooltip content="New note">
+              <button className="ccSessionTab ccNewNoteTab" onClick={handleCreateNote}>
+                + Note
+              </button>
+            </Tooltip>
+            <Tooltip content="Open file">
+              <button className="ccSessionTab ccNewNoteTab" onClick={handleOpenFile}>
+                + File
+              </button>
+            </Tooltip>
           </div>
         )}
         <div className="ccPanels">
@@ -523,11 +528,10 @@ export const ClaudeCodePage = ({ projectId }) => {
                 {sidebarItems.length > 1 && (
                   <div className="ccSidebarTabs">
                     {sidebarItems.map((id) => (
+                      <Tooltip key={id} content={isFileItem(id) ? filePathFromId(id) : ''}>
                       <div
-                        key={id}
                         className={`ccSidebarTab ${activeSidebarId === id ? 'ccSidebarTabActive' : ''}`}
                         onClick={() => { setActiveSidebarId(id); setLastFocus('sidebar'); }}
-                        title={isFileItem(id) ? filePathFromId(id) : undefined}
                       >
                         <span className={isFileItem(id) ? 'ccFileTabIcon' : 'ccNoteTabIcon'}>
                           {isFileItem(id) ? 'F' : 'N'}
@@ -539,6 +543,7 @@ export const ClaudeCodePage = ({ projectId }) => {
                           type="button"
                         >&times;</button>
                       </div>
+                      </Tooltip>
                     ))}
                   </div>
                 )}

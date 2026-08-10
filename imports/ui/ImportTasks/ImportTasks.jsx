@@ -330,30 +330,36 @@ export const ImportTasks = () => {
                   )}
                 </div>
                 <div className="importTaskActionsCol">
-                  <button
-                    className="iconButton"
-                    title="Remove from import"
-                    onClick={() => setResults(prev => ({ ...prev, tasks: prev.tasks.filter((row) => row._cid !== cid) }))}
-                  >
-                    🗑
-                  </button>
-                  <button
-                    className="iconButton"
-                    disabled={!displayDeadline}
-                    title="Clear deadline"
-                    onClick={() => setTaskDeadlineSelections(prev => ({ ...prev, [cid]: '' }))}
-                  >
-                    ⏳
-                  </button>
-                  <button
-                    className="iconButton"
-                    disabled={!taskProjectSelections[cid]?.value}
-                    title={!taskProjectSelections[cid]?.value ? 'Select a project first' : 'Save task'}
-                    onMouseDown={() => { const el = document.activeElement; if (el && typeof el.blur === 'function') { el.blur(); } }}
-                    onClick={() => setTimeout(() => handleSaveTask(cid, t), 0)}
-                  >
-                    💾
-                  </button>
+                  <Tooltip content="Remove from import">
+                    <button
+                      className="iconButton"
+                      aria-label="Remove from import"
+                      onClick={() => setResults(prev => ({ ...prev, tasks: prev.tasks.filter((row) => row._cid !== cid) }))}
+                    >
+                      🗑
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Clear deadline">
+                    <button
+                      className="iconButton"
+                      aria-label="Clear deadline"
+                      disabled={!displayDeadline}
+                      onClick={() => setTaskDeadlineSelections(prev => ({ ...prev, [cid]: '' }))}
+                    >
+                      ⏳
+                    </button>
+                  </Tooltip>
+                  <Tooltip content={!taskProjectSelections[cid]?.value ? 'Select a project first' : 'Save task'}>
+                    <button
+                      className="iconButton"
+                      aria-label="Save task"
+                      disabled={!taskProjectSelections[cid]?.value}
+                      onMouseDown={() => { const el = document.activeElement; if (el && typeof el.blur === 'function') { el.blur(); } }}
+                      onClick={() => setTimeout(() => handleSaveTask(cid, t), 0)}
+                    >
+                      💾
+                    </button>
+                  </Tooltip>
                 </div>
               </li>
             );})}

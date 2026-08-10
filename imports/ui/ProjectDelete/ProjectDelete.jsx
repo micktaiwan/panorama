@@ -19,7 +19,7 @@ export const ProjectDelete = ({ projectId, onBack }) => {
   const [confirmed, setConfirmed] = useState(false);
 
   const project = useFind(() => ProjectsCollection.find({ _id: projectId }))[0];
-  const tasks = useFind(() => TasksCollection.find({ projectId }));
+  const tasks = useFind(() => TasksCollection.find({ projectId, deletedAt: { $exists: false } }));
   const sessions = useFind(() => NoteSessionsCollection.find({ projectId }));
   const sessionIds = sessions.map(s => s._id);
   const lines = useFind(() => NoteLinesCollection.find(sessionIds.length ? { sessionId: { $in: sessionIds } } : { _id: '__none__' }));

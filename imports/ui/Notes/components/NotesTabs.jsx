@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './NotesTabs.css';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -48,7 +49,12 @@ const SortableTab = ({ tab, isActive, isDirty, lockInfo, onClick, onDoubleClick,
     }
   };
   
+  const tabTooltip = isFileTab
+    ? tab.filePath
+    : lockInfo ? (lockInfo.self ? 'Locked by you' : `Editing by ${lockInfo.name} — read-only`) : '';
+
   return (
+    <Tooltip content={tabTooltip} className="note-tab-tip">
     <div
       ref={setNodeRef}
       style={style}
@@ -61,7 +67,6 @@ const SortableTab = ({ tab, isActive, isDirty, lockInfo, onClick, onDoubleClick,
       role="tab"
       aria-selected={isActive}
       tabIndex={0}
-      title={isFileTab ? tab.filePath : lockInfo ? (lockInfo.self ? 'Locked by you' : `Editing by ${lockInfo.name} — read-only`) : undefined}
     >
       <div
         className="tab-draggable"
@@ -103,6 +108,7 @@ const SortableTab = ({ tab, isActive, isDirty, lockInfo, onClick, onDoubleClick,
         ×
       </button>
     </div>
+    </Tooltip>
   );
 };
 SortableTab.propTypes = {
@@ -266,9 +272,11 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
         <SortableContext items={order} strategy={horizontalListSortingStrategy}>
           <div className="notes-tabs">
             {onBackToList && (
-              <button className="notes-back-button" onClick={onBackToList} title="Back to notes list" type="button">
-                &#x2190;
-              </button>
+              <Tooltip content="Back to notes list">
+                <button className="notes-back-button" onClick={onBackToList} aria-label="Back to notes list" type="button">
+                  &#x2190;
+                </button>
+              </Tooltip>
             )}
             {openTabs.map(tab => (
               <SortableTab
@@ -289,24 +297,28 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
                 onKeyDown={handleKeyDown}
               />
             ))}
-            <button
-              className="new-note-button"
-              onClick={onCreateNote}
-              disabled={isCreatingNote}
-              title={isCreatingNote ? "Creating note..." : "Create new note"}
-              type="button"
-            >
-              {isCreatingNote ? "..." : "+"}
-            </button>
-            {onOpenFile && (
+            <Tooltip content={isCreatingNote ? "Creating note..." : "Create new note"}>
               <button
-                className="new-note-button open-file-button"
-                onClick={onOpenFile}
-                title="Open file from disk"
+                className="new-note-button"
+                onClick={onCreateNote}
+                disabled={isCreatingNote}
+                aria-label="Create new note"
                 type="button"
               >
-                F
+                {isCreatingNote ? "..." : "+"}
               </button>
+            </Tooltip>
+            {onOpenFile && (
+              <Tooltip content="Open file from disk">
+                <button
+                  className="new-note-button open-file-button"
+                  onClick={onOpenFile}
+                  aria-label="Open file from disk"
+                  type="button"
+                >
+                  F
+                </button>
+              </Tooltip>
             )}
           </div>
         </SortableContext>

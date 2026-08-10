@@ -40,16 +40,16 @@ export const Help = () => {
               <li>
                 <span className="bold">Create Task</span>
                 <ul>
-                  <li>Project: optionnel, pré‑sélection selon la page</li>
-                  <li>Deadline: optionnelle</li>
+                  <li>Project: optional, pre-selected from the current page</li>
+                  <li>Deadline: optional</li>
                 </ul>
               </li>
               <li>
                 <span className="bold">Create Note</span>
                 <ul>
-                  <li>Title: optionnel; Enter sur Title → focus Content</li>
-                  <li>Content: requis; Enter sur Content → crée la note</li>
-                  <li>Project: optionnel, pré‑sélection selon la page</li>
+                  <li>Title: optional; Enter on Title → focus Content</li>
+                  <li>Content: required; Enter on Content → creates the note</li>
+                  <li>Project: optional, pre-selected from the current page</li>
                 </ul>
               </li>
               <li>

@@ -88,3 +88,44 @@
 .mt12 { margin-top: 12px; }
 .ml8 { margin-left: 8px; }
 
+/* Mobile: the palette is a full-height sheet, forms stack, and every hint that
+   names a keyboard shortcut disappears (there is no keyboard to press). */
+@media (max-width: 768px) {
+  .cmdTabs {
+    margin-bottom: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cmdTab {
+    padding: 8px 10px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .cmdTabsHint,
+  .kbdHint,
+  .cmdTip {
+    display: none;
+  }
+  .formRow {
+    display: block;
+  }
+  .formRow label {
+    display: block;
+    width: auto;
+    margin-bottom: 4px;
+  }
+  .formRow .afInput,
+  .formRow .afSelect {
+    width: 100%;
+  }
+  .formRowSubmit {
+    display: flex;
+    justify-content: stretch;
+  }
+  .formRowSubmit .btn {
+    flex: 1;
+    margin-left: 0;
+    padding: 10px 12px;
+  }
+}
+

@@ -34,6 +34,11 @@ Meteor.methods({
     if (doc.projectId) {
       await ProjectsCollection.updateAsync(doc.projectId, { $set: { updatedAt: new Date() } });
     }
+    // URLs written in the note become links of the project (fire-and-forget:
+    // a note must never fail to save because of link detection).
+    const { syncLinksFromNote } = await import('/imports/api/links/autoDetect.js');
+    syncLinksFromNote({ noteId: _id, projectId: sanitized.projectId, content: sanitized.content, userId: this.userId })
+      .catch(e => console.error('[links][notes.insert] auto-detect failed', e));
     if (vectorError) throw vectorError;
     return _id;
   },
@@ -134,6 +139,13 @@ Meteor.methods({
         } catch (e) {
           console.error('[search][notes.update] upsert failed', e);
         }
+        try {
+          const next = await NotesCollection.findOneAsync(noteId, { fields: { content: 1, projectId: 1 } });
+          const { syncLinksFromNote } = await import('/imports/api/links/autoDetect.js');
+          await syncLinksFromNote({ noteId, projectId: next?.projectId, content: next?.content, userId });
+        } catch (e) {
+          console.error('[links][notes.update] auto-detect failed', e);
+        }
       })();
     }
 
@@ -189,6 +201,12 @@ Meteor.methods({
         await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId, minChars: 800, maxChars: 1200, overlap: 150 });
       } catch (e) {
         console.error('[search][notes.updateContentCAS] upsert failed', e);
+      }
+      try {
+        const { syncLinksFromNote } = await import('/imports/api/links/autoDetect.js');
+        await syncLinksFromNote({ noteId, projectId: note.projectId, content: newContent, userId });
+      } catch (e) {
+        console.error('[links][notes.updateContentCAS] auto-detect failed', e);
       }
     })();
 

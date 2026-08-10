@@ -50,6 +50,10 @@ const clampText = (s, max = 300) => {
   return str.slice(0, max - 1) + '…';
 };
 
+// User input goes into Mongo $regex: neutralize anything that would change
+// the pattern (a name like "J. Doe (ops)" must be matched literally).
+const escapeRegex = (str) => String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // Project access mirrors the web publications: a user may access any project
 // they are a MEMBER of (memberIds), not only projects they own (userId). Docs
 // living inside a shared project (tasks, notes, links, files, sessions) are
@@ -211,10 +215,10 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
     // Project membership already checked by validateProjectId — return every
     // task in the project, whichever member created it (matches the web view).
-    const selector = buildByProjectSelector(validation.id);
+    const selector = { ...buildByProjectSelector(validation.id), ...NOT_DELETED };
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
@@ -230,9 +234,9 @@ export const TOOL_HANDLERS = {
     );
   },
   async tool_tasksFilter(args, memory) {
-    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
     const userId = getMCPUserId();
-    const selector = { ...buildFilterSelector(args || {}), userId };
+    const selector = { ...buildFilterSelector(args || {}), userId, ...NOT_DELETED };
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
@@ -366,6 +370,108 @@ export const TOOL_HANDLERS = {
       return buildErrorResponse(error, 'tool_updateProject');
     }
   },
+  async tool_projectMembers(args, memory) {
+    const projectId = String(args?.projectId || '').trim();
+    if (!projectId) {
+      return buildErrorResponse('projectId is required', 'tool_projectMembers', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide the project ID, e.g., {projectId: "abc123"}'
+      });
+    }
+
+    try {
+      const userId = getMCPUserId();
+      const { ProjectsCollection } = await import('/imports/api/projects/collections');
+      const project = await ProjectsCollection.findOneAsync(
+        { _id: projectId, memberIds: userId },
+        { fields: { name: 1, memberIds: 1, userId: 1 } }
+      );
+      if (!project) {
+        return buildErrorResponse('Project not found', 'tool_projectMembers', {
+          code: 'NOT_FOUND',
+          suggestion: 'Use tool_projectsList to find a project you are a member of'
+        });
+      }
+
+      const memberIds = Array.isArray(project.memberIds) ? project.memberIds : [];
+      const users = await Meteor.users.find(
+        { _id: { $in: memberIds } },
+        { fields: { emails: 1, username: 1, profile: 1 } }
+      ).fetchAsync();
+      const members = (users || []).map(u => ({
+        id: u._id,
+        name: clampText(u.profile?.name || u.username || ''),
+        email: clampText(u.emails?.[0]?.address || ''),
+        isOwner: u._id === project.userId,
+        isSelf: u._id === userId
+      }));
+
+      if (memory) { memory.lists = memory.lists || {}; memory.lists.members = members; }
+      return buildSuccessResponse(
+        { projectId, projectName: project.name || '', members, total: members.length },
+        'tool_projectMembers'
+      );
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_projectMembers');
+    }
+  },
+  async tool_addProjectMember(args, memory) {
+    const projectId = String(args?.projectId || '').trim();
+    const email = String(args?.email || '').trim();
+    if (!projectId || !email) {
+      return buildErrorResponse('projectId and email are required', 'tool_addProjectMember', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide both, e.g., {projectId: "abc123", email: "someone@example.com"}'
+      });
+    }
+
+    try {
+      const userId = getMCPUserId();
+      const memberId = await callMethodAs('projects.addMember', userId, projectId, email);
+
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.projectId = projectId;
+        memory.ids.memberId = memberId;
+      }
+      return buildSuccessResponse(
+        { success: true, projectId, memberId, email },
+        'tool_addProjectMember',
+        { policy: 'write' }
+      );
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_addProjectMember', {
+        suggestion: 'The user must already have a Panorama account and you must own the project. Use tool_usersList to check known accounts.'
+      });
+    }
+  },
+  async tool_removeProjectMember(args, memory) {
+    const projectId = String(args?.projectId || '').trim();
+    const memberId = String(args?.memberId || '').trim();
+    if (!projectId || !memberId) {
+      return buildErrorResponse('projectId and memberId are required', 'tool_removeProjectMember', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide both, e.g., {projectId: "abc123", memberId: "user123"}. Use tool_projectMembers to list ids.'
+      });
+    }
+
+    try {
+      const userId = getMCPUserId();
+      await callMethodAs('projects.removeMember', userId, projectId, memberId);
+
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.projectId = projectId;
+      }
+      return buildSuccessResponse(
+        { success: true, projectId, memberId },
+        'tool_removeProjectMember',
+        { policy: 'write' }
+      );
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_removeProjectMember');
+    }
+  },
   async tool_projectsOverview(args, memory) {
     const periodDays = Number(args?.periodDays) || 14;
 
@@ -451,7 +557,9 @@ export const TOOL_HANDLERS = {
       }
       let cursor;
       if (collection === 'tasks') {
-        const { TasksCollection } = await import('/imports/api/tasks/collections');
+        const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+        // Trashed tasks are invisible to queries; only the purge cron sees them.
+        Object.assign(selector, NOT_DELETED);
         cursor = TasksCollection;
       } else if (collection === 'projects') {
         const { ProjectsCollection } = await import('/imports/api/projects/collections');
@@ -897,6 +1005,147 @@ export const TOOL_HANDLERS = {
 
     return buildSuccessResponse(result, 'tool_updatePerson', { policy: 'write' });
   },
+  async tool_personContext(args, memory) {
+    const rawName = String(args?.name || '').trim();
+    const personId = String(args?.personId || '').trim();
+    if (!rawName && !personId) {
+      return buildErrorResponse('name or personId is required', 'tool_personContext', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide a person name, e.g., {name: "Jules"}'
+      });
+    }
+
+    const limit = Math.min(Math.max(Number(args?.limitPerKind) || 15, 1), 50);
+    const sinceDays = Math.min(Math.max(Number(args?.sinceDays) || 365, 1), 3650);
+    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+
+    try {
+      const userId = getMCPUserId();
+      const { PeopleCollection } = await import('/imports/api/people/collections');
+
+      // 1) Resolve the person. An exact id wins; otherwise match name and aliases.
+      const person = personId
+        ? await PeopleCollection.findOneAsync({ _id: personId, userId })
+        : await PeopleCollection.findOneAsync({
+          userId,
+          $or: [
+            { name: { $regex: escapeRegex(rawName), $options: 'i' } },
+            { aliases: { $regex: escapeRegex(rawName), $options: 'i' } },
+            { email: rawName.toLowerCase() }
+          ]
+        });
+
+      // Search terms: what the user typed, plus what the record knows.
+      const terms = [rawName, person?.name, person?.lastName, ...(person?.aliases || [])]
+        .map(t => String(t || '').trim())
+        .filter(t => t.length >= 3);
+      const uniqueTerms = [...new Set(terms.map(t => t.toLowerCase()))].map(t => escapeRegex(t));
+      if (uniqueTerms.length === 0) {
+        return buildErrorResponse(`No usable search term for "${rawName}"`, 'tool_personContext', {
+          code: 'NOT_FOUND',
+          suggestion: 'Use at least 3 characters, or pass a personId from tool_peopleList'
+        });
+      }
+      const nameRegex = { $regex: uniqueTerms.join('|'), $options: 'i' };
+      const email = String(person?.email || (rawName.includes('@') ? rawName : '')).toLowerCase();
+
+      // 2) Everything that mentions them, each source queried on its own terms.
+      const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+      const { NotesCollection } = await import('/imports/api/notes/collections');
+      const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+      const { CalendarEventsCollection } = await import('/imports/api/calendar/collections');
+      const { ProjectsCollection } = await import('/imports/api/projects/collections');
+
+      const projectIds = (await ProjectsCollection.find({ memberIds: userId }, { fields: { _id: 1, name: 1 } }).fetchAsync());
+      const projectName = Object.fromEntries(projectIds.map(p => [p._id, p.name || '']));
+      const scope = { $or: [{ userId }, { projectId: { $in: projectIds.map(p => p._id) } }] };
+
+      const [tasks, notes, emails, events] = await Promise.all([
+        TasksCollection.find(
+          { ...scope, ...NOT_DELETED, $and: [{ $or: [{ title: nameRegex }, { notes: nameRegex }] }] },
+          { fields: { title: 1, notes: 1, status: 1, deadline: 1, projectId: 1 }, sort: { updatedAt: -1 }, limit }
+        ).fetchAsync(),
+        NotesCollection.find(
+          { ...scope, $and: [{ $or: [{ title: nameRegex }, { content: nameRegex }] }] },
+          { fields: { title: 1, content: 1, projectId: 1, updatedAt: 1 }, sort: { updatedAt: -1 }, limit }
+        ).fetchAsync(),
+        GmailMessagesCollection.find(
+          {
+            userId,
+            gmailDate: { $gte: since },
+            $or: email ? [{ from: { $regex: escapeRegex(email), $options: 'i' } }, { from: nameRegex }] : [{ from: nameRegex }]
+          },
+          { fields: { id: 1, from: 1, subject: 1, snippet: 1, gmailDate: 1 }, sort: { gmailDate: -1 }, limit }
+        ).fetchAsync(),
+        CalendarEventsCollection.find(
+          {
+            userId,
+            start: { $gte: since },
+            $or: email
+              ? [{ title: nameRegex }, { 'attendees.email': email }, { 'attendees.displayName': nameRegex }]
+              : [{ title: nameRegex }, { 'attendees.displayName': nameRegex }]
+          },
+          { fields: { title: 1, start: 1, end: 1, attendees: 1 }, sort: { start: -1 }, limit }
+        ).fetchAsync()
+      ]);
+
+      const result = {
+        person: person ? {
+          id: person._id,
+          name: person.name || '',
+          lastName: person.lastName || '',
+          role: person.role || '',
+          email: person.email || '',
+          aliases: person.aliases || [],
+          notes: clampText(person.notes || '', 600),
+          left: !!person.left
+        } : null,
+        searchedFor: rawName || person?.name || '',
+        window: { sinceDays, since: since.toISOString() },
+        tasks: (tasks || []).map(t => ({
+          id: t._id,
+          title: clampText(t.title || ''),
+          notes: clampText(t.notes || ''),
+          status: t.status || 'todo',
+          deadline: t.deadline || null,
+          project: t.projectId ? (projectName[t.projectId] || '') : ''
+        })),
+        notes: (notes || []).map(n => ({
+          id: n._id,
+          title: clampText(n.title || '(untitled note)'),
+          excerpt: clampText(n.content || '', 300),
+          project: n.projectId ? (projectName[n.projectId] || '') : '',
+          updatedAt: n.updatedAt || null
+        })),
+        emails: (emails || []).map(e => ({
+          id: e.id,
+          from: clampText(e.from || ''),
+          subject: clampText(e.subject || ''),
+          snippet: clampText(e.snippet || '', 200),
+          date: e.gmailDate ? new Date(e.gmailDate).toISOString() : null
+        })),
+        events: (events || []).map(ev => ({
+          id: ev._id,
+          title: clampText(ev.title || ''),
+          start: ev.start ? new Date(ev.start).toISOString() : null,
+          end: ev.end ? new Date(ev.end).toISOString() : null,
+          attendees: (ev.attendees || []).map(a => a.displayName || a.email).filter(Boolean).slice(0, 10)
+        }))
+      };
+      result.total = result.tasks.length + result.notes.length + result.emails.length + result.events.length;
+
+      if (memory) {
+        memory.ids = memory.ids || {};
+        if (person?._id) memory.ids.personId = person._id;
+        memory.entities = memory.entities || {};
+        memory.entities.person = result.person;
+      }
+
+      return buildSuccessResponse(result, 'tool_personContext');
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_personContext');
+    }
+  },
   async tool_teamsList(args, memory) {
     const { TeamsCollection } = await import('/imports/api/teams/collections');
     const teams = await TeamsCollection.find({ userId: getMCPUserId() }, { fields: { name: 1 } }).fetchAsync();
@@ -1171,6 +1420,44 @@ export const TOOL_HANDLERS = {
     } catch (error) {
       console.error(`[tool_deleteTask] Error deleting task ${taskId}:`, error);
       return buildErrorResponse(error, 'tool_deleteTask');
+    }
+  },
+  async tool_restoreTask(args, memory) {
+    const taskId = String(args?.taskId || '').trim();
+    if (!taskId) {
+      return buildErrorResponse('taskId is required', 'tool_restoreTask', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide the task ID to restore, e.g., {taskId: "abc123"}'
+      });
+    }
+
+    const userId = getMCPUserId();
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const trashed = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { userId: 1, projectId: 1, deletedAt: 1, title: 1 } });
+
+    if (!trashed || !(await canAccessDoc(trashed, userId))) {
+      return buildErrorResponse(`Task not found: "${taskId}"`, 'tool_restoreTask', {
+        code: 'NOT_FOUND',
+        suggestion: 'A task purged after 7 days in the trash cannot be restored'
+      });
+    }
+    if (!trashed.deletedAt) {
+      return buildErrorResponse('This task is not in the trash', 'tool_restoreTask', {
+        code: 'NOT_DELETED',
+        suggestion: 'Nothing to restore — the task is already active'
+      });
+    }
+
+    try {
+      await callMethodAs('tasks.restore', userId, taskId);
+      const result = { restored: true, taskId, title: clampText(trashed.title || '') };
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.taskId = taskId;
+      }
+      return buildSuccessResponse(result, 'tool_restoreTask', { policy: 'write' });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_restoreTask');
     }
   },
   async tool_createNote(args, memory) {
@@ -1704,9 +1991,6 @@ export const TOOL_HANDLERS = {
       // Parse Gmail-style query syntax with support for combined queries
       const conditions = [];
       let remainingText = query;
-
-      // Helper function to escape regex special characters
-      const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
       // Extract all operators from the query
       const operators = {

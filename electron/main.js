@@ -11,35 +11,165 @@ const http = require('http');
 const SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8" />
 <title>Panorama</title>
 <style>
-  :root { color-scheme: light dark; }
-  html, body { margin: 0; height: 100%; }
+  :root {
+    color-scheme: light dark;
+    --bg: #0e1014;
+    --glow: rgba(106,169,255,0.16);
+    --text: #eef1f6;
+    --muted: #7c8496;
+    --accent: #6aa9ff;
+    --accent-soft: #a9c9ff;
+    --track: rgba(255,255,255,0.08);
+    --ridge-far: rgba(106,169,255,0.13);
+    --ridge-mid: rgba(106,169,255,0.20);
+    --ridge-near: rgba(10,14,22,0.85);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fa;
+      --glow: rgba(37,99,235,0.10);
+      --text: #171a20;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-soft: #7aa2f7;
+      --track: rgba(0,0,0,0.08);
+      --ridge-far: rgba(37,99,235,0.12);
+      --ridge-mid: rgba(37,99,235,0.18);
+      --ridge-near: rgba(37,99,235,0.30);
+    }
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, Helvetica, Arial, sans-serif;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     height: 100vh;
-    background: #1a1a1a; color: #e6e6e6;
+    background: var(--bg); color: var(--text);
     -webkit-user-select: none; user-select: none;
   }
-  .logo { font-size: 28px; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 28px; }
-  .spinner {
-    width: 32px; height: 32px;
-    border: 3px solid rgba(255,255,255,0.12);
-    border-top-color: #6aa9ff;
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
+  /* Night sky: three star layers twinkling out of phase, plus a rare shooting star */
+  .sky {
+    position: fixed; inset: 0; pointer-events: none; overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent 76%);
+    mask-image: linear-gradient(to bottom, #000 40%, transparent 76%);
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .status { margin-top: 20px; font-size: 13px; color: #888; min-height: 1.2em; }
-  @media (prefers-color-scheme: light) {
-    body { background: #fafafa; color: #222; }
-    .spinner { border-color: rgba(0,0,0,0.08); border-top-color: #2563eb; }
-    .status { color: #666; }
+  .stars { position: absolute; top: 0; left: 0; border-radius: 50%; animation: twinkle ease-in-out infinite; }
+  .s1 { width: 1px; height: 1px; animation-duration: 4.1s; box-shadow: 1114px 140px 0 0 rgba(255,255,255,0.4), 1693px 382px 0 0 rgba(190,214,255,0.5), 294px 531px 0 0 rgba(190,214,255,0.5), 1407px 425px 0 0 rgba(255,255,255,0.4), 1350px 79px 0 0 rgba(255,255,255,0.4), 397px 88px 0 0 rgba(190,214,255,0.5), 1481px 502px 0 0 rgba(255,255,255,0.55), 800px 419px 0 0 rgba(255,255,255,0.4), 475px 178px 0 0 rgba(190,214,255,0.5), 1480px 209px 0 0 rgba(255,255,255,0.4), 1394px 69px 0 0 rgba(255,255,255,0.55), 540px 183px 0 0 rgba(255,255,255,0.4), 1654px 240px 0 0 rgba(190,214,255,0.5), 383px 220px 0 0 rgba(190,214,255,0.5), 1392px 142px 0 0 rgba(255,255,255,0.4), 1439px 397px 0 0 rgba(255,255,255,0.55), 1002px 31px 0 0 rgba(190,214,255,0.5), 679px 397px 0 0 rgba(255,255,255,0.55), 650px 197px 0 0 rgba(255,255,255,0.4), 1605px 216px 0 0 rgba(255,255,255,0.55), 428px 50px 0 0 rgba(190,214,255,0.5), 9px 130px 0 0 rgba(255,255,255,0.55), 710px 92px 0 0 rgba(190,214,255,0.5), 815px 286px 0 0 rgba(190,214,255,0.5), 1043px 397px 0 0 rgba(255,255,255,0.55), 942px 228px 0 0 rgba(255,255,255,0.4), 1128px 133px 0 0 rgba(255,255,255,0.4), 1622px 84px 0 0 rgba(255,255,255,0.4), 1541px 334px 0 0 rgba(255,255,255,0.55), 1088px 361px 0 0 rgba(255,255,255,0.4), 1368px 387px 0 0 rgba(255,255,255,0.55), 1348px 616px 0 0 rgba(255,255,255,0.4), 324px 306px 0 0 rgba(190,214,255,0.5), 1466px 309px 0 0 rgba(190,214,255,0.5), 147px 569px 0 0 rgba(255,255,255,0.55), 414px 231px 0 0 rgba(190,214,255,0.5), 527px 514px 0 0 rgba(255,255,255,0.55), 1368px 203px 0 0 rgba(255,255,255,0.4), 15px 151px 0 0 rgba(190,214,255,0.5), 1405px 465px 0 0 rgba(190,214,255,0.5), 1006px 513px 0 0 rgba(255,255,255,0.55), 10px 112px 0 0 rgba(255,255,255,0.4), 1100px 387px 0 0 rgba(190,214,255,0.5), 830px 366px 0 0 rgba(190,214,255,0.5), 1160px 49px 0 0 rgba(255,255,255,0.4), 362px 380px 0 0 rgba(255,255,255,0.4), 545px 386px 0 0 rgba(255,255,255,0.4), 640px 107px 0 0 rgba(255,255,255,0.55), 202px 289px 0 0 rgba(190,214,255,0.5), 1191px 273px 0 0 rgba(190,214,255,0.5), 1360px 149px 0 0 rgba(255,255,255,0.4), 814px 51px 0 0 rgba(190,214,255,0.5), 586px 1px 0 0 rgba(255,255,255,0.4), 663px 33px 0 0 rgba(255,255,255,0.55), 207px 45px 0 0 rgba(190,214,255,0.5), 1208px 399px 0 0 rgba(255,255,255,0.4), 372px 242px 0 0 rgba(190,214,255,0.5), 533px 33px 0 0 rgba(190,214,255,0.5), 605px 607px 0 0 rgba(255,255,255,0.55), 424px 315px 0 0 rgba(190,214,255,0.5), 431px 420px 0 0 rgba(255,255,255,0.55), 1392px 130px 0 0 rgba(255,255,255,0.4), 1237px 277px 0 0 rgba(190,214,255,0.5), 1162px 122px 0 0 rgba(255,255,255,0.55), 1308px 8px 0 0 rgba(255,255,255,0.55), 839px 237px 0 0 rgba(255,255,255,0.4), 1187px 346px 0 0 rgba(255,255,255,0.4), 588px 218px 0 0 rgba(255,255,255,0.4), 1004px 145px 0 0 rgba(190,214,255,0.5), 1583px 338px 0 0 rgba(255,255,255,0.4); }
+  .s2 { width: 2px; height: 2px; animation-duration: 5.7s; animation-delay: -1.9s; box-shadow: 1505px 109px 0 0 rgba(255,255,255,0.85), 686px 178px 0 0 rgba(255,246,224,0.75), 1659px 8px 0 0 rgba(200,222,255,0.8), 643px 62px 0 0 rgba(255,246,224,0.75), 501px 528px 0 0 rgba(255,246,224,0.75), 1685px 413px 0 0 rgba(200,222,255,0.8), 1138px 488px 0 0 rgba(255,255,255,0.85), 1332px 295px 0 0 rgba(200,222,255,0.8), 952px 26px 0 0 rgba(255,246,224,0.75), 1267px 6px 0 0 rgba(200,222,255,0.8), 490px 439px 0 0 rgba(255,246,224,0.75), 1617px 251px 0 0 rgba(255,246,224,0.75), 343px 41px 0 0 rgba(255,255,255,0.85), 1545px 423px 0 0 rgba(255,255,255,0.85), 549px 463px 0 0 rgba(255,246,224,0.75), 1185px 361px 0 0 rgba(255,255,255,0.85), 1411px 439px 0 0 rgba(255,246,224,0.75), 383px 54px 0 0 rgba(255,255,255,0.85), 416px 148px 0 0 rgba(200,222,255,0.8), 841px 18px 0 0 rgba(255,255,255,0.85), 1063px 495px 0 0 rgba(255,255,255,0.85), 71px 100px 0 0 rgba(255,246,224,0.75), 848px 319px 0 0 rgba(200,222,255,0.8), 196px 430px 0 0 rgba(200,222,255,0.8), 1087px 310px 0 0 rgba(255,255,255,0.85), 199px 288px 0 0 rgba(200,222,255,0.8), 1319px 191px 0 0 rgba(255,255,255,0.85), 1685px 421px 0 0 rgba(255,246,224,0.75), 399px 73px 0 0 rgba(255,246,224,0.75), 1579px 182px 0 0 rgba(200,222,255,0.8), 1651px 342px 0 0 rgba(200,222,255,0.8), 1166px 253px 0 0 rgba(200,222,255,0.8), 1192px 370px 0 0 rgba(255,255,255,0.85), 444px 13px 0 0 rgba(255,255,255,0.85); }
+  .s3 { width: 3px; height: 3px; animation-duration: 7.3s; animation-delay: -3.4s; box-shadow: 1451px 199px 0 0 rgba(255,255,255,0.95), 7px 28px 0 0 rgba(174,205,255,0.9), 1366px 246px 0 0 rgba(174,205,255,0.9), 1348px 319px 0 0 rgba(174,205,255,0.9), 1671px 279px 0 0 rgba(174,205,255,0.9), 227px 360px 0 0 rgba(255,255,255,0.95), 1134px 200px 0 0 rgba(174,205,255,0.9), 789px 7px 0 0 rgba(174,205,255,0.9), 203px 46px 0 0 rgba(174,205,255,0.9), 686px 174px 0 0 rgba(255,255,255,0.95), 1572px 171px 0 0 rgba(174,205,255,0.9), 1669px 356px 0 0 rgba(174,205,255,0.9), 646px 72px 0 0 rgba(174,205,255,0.9), 97px 5px 0 0 rgba(174,205,255,0.9), 703px 398px 0 0 rgba(174,205,255,0.9), 447px 45px 0 0 rgba(255,255,255,0.95); }
+  @keyframes twinkle { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+  .shooting {
+    position: absolute; top: 14%; left: -12%;
+    width: 120px; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8));
+    opacity: 0;
+    animation: shoot 13s ease-in infinite;
+  }
+  @keyframes shoot {
+    0%   { transform: translate(0, 0) rotate(16deg); opacity: 0; }
+    3%   { opacity: 1; }
+    13%  { transform: translate(78vw, 24vh) rotate(16deg); opacity: 0; }
+    100% { transform: translate(78vw, 24vh) rotate(16deg); opacity: 0; }
+  }
+  /* Daytime panorama: no stars in light theme */
+  @media (prefers-color-scheme: light) { .sky { display: none; } }
+  /* Soft light pooling behind the wordmark */
+  .halo {
+    position: fixed; left: 50%; top: 42%; width: 720px; height: 720px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, var(--glow) 0%, transparent 62%);
+    animation: breathe 5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.75; transform: translate(-50%, -50%) scale(1); }
+    50%      { opacity: 1;    transform: translate(-50%, -50%) scale(1.08); }
+  }
+  .stage {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center;
+    animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .logo {
+    font-size: 30px; font-weight: 650; letter-spacing: 1.5px;
+    background: linear-gradient(100deg, var(--text) 20%, var(--accent-soft) 44%, var(--accent) 52%, var(--text) 76%);
+    background-size: 260% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+    animation: sweep 3.6s ease-in-out infinite;
+  }
+  @keyframes sweep {
+    0%   { background-position: 130% 0; }
+    55%  { background-position: -30% 0; }
+    100% { background-position: -30% 0; }
+  }
+  /* Indeterminate progress: a light travelling along a hairline track */
+  .track {
+    position: relative; margin-top: 30px;
+    width: 190px; height: 2px; border-radius: 2px;
+    background: var(--track); overflow: hidden;
+  }
+  .track::after {
+    content: ""; position: absolute; inset: 0; width: 42%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: travel 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  }
+  @keyframes travel {
+    0%   { transform: translateX(-110%); }
+    100% { transform: translateX(340%); }
+  }
+  .status {
+    margin-top: 18px; font-size: 12.5px; letter-spacing: 0.2px;
+    color: var(--muted); min-height: 1.2em;
+  }
+  .dots span { animation: blink 1.4s infinite; }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+  /* The panorama itself: three ridges drifting at their own pace */
+  .horizon {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 34vh; min-height: 130px;
+    pointer-events: none; overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 45%);
+    mask-image: linear-gradient(to bottom, transparent, #000 45%);
+  }
+  .horizon svg { position: absolute; bottom: 0; width: 100%; height: 100%; }
+  .ridge { animation: drift linear infinite; }
+  .ridge-far  { fill: var(--ridge-far);  animation-duration: 150s; }
+  .ridge-mid  { fill: var(--ridge-mid);  animation-duration: 90s; }
+  .ridge-near { fill: var(--ridge-near); animation-duration: 55s; }
+  @keyframes drift { to { transform: translateX(-400px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .halo, .logo, .ridge, .dots span, .stage, .stars { animation: none; }
+    .shooting { display: none; }
+    .logo { -webkit-text-fill-color: var(--text); color: var(--text); }
+    .track::after { animation-duration: 2.4s; }
   }
 </style></head>
 <body>
-  <div class="logo">Panorama</div>
-  <div class="spinner"></div>
-  <div class="status" id="status">Démarrage du serveur Meteor…</div>
+  <div class="sky">
+    <div class="stars s1"></div>
+    <div class="stars s2"></div>
+    <div class="stars s3"></div>
+    <div class="shooting"></div>
+  </div>
+  <div class="halo"></div>
+  <div class="stage">
+    <div class="logo">Panorama</div>
+    <div class="track"></div>
+    <div class="status" id="status">Starting Meteor server<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+  </div>
+  <div class="horizon">
+    <svg viewBox="0 0 800 120" preserveAspectRatio="none" aria-hidden="true">
+      <path class="ridge ridge-far" d="M0,70 L50,55 L100,62 L150,40 L200,58 L250,48 L300,66 L350,52 L400,70 L450,55 L500,62 L550,40 L600,58 L650,48 L700,66 L750,52 L800,70 L850,55 L900,62 L950,40 L1000,58 L1050,48 L1100,66 L1150,52 L1200,70 L1250,55 L1300,62 L1350,40 L1400,58 L1450,48 L1500,66 L1550,52 L1600,70 L1600,120 L0,120 Z" />
+      <path class="ridge ridge-mid" d="M0,86 L50,58 L100,74 L150,46 L200,68 L250,52 L300,80 L350,54 L400,86 L450,58 L500,74 L550,46 L600,68 L650,52 L700,80 L750,54 L800,86 L850,58 L900,74 L950,46 L1000,68 L1050,52 L1100,80 L1150,54 L1200,86 L1250,58 L1300,74 L1350,46 L1400,68 L1450,52 L1500,80 L1550,54 L1600,86 L1600,120 L0,120 Z" />
+      <path class="ridge ridge-near" d="M0,104 L50,80 L100,94 L150,68 L200,98 L250,74 L300,90 L350,72 L400,104 L450,80 L500,94 L550,68 L600,98 L650,74 L700,90 L750,72 L800,104 L850,80 L900,94 L950,68 L1000,98 L1050,74 L1100,90 L1150,72 L1200,104 L1250,80 L1300,94 L1350,68 L1400,98 L1450,74 L1500,90 L1550,72 L1600,104 L1600,120 L0,120 Z" />
+    </svg>
+  </div>
 </body></html>`;
 
 function waitForMeteor(url, win) {

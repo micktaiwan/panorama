@@ -7,6 +7,8 @@ import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 import { notify } from '/imports/ui/utils/notify.js';
 import { useTracker } from 'meteor/react-meteor-data';
 import { ChatsCollection } from '/imports/api/chats/collections';
+import { buildPageContext } from '/imports/ui/utils/pageContext.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 
 // Configure marked for safe HTML output
 marked.setOptions({
@@ -123,7 +125,9 @@ export default function ChatWidget({ isStandalone = false }) {
     const history = [...renderList, { role: 'user', content: trimmed }].map((m) => ({ role: m.role, content: m.content }));
     Meteor.call(
       'chat.ask',
-      { query: trimmed, history },
+      // The page the user is on travels with the question: "cette tâche",
+      // "ce projet" are only resolvable with that context.
+      { query: trimmed, history, context: buildPageContext() },
       (error, result) => {
         setIsSending(false);
         // Clear pending placeholders
@@ -384,11 +388,15 @@ export default function ChatWidget({ isStandalone = false }) {
           <div className="ChatWidget__header">
             <div className="ChatWidget__title">AI Chat {isSending ? <span className="muted">· Sending…</span> : null}</div>
             <div>
-              <button type="button" className="ChatWidget__close" onClick={handleCopyTranscript} aria-label="Copy transcript" title="Copy transcript">⧉</button>
-              <button type="button" className="ChatWidget__close" onClick={() => {
-                setPending([]);
-                Meteor.call('chats.clear');
-              }} aria-label="Clear" title="Clear chat">⟲</button>
+              <Tooltip content="Copy transcript">
+                <button type="button" className="ChatWidget__close" onClick={handleCopyTranscript} aria-label="Copy transcript">⧉</button>
+              </Tooltip>
+              <Tooltip content="Clear chat">
+                <button type="button" className="ChatWidget__close" onClick={() => {
+                  setPending([]);
+                  Meteor.call('chats.clear');
+                }} aria-label="Clear">⟲</button>
+              </Tooltip>
             </div>
           </div>
 
@@ -421,15 +429,16 @@ export default function ChatWidget({ isStandalone = false }) {
                     )}
                     {m.role === 'assistant' && !m.isStatus ? (
                       <div className="ChatWidget__actions">
-                        <button
-                          type="button"
-                          className="ChatWidget__iconBtn"
-                          onClick={() => handleCopyMessage(m.content)}
-                          aria-label="Copy reply"
-                          title="Copy reply"
-                        >
-                          ⧉
-                        </button>
+                        <Tooltip content="Copy reply">
+                          <button
+                            type="button"
+                            className="ChatWidget__iconBtn"
+                            onClick={() => handleCopyMessage(m.content)}
+                            aria-label="Copy reply"
+                          >
+                            ⧉
+                          </button>
+                        </Tooltip>
                       </div>
                     ) : null}
                   </div>
@@ -467,20 +476,25 @@ export default function ChatWidget({ isStandalone = false }) {
           style={docked ? { width: `${dockedWidth}px` } : undefined}
         >
           {docked && (
-            <div
-              className="ChatWidget__resizeHandle"
-              onMouseDown={handleResizeStart}
-              title="Drag to resize"
-            />
+            <Tooltip content="Drag to resize" placement="right" className="ChatWidget__resizeHandleTip">
+              <div
+                className="ChatWidget__resizeHandle"
+                onMouseDown={handleResizeStart}
+              />
+            </Tooltip>
           )}
           <div className="ChatWidget__header">
             <div className="ChatWidget__title">AI Chat {isSending ? <span className="muted">· Sending…</span> : null}</div>
             <div>
-              <button type="button" className="ChatWidget__close" onClick={handleCopyTranscript} aria-label="Copy transcript" title="Copy transcript">⧉</button>
-              <button type="button" className="ChatWidget__close" onClick={() => {
-                setPending([]);
-                Meteor.call('chats.clear');
-              }} aria-label="Clear" title="Clear chat">⟲</button>
+              <Tooltip content="Copy transcript">
+                <button type="button" className="ChatWidget__close" onClick={handleCopyTranscript} aria-label="Copy transcript">⧉</button>
+              </Tooltip>
+              <Tooltip content="Clear chat">
+                <button type="button" className="ChatWidget__close" onClick={() => {
+                  setPending([]);
+                  Meteor.call('chats.clear');
+                }} aria-label="Clear">⟲</button>
+              </Tooltip>
               <button type="button" className="ChatWidget__close" onClick={toggleOpen} aria-label="Close">×</button>
             </div>
           </div>
@@ -514,15 +528,16 @@ export default function ChatWidget({ isStandalone = false }) {
                     )}
                     {m.role === 'assistant' && !m.isStatus ? (
                       <div className="ChatWidget__actions">
-                        <button
-                          type="button"
-                          className="ChatWidget__iconBtn"
-                          onClick={() => handleCopyMessage(m.content)}
-                          aria-label="Copy reply"
-                          title="Copy reply"
-                        >
-                          ⧉
-                        </button>
+                        <Tooltip content="Copy reply">
+                          <button
+                            type="button"
+                            className="ChatWidget__iconBtn"
+                            onClick={() => handleCopyMessage(m.content)}
+                            aria-label="Copy reply"
+                          >
+                            ⧉
+                          </button>
+                        </Tooltip>
                       </div>
                     ) : null}
                   </div>

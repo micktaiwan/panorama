@@ -8,21 +8,22 @@ import { handlesOf } from '/imports/api/people/githubHandles';
 import { InlineEditable } from '/imports/ui/InlineEditable/InlineEditable.jsx';
 import { navigateTo } from '/imports/ui/router.js';
 import { notify } from '/imports/ui/utils/notify.js';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './OpportunityDetail.css';
 
 const personLabel = (p) => `${p?.name || ''}${p?.lastName ? ' ' + p.lastName : ''}`.trim();
 const fmtDate = (d) => {
   if (!d) return '—';
   const x = new Date(d);
-  return `${x.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} ${x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  return `${x.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} ${x.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
 const STATUS_OPTIONS = [
-  { value: 'idea', label: 'Idée' },
-  { value: 'in_progress', label: 'En cours' },
+  { value: 'idea', label: 'Idea' },
+  { value: 'in_progress', label: 'In progress' },
   { value: 'cooldown', label: 'Cooldown' },
-  { value: 'shipped', label: 'Livré' },
-  { value: 'paused', label: 'En pause' }
+  { value: 'shipped', label: 'Shipped' },
+  { value: 'paused', label: 'Paused' }
 ];
 
 export const OpportunityDetail = ({ opportunityId }) => {
@@ -79,20 +80,20 @@ export const OpportunityDetail = ({ opportunityId }) => {
   );
 
   const updateName = (name) => Meteor.call('opportunities.update', opportunityId, { name }, (err) => {
-    if (err) notify({ message: err.reason || 'Erreur', kind: 'error' });
+    if (err) notify({ message: err.reason || 'Error', kind: 'error' });
   });
   const updateStatus = (status) => Meteor.call('opportunities.update', opportunityId, { status }, (err) => {
-    if (err) notify({ message: err.reason || 'Erreur', kind: 'error' });
+    if (err) notify({ message: err.reason || 'Error', kind: 'error' });
   });
   const rerankAfterKeywords = () => {
-    notify({ message: 'Mots-clés enregistrés — recalcul des propositions…', kind: 'info' });
+    notify({ message: 'Keywords saved — recomputing suggestions…', kind: 'info' });
     Meteor.call('staffing.rerankUnclassified', (e, res) => {
-      if (e) { notify({ message: e.reason || 'Erreur recalcul', kind: 'error' }); return; }
-      notify({ message: `Propositions recalculées (${res.ranked}/${res.total})`, kind: 'success' });
+      if (e) { notify({ message: e.reason || 'Recompute failed', kind: 'error' }); return; }
+      notify({ message: `Suggestions recomputed (${res.ranked}/${res.total})`, kind: 'success' });
     });
   };
   const updateKeywords = (str) => Meteor.call('opportunities.update', opportunityId, { keywords: str }, (err) => {
-    if (err) { notify({ message: err.reason || 'Erreur', kind: 'error' }); return; }
+    if (err) { notify({ message: err.reason || 'Error', kind: 'error' }); return; }
     rerankAfterKeywords();
   });
 
@@ -105,11 +106,11 @@ export const OpportunityDetail = ({ opportunityId }) => {
     setKwLoading(true);
     Meteor.call('staffing.suggestKeywords', opportunityId, (err, res) => {
       setKwLoading(false);
-      if (err) { notify({ message: err.reason || 'Erreur', kind: 'error' }); return; }
+      if (err) { notify({ message: err.reason || 'Error', kind: 'error' }); return; }
       const kws = res?.keywords || [];
       setKwSuggestions(kws);
       setKwSelected(new Set(kws));
-      if (kws.length === 0) notify({ message: `Aucun nouveau mot-clé proposé (${res?.commitsConsidered || 0} commits analysés)`, kind: 'info' });
+      if (kws.length === 0) notify({ message: `No new keyword suggested (${res?.commitsConsidered || 0} commits analyzed)`, kind: 'info' });
     });
   };
   const toggleKw = (k) => setKwSelected(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -117,15 +118,15 @@ export const OpportunityDetail = ({ opportunityId }) => {
     if (!toAdd || toAdd.length === 0) return;
     const merged = [...new Set([...(opp?.keywords || []), ...toAdd])];
     Meteor.call('opportunities.update', opportunityId, { keywords: merged }, (err) => {
-      if (err) { notify({ message: err.reason || 'Erreur', kind: 'error' }); return; }
+      if (err) { notify({ message: err.reason || 'Error', kind: 'error' }); return; }
       setKwSuggestions(null);
-      notify({ message: `${toAdd.length} mot(s)-clé(s) ajouté(s)`, kind: 'success' });
+      notify({ message: `${toAdd.length} keyword(s) added`, kind: 'success' });
       rerankAfterKeywords();
     });
   };
   const reassignCommit = (sha, targetOppId) => Meteor.call('staffing.setCommitOpportunity', sha, targetOppId, (err) => {
-    if (err) { notify({ message: err.reason || 'Erreur', kind: 'error' }); return; }
-    notify({ message: targetOppId ? 'Commit rattaché' : 'Commit détaché', kind: 'success' });
+    if (err) { notify({ message: err.reason || 'Error', kind: 'error' }); return; }
+    notify({ message: targetOppId ? 'Commit linked' : 'Commit unlinked', kind: 'success' });
   });
 
   if (loading) return <div className="oppDetail"><p className="muted">Loading…</p></div>;
@@ -133,7 +134,7 @@ export const OpportunityDetail = ({ opportunityId }) => {
     return (
       <div className="oppDetail">
         <a href="#/staffing" className="oppBack" onClick={(e) => { e.preventDefault(); navigateTo({ name: 'staffing' }); }}>← Staffing</a>
-        <p className="muted">Projet introuvable.</p>
+        <p className="muted">Project not found.</p>
       </div>
     );
   }
@@ -147,28 +148,28 @@ export const OpportunityDetail = ({ opportunityId }) => {
 
       <div className="oppDetailHead">
         <h2 className="oppDetailName">
-          <InlineEditable value={opp.name} onSubmit={updateName} placeholder="Nom du projet" />
+          <InlineEditable value={opp.name} onSubmit={updateName} placeholder="Project name" />
         </h2>
         <div className="oppDetailMeta">
           <label className="oppStatusField">
-            Statut
+            Status
             <InlineEditable as="select" value={opp.status || 'in_progress'} options={STATUS_OPTIONS} onSubmit={updateStatus} />
           </label>
-          {opp.cycle ? <span className="oppCycle">Cycle : {opp.cycle}</span> : null}
+          {opp.cycle ? <span className="oppCycle">Cycle: {opp.cycle}</span> : null}
           {opp.notionUrl ? <a className="oppNotion" href={opp.notionUrl} target="_blank" rel="noreferrer">Notion ↗</a> : null}
         </div>
         <label className="oppKeywordsField">
-          <span className="oppKeywordsLabel">Mots-clés (aident la classification des commits)</span>
+          <span className="oppKeywordsLabel">Keywords (they help classify commits)</span>
           <InlineEditable
             value={(opp.keywords || []).join(', ')}
-            placeholder="ex. sre, terraform, infra, kibana"
+            placeholder="e.g. sre, terraform, infra, kibana"
             onSubmit={updateKeywords}
             fullWidth
           />
         </label>
         <div className="oppKwSuggest">
           <button type="button" className="btn" disabled={kwLoading} onClick={suggestKeywords}>
-            {kwLoading ? 'Analyse des commits…' : '💡 Suggérer des mots-clés manquants'}
+            {kwLoading ? 'Analyzing commits…' : '💡 Suggest missing keywords'}
           </button>
           {Array.isArray(kwSuggestions) && kwSuggestions.length > 0 && (
             <div className="oppKwProposals">
@@ -180,7 +181,7 @@ export const OpportunityDetail = ({ opportunityId }) => {
                   onClick={() => toggleKw(k)}
                 >{k}</button>
               ))}
-              <button type="button" className="btn btnPrimary" disabled={kwSelected.size === 0} onClick={() => addKeywords([...kwSelected])}>Ajouter ({kwSelected.size})</button>
+              <button type="button" className="btn btnPrimary" disabled={kwSelected.size === 0} onClick={() => addKeywords([...kwSelected])}>Add ({kwSelected.size})</button>
               <button type="button" className="btn" onClick={() => setKwSuggestions(null)}>✕</button>
             </div>
           )}
@@ -189,22 +190,22 @@ export const OpportunityDetail = ({ opportunityId }) => {
 
       <div className="oppStats">
         <span className="oppStatChip">{ownCommits.length} commits</span>
-        <span className="oppStatChip">{contributors.length} contributeur{contributors.length > 1 ? 's' : ''}</span>
+        <span className="oppStatChip">{contributors.length} contributor{contributors.length > 1 ? 's' : ''}</span>
         {contributors.length > 0 && <span className="oppContribs">{contributors.join(', ')}</span>}
       </div>
 
-      <h3 className="oppSectionTitle">Commits rattachés</h3>
+      <h3 className="oppSectionTitle">Linked commits</h3>
       {ownCommits.length === 0 ? (
-        <p className="muted">Aucun commit rattaché à ce projet.</p>
+        <p className="muted">No commit linked to this project.</p>
       ) : (
         <table className="oppCommits">
           <thead>
             <tr>
               <th>Date</th>
-              <th>Auteur</th>
+              <th>Author</th>
               <th>Scope</th>
               <th>Message</th>
-              <th>Rattacher à…</th>
+              <th>Move to…</th>
             </tr>
           </thead>
           <tbody>
@@ -216,15 +217,17 @@ export const OpportunityDetail = ({ opportunityId }) => {
                   <td className="oppCommitDate">{fmtDate(c.committedAt)}</td>
                   <td>{pid ? personLabel(peopleById.get(pid)) : (c.authorLogin || c.authorEmail || '—')}</td>
                   <td><span className="oppCommitScope">{c.scope || 'autre'}{overridden ? ' ✎' : ''}</span></td>
-                  <td className="oppCommitMsg" title={c.message}>{c.message}</td>
+                  <td className="oppCommitMsg">
+                    <Tooltip content={c.message} size="large" className="tooltipTriggerBlock">{c.message}</Tooltip>
+                  </td>
                   <td>
                     <select
                       className="oppReassign"
                       value=""
                       onChange={(e) => { if (e.target.value !== '') reassignCommit(c.sha, e.target.value === '__clear__' ? '' : e.target.value); e.target.value = ''; }}
                     >
-                      <option value="">déplacer…</option>
-                      {overridden && <option value="__clear__">↩ rendre au scope ({c.scope})</option>}
+                      <option value="">move…</option>
+                      {overridden && <option value="__clear__">↩ give back to the scope ({c.scope})</option>}
                       {reassignOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </td>

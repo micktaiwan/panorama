@@ -379,7 +379,7 @@ function App() {
           const message = err?.reason || err?.message || res?.error || 'Qdrant indisponible';
           setQdrantStatus({ ok: false, error: message, info: res || null });
           setQdrantModalOpen(true);
-          notify({ message: 'Qdrant indisponible — la recherche sémantique ne fonctionnera pas', kind: 'warning' });
+          notify({ message: 'Qdrant unavailable — semantic search will not work', kind: 'warning' });
         } else {
           setQdrantStatus({ ok: true, info: res });
         }
@@ -602,7 +602,7 @@ function App() {
       } else {
         // Pour toutes les autres pages : Tab -> Panorama
         e.preventDefault();
-        // Tab et Shift+Tab vont tous les deux à Panorama
+        // Tab and Shift+Tab both go to Panorama
         navigateTo({ name: 'home' });
       }
     };
@@ -974,18 +974,18 @@ function App() {
               notify({ message: 'Qdrant est de nouveau disponible', kind: 'success' });
               setQdrantModalOpen(false);
             });
-          }}>Réessayer</button>,
-          <button key="prefs" className="btn ml8" onClick={() => { setQdrantModalOpen(false); navigateTo({ name: 'preferences' }); }}>Ouvrir Préférences</button>,
+          }}>Retry</button>,
+          <button key="prefs" className="btn ml8" onClick={() => { setQdrantModalOpen(false); navigateTo({ name: 'preferences' }); }}>Open Preferences</button>,
           <button key="close" className="btn ml8" onClick={() => setQdrantModalOpen(false)}>Ignorer</button>
         ]}
       >
         <div>
-          <p>La base Qdrant n'est pas accessible. La recherche sémantique sera désactivée tant que la connexion n'est pas rétablie.</p>
+          <p>The Qdrant database is unreachable. Semantic search stays disabled until the connection is back.</p>
           {qdrantStatus?.error ? (
-            <p className="muted">Détails: {String(qdrantStatus.error)}</p>
+            <p className="muted">Details: {String(qdrantStatus.error)}</p>
           ) : null}
           {qdrantStatus?.info?.url ? (
-            <p className="muted">URL configurée: {qdrantStatus.info.url}</p>
+            <p className="muted">Configured URL: {qdrantStatus.info.url}</p>
           ) : null}
         </div>
       </Modal>

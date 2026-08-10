@@ -1,6 +1,6 @@
 import { Meteor } from 'meteor/meteor';
 import cron from 'node-cron';
-import { TasksCollection } from '/imports/api/tasks/collections';
+import { TasksCollection, TRASH_RETENTION_DAYS } from '/imports/api/tasks/collections';
 import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { GmailMessagesCollection } from '/imports/api/emails/collections';
 import { suggestCtaInternal } from '/imports/api/emails/methods';
@@ -11,7 +11,7 @@ import { ensureLoggedIn } from '/imports/api/_shared/auth';
 let cronJobsStarted = false;
 const jobLocks = new Map();
 
-function scheduleNoOverlap(name, expression, timezone, task) { // eslint-disable-line no-unused-vars
+function scheduleNoOverlap(name, expression, timezone, task) {
   const run = async () => {
     if (jobLocks.get(name)) return;
     jobLocks.set(name, true);
@@ -240,6 +240,35 @@ async function prepareEmailCtaMorningBatch() {
   }
 }
 
+// Permanently remove tasks that have been in the trash for more than
+// TRASH_RETENTION_DAYS. Until then they stay restorable and still count in the
+// activity reporting.
+async function purgeTrashedTasks() {
+  const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const expired = await TasksCollection.find(
+    { deletedAt: { $lte: cutoff } },
+    { fields: { _id: 1, projectId: 1 } }
+  ).fetchAsync();
+
+  if (expired.length === 0) {
+    console.log('[cron][trash] No expired task to purge');
+    return { purged: 0 };
+  }
+
+  const { deleteDoc } = await import('/imports/api/search/vectorStore.js');
+  let purged = 0;
+  for (const task of expired) {
+    await TasksCollection.removeAsync(task._id);
+    // The vector was already dropped on soft delete; this is a safety net for
+    // tasks trashed before that behaviour existed.
+    try { await deleteDoc('task', task._id); } catch (e) { console.error('[cron][trash] vector delete failed', task._id, e); }
+    purged += 1;
+  }
+
+  console.log(`[cron][trash] Purged ${purged} task(s) deleted before ${cutoff.toISOString()}`);
+  return { purged };
+}
+
 function registerJobs() {
   // const cronSettings = Meteor.settings?.cron || {};
   // const timezone = cronSettings.timezone || 'Europe/Paris';
@@ -259,7 +288,10 @@ function registerJobs() {
   // );
 
   // console.log('[cron] Jobs registered - urgent tasks and email batch on weekdays at 9:00 AM');
-  console.log('[cron] Jobs disabled - all cron jobs are commented out');
+
+  const timezone = Meteor.settings?.cron?.timezone || 'Europe/Paris';
+  scheduleNoOverlap('purge-trashed-tasks', '30 3 * * *', timezone, purgeTrashedTasks);
+  console.log('[cron] Job registered - trashed tasks purge daily at 03:30');
 }
 
 Meteor.methods({
@@ -275,6 +307,12 @@ Meteor.methods({
     console.log('[cron] Manual trigger of morning email batch...');
     await prepareEmailCtaMorningBatch();
     return { success: true, message: 'Morning email batch executed manually' };
+  },
+
+  async 'cron.purgeTrashedTasks'() {
+    ensureLoggedIn(this.userId);
+    console.log('[cron] Manual trigger of trashed tasks purge...');
+    return purgeTrashedTasks();
   }
 });
 
@@ -282,4 +320,6 @@ Meteor.startup(() => {
   if (cronJobsStarted) return;
   cronJobsStarted = true;
   registerJobs();
+  // Catch-up: the desktop app is rarely running at 03:30, so sweep once at boot.
+  purgeTrashedTasks().catch(e => console.error('[cron][trash] startup purge failed', e));
 });

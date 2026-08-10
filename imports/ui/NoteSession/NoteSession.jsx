@@ -27,7 +27,9 @@ const SortableLine = ({ line, index, children }) => {
   return (
     <li ref={setNodeRef} style={style} key={line._id}>
       <div className="noteLineRow">
-        <span className="noteLineNumber dragHandle" title="Drag to reorder" {...attributes} {...listeners}>L{index + 1}</span>
+        <Tooltip content="Drag to reorder">
+          <span className="noteLineNumber dragHandle" {...attributes} {...listeners}>L{index + 1}</span>
+        </Tooltip>
         {children}
       </div>
     </li>
@@ -284,25 +286,27 @@ export const NoteSession = ({ sessionId, onBack }) => {
                       }}
                     />
                     <span className="noteLineActions">
-                      <button
-                        className="iconButton"
-                        title="Delete line"
-                        onClick={() => {
-                          Meteor.call('noteLines.remove', l._id, (err, _res) => {
-                            if (err) {
-                              if (err && err.error === 'search-delete-failed') {
-                                notify({ message: 'Deleted, but search index cleanup failed.', kind: 'warning' });
-                              } else {
-                                console.error('noteLines.remove failed', err);
-                                notify({ message: 'Failed to delete line.', kind: 'error' });
-                                return;
+                      <Tooltip content="Delete line">
+                        <button
+                          className="iconButton"
+                          aria-label="Delete line"
+                          onClick={() => {
+                            Meteor.call('noteLines.remove', l._id, (err, _res) => {
+                              if (err) {
+                                if (err && err.error === 'search-delete-failed') {
+                                  notify({ message: 'Deleted, but search index cleanup failed.', kind: 'warning' });
+                                } else {
+                                  console.error('noteLines.remove failed', err);
+                                  notify({ message: 'Failed to delete line.', kind: 'error' });
+                                  return;
+                                }
                               }
-                            }
-                          });
-                        }}
-                      >
-                        🗑
-                      </button>
+                            });
+                          }}
+                        >
+                          🗑
+                        </button>
+                      </Tooltip>
                     </span>
                   </SortableLine>
                 );
@@ -329,23 +333,31 @@ export const NoteSession = ({ sessionId, onBack }) => {
         <div className="aiHeader">
           <h3>AI</h3>
           <div className="aiHeaderActions">
-            <button
-              className="btn btn-primary"
-              disabled={isCoaching || !hasLines}
-              onClick={() => {
-                setIsCoaching(true);
-                Meteor.call('ai.coachQuestions', sessionId, (err, _res) => {
-                  setIsCoaching(false);
-                  if (err) {
-                    console.error('ai.coachQuestions failed', err);
-                  }
-                });
-              }}
-              title={!hasLines ? 'Add at least one line to ask Coach' : undefined}
+            <Tooltip content={!hasLines ? 'Add at least one line to ask Coach' : ''}>
+              <button
+                className="btn btn-primary"
+                disabled={isCoaching || !hasLines}
+                onClick={() => {
+                  setIsCoaching(true);
+                  Meteor.call('ai.coachQuestions', sessionId, (err, _res) => {
+                    setIsCoaching(false);
+                    if (err) {
+                      console.error('ai.coachQuestions failed', err);
+                    }
+                  });
+                }}
+              >
+                {isCoaching ? 'Asking…' : 'Ask Coach'}
+              </button>
+            </Tooltip>
+            <Tooltip
+              placement="top"
+              content={!session || !hasLines
+                ? 'Add at least one line to manage coach items'
+                : (!session.coachQuestions && !session.coachQuestionsJson && !session.coachIdeasJson && !session.coachAnswersJson)
+                  ? 'No coach items to clear'
+                  : 'Clear coach items (questions, ideas, answers) for this session'}
             >
-              {isCoaching ? 'Asking…' : 'Ask Coach'}
-            </button>
-            <Tooltip content="Clear coach items (questions, ideas, answers) for this session" placement="top">
               <button
                 className="btn ml8"
                 onClick={() => {
@@ -356,31 +368,27 @@ export const NoteSession = ({ sessionId, onBack }) => {
                   });
                 }}
                 disabled={!session || !hasLines || (!session.coachQuestions && !session.coachQuestionsJson && !session.coachIdeasJson && !session.coachAnswersJson)}
-                title={!session || !hasLines
-                  ? 'Add at least one line to manage coach items'
-                  : (!session.coachQuestions && !session.coachQuestionsJson && !session.coachIdeasJson && !session.coachAnswersJson)
-                    ? 'No coach items to clear'
-                    : 'Clear coach items'}
               >
                 Clear Coach
               </button>
             </Tooltip>
-            <button
-              className="btn ml8"
-              disabled={isSummarizing || !hasLines}
-              onClick={() => {
-                setIsSummarizing(true);
-                Meteor.call('ai.summarizeSession', sessionId, (err, _res) => {
-                  setIsSummarizing(false);
-                  if (err) {
-                    console.error('ai.summarizeSession failed', err);
-                  }
-                });
-              }}
-              title={!hasLines ? 'Add at least one line to summarize' : undefined}
-            >
-              {isSummarizing ? 'Summarizing…' : 'Summarize'}
-            </button>
+            <Tooltip content={!hasLines ? 'Add at least one line to summarize' : ''}>
+              <button
+                className="btn ml8"
+                disabled={isSummarizing || !hasLines}
+                onClick={() => {
+                  setIsSummarizing(true);
+                  Meteor.call('ai.summarizeSession', sessionId, (err, _res) => {
+                    setIsSummarizing(false);
+                    if (err) {
+                      console.error('ai.summarizeSession failed', err);
+                    }
+                  });
+                }}
+              >
+                {isSummarizing ? 'Summarizing…' : 'Summarize'}
+              </button>
+            </Tooltip>
             
           </div>
         </div>
@@ -460,7 +468,6 @@ export const NoteSession = ({ sessionId, onBack }) => {
                     <button
                       className="btn btn-success"
                       disabled={isFinalizing || !session.projectId}
-                      title={!session.projectId ? 'Link this session to a project to finalize as a note' : 'Finalize this recap as a project note'}
                       onClick={() => {
                       if (!session.projectId) return;
                       setIsFinalizing(true);
@@ -535,31 +542,33 @@ export const NoteSession = ({ sessionId, onBack }) => {
           )}
         </div>
         <div className="sessionFooter">
-          <button
-            className="dangerLink"
+          <Tooltip content="Delete this session">
+            <button
+              className="dangerLink"
               onClick={() => {
                 setShowDeleteModal(true);
               }}
-              title="Delete this session"
             >
               Delete session
             </button>
-          <button
-            className="btn ml8"
-            onClick={() => {
-              // eslint-disable-next-line no-alert -- simple confirmation, no modal refactor needed
-              const ok = window.confirm('Reset this session? This will permanently delete all session lines and clear AI coach and summary data.');
-              if (!ok) return;
-              Meteor.call('noteSessions.resetAll', sessionId, (err) => {
+          </Tooltip>
+          <Tooltip content="Reset all session data (lines, coach, summary)">
+            <button
+              className="btn ml8"
+              onClick={() => {
+                // eslint-disable-next-line no-alert -- simple confirmation, no modal refactor needed
+                const ok = window.confirm('Reset this session? This will permanently delete all session lines and clear AI coach and summary data.');
+                if (!ok) return;
+                Meteor.call('noteSessions.resetAll', sessionId, (err) => {
                   if (err) {
                     console.error('noteSessions.resetAll failed', err);
                   }
                 });
               }}
-            title="Reset all session data (lines, coach, summary)"
             >
               Reset session
             </button>
+          </Tooltip>
           <Modal
             open={typeof showDeleteModal === 'boolean' ? showDeleteModal : false}
             onClose={() => setShowDeleteModal(false)}

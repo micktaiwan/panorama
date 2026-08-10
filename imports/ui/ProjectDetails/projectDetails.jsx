@@ -24,10 +24,12 @@ import { FileItem } from '../components/File/File.jsx';
 import { ClaudeProjectsCollection } from '../../api/claudeProjects/collections';
 import { Collapsible } from '../components/Collapsible/Collapsible.jsx';
 import { Modal } from '../components/Modal/Modal.jsx';
+import { Tooltip } from '../components/Tooltip/Tooltip.jsx';
 import { ActivitySummary } from '../components/ActivitySummary/ActivitySummary.jsx';
 import { NotesPanel } from '../Notes/NotesPanel/NotesPanel.jsx';
 import { useDeferredTaskRemoval } from '../hooks/useDeferredTaskRemoval.js';
 import { useNow } from '../hooks/useNow.js';
+import { taskStatusRank, CLOSED_TASK_STATUSES } from '../../api/_shared/taskStatus';
 
 /** Return '#000' or '#fff' depending on which has better contrast against hex color */
 function contrastText(hex) {
@@ -47,7 +49,9 @@ const SortableRow = ({ task, children }) => {
   return (
     <li ref={setNodeRef} style={style} key={task._id} className={(task.status || 'todo') === 'done' ? 'taskDone' : ''}>
       <div className={`taskRow${(task.status || 'todo') === 'in_progress' ? ' inProgress' : ''}`}>
-        <span className="dragHandle" {...attributes} {...listeners} title="Drag to reorder">≡</span>
+        <Tooltip content="Drag to reorder">
+          <span className="dragHandle" {...attributes} {...listeners}>≡</span>
+        </Tooltip>
         {children}
       </div>
     </li>
@@ -71,15 +75,17 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
     () => allProjects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })),
     [allProjects]
   );
-  const tasks = useFind(() => TasksCollection.find({ projectId }, { sort: { updatedAt: -1 } }));
+  const tasks = useFind(() => TasksCollection.find({ projectId, deletedAt: { $exists: false } }, { sort: { updatedAt: -1 } }));
   // Ticks every minute so a snoozed task returns to the active list on its own
   // once its wake-up date has passed, without a reload.
   const now = useNow();
   const activeTasks = useMemo(() => {
     const toTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
-    const statusRank = (s) => (s === 'in_progress' ? 0 : 1);
+    const statusRank = taskStatusRank;
     return tasks
-      .filter(t => !['done','cancelled','idea'].includes(t.status || 'todo'))
+      .filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo'))
+      // Tasks under validation have their own collapsed section
+      .filter(t => (t.status || 'todo') !== 'testing')
       .filter(t => !isSnoozed(t, now))
       .sort((a, b) => {
         const ad = toTime(a.deadline);
@@ -98,11 +104,16 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   }, [tasks, now]);
   // Snoozed open tasks get their own collapsed section, soonest wake-up first
   const snoozedTasks = useMemo(() => tasks
-    .filter(t => !['done','cancelled','idea'].includes(t.status || 'todo'))
+    .filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo'))
     .filter(t => isSnoozed(t, now))
     .sort((a, b) => new Date(a.snoozedUntil).getTime() - new Date(b.snoozedUntil).getTime()), [tasks, now]);
   const doneTasks = useMemo(() => tasks
     .filter(t => ['done','cancelled'].includes(t.status || 'todo'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    .sort((a,b) => new Date((b.statusChangedAt || 0)) - new Date((a.statusChangedAt || 0))), [tasks, tasks && tasks.map(t => t.status || '').join(','), projectId]);
+  // Waiting for validation: out of the active list, most recently moved first
+  const testingTasks = useMemo(() => tasks
+    .filter(t => (t.status || 'todo') === 'testing')
     // eslint-disable-next-line react-hooks/exhaustive-deps
     .sort((a,b) => new Date((b.statusChangedAt || 0)) - new Date((a.statusChangedAt || 0))), [tasks, tasks && tasks.map(t => t.status || '').join(','), projectId]);
   const ideaTasks = useMemo(() => tasks
@@ -128,6 +139,7 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
   const [showDone, setShowDone] = useState(false);
   const [showIdeas, setShowIdeas] = useState(false);
   const [showSnoozed, setShowSnoozed] = useState(false);
+  const [showTesting, setShowTesting] = useState(false);
   const sessions = useFind(() => NoteSessionsCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const notes = useFind(() => NotesCollection.find({ projectId }, { sort: { createdAt: -1 } }));
   const links = useFind(() => LinksCollection.find({ projectId }, { sort: { createdAt: -1 } }));
@@ -293,21 +305,23 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
       <Card className="projectHeaderCard" title={null} actions={null}>
         <div className="pd-hero" style={displayColor ? { '--project-color': displayColor, '--project-text': contrastText(displayColor) } : undefined}>
         <div className="projectHeaderRow">
-          <button
-            className={`starBtn${project.isFavorite ? ' active' : ''}`}
-            title={project.isFavorite ? 'Unfavorite project' : 'Mark as favorite'}
-            onClick={() => {
-              const next = !project.isFavorite;
-              const modifier = next && (typeof project.favoriteRank === 'undefined' || project.favoriteRank === null)
-                ? { isFavorite: true, favoriteRank: Date.now() }
-                : { isFavorite: next };
-              Meteor.call('projects.update', projectId, modifier);
-            }}
-          >
-            <svg className="starIcon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-            </svg>
-          </button>
+          <Tooltip content={project.isFavorite ? 'Unfavorite project' : 'Mark as favorite'}>
+            <button
+              className={`starBtn${project.isFavorite ? ' active' : ''}`}
+              aria-label={project.isFavorite ? 'Unfavorite project' : 'Mark as favorite'}
+              onClick={() => {
+                const next = !project.isFavorite;
+                const modifier = next && (typeof project.favoriteRank === 'undefined' || project.favoriteRank === null)
+                  ? { isFavorite: true, favoriteRank: Date.now() }
+                  : { isFavorite: next };
+                Meteor.call('projects.update', projectId, modifier);
+              }}
+            >
+              <svg className="starIcon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+              </svg>
+            </button>
+          </Tooltip>
           <h2 className="projectTitle">
             <InlineEditable
               value={project.name}
@@ -343,25 +357,26 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
             </span>
             <span className="pd-meta-badge">
               <span className="pd-meta-label">Color</span>
-              <input
-                type="color"
-                className="colorPickerInput"
-                value={displayColor || '#6b7280'}
-                onInput={onColorChange}
-                title="Pick a label color"
-              />
+              <Tooltip content="Pick a label color">
+                <input
+                  type="color"
+                  className="colorPickerInput"
+                  value={displayColor || '#6b7280'}
+                  onInput={onColorChange}
+                  aria-label="Pick a label color"
+                />
+              </Tooltip>
             </span>
             {linkedClaudeProjects.length > 0 && linkedClaudeProjects.map((cp) => (
-              <a
-                key={cp._id}
-                href={`#/claude/${cp._id}`}
-                className="claudeCodeLink"
-                title={`Open Claude project: ${cp.name}`}
-              >Claude Code: {cp.name}</a>
+              <Tooltip key={cp._id} content={`Open Claude project: ${cp.name}`}>
+                <a href={`#/claude/${cp._id}`} className="claudeCodeLink">Claude Code: {cp.name}</a>
+              </Tooltip>
             ))}
           </div>
           <div className="projectHeaderRight">
-            <button className="btn-link" onClick={openImproveModal} title="Improve project description">Improve description</button>
+            <Tooltip content="Improve project description">
+              <button className="btn-link" onClick={openImproveModal}>Improve description</button>
+            </Tooltip>
           </div>
         </div>
         <div className="projectDescription">
@@ -470,6 +485,53 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                 </ul>
               </SortableContext>
             </DndContext>
+
+            {testingTasks.length > 0 ? (
+              <div className="doneSection">
+                <h3 className="tasksHeader doneHeader">
+                  <button className="btn-link" onClick={() => setShowTesting(v => !v)} aria-expanded={showTesting} aria-controls="testingTasksList">
+                    {showTesting ? '▼' : '▶'} Testing ({testingTasks.length})
+                  </button>
+                </h3>
+                {showTesting ? (
+                  <ul id="testingTasksList" className="tasksList">
+                    {testingTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
+                      <li key={t._id}>
+                        <TaskRow
+                          as="div"
+                          task={t}
+                          showProject={false}
+                          allowProjectChange
+                          showMoveProjectButton
+                          projectOptions={projectOptions}
+                          onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
+                          showStatusSelect
+                          showDeadline
+                          editableDeadline
+                          showClearDeadline
+                          showDelete
+                          showSnooze
+                          showUrgentImportant={false}
+                          showAssignee
+                          memberOptions={memberOptions}
+                          showTags
+                          tagSuggestions={tagSuggestions}
+                          inlineActions={false}
+                          titleClassName={t.deadline ? (deadlineSeverity(t.deadline) || '') : ''}
+                          onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                          onUpdateTitle={(next) => updateTaskTitle(t._id, next)}
+                          onUpdateDeadline={(next) => updateTaskDeadline(t._id, next)}
+                          onClearDeadline={() => updateTaskDeadline(t._id, '')}
+                          onRemove={() => removeTask(t._id)}
+                          onUpdateAssignee={(next) => Meteor.call('tasks.update', t._id, { assigneeId: next })}
+                          onUpdateTags={(next) => Meteor.call('tasks.update', t._id, { tags: next })}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
 
             {snoozedTasks.length > 0 ? (
               <div className="doneSection">
@@ -696,15 +758,16 @@ export const ProjectDetails = ({ projectId, onBack, onOpenNoteSession, onCreateT
                           {email && <span className="pd-member__email">{email}</span>}
                         </div>
                         {!isSelf && (
-                          <button
-                            className="pd-member__remove"
-                            title="Remove member"
-                            onClick={() => {
-                              Meteor.call('projects.removeMember', projectId, m._id, (err) => {
-                                if (err) setMemberError(err.reason || err.message);
-                              });
-                            }}
-                          >Remove</button>
+                          <Tooltip content="Remove member">
+                            <button
+                              className="pd-member__remove"
+                              onClick={() => {
+                                Meteor.call('projects.removeMember', projectId, m._id, (err) => {
+                                  if (err) setMemberError(err.reason || err.message);
+                                });
+                              }}
+                            >Remove</button>
+                          </Tooltip>
                         )}
                       </div>
                     );

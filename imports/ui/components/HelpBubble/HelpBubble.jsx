@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Help } from '/imports/ui/Help/Help.jsx';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './HelpBubble.css';
 
 export default function HelpBubble() {
@@ -20,7 +21,9 @@ export default function HelpBubble() {
 
   return (
     <div className={`HelpBubble__root${open ? ' isOpen' : ''}`}>
-      <button className="HelpBubble__fab" onClick={() => setOpen((v) => !v)} title={open ? 'Close help' : 'Open help'} aria-expanded={open} aria-haspopup="dialog">❔</button>
+      <Tooltip content={open ? 'Close help' : 'Open help'}>
+        <button className="HelpBubble__fab" onClick={() => setOpen((v) => !v)} aria-label={open ? 'Close help' : 'Open help'} aria-expanded={open} aria-haspopup="dialog">❔</button>
+      </Tooltip>
       {open && (
         <div className="HelpBubble__panel" ref={panelRef} role="dialog" aria-label="Help">
           <div className="HelpBubble__header">

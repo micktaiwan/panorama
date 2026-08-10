@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Meteor } from 'meteor/meteor';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './AgentTeams.css';
 
 const POLL_ACTIVE = 5000;
@@ -120,7 +121,9 @@ const TeamItem = ({ team, isExpanded, onToggle }) => {
               {team.tasks.map(task => (
                 <div key={task.id} className="ccTeamTask">
                   <span className={`ccStatusDot ccStatusDot--small ccStatus-${taskStatusToUi(task.status)}`} />
-                  <span className="ccTeamTaskSubject" title={task.description}>{task.subject}</span>
+                  <Tooltip content={task.description} className="ccTeamTaskSubjectTip" size="large">
+                    <span className="ccTeamTaskSubject">{task.subject}</span>
+                  </Tooltip>
                   {task.status === 'in_progress' && task.activeForm && (
                     <span className="ccTeamTaskActive muted">{task.activeForm}</span>
                   )}

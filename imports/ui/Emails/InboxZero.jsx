@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { Meteor } from 'meteor/meteor';
 import { GmailMessagesCollection } from '../../api/emails/collections';
@@ -14,7 +15,7 @@ export const InboxZero = () => {
   const [processedCount, setProcessedCount] = useState(0);
   const [sessionStartTime, _setSessionStartTime] = useState(() => Date.now());
 
-  // ✅ Solution 3 : Utiliser la publication réactive
+  // Use the reactive publication
   const subInboxZeroThreads = useSubscribe('emails.inboxZeroThreads');
   const allMessages = useFind(() => GmailMessagesCollection.find({}, { 
     sort: { gmailDate: -1 } 
@@ -134,7 +135,7 @@ export const InboxZero = () => {
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [handleKeyPress]);
 
-  // ✅ Solution 3 : Plus besoin d'effet complexe, la méthode côté serveur gère tout
+  // No complex effect needed: the server method handles everything
 
   const handleSuggestedAction = () => {
     if (!currentEmail?.ctaSuggestion) return;
@@ -252,7 +253,7 @@ export const InboxZero = () => {
   const refreshEmails = () => {
     setCurrentEmailIndex(0);
     setProcessedEmails(new Set());
-    // ✅ Solution 3 : Plus besoin de recharger, la publication est réactive !
+    // No reload needed: the publication is reactive
   };
 
   // Reset index when visible emails change
@@ -302,7 +303,7 @@ export const InboxZero = () => {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // ✅ Solution 3 : Gestion des états de chargement avec publication
+  // Loading states driven by the publication
   if (subInboxZeroThreads()) {
     return (
       <div className="inboxZero-container">
@@ -447,16 +448,20 @@ export const InboxZero = () => {
               </div>
 
               {/* Tooltip with rationale */}
-              <div className="inboxZero-tooltip">
+              <Tooltip
+                size="large"
+                content={(
+                  <>
+                    <strong>AI Suggestion:</strong> {currentEmail.ctaSuggestion.rationale}
+                    <br />
+                    <strong>Confidence:</strong> {Math.round(currentEmail.ctaSuggestion.confidence * 100)}%
+                    <br />
+                    <strong>Model:</strong> {currentEmail.ctaSuggestion.model}
+                  </>
+                )}
+              >
                 <span>ℹ️</span>
-                <div className="inboxZero-tooltipContent">
-                  <strong>AI Suggestion:</strong> {currentEmail.ctaSuggestion.rationale}
-                  <br />
-                  <strong>Confidence:</strong> {Math.round(currentEmail.ctaSuggestion.confidence * 100)}%
-                  <br />
-                  <strong>Model:</strong> {currentEmail.ctaSuggestion.model}
-                </div>
-              </div>
+              </Tooltip>
             </>
           ) : currentEmail.ctaPreparing ? (
             <div className="inboxZero-loadingState">

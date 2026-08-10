@@ -28,6 +28,8 @@
   background: var(--notes-border-strong);
 }
 
+/* The tooltip wrapper is the flex item now, so the tab keeps its own sizing */
+.note-tab-tip { flex-shrink: 0; }
 .note-tab {
   display: flex;
   align-items: center;

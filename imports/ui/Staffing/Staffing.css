@@ -829,3 +829,9 @@
   border-radius: 6px;
   padding: 4px 8px;
 }
+
+/* Tooltip wrappers become the layout item of their container, so they carry
+   the sizing their child used to get directly. */
+.effortList > .tooltipTrigger { display: block; }
+.reviewRow > .reviewMsgTip { min-width: 0; }
+.reviewMsgTip > .reviewMsg { min-width: 0; flex: 1; }
