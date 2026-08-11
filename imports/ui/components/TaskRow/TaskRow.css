@@ -36,6 +36,8 @@
 .taskNotesButton { font-size: 12px; color: var(--muted); transition: opacity 120ms ease-in-out; }
 .taskNotesButton.hasNotes { color: var(--text); opacity: 0.7; }
 .taskNotesButton.hasNotes:hover { opacity: 1; }
+.taskCopyIdBtn { font-size: 12px; color: var(--muted); opacity: 0.6; transition: opacity 120ms ease-in-out; }
+.taskCopyIdBtn:hover { opacity: 1; color: var(--text); }
 .taskRankDebug { font-size: 10px; color: var(--muted); background: rgba(var(--black-rgb),0.1); padding: 1px 4px; border-radius: 3px; margin-left: 6px; }
 
 /* Notes modal */

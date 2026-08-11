@@ -7,6 +7,7 @@ import { InlineDate } from '/imports/ui/InlineDate/InlineDate.jsx';
 import { formatDate, formatDateTime, deadlineSeverity, SNOOZE_PRESETS, snoozeDateFor, isSnoozed } from '/imports/ui/utils/date.js';
 import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { writeClipboard } from '/imports/ui/utils/clipboard.js';
 import { TASK_STATUS_OPTIONS } from '/imports/api/_shared/taskStatus';
 import './TaskRow.css';
 
@@ -379,6 +380,14 @@ export const TaskRow = ({
               <button className={`iconButton taskNotesButton${task.notes ? ' hasNotes' : ''}`} aria-label="Notes" onClick={openNotes}>…</button>
             </Tooltip>
             {tagAddButton}
+            <Tooltip content={`Copy "Tâche Pano #${task._id}"`}>
+              <button
+                type="button"
+                className="iconButton taskCopyIdBtn"
+                aria-label="Copy task ID"
+                onClick={() => writeClipboard(`Tâche Pano #${task._id}`)}
+              >⧉</button>
+            </Tooltip>
           </span>
           {task.notes ? (
             <Tooltip content={task.notes} size="large" className="taskNotesTip">
