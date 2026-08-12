@@ -46,6 +46,7 @@ export const parseHashRoute = () => {
   if (parts[0] === 'projects' && parts[1]) return { name: 'project', projectId: parts[1] };
   if (parts[0] === 'sessions' && parts[1]) return { name: 'session', sessionId: parts[1] };
   if (parts[0] === 'import-tasks') return { name: 'importTasks' };
+  if (parts[0] === 'trash') return { name: 'trash' };
   if (parts[0] === 'notes') return { name: 'notes', noteId: parts[1] };
   if (parts[0] === 'emails') return { name: 'emails' };
   if (parts[0] === 'inbox-zero') return { name: 'inboxZero' };
@@ -146,6 +147,9 @@ export const navigateTo = (route) => {
       break;
     case 'importTasks':
       window.location.hash = '#/import-tasks';
+      break;
+    case 'trash':
+      window.location.hash = '#/trash';
       break;
     case 'notes':
       window.location.hash = route.noteId ? `#/notes/${route.noteId}` : '#/notes';

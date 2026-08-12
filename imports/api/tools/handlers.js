@@ -1460,6 +1460,42 @@ export const TOOL_HANDLERS = {
       return buildErrorResponse(error, 'tool_restoreTask');
     }
   },
+  async tool_tasksTrashed(args, memory) {
+    const { TasksCollection, TRASH_RETENTION_DAYS } = await import('/imports/api/tasks/collections');
+    const userId = getMCPUserId();
+    const requested = Number(args?.limit);
+    const limit = Number.isFinite(requested) && requested > 0 ? Math.min(Math.trunc(requested), 200) : 50;
+    const tasks = await TasksCollection.find(
+      { userId, deletedAt: { $exists: true } },
+      {
+        sort: { deletedAt: -1 },
+        limit,
+        fields: { title: 1, projectId: 1, status: 1, deadline: 1, deletedAt: 1 }
+      }
+    ).fetchAsync();
+    const retentionMs = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const mapped = (tasks || []).map(t => {
+      const purgeAt = new Date(new Date(t.deletedAt).getTime() + retentionMs);
+      return {
+        id: t._id,
+        projectId: t.projectId || null,
+        title: clampText(t.title || ''),
+        status: t.status || 'todo',
+        deadline: t.deadline || null,
+        deletedAt: t.deletedAt,
+        purgeAt,
+        daysLeft: Math.max(0, Math.ceil((purgeAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+      };
+    });
+    if (memory) {
+      memory.lists = memory.lists || {};
+      memory.lists.trashedTasks = mapped;
+    }
+    return buildSuccessResponse(
+      { tasks: mapped, total: mapped.length, retentionDays: TRASH_RETENTION_DAYS },
+      'tool_tasksTrashed'
+    );
+  },
   async tool_createNote(args, memory) {
     const title = String(args?.title || '').trim();
     if (!title) {

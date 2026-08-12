@@ -12,6 +12,7 @@ import { canSeePage } from '/imports/ui/utils/pageAccess.js';
 import { ImportTasks } from '/imports/ui/ImportTasks/ImportTasks.jsx';
 import { Alarms } from '/imports/ui/Alarms/Alarms.jsx';
 import { LinksPage } from '/imports/ui/Links/LinksPage.jsx';
+import { TrashPage } from '/imports/ui/Trash/TrashPage.jsx';
 import { FilesPage } from '/imports/ui/Files/FilesPage.jsx';
 import { Eisenhower } from '/imports/ui/Eisenhower/Eisenhower.jsx';
 import { BudgetPage } from '/imports/ui/Budget/BudgetPage.jsx';
@@ -141,6 +142,7 @@ function App() {
     { key: 's', label: 'Situation Analyzer', route: { name: 'situationAnalyzer' } },
     { key: 'w', label: 'Web Search', route: { name: 'web' } },
     { key: 'i', label: 'Import tasks', route: { name: 'importTasks' } },
+    { key: 'u', label: 'Trash', route: { name: 'trash' } },
     { key: 't', label: 'Notes', route: { name: 'notes' } },
     { key: 'm', label: 'Emails', route: { name: 'emails' } },
     { key: 'x', label: 'Claude Code', route: { name: 'claude' } },
@@ -832,6 +834,11 @@ function App() {
         {route?.name === 'links' && (
           <div className="panel">
             <LinksPage />
+          </div>
+        )}
+        {route?.name === 'trash' && (
+          <div className="panel">
+            <TrashPage />
           </div>
         )}
         {route?.name === 'files' && (

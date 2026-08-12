@@ -1,0 +1,16 @@
+.trashIntro { color: var(--muted); margin: 0 0 12px; }
+
+.trashTable { width: 100%; border-collapse: collapse; }
+.trashTable td, .trashTable th { padding: 10px 8px; text-align: left; }
+.trashTable th { color: var(--muted); font-weight: normal; }
+.trashTable tbody tr:hover { background: rgba(var(--white-rgb), 0.03); }
+.trashTable .colTitle { min-width: 0; }
+.trashTable .colProject,
+.trashTable .colStatus,
+.trashTable .colDeleted,
+.trashTable .colPurge { white-space: nowrap; }
+.trashTable .colRight { text-align: right; }
+
+.trashPurge { color: var(--warning); }
+.trashDeadline { color: var(--muted); }
+.trashMuted { color: var(--muted); }

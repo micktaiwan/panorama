@@ -66,6 +66,7 @@ export const HamburgerMenu = ({ user, userPrefs, onNewSession, onExport }) => {
     'separator',
     { label: 'New Note Session', action: onNewSession },
     { label: 'Import tasks', route: { name: 'importTasks' } },
+    { label: 'Trash', route: { name: 'trash' } },
     { label: 'Export', action: onExport },
     'separator',
     { label: 'Help', route: { name: 'help' } },

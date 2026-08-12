@@ -470,6 +470,19 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_tasksTrashed',
+    description: 'List the tasks currently in the trash: deleted but not yet purged, most recently deleted first. Each entry carries deletedAt and daysLeft before the purge cron removes it for good. Use before tool_restoreTask to find the taskId of something deleted by mistake.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        limit: { type: 'number', description: 'Max tasks to return (default 50, capped at 200)' }
+      },
+      required: []
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_createNote',
     description: 'Create a new note with title and optional content. Associate with a project if needed. Content can be markdown formatted.',
     parameters: {
