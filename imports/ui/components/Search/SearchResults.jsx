@@ -115,6 +115,12 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
       if (onAfterNavigate) onAfterNavigate(index);
       return;
     }
+    if (r.kind === 'person' && r.id) {
+      const id = String(r.id).split(':').pop();
+      navigateTo({ name: 'people', personId: id });
+      if (onAfterNavigate) onAfterNavigate(index);
+      return;
+    }
     if (r.kind === 'alarm') {
       navigateTo({ name: 'alarms' });
       if (onAfterNavigate) onAfterNavigate(index);
@@ -167,6 +173,9 @@ export const SearchResults = ({ results, onAfterNavigate, keyboardNav = false, a
                 break;
               case 'userlog':
                 icon = (<svg className="kindIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h10v12H3zM4 3v10h8V3zM5 5h6v1H5zm0 2h6v1H5zm0 2h6v1H5z"/></svg>);
+                break;
+              case 'person':
+                icon = (<svg className="kindIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 2a3 3 0 100 6 3 3 0 000-6zM2 14c0-2.76 2.69-4.5 6-4.5s6 1.74 6 4.5z"/></svg>);
                 break;
               case 'email':
                 icon = (<svg className="kindIcon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 3h12v10H2zM3 4v8h10V4zM4 5h8v1H4zm0 2h8v1H4zm0 2h6v1H4z"/></svg>);

@@ -49,6 +49,10 @@ Tabs.propTypes = {
   onChange: PropTypes.func.isRequired,
 };
 
+// A pasted document id (alone or inside a label like "Tâche Pano #<id>") resolves
+// to the object itself server-side, so Enter can open it without a semantic search.
+const looksLikeDocId = (q) => /(?:^|[^A-Za-z0-9])[A-Za-z0-9]{17}(?![A-Za-z0-9])/.test(String(q || ''));
+
 const SearchPane = ({ onClose }) => {
   const [searchQ, setSearchQ] = useState(() => {
     return typeof localStorage !== 'undefined' ? (localStorage.getItem('global_search_q') || '') : '';
@@ -106,6 +110,7 @@ const SearchPane = ({ onClose }) => {
         if (err) { setInstantResults([]); return; }
         const items = Array.isArray(res) ? res : [];
         setInstantResults(items);
+        if (items.length === 1 && looksLikeDocId(q)) setSearchDirty(false);
       });
     }, 120);
     return () => clearTimeout(handle);
@@ -137,6 +142,8 @@ const SearchPane = ({ onClose }) => {
 
     const hasInclude = Object.values(typeFilters).some(v => v === 1);
     const filtered = (combinedResults || []).filter(r => {
+      // An id lookup names one exact object: never let a type filter hide it.
+      if (r?.byId) return true;
       const k = r?.kind;
       const st = typeFilters[k];
       if (hasInclude) return st === 1;
@@ -197,6 +204,7 @@ const SearchPane = ({ onClose }) => {
       line: (r) => (r?.sessionId ? { name: 'session', sessionId: r.sessionId } : null),
       note: (r) => (r?.projectId ? { name: 'project', projectId: r.projectId } : null),
       session: (r) => (r?.id ? { name: 'session', sessionId: idFrom(r.id) } : null),
+      person: (r) => (r?.id ? { name: 'people', personId: idFrom(r.id) } : null),
       alarm: () => ({ name: 'alarms' }),
       email: () => ({ name: 'emails' }),
     };

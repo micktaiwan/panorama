@@ -3,6 +3,7 @@ import { check } from 'meteor/check';
 import { PeopleCollection } from './collections';
 import { ensureLoggedIn, ensureOwner } from '/imports/api/_shared/auth';
 import { normalizeHandles } from './githubHandles';
+import { applyHrRoster } from './hrTech';
 
 const normalize = (s) => {
   const base = String(s || '').trim();
@@ -117,114 +118,15 @@ Meteor.methods({
   }
 });
 
-// Import people from a Google Workspace JSON export
-// Deduplicate by email (primary) or full name lowercased (fallback, only
-// against records that have no email — a differing email means a different person)
+// The roster, read from HR Tech — which is the only system that reads the SIRH.
+// This replaced a hand-fed Google Workspace export: an account being active
+// never meant its owner still worked here.
 Meteor.methods({
-  async 'people.importGoogleWorkspace'(records) {
-    check(records, Array);
+  // Pass dryRun to see what would change without changing it.
+  async 'people.syncFromHrTech'(options) {
     ensureLoggedIn(this.userId);
-    const now = new Date();
-
-    // Count total before import
-    const totalBefore = await PeopleCollection.find({ userId: this.userId }).countAsync();
-
-    // Build lookup maps from existing people
-    const cursor = PeopleCollection.find({ userId: this.userId }, { fields: { _id: 1, email: 1, name: 1, lastName: 1, left: 1 } });
-    const existingPeople = typeof cursor.fetchAsync === 'function' ? await cursor.fetchAsync() : cursor.fetch();
-    const emailToPerson = new Map();
-    const nameKeyToPerson = new Map();
-    const buildNameKey = (first, last) =>
-      `${String(first || '').trim().toLowerCase()}|${String(last || '').trim().toLowerCase()}`;
-    existingPeople.forEach(p => {
-      const email = String(p.email || '').trim().toLowerCase();
-      if (email && !emailToPerson.has(email)) emailToPerson.set(email, p);
-      const nameKey = buildNameKey(p.name, p.lastName);
-      if (nameKey !== '|' && !nameKeyToPerson.has(nameKey)) nameKeyToPerson.set(nameKey, p);
-    });
-
-    // Deduplicate inside the incoming dataset as well
-    const seenEmails = new Set();
-    const seenNameKeys = new Set();
-
-    let inserted = 0;
-    let updated = 0;
-    let skipped = 0;
-
-    const getField = (obj, key) => String((obj && obj[key]) || '').trim();
-
-    for (const rec of records) {
-      if (!rec || typeof rec !== 'object') { skipped++; continue; }
-
-      const firstName = getField(rec, 'First Name [Required]');
-      const lastName = getField(rec, 'Last Name [Required]');
-      const email = getField(rec, 'Email Address [Required]').toLowerCase();
-      const status = getField(rec, 'Status [READ ONLY]');
-      const isActive = status.toLowerCase() === 'active';
-      const left = !isActive; // active corresponds to left=false
-
-      // Skip empty rows
-      if (!firstName && !lastName && !email) { skipped++; continue; }
-
-      const nameKey = buildNameKey(firstName, lastName);
-
-      // Intra-file dedupe
-      if (email) {
-        if (seenEmails.has(email)) { skipped++; continue; }
-        seenEmails.add(email);
-      } else if (nameKey !== '|') {
-        if (seenNameKeys.has(nameKey)) { skipped++; continue; }
-        seenNameKeys.add(nameKey);
-      }
-
-      // Find existing
-      let existing = null;
-      if (email && emailToPerson.has(email)) existing = emailToPerson.get(email);
-      if (!existing && nameKey !== '|') {
-        const byName = nameKeyToPerson.get(nameKey);
-        // Name fallback only against a record with no email: if the existing
-        // record has one, a non-matching email means a different person.
-        if (byName && !String(byName.email || '').trim()) existing = byName;
-      }
-
-      if (existing) {
-        const updates = {};
-        if (firstName) updates.name = firstName;
-        if (lastName) updates.lastName = lastName;
-        if (email) updates.email = email;
-        updates.left = !!left;
-        updates.updatedAt = now;
-        if (updates.name) updates.normalizedName = normalize(updates.name);
-        await PeopleCollection.updateAsync({ _id: existing._id }, { $set: updates });
-        updated++;
-      } else {
-        const name = firstName || (lastName ? '' : '');
-        if (!name && !email && !lastName) { skipped++; continue; }
-        const doc = {
-          name: name || firstName,
-          lastName,
-          normalizedName: normalize(name || firstName || ''),
-          aliases: [],
-          role: '',
-          email,
-          notes: '',
-          left: !!left,
-          userId: this.userId,
-          createdAt: now,
-          updatedAt: now
-        };
-        const _id = await PeopleCollection.insertAsync(doc);
-        // Update maps to avoid duplicate subsequent inserts within this run
-        if (email) emailToPerson.set(email, { _id, email, name: doc.name, lastName });
-        if (nameKey !== '|') nameKeyToPerson.set(nameKey, { _id, email, name: doc.name, lastName });
-        inserted++;
-      }
-    }
-
-    // Count total after import
-    const totalAfter = await PeopleCollection.find({ userId: this.userId }).countAsync();
-
-    return { inserted, updated, skipped, totalBefore, totalAfter };
+    const dryRun = !!(options && options.dryRun);
+    return applyHrRoster(this.userId, { dryRun });
   }
 });
 

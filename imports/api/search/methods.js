@@ -285,6 +285,93 @@ const runIndexJob = async (jobId, userId) => {
   return indexJobs.get(jobId);
 };
 
+// A Meteor document id is 17 chars from Random.id()'s alphabet. Accept an id pasted
+// on its own or inside a label (e.g. the "Tâche Pano #<id>" the task rows copy).
+const extractDocId = (q) => {
+  const m = String(q || '').match(/(?:^|[^A-Za-z0-9])([A-Za-z0-9]{17})(?![A-Za-z0-9])/);
+  return m ? m[1] : null;
+};
+
+// Resolve a document id to the object it designates, across the collections the
+// palette can navigate to. Returns [] when no collection owns that id for this user.
+const lookupById = async (docId, userId) => {
+  const projectNameFor = async (projectId) => {
+    if (!projectId) return null;
+    const { ProjectsCollection } = await import('/imports/api/projects/collections');
+    const p = await ProjectsCollection.findOneAsync({ _id: String(projectId), userId }, { fields: { name: 1 } });
+    return p?.name || null;
+  };
+
+  const { ProjectsCollection } = await import('/imports/api/projects/collections');
+  const project = await ProjectsCollection.findOneAsync({ _id: docId, userId }, { fields: { name: 1, description: 1 } });
+  if (project) {
+    return [{
+      byId: true, score: '#', kind: 'project', projectId: project._id, projectName: project.name || null,
+      id: `project:${project._id}`, text: makePreview(`${project.name || ''} ${project.description || ''}`),
+    }];
+  }
+
+  const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+  const task = await TasksCollection.findOneAsync({ _id: docId, userId, ...NOT_DELETED }, { fields: { title: 1, projectId: 1, status: 1 } });
+  if (task) {
+    const pid = task.projectId ? String(task.projectId) : null;
+    return [{
+      byId: true, score: '#', kind: 'task', projectId: pid, projectName: await projectNameFor(pid),
+      id: `task:${task._id}`, text: String(task.title || '').trim() || '(task)', status: task?.status || null,
+    }];
+  }
+
+  const { NotesCollection } = await import('/imports/api/notes/collections');
+  const note = await NotesCollection.findOneAsync({ _id: docId, userId }, { fields: { title: 1, content: 1, projectId: 1 } });
+  if (note) {
+    const pid = note.projectId ? String(note.projectId) : null;
+    return [{
+      byId: true, score: '#', kind: 'note', projectId: pid, projectName: await projectNameFor(pid),
+      id: `note:${note._id}`, text: makePreview(`${note.title || ''} ${note.content || ''}`),
+    }];
+  }
+
+  const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
+  const session = await NoteSessionsCollection.findOneAsync({ _id: docId, userId }, { fields: { name: 1, aiSummary: 1, projectId: 1 } });
+  if (session) {
+    const pid = session.projectId ? String(session.projectId) : null;
+    return [{
+      byId: true, score: '#', kind: 'session', projectId: pid, projectName: await projectNameFor(pid),
+      id: `session:${session._id}`, text: makePreview(`${session.name || ''} ${session.aiSummary || ''}`) || '(session)',
+    }];
+  }
+
+  const { LinksCollection } = await import('/imports/api/links/collections');
+  const link = await LinksCollection.findOneAsync({ _id: docId, userId }, { fields: { name: 1, url: 1, projectId: 1 } });
+  if (link) {
+    const pid = link.projectId ? String(link.projectId) : null;
+    return [{
+      byId: true, score: '#', kind: 'link', projectId: pid, projectName: await projectNameFor(pid),
+      id: `link:${link._id}`, text: makePreview(`${link.name || ''} ${link.url || ''}`), url: link.url || '',
+    }];
+  }
+
+  const { AlarmsCollection } = await import('/imports/api/alarms/collections');
+  const alarm = await AlarmsCollection.findOneAsync({ _id: docId, userId }, { fields: { title: 1 } });
+  if (alarm) {
+    return [{
+      byId: true, score: '#', kind: 'alarm', projectId: null, projectName: null,
+      id: `alarm:${alarm._id}`, text: String(alarm.title || '').trim() || '(alarm)',
+    }];
+  }
+
+  const { PeopleCollection } = await import('/imports/api/people/collections');
+  const person = await PeopleCollection.findOneAsync({ _id: docId, userId }, { fields: { name: 1, lastName: 1, role: 1 } });
+  if (person) {
+    return [{
+      byId: true, score: '#', kind: 'person', projectId: null, projectName: null,
+      id: `person:${person._id}`, text: makePreview(`${person.name || ''} ${person.lastName || ''} ${person.role || ''}`),
+    }];
+  }
+
+  return [];
+};
+
 Meteor.methods({
   async 'search.instant'(query, opts = {}) {
     check(query, String);
@@ -296,6 +383,15 @@ Meteor.methods({
     const limitPerKind = Math.max(1, Math.min(20, Number(opts?.limitPerKind) || 5));
     const q = String(query || '').trim();
     if (!q) return [];
+
+    // Searching by id must find the object itself, whatever its kind: try the
+    // direct lookup first and return it alone when it hits.
+    const docId = extractDocId(q);
+    if (docId) {
+      const byId = await lookupById(docId, userId);
+      if (byId.length > 0) return byId;
+    }
+
     // Build a safe, case-insensitive regex for substring matching
     const escapeRegExp = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = escapeRegExp(q);
