@@ -1,28 +1,54 @@
 #!/usr/bin/env bash
 # start-local.sh — Lance Panorama en mode local
 #
-# MongoDB : panorama.mickaelfm.me:27018 (TLS + auth, toutes les collections)
-# Qdrant  : localhost:16333 → VPS:6333 (tunnel SSH)
+# MongoDB : localhost:27018 → VPS:27017 (tunnel SSH)
+# Qdrant  : localhost:16333 → VPS:6333  (tunnel SSH)
+#
+# Depuis la migration du 15/08/2026, Mongo n'est plus publie sur Internet : il
+# n'ecoute que sur la loopback du VPS. Les deux acces passent donc par un tunnel.
 
 VPS_HOST="${PANORAMA_VPS_HOST:?Définir PANORAMA_VPS_HOST (ex: export PANORAMA_VPS_HOST=ubuntu@your-vps-ip)}"
 MONGO_USER="${PANORAMA_MONGO_USER:?Définir PANORAMA_MONGO_USER dans ~/.env.secrets}"
 MONGO_PASS="${PANORAMA_MONGO_PASS:?Définir PANORAMA_MONGO_PASS dans ~/.env.secrets}"
-MONGO_HOST="panorama.mickaelfm.me:27018"
+MONGO_TUNNEL_PORT=27018
+MONGO_HOST="localhost:${MONGO_TUNNEL_PORT}"
 QDRANT_TUNNEL_PORT=16333
 METEOR_PORT=4000
 
-# Tunnel SSH pour Qdrant (MongoDB n'en a plus besoin grâce au TLS)
-if lsof -i :$QDRANT_TUNNEL_PORT -P -n >/dev/null 2>&1; then
-  echo "✓ Tunnel Qdrant déjà actif sur :$QDRANT_TUNNEL_PORT"
-else
-  echo "→ Démarrage du tunnel SSH (Qdrant)..."
+# tunnel <nom> <port local> <port distant>
+#
+# Le garde ne se contente PAS de constater que le port est pris : il verifie que
+# le tunnel qui le tient va bien vers $VPS_HOST. Le 15/08/2026, apres la bascule
+# de VPS, un autossh lance la veille tenait encore :16333 vers l'ANCIENNE machine.
+# L'ancien garde (« port occupe → rien a faire ») aurait laisse Panorama lire et
+# ecrire le Qdrant de l'ancien VPS sans que rien ne paraisse anormal.
+#
+# On ne tue pas le tunnel perime tout seul : d'autres sessions peuvent en dependre.
+# On s'arrete en disant quoi faire.
+tunnel() {
+  local name="$1" local_port="$2" remote_port="$3"
+  if lsof -i :"$local_port" -P -n >/dev/null 2>&1; then
+    if pgrep -f -- "-L ${local_port}:localhost:${remote_port} ${VPS_HOST}" >/dev/null 2>&1; then
+      echo "✓ Tunnel $name déjà actif sur :$local_port → $VPS_HOST"
+      return 0
+    fi
+    echo "✗ Le port $local_port est pris, mais pas par un tunnel vers $VPS_HOST :"
+    pgrep -fl -- "-L ${local_port}:" 2>/dev/null | sed 's/^/    /'
+    echo "  Tuer ce tunnel, puis relancer :"
+    echo "    pkill -f 'ssh.*-L ${local_port}:'"
+    exit 1
+  fi
+  echo "→ Démarrage du tunnel SSH ($name)..."
   autossh -M 0 -f -N \
     -o "ServerAliveInterval=30" \
     -o "ServerAliveCountMax=3" \
-    -L ${QDRANT_TUNNEL_PORT}:localhost:6333 \
+    -L ${local_port}:localhost:${remote_port} \
     $VPS_HOST
-  echo "✓ Tunnel Qdrant démarré"
-fi
+  echo "✓ Tunnel $name démarré"
+}
+
+tunnel Mongo  "$MONGO_TUNNEL_PORT"  27017
+tunnel Qdrant "$QDRANT_TUNNEL_PORT" 6333
 
 # NOTE: pas de mongosh ping ici — il ajoutait 2–5 s de latence visible
 # avant que la fenêtre Electron n'apparaisse. Si Mongo est down, Meteor
@@ -31,7 +57,17 @@ fi
 # Lancer Meteor
 # serverSelectionTimeoutMS=60000 : laisse 60s au driver pour retrouver le serveur après un sleep/wake
 # heartbeatFrequencyMS=10000 : sonde le serveur toutes les 10s (réduit les faux positifs au réveil)
-MONGO_OPTS="tls=true&authSource=admin&serverSelectionTimeoutMS=60000&heartbeatFrequencyMS=10000"
+# Plus de tls=true : le trafic est deja chiffre par SSH, et le certificat du Mongo
+# est emis pour le nom du conteneur, pas pour localhost — il echouerait a la
+# verification du nom d'hote.
+#
+# directConnection=true est OBLIGATOIRE : le replica set rs0 declare son membre
+# comme `organizer-mongodb:27017`, un nom qui n'existe que dans le reseau Docker
+# du VPS. Sans ce drapeau, le driver decouvre la topologie, apprend ce nom, essaie
+# de s'y connecter et echoue. Verifie le 15/08/2026 : les change streams (dont
+# depend toute la reactivite, voir la note plus bas) fonctionnent en connexion
+# directe sur un membre de replica set.
+MONGO_OPTS="authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&heartbeatFrequencyMS=10000"
 MONGO_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?${MONGO_OPTS}"
 # MONGO_OPLOG_URL volontairement NON défini : depuis Mongo 6 + Meteor 3.5, la
 # réactivité passe par les Change Streams (driver par défaut). Définir cette URL
@@ -153,6 +189,9 @@ app_state() {
   esac
 }
 
+# Attention a la portee : depuis que Mongo passe par un tunnel, ce test dit que
+# le TUNNEL est debout, pas que mongod repond. Ca reste le bon signal pour ce
+# watchdog, dont la question est « le reseau est-il revenu ? ».
 mongo_is_reachable() {
   nc -z -G 3 "${MONGO_HOST%%:*}" "${MONGO_HOST##*:}" >/dev/null 2>&1
 }

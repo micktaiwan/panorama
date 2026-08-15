@@ -52,7 +52,7 @@ L'application est **integralement single-user** :
 
 ### Infrastructure existante sur le VPS (fevrier 2026)
 
-Le VPS OVH (`51.210.150.25`) heberge deja le projet **Organizer** et un prototype de Panorama fait par David (Express 5 + React, abandonne — a supprimer).
+Le VPS OVH (`51.178.29.205`) heberge deja le projet **Organizer** et un prototype de Panorama fait par David (Express 5 + React, abandonne — a supprimer).
 
 **Note historique** : David avait nomme son prototype "Panoramix" et deploye des containers `panoramix-api` + `panoramix-web`. Ce nom n'est pas retenu — le projet s'appelle **Panorama**. Les containers de David seront supprimes et remplaces par le deploiement Meteor. La DB `panoramix` sur le VPS peut etre droppee apres la mise en production.
 
@@ -812,7 +812,7 @@ MUP fonctionne avec Meteor 3.4. Le CLI MUP doit tourner sous **Node 20.9.0** (bu
 module.exports = {
   servers: {
     one: {
-      host: '51.210.150.25',
+      host: '51.178.29.205',
       username: 'ubuntu',
       // Uses ssh-agent (ed25519 key loaded via ssh-add)
     },
@@ -1022,7 +1022,7 @@ Non utilise — MUP fonctionne bien avec Meteor 3.4. Garde en reserve.
 #### Migration des fichiers existants
 
 ```bash
-rsync -avz ~/PanoramaFiles/ ubuntu@51.210.150.25:/var/www/panorama/files/
+rsync -avz ~/PanoramaFiles/ ubuntu@51.178.29.205:/var/www/panorama/files/
 ```
 
 Les `storedFileName` en DB ne changent pas — pas de migration de metadonnees.
@@ -1030,7 +1030,7 @@ Les `storedFileName` en DB ne changent pas — pas de migration de metadonnees.
 #### Pre-deploy sur le VPS
 
 ```bash
-ssh ubuntu@51.210.150.25 'sudo mkdir -p /var/www/panorama/files && sudo chown 1000:1000 /var/www/panorama/files'
+ssh ubuntu@51.178.29.205 'sudo mkdir -p /var/www/panorama/files && sudo chown 1000:1000 /var/www/panorama/files'
 ```
 
 Generer l'API key : `openssl rand -hex 32` → ajouter `PANORAMA_FILES_API_KEY=<key>` dans `~/.env.secrets`.

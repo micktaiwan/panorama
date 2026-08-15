@@ -24,7 +24,9 @@ const MONGO_URL = `mongodb://${MONGO_USER}:${MONGO_PASS}@organizer-mongodb:27017
 module.exports = {
   servers: {
     one: {
-      host: '51.210.150.25',
+      // Cible du deploiement : ancien VPS par defaut, nouveau via la variable.
+      //   PANORAMA_DEPLOY_HOST=51.178.29.205 mup deploy
+      host: process.env.PANORAMA_DEPLOY_HOST || '51.178.29.205',
       username: 'ubuntu',
       // Uses ssh-agent (ed25519 key loaded via ssh-add)
     },
