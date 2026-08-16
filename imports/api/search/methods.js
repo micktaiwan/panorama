@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor';
-import { getQdrantUrl, getAIConfigAsync, getOpenAiApiKeyAsync } from '/imports/api/_shared/config';
+import { getQdrantUrl, getAIConfig, getAIConfigAsync, getOpenAiApiKeyAsync } from '/imports/api/_shared/config';
 import { check } from 'meteor/check';
 import { ensureLoggedIn, ensureAdmin } from '/imports/api/_shared/auth';
 
@@ -21,7 +21,12 @@ const vectorCache = new Map(); // key -> { vec: number[], at: number }
 const inFlightVectors = new Map(); // key -> Promise<number[]>
 const normalizeQuery = (q) => String(q || '').trim().replace(/\s+/g, ' ').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
 const getQueryVector = async (rawQuery, { userId } = {}) => {
-  const key = `v1|${normalizeQuery(rawQuery)}`;
+  // The model is part of the key: after an embedding model switch, a vector
+  // cached under the old model has the wrong dimensions and would be searched
+  // against a collection that no longer accepts it.
+  const aiConfig = getAIConfig();
+  const model = aiConfig.mode === 'local' ? aiConfig.local?.embeddingModel : aiConfig.remote?.embeddingModel;
+  const key = `v1|${model || 'unknown'}|${normalizeQuery(rawQuery)}`;
   if (vectorCache.has(key)) {
     const hit = vectorCache.get(key);
     // refresh LRU order
@@ -179,6 +184,48 @@ const collectDocsByKind = async (kind, userId) => {
 
 // use toPointId(kind, id) from vectorStore for point ids
 
+// Embed a slice of documents into Qdrant points.
+//
+// The embeddings are the whole cost of a reindex and each one is a network call
+// that spends its time waiting: running them one at a time indexed ~1.3 doc/s,
+// which is 80 minutes for a full rebuild — and the index is degraded for the
+// whole duration. A small pool of concurrent calls keeps the same per-document
+// code path (same proxy, same error accounting) and only overlaps the waiting.
+const EMBED_CONCURRENCY = 8;
+
+const embedSliceToPoints = async (slice, { userId, vectorSize, onProcessed, onError }) => {
+  const points = [];
+  let cursor = 0;
+  const worker = async () => {
+    for (;;) {
+      const d = slice[cursor];
+      if (!d) return;
+      cursor += 1;
+      try {
+        const vector = await embedText(d.content, { userId });
+        if (Array.isArray(vector) && vector.length === vectorSize) {
+          const payload = { kind: d.kind, docId: d.id, preview: makePreview(d.content) };
+          if (d.projectId) payload.projectId = d.projectId;
+          if (d.userId) payload.userId = d.userId;
+          if (d.meta && d.meta.sessionId) payload.sessionId = d.meta.sessionId;
+          if (d.meta && typeof d.meta.chunkIndex === 'number') payload.chunkIndex = d.meta.chunkIndex;
+          if (d.meta && d.meta.threadId) payload.threadId = d.meta.threadId;
+          const rawId = String(d.id || '').split(':').pop();
+          const uniqueRaw = (d.meta && typeof d.meta.chunkIndex === 'number') ? `${rawId}#${d.meta.chunkIndex}` : rawId;
+          points.push({ id: toPointId(d.kind, uniqueRaw), vector: Array.from(vector), payload });
+        } else {
+          onError(d, `invalid vector: length ${vector?.length}, expected ${vectorSize}`);
+        }
+      } catch (e) {
+        onError(d, e?.message || String(e));
+      }
+      onProcessed();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(EMBED_CONCURRENCY, slice.length) }, () => worker()));
+  return points;
+};
+
 const runIndexJob = async (jobId, userId) => {
   const client = await getQdrantClient();
   const collectionName = COLLECTION();
@@ -222,34 +269,18 @@ const runIndexJob = async (jobId, userId) => {
     }
 
     const slice = docs.slice(i, i + BATCH);
-    const points = [];
-    
-    for (const d of slice) {
-      try {
-        const vector = await embedText(d.content, { userId });
-        if (Array.isArray(vector) && vector.length === vectorSize) {
-          const payload = { kind: d.kind, docId: d.id, preview: makePreview(d.content) };
-          if (d.projectId) payload.projectId = d.projectId;
-          if (d.userId) payload.userId = d.userId;
-          if (d.meta && d.meta.sessionId) payload.sessionId = d.meta.sessionId;
-          if (d.meta && typeof d.meta.chunkIndex === 'number') payload.chunkIndex = d.meta.chunkIndex;
-          const rawId = String(d.id || '').split(':').pop();
-          const uniqueRaw = (d.meta && typeof d.meta.chunkIndex === 'number') ? `${rawId}#${d.meta.chunkIndex}` : rawId;
-          const pointId = toPointId(d.kind, uniqueRaw);
-          points.push({ id: pointId, vector: Array.from(vector), payload });
-        } else {
-          batchErrors++;
-          console.error(`[runIndexJob] Invalid vector for ${d.id}: length ${vector?.length}, expected ${vectorSize}`);
-        }
-      } catch (e) {
+    const points = await embedSliceToPoints(slice, {
+      userId,
+      vectorSize,
+      onProcessed: () => {
+        const st = indexJobs.get(jobId);
+        if (st) { st.processed = (st.processed || 0) + 1; }
+      },
+      onError: (d, message) => {
         batchErrors++;
-        console.error('[qdrant.index job] embed failed', d.id, e?.message || e);
+        console.error('[qdrant.index job] embed failed', d.id, message);
       }
-      const st = indexJobs.get(jobId);
-      if (st) {
-        st.processed = (st.processed || 0) + 1;
-      }
-    }
+    });
     
     if (points.length > 0) {
       try {
@@ -677,29 +708,19 @@ Meteor.methods({
       const BATCH = 64;
       for (let i = 0; i < docs.length; i += BATCH) {
         const slice = docs.slice(i, i + BATCH);
-        const points = [];
-        for (const d of slice) {
-          try {
-            const vector = await embedText(d.content, { userId });
-            if (Array.isArray(vector) && vector.length === vectorSize) {
-              const payload = { kind: d.kind, docId: d.id, preview: makePreview(d.content) };
-              if (d.projectId) payload.projectId = d.projectId;
-              if (d.userId) payload.userId = d.userId;
-              if (d.meta && d.meta.sessionId) payload.sessionId = d.meta.sessionId;
-              if (d.meta && typeof d.meta.chunkIndex === 'number') payload.chunkIndex = d.meta.chunkIndex;
-              const rawId = String(d.id || '').split(':').pop();
-              const uniqueRaw = (d.meta && typeof d.meta.chunkIndex === 'number') ? `${rawId}#${d.meta.chunkIndex}` : rawId;
-              const pointId = toPointId(d.kind, uniqueRaw);
-              points.push({ id: pointId, vector: Array.from(vector), payload });
-            }
-          } catch (e) {
+        const points = await embedSliceToPoints(slice, {
+          userId,
+          vectorSize,
+          onProcessed: () => {
+            const st = indexJobs.get(jobId);
+            if (st) st.processed += 1;
+          },
+          onError: (d, message) => {
             const st = indexJobs.get(jobId);
             if (st) st.errors += 1;
-            console.error('[qdrant.indexKind job] embed failed', d.id, e?.message || e);
+            console.error('[qdrant.indexKind job] embed failed', d.id, message);
           }
-          const st = indexJobs.get(jobId);
-          if (st) st.processed += 1;
-        }
+        });
         if (points.length > 0) {
           try {
             await client.upsert(COLLECTION(), { points });
@@ -959,49 +980,17 @@ Meteor.methods({
   },
   async 'qdrant.qualityTest'(opts = {}) {
     ensureLoggedIn(this.userId);
-    const limit = Math.max(1, Math.min(50, Number(opts?.limit) || 10));
-    const verbose = !!opts?.verbose;
-
-    console.log('[qdrant.qualityTest] Starting quality test...');
-
-    // Generate test dataset from real data
-    const { generateTestDataset } = await import('./generateQualityTests');
-    const dataset = await generateTestDataset({ userId: this.userId });
-
-    if (dataset.length === 0) {
-      return {
-        error: 'No test data could be generated. Ensure you have notes, tasks, or projects with content.',
-        tests: [],
-        summary: {},
-        failures: [],
-        totalFailures: []
-      };
-    }
-
-    console.log(`[qdrant.qualityTest] Generated ${dataset.length} test cases`);
-
-    // Run quality tests
-    const { runQualityTests } = await import('./runQualityTests');
-    const results = await runQualityTests(dataset, { limit, verbose });
-
-    // Generate automatic recommendations
-    const { analyzeRecommendations } = await import('./analyzeRecommendations');
-    const analysis = analyzeRecommendations(results);
-
-    console.log('[qdrant.qualityTest] Quality test completed');
-    console.log('[qdrant.qualityTest] Recommendations:', JSON.stringify(analysis.summary, null, 2));
-
-    return {
-      ...results,
-      recommendations: analysis.recommendations,
-      recommendationsSummary: analysis.summary
-    };
+    check(opts, Object);
+    // Runs synchronously (the UI waits for it) but is persisted like any other
+    // run, so it shows up in the history and over MCP afterwards.
+    const { executeRun } = await import('/imports/api/searchQuality/runner');
+    return executeRun({ userId: this.userId, source: 'ui', opts });
   },
   async 'qdrant.diagnoseIndexing'() {
     ensureLoggedIn(this.userId);
     console.log('[qdrant.diagnoseIndexing] Running indexing diagnosis...');
     const { diagnoseIndexing } = await import('./diagnoseIndexing');
-    const diagnosis = await diagnoseIndexing();
+    const diagnosis = await diagnoseIndexing({ userId: this.userId });
     console.log('[qdrant.diagnoseIndexing] Diagnosis complete');
     return diagnosis;
   },

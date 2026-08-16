@@ -138,10 +138,24 @@ export const analyzeRecommendations = (testResults) => {
       priority: 'critical',
       reason: `Search quality is poor (${(summary.successRate_top10 * 100).toFixed(1)}% success rate). This will significantly impact LLM/MCP functionality.`,
       urgentActions: [
-        'Check Qdrant health: Meteor.call("qdrant.health")',
-        'Verify embeddings are being generated: Check server logs for errors',
-        'Rebuild index: Meteor.call("qdrant.indexStart")',
+        'Check Qdrant health: tool_searchHealth',
+        'Find what is not indexed: tool_searchDiagnoseIndexing',
+        'Reindex the missing documents: tool_searchAutoFix {"dryRun": false}',
+        'Rebuild the whole index: tool_searchReindex',
         'Consider switching AI mode (local ↔ remote)'
+      ]
+    });
+  } else {
+    // Between 50% and 80% nothing else fires: without this band a mediocre run
+    // comes back with zero recommendation, which reads as "nothing to do".
+    recommendations.push({
+      type: 'quality_degraded',
+      priority: 'medium',
+      reason: `Search quality is mediocre (${(summary.successRate_top10 * 100).toFixed(1)}% success rate in top-${config.limit}).`,
+      urgentActions: [
+        'Check whether recent documents are indexed: tool_searchAutoFix {"dryRun": true}',
+        'Cross-check database vs index: tool_searchDiagnoseIndexing',
+        'Look at the failing queries in this run: short or truncated queries failing while exact titles succeed points at query ambiguity, not at indexing'
       ]
     });
   }

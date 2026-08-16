@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
+import { useSubscribe, useFind } from 'meteor/react-meteor-data';
+import { SearchQualityRunsCollection } from '/imports/api/searchQuality/collections';
 import { notify } from '/imports/ui/utils/notify';
 import './SearchQuality.css';
 
@@ -10,6 +12,9 @@ export const SearchQuality = () => {
   const [autoFixReport, setAutoFixReport] = useState(null);
   const [limit, setLimit] = useState(10);
   const [showDetails, setShowDetails] = useState(true);
+  // Every run (from here or from MCP) is stored, so past runs stay comparable.
+  const runsLoading = useSubscribe('searchQualityRuns.recent', 20);
+  const runs = useFind(() => SearchQualityRunsCollection.find({}, { sort: { startedAt: -1 }, limit: 20 }), []);
 
   const runTest = () => {
     setLoading(true);
@@ -532,6 +537,51 @@ export const SearchQuality = () => {
           )}
         </div>
       )}
+
+      <div className="runHistory">
+        <h3>Run history</h3>
+        <p className="description">
+          Runs started here and runs started from Claude (MCP tool_searchQualityTest) land in the same list.
+        </p>
+        {runsLoading() && <p className="hint">Loading…</p>}
+        {!runsLoading() && runs.length === 0 && <p className="hint">No run recorded yet.</p>}
+        {!runsLoading() && runs.length > 0 && (
+          <div className="results-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>From</th>
+                  <th>Status</th>
+                  <th>Top-3</th>
+                  <th>Top-5</th>
+                  <th>Top-10</th>
+                  <th>MRR</th>
+                  <th>Queries</th>
+                  <th>Issues</th>
+                  <th>Model</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map(run => (
+                  <tr key={run._id}>
+                    <td>{run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'}</td>
+                    <td>{run.source}</td>
+                    <td>{run.status === 'error' ? (run.error || 'error') : run.status}</td>
+                    <td>{run.summary ? formatPercent(run.summary.successRate_top3) : ''}</td>
+                    <td>{run.summary ? formatPercent(run.summary.successRate_top5) : ''}</td>
+                    <td>{run.summary ? formatPercent(run.summary.successRate_top10) : ''}</td>
+                    <td>{run.summary ? run.summary.mrr.toFixed(3) : ''}</td>
+                    <td>{run.counts?.testedQueries ?? ''}</td>
+                    <td>{run.recommendationsSummary?.totalIssues ?? ''}</td>
+                    <td>{run.env?.embeddingModel || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

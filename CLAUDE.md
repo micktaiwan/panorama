@@ -54,6 +54,7 @@ Uses a **proxy pattern** — import from `imports/api/_shared/llmProxy.js`: `cha
 - **URLs**: Local (Mick): `http://localhost:16333` via autossh tunnel (port 16333 → VPS 6333), configuré dans `start-local.sh`. Production (VPS): `http://organizer-qdrant:6333` (Docker internal, env `QDRANT_URL` in `.deploy/mup.js`). Version VPS: v1.16.3. Qdrant REST API accessible via curl sur ces URLs.
 - **Collection naming**: `panorama` (remote mode) or `panorama_<model_name>` (local mode)
 - **Client lib**: `@qdrant/js-client-rest` v1.15+
+- **Quality loop**: `tool_searchHealth`, `tool_searchQualityTest` (async, returns a `runId` to poll), `tool_searchQualityRun`/`tool_searchQualityRuns`, `tool_searchDiagnoseIndexing`, `tool_searchAutoFix`, `tool_searchReindex`/`tool_searchIndexStatus`. Runs are persisted in `searchQualityRuns` (UI runs included). See `docs/features/13-feat-search.md`
 
 ### UI Component Patterns
 

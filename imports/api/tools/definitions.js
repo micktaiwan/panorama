@@ -906,4 +906,104 @@ export const TOOL_DEFINITIONS = [
       required: ['version', 'title', 'content']
     }
   },
+  {
+    type: 'function',
+    name: 'tool_searchQualityTest',
+    description: 'Run the Search Quality Test: builds queries from real notes/tasks/projects/emails, runs them through semantic search, and measures whether each source document comes back (top-3/top-5/top-10 success rate, MRR, average rank/score) plus automatic recommendations. Use to check semantic search health, or to compare before/after a reindex. The run is stored and can be re-read later with tool_searchQualityRun.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        limit: { type: 'number', description: 'Top-K depth used for each search (default 10, max 50)' },
+        maxDocsPerKind: { type: 'number', description: 'Documents sampled per kind (default 10 for notes/tasks/emails, 5 for projects; max 50). Lower it for a fast check.' },
+        kinds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Restrict the test to these kinds: note, task, project, email (default: all four)'
+        },
+        waitMs: { type: 'number', description: 'How long to wait for completion before returning the runId to poll with tool_searchQualityRun (default 50000, max 240000)' }
+      }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_searchQualityRun',
+    description: 'Read one stored Search Quality Test run: metrics, failure patterns, recommendations, the documents that failed and the queries that missed them. Use to poll a run started by tool_searchQualityTest, or to read the result of a run launched from the Preferences > Search Quality screen.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        runId: { type: 'string', description: 'Run id (optional: defaults to the most recent run)' }
+      }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_searchQualityRuns',
+    description: 'List recent Search Quality Test runs with their headline metrics (success rates, MRR, issue counts, embedding model used). Use to compare quality over time or to find the run id of an earlier test.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        limit: { type: 'number', description: 'Max runs to return (default 10, max 100)' }
+      }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_searchHealth',
+    description: 'Qdrant health for the current search configuration: URL configured, collection name, vector size, point count, and whether the collection dimensions match the active embedding model. Use as the first check when semantic search misbehaves.',
+    parameters: { type: 'object', additionalProperties: false, properties: {} }
+  },
+  {
+    type: 'function',
+    name: 'tool_searchDiagnoseIndexing',
+    description: 'Cross-check the database against the Qdrant index for the current user: document counts per kind, sampled documents missing a vector, and prioritized recommendations. Use to find out WHY a quality test failed before fixing anything.',
+    parameters: { type: 'object', additionalProperties: false, properties: {} }
+  },
+  {
+    type: 'function',
+    name: 'tool_searchAutoFix',
+    description: 'Find documents missing from the Qdrant index and reindex only those. Defaults to a dry run that reports what is missing without writing. Use after tool_searchDiagnoseIndexing, when the problem is missing documents rather than a bad model.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        dryRun: { type: 'boolean', description: 'Report only, do not reindex (default true)' },
+        sampleSize: { type: 'number', description: 'Documents checked per kind (default 100, max 1000, 0 = all)' }
+      }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_searchReindex',
+    description: 'Rebuild the Qdrant index for the current user, either fully or for one kind. Starts a background job and returns a jobId to poll with tool_searchIndexStatus. Use when the embedding model changed, when the collection is empty, or when a whole kind is missing. This deletes and rewrites the user\'s points for the targeted scope.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: {
+          type: 'string',
+          description: 'Reindex only this kind: project, task, note, session, line, alarm, link, userlog, email. Omit to reindex everything.'
+        },
+        targetUserId: {
+          type: 'string',
+          description: 'Reindex another user\'s documents (admin only). Omit to reindex your own.'
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_searchIndexStatus',
+    description: 'Progress of a reindex job started by tool_searchReindex: processed/total documents, upserts, errors, done flag.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        jobId: { type: 'string', description: 'Job id returned by tool_searchReindex' }
+      },
+      required: ['jobId']
+    }
+  },
 ];

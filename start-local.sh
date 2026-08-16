@@ -79,6 +79,13 @@ MONGO_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?${MONGO_
 
 export MONGO_URL
 export QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}"
+# Le port du dev server rspack n'est pas choisi : le plugin meteor le derive du
+# --port de meteor en additionnant ses CHIFFRES (8077 + somme, soit 8081 pour
+# 4000). Depuis que le script npm passe `--port 127.0.0.1:4000`, les points et
+# les deux-points de l'hote donnent parseInt('.') = NaN, donc RSPACK_DEVSERVER_PORT
+# = NaN, et rspack-cli refuse d'ecouter (ERR_SOCKET_BAD_PORT). Le plugin ne calcule
+# la valeur que si elle est absente : on la pose ici, l'app ne demarre pas sans.
+export RSPACK_DEVSERVER_PORT="${RSPACK_DEVSERVER_PORT:-8081}"
 export PANORAMA_FILES_URL="https://panorama.mickaelfm.me"
 export PANORAMA_FILES_API_KEY="${PANORAMA_FILES_API_KEY:?Définir PANORAMA_FILES_API_KEY dans ~/.env.secrets}"
 MAIL_USER="${PANORAMA_MAIL_USER:-}"

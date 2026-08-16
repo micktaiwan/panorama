@@ -42,7 +42,7 @@ export const autoFixIndexing = async (opts = {}) => {
 
     // Import collections
     const { ProjectsCollection } = await import('/imports/api/projects/collections');
-    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
 
@@ -52,18 +52,24 @@ export const autoFixIndexing = async (opts = {}) => {
         kind: 'project',
         collection: ProjectsCollection,
         fields: { name: 1, description: 1, _id: 1 },
+        sort: { createdAt: -1 },
         getText: (doc) => `${doc.name || ''} ${doc.description || ''}`
       },
       {
         kind: 'task',
         collection: TasksCollection,
+        // Trashed tasks are excluded from the index on purpose: without this the
+        // "fix" reindexes them and makes deleted tasks searchable again.
+        extraSelector: NOT_DELETED,
         fields: { title: 1, notes: 1, projectId: 1, _id: 1 },
+        sort: { createdAt: -1 },
         getText: (doc) => `${doc.title || ''} ${doc.notes || ''}`
       },
       {
         kind: 'note',
         collection: NotesCollection,
         fields: { title: 1, content: 1, projectId: 1, _id: 1 },
+        sort: { updatedAt: -1 },
         getText: (doc) => `${doc.title || ''} ${doc.content || ''}`,
         chunked: true
       },
@@ -71,6 +77,7 @@ export const autoFixIndexing = async (opts = {}) => {
         kind: 'email',
         collection: GmailMessagesCollection,
         fields: { id: 1, from: 1, to: 1, subject: 1, snippet: 1, body: 1, threadId: 1 },
+        sort: { gmailDate: -1 },
         getText: (doc) => `${doc.from || ''} ${doc.to || ''} ${doc.subject || ''} ${doc.snippet || ''} ${doc.body || ''}`,
         chunked: true,
         idField: 'id' // Use Gmail message ID instead of MongoDB _id
@@ -78,11 +85,15 @@ export const autoFixIndexing = async (opts = {}) => {
     ];
 
     for (const config of kindConfigs) {
-      const { kind, collection, fields, getText, chunked, idField = '_id' } = config;
+      const { kind, collection, fields, getText, chunked, idField = '_id', sort, extraSelector } = config;
 
-      // Get documents from database
-      const query = {};
-      const options = { fields };
+      // Get documents from database. Every collection is userId-partitioned:
+      // without this filter the fix walks other users' documents and reindexes
+      // them under the caller's userId.
+      const query = { ...(userId ? { userId } : {}), ...(extraSelector || {}) };
+      // Newest first: a sample taken in natural order checks the oldest
+      // documents, which are the least likely to be missing from the index.
+      const options = { fields, sort };
       if (sampleSize > 0) {
         options.limit = sampleSize;
       }

@@ -234,6 +234,9 @@ import '/imports/api/diskFiles/methods';
 // Search & AI
 import '/imports/api/search/qdrantInit';
 import '/imports/api/search/methods';
+import '/imports/api/searchQuality/collections';
+import '/imports/api/searchQuality/publications';
+import '/imports/api/searchQuality/methods';
 import '/imports/api/sessions/aiMethods';
 
 // Reporting & Export
@@ -492,8 +495,10 @@ Meteor.startup(async () => {
   const { NotionIntegrationsCollection } = await import('/imports/api/notionIntegrations/collections');
   const { NotionTicketsCollection } = await import('/imports/api/notionTickets/collections');
   const { ClaudeCommandsCollection } = await import('/imports/api/claudeCommands/collections');
+  const { SearchQualityRunsCollection } = await import('/imports/api/searchQuality/collections');
 
   AlarmsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
+  SearchQualityRunsCollection.rawCollection().createIndex({ userId: 1, startedAt: -1 }).catch(() => {});
   TeamsCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   PeopleCollection.rawCollection().createIndex({ userId: 1 }).catch(() => {});
   PeopleCollection.rawCollection().createIndex({ userId: 1, managerId: 1 }).catch(() => {});

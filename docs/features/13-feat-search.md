@@ -54,6 +54,68 @@ When AI mode or embedding model changes, you need to manually trigger reindexing
 - Or call `Meteor.call('qdrant.indexStart')` programmatically
 - Falls back to `search.instant` when Qdrant is unavailable in local mode
 
+## Search Quality Test
+
+Measures whether semantic search can find back the documents it indexed. Queries are
+generated from real content (exact title, partial title, content concepts) for a sample
+of notes, tasks, projects and emails, then run through `panorama.search`; the rank of the
+source document in the results gives the metrics (top-3/5/10 success rate, hit rate, MRR,
+average rank and score) plus automatic recommendations.
+
+Code: `imports/api/search/generateQualityTests.js` (dataset), `runQualityTests.js`
+(execution and metrics), `analyzeRecommendations.js` (recommendations),
+`imports/api/searchQuality/runner.js` (orchestration and persistence).
+
+Every run is stored in the `searchQualityRuns` collection (userId-scoped), whether it was
+started from Preferences > Search Quality or from an MCP client, so runs stay comparable
+before/after a fix. The stored document holds the metrics, the failure patterns, the
+recommendations, up to 50 failing documents with the queries that missed them, and an
+`env` snapshot (AI mode, embedding model, Qdrant collection, vector size, point count) —
+without which two runs are not comparable.
+
+Methods: `searchQuality.start(opts)` (background, returns `runId`),
+`searchQuality.run(runId)`, `searchQuality.runs({limit})`, and `qdrant.qualityTest(opts)`
+(synchronous, used by the UI, persisted the same way).
+
+### Embedding model: measured, not assumed (2026-08-16)
+
+Measured on 35 documents / 129 queries, index fully rebuilt each time:
+
+| Model | top-3 | top-10 | MRR |
+|---|---|---|---|
+| text-embedding-3-small (1536) | 62.0 % | 77.5 % | 0.558 |
+| text-embedding-3-large (3072) | 64.3 % | 82.2 % | 0.583 |
+
+`large` is in place since. It costs twice the vector storage (~79 MB for 6.4k points) and about
+16 cents per full reindex against 3 cents, for four to six points of recall — worth it here.
+
+Two traps found while measuring, both fixed:
+
+- The quality dataset, the auto-fix and the diagnosis all ignored the task trash. The indexer skips
+  `deletedAt` tasks on purpose, so the test counted a correct exclusion as a search failure — and
+  the auto-fix reindexed trashed tasks, making deleted content searchable again. All three now
+  filter on `NOT_DELETED`. A comparison run before that fix is not usable.
+- Changing the embedding model in preferences does not reach the server instantly: `PREFS_CACHE`
+  is refreshed by an observer. Starting a reindex right after the write creates the collection with
+  the OLD vector size while the embeddings already use the new model, and every point is rejected
+  (`invalid vector: length 3072, expected 1536`). Wait until `tool_searchHealth` reports the new
+  `expectedVectorSize` before touching the collection.
+
+### Diagnose and fix loop (MCP)
+
+The whole loop is available over MCP, so it can be run and acted upon without opening the app:
+
+- `tool_searchHealth` — Qdrant reachable, collection, points, dimension mismatch.
+- `tool_searchQualityTest` — start a run (`limit`, `maxDocsPerKind`, `kinds`, `waitMs`).
+  A full run outlives a typical 60s client timeout, so it returns a `runId` to poll.
+- `tool_searchQualityRun` / `tool_searchQualityRuns` — read one run (defaults to the latest) or the history.
+- `tool_searchDiagnoseIndexing` — database counts vs indexed points, sampled missing documents, recommendations.
+- `tool_searchAutoFix` — reindex only the documents missing from Qdrant (`dryRun` defaults to true).
+- `tool_searchReindex` / `tool_searchIndexStatus` — full or per-kind rebuild, then poll the job.
+
+Typical order: health → quality test → diagnose → auto-fix (dry run, then for real) or
+reindex → quality test again and compare with the previous run.
+
 ## Roadmap: Hybrid BM25 + Vector
 
 Goal: one `search.hybrid` that mixes lexical (BM25) and semantic (Qdrant) results.

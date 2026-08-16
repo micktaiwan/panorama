@@ -1,7 +1,7 @@
 // Run quality tests on search results
 // Executes generated test queries and calculates relevance metrics
 
-import { Meteor } from 'meteor/meteor';
+import { callMethodAs } from '/imports/api/_shared/callMethodAs';
 
 // Calculate metrics for a set of test results
 const calculateMetrics = (testResults) => {
@@ -73,8 +73,10 @@ const calculateLexicalOverlap = (query, docTitle, docContent) => {
 };
 
 // Run quality tests on a generated test dataset
+// `userId` is explicit on purpose: the run can be executed from a background
+// job (MCP), where there is no ambient method invocation to inherit a user from.
 export const runQualityTests = async (testDataset, options = {}) => {
-  const { limit = 10, verbose = false } = options;
+  const { limit = 10, verbose = false, userId = null } = options;
   const results = [];
 
   console.log(`[runQualityTests] Starting ${testDataset.length} test cases with limit=${limit}`);
@@ -92,7 +94,7 @@ export const runQualityTests = async (testDataset, options = {}) => {
 
       try {
         // Execute search
-        const searchRes = await Meteor.callAsync('panorama.search', query, { limit });
+        const searchRes = await callMethodAs('panorama.search', userId, query, { limit });
         const searchResults = searchRes.results || [];
 
         // Find position of source document in results

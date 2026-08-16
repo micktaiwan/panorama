@@ -16,20 +16,7 @@ const getMCPUserId = () => {
 };
 
 // Call a Meteor method with a simulated userId context (for MCP server-to-server calls).
-// The context mimics DDPCommon.MethodInvocation: there is no DDP session here, so unblock()
-// and setUserId() are no-ops, but methods must be able to call them without crashing.
-const callMethodAs = async (methodName, userId, ...args) => {
-  const handler = Meteor.server.method_handlers[methodName];
-  if (!handler) throw new Meteor.Error('method-not-found', `Method ${methodName} not found`);
-  const invocation = {
-    userId,
-    isSimulation: false,
-    connection: null,
-    unblock: () => {},
-    setUserId: (id) => { invocation.userId = id; }
-  };
-  return handler.call(invocation, ...args);
-};
+import { callMethodAs } from '/imports/api/_shared/callMethodAs';
 import {
   buildProjectByNameSelector,
   buildByProjectSelector,
@@ -42,6 +29,17 @@ import {
   buildSuccessResponse,
   buildErrorResponse
 } from '/imports/api/tools/responseBuilder';
+
+// One-line verdict for a stored quality run, so a caller sees the outcome
+// without unpacking the metrics object.
+const summarizeQualityRun = (run) => {
+  if (!run) return 'Quality run not found';
+  if (run.status === 'error') return `Quality run failed: ${run.error}`;
+  if (run.status === 'running') return `Quality run ${run._id} still running`;
+  const pct = (v) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : 'n/a');
+  const issues = run.recommendationsSummary?.totalIssues ?? 0;
+  return `Top-10 ${pct(run.summary?.successRate_top10)}, top-3 ${pct(run.summary?.successRate_top3)}, MRR ${(run.summary?.mrr ?? 0).toFixed(3)} over ${run.counts?.testedQueries ?? 0} queries — ${issues} issue(s) flagged`;
+};
 
 // Utility functions
 const clampText = (s, max = 300) => {
@@ -3044,5 +3042,236 @@ export const TOOL_HANDLERS = {
     }
 
     return buildSuccessResponse(result, 'tool_createRelease', { source: 'panorama_db', policy: 'write' });
+  },
+
+  // --- Search quality and index maintenance ---
+
+  async tool_searchQualityTest(args, memory) {
+    const userId = getMCPUserId();
+    const rawWait = Number(args?.waitMs);
+    // Default stays under a typical 60s MCP client timeout: a full run takes
+    // longer than that, so the caller gets a runId to poll instead of a hang.
+    const waitMs = Number.isFinite(rawWait) ? Math.max(0, Math.min(240000, rawWait)) : 50000;
+    const opts = { source: 'mcp' };
+    if (Number(args?.limit) > 0) opts.limit = Number(args.limit);
+    if (Number(args?.maxDocsPerKind) > 0) opts.maxDocsPerKind = Number(args.maxDocsPerKind);
+    if (Array.isArray(args?.kinds) && args.kinds.length > 0) opts.kinds = args.kinds.map(String);
+
+    try {
+      const { runId } = await callMethodAs('searchQuality.start', userId, opts);
+      const { SearchQualityRunsCollection } = await import('/imports/api/searchQuality/collections');
+
+      const deadline = Date.now() + waitMs;
+      let run = null;
+      // Poll instead of holding the method open: a full run embeds ~100 queries
+      // and can outlive the MCP client's request timeout.
+      do {
+        run = await SearchQualityRunsCollection.findOneAsync({ _id: runId, userId });
+        if (run?.status !== 'running') break;
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } while (Date.now() < deadline);
+
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.searchQualityRunId = runId;
+      }
+
+      if (run?.status === 'running') {
+        return buildSuccessResponse(
+          { runId, status: 'running', startedAt: run.startedAt, params: run.params },
+          'tool_searchQualityTest',
+          {
+            source: 'qdrant',
+            policy: 'write',
+            customSummary: `Quality run ${runId} still going after ${Math.round(waitMs / 1000)}s — poll it with tool_searchQualityRun`
+          }
+        );
+      }
+
+      return buildSuccessResponse(
+        { run: run || { runId, status: 'unknown' } },
+        'tool_searchQualityTest',
+        { source: 'qdrant', policy: 'write', customSummary: summarizeQualityRun(run) }
+      );
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchQualityTest', {
+        suggestion: 'Check Qdrant health first with tool_searchHealth'
+      });
+    }
+  },
+
+  async tool_searchQualityRun(args, memory) {
+    const userId = getMCPUserId();
+    const runId = String(args?.runId || memory?.ids?.searchQualityRunId || '').trim();
+
+    try {
+      const { SearchQualityRunsCollection } = await import('/imports/api/searchQuality/collections');
+      const run = runId
+        ? await SearchQualityRunsCollection.findOneAsync({ _id: runId, userId })
+        : await SearchQualityRunsCollection.findOneAsync({ userId }, { sort: { startedAt: -1 } });
+
+      if (!run) {
+        return buildErrorResponse(runId ? `Run ${runId} not found` : 'No quality run recorded yet', 'tool_searchQualityRun', {
+          code: 'RESOURCE_NOT_FOUND',
+          suggestion: 'Run tool_searchQualityTest first, or list past runs with tool_searchQualityRuns'
+        });
+      }
+
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.searchQualityRunId = run._id;
+      }
+
+      return buildSuccessResponse({ run }, 'tool_searchQualityRun', {
+        source: 'panorama_db',
+        customSummary: summarizeQualityRun(run)
+      });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchQualityRun');
+    }
+  },
+
+  async tool_searchQualityRuns(args, memory) {
+    const userId = getMCPUserId();
+    const limit = Math.max(1, Math.min(100, Number(args?.limit) || 10));
+
+    try {
+      const runs = await callMethodAs('searchQuality.runs', userId, { limit });
+      const rows = (runs || []).map(r => ({
+        runId: r._id,
+        status: r.status,
+        source: r.source,
+        startedAt: r.startedAt,
+        durationMs: r.durationMs,
+        limit: r.params?.limit ?? null,
+        embeddingModel: r.env?.embeddingModel || null,
+        aiMode: r.env?.aiMode || null,
+        points: r.env?.points ?? null,
+        successRate_top3: r.summary?.successRate_top3 ?? null,
+        successRate_top5: r.summary?.successRate_top5 ?? null,
+        successRate_top10: r.summary?.successRate_top10 ?? null,
+        mrr: r.summary?.mrr ?? null,
+        avgScore: r.summary?.avgScore ?? null,
+        issues: r.recommendationsSummary?.totalIssues ?? null,
+        error: r.error || null
+      }));
+
+      if (memory) {
+        memory.lists = memory.lists || {};
+        memory.lists.searchQualityRuns = rows;
+      }
+
+      return buildSuccessResponse({ runs: rows, total: rows.length }, 'tool_searchQualityRuns', {
+        source: 'panorama_db'
+      });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchQualityRuns');
+    }
+  },
+
+  async tool_searchHealth() {
+    const userId = getMCPUserId();
+    try {
+      const health = await callMethodAs('qdrant.health', userId);
+      const summary = health?.disabled
+        ? 'Qdrant is not configured (semantic search disabled)'
+        : `Qdrant collection ${health?.collection}: ${health?.exists ? `${health?.count ?? '?'} points` : 'missing'}${health?.incompatible ? ' — VECTOR SIZE MISMATCH' : ''}`;
+      return buildSuccessResponse({ health }, 'tool_searchHealth', { source: 'qdrant', customSummary: summary });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchHealth');
+    }
+  },
+
+  async tool_searchDiagnoseIndexing() {
+    const userId = getMCPUserId();
+    try {
+      const diagnosis = await callMethodAs('qdrant.diagnoseIndexing', userId);
+      const top = (diagnosis?.recommendations || [])[0];
+      return buildSuccessResponse({ diagnosis }, 'tool_searchDiagnoseIndexing', {
+        source: 'qdrant',
+        customSummary: top ? `${top.priority}: ${top.issue}` : 'Indexing diagnosis complete'
+      });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchDiagnoseIndexing');
+    }
+  },
+
+  async tool_searchAutoFix(args) {
+    const userId = getMCPUserId();
+    // Default to dry run: this tool writes vectors, so the caller must ask for it.
+    const dryRun = args?.dryRun === undefined ? true : !!args.dryRun;
+    const sampleSize = args?.sampleSize === undefined ? undefined : Number(args.sampleSize);
+
+    try {
+      const report = await callMethodAs('qdrant.autoFix', userId, {
+        dryRun,
+        ...(sampleSize === undefined ? {} : { sampleSize })
+      });
+      return buildSuccessResponse({ report }, 'tool_searchAutoFix', {
+        source: 'qdrant',
+        policy: dryRun ? 'read_only' : 'write',
+        customSummary: report?.summary?.recommendation || 'Auto-fix complete'
+      });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchAutoFix', {
+        suggestion: 'Run tool_searchDiagnoseIndexing to check Qdrant is reachable'
+      });
+    }
+  },
+
+  async tool_searchReindex(args, memory) {
+    const userId = getMCPUserId();
+    const kind = String(args?.kind || '').trim();
+    // Reindexing someone else is admin-gated by the method itself.
+    const targetUserId = String(args?.targetUserId || '').trim() || undefined;
+
+    try {
+      const res = kind
+        ? await callMethodAs('qdrant.indexKindStart', userId, kind, targetUserId)
+        : await callMethodAs('qdrant.indexStart', userId, targetUserId);
+
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.indexJobId = res?.jobId;
+      }
+
+      return buildSuccessResponse(
+        { jobId: res?.jobId, total: res?.total, kind: kind || 'all', targetUserId: targetUserId || userId },
+        'tool_searchReindex',
+        {
+          source: 'qdrant',
+          policy: 'write',
+          customSummary: `Reindexing ${kind || 'all kinds'}: ${res?.total ?? '?'} documents queued (job ${res?.jobId}) — poll with tool_searchIndexStatus`
+        }
+      );
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchReindex', {
+        suggestion: 'Valid kinds: project, task, note, session, line, alarm, link, userlog, email'
+      });
+    }
+  },
+
+  async tool_searchIndexStatus(args) {
+    const userId = getMCPUserId();
+    const jobId = String(args?.jobId || '').trim();
+    if (!jobId) {
+      return buildErrorResponse('jobId is required', 'tool_searchIndexStatus', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide the jobId returned by tool_searchReindex'
+      });
+    }
+
+    try {
+      const status = await callMethodAs('qdrant.indexStatus', userId, jobId);
+      const summary = status?.done
+        ? `Job ${jobId} finished: ${status?.upserts ?? 0} upserts, ${status?.errors ?? 0} errors`
+        : `Job ${jobId}: ${status?.processed ?? 0}/${status?.total ?? '?'} documents`;
+      return buildSuccessResponse({ jobId, status }, 'tool_searchIndexStatus', {
+        source: 'qdrant',
+        customSummary: summary
+      });
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_searchIndexStatus');
+    }
   }
 };

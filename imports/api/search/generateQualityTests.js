@@ -95,14 +95,20 @@ const generateQueriesForDoc = ({ title, content }) => {
   return queries.filter(q => q.query && q.query.length >= 5);
 };
 
-// Generate test dataset from real database content
-export const generateTestDataset = async ({ userId } = {}) => {
+// Generate test dataset from real database content.
+// `kinds` restricts which kinds are sampled (default: all four), `maxDocsPerKind`
+// overrides the per-kind sample size (default: the per-kind values below).
+export const generateTestDataset = async ({ userId, kinds, maxDocsPerKind } = {}) => {
   const tests = [];
   const userFilter = userId ? { userId } : {};
+  const wanted = Array.isArray(kinds) && kinds.length > 0 ? new Set(kinds.map(String)) : null;
+  const wants = (kind) => !wanted || wanted.has(kind);
+  const cap = Number(maxDocsPerKind) > 0 ? Math.min(50, Math.floor(Number(maxDocsPerKind))) : null;
+  const sampleSize = (defaultN) => (cap === null ? defaultN : cap);
 
   // 1. Sample notes (most recent with content)
   const { NotesCollection } = await import('/imports/api/notes/collections');
-  const notes = await NotesCollection.find(
+  const notes = !wants('note') ? [] : await NotesCollection.find(
     {
       ...userFilter,
       $and: [
@@ -111,7 +117,7 @@ export const generateTestDataset = async ({ userId } = {}) => {
       ]
     },
     {
-      limit: 10,
+      limit: sampleSize(10),
       sort: { updatedAt: -1 },
       fields: { title: 1, content: 1, projectId: 1 }
     }
@@ -139,14 +145,17 @@ export const generateTestDataset = async ({ userId } = {}) => {
   }
 
   // 2. Sample tasks (with notes field)
-  const { TasksCollection } = await import('/imports/api/tasks/collections');
-  const tasks = await TasksCollection.find(
+  // NOT_DELETED, like the indexer: a trashed task is deliberately absent from
+  // Qdrant, so testing it would count a correct behaviour as a search failure.
+  const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+  const tasks = !wants('task') ? [] : await TasksCollection.find(
     {
       ...userFilter,
+      ...NOT_DELETED,
       title: { $exists: true, $ne: '' }
     },
     {
-      limit: 10,
+      limit: sampleSize(10),
       sort: { createdAt: -1 },
       fields: { title: 1, notes: 1, projectId: 1 }
     }
@@ -174,13 +183,13 @@ export const generateTestDataset = async ({ userId } = {}) => {
 
   // 3. Sample projects
   const { ProjectsCollection } = await import('/imports/api/projects/collections');
-  const projects = await ProjectsCollection.find(
+  const projects = !wants('project') ? [] : await ProjectsCollection.find(
     {
       ...userFilter,
       name: { $exists: true, $ne: '' }
     },
     {
-      limit: 5,
+      limit: sampleSize(5),
       sort: { createdAt: -1 },
       fields: { name: 1, description: 1 }
     }
@@ -208,7 +217,7 @@ export const generateTestDataset = async ({ userId } = {}) => {
 
   // 4. Sample emails (to test vector indexing)
   const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
-  const emails = await GmailMessagesCollection.find(
+  const emails = !wants('email') ? [] : await GmailMessagesCollection.find(
     {
       ...userFilter,
       $and: [
@@ -217,7 +226,7 @@ export const generateTestDataset = async ({ userId } = {}) => {
       ]
     },
     {
-      limit: 10,
+      limit: sampleSize(10),
       sort: { gmailDate: -1 },
       fields: { id: 1, from: 1, subject: 1, snippet: 1, body: 1 }
     }
