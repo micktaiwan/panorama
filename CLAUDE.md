@@ -15,6 +15,7 @@ Two instances (local Electron + remote VPS at `panorama.mickaelfm.me`) share the
 ### Known Limitations
 
 - **No EMAIL_URL**: verification and reset password emails print to server console only
+- **Client errors are never persisted**: the `errors` collection is fed only by the server `console.error` override (`imports/api/errors/serverConsoleOverride.js`). The `errors.insert` method has no caller anywhere, so a toast shown in the UI leaves no trace in the DB.
 
 ### File Storage
 
