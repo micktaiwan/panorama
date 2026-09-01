@@ -1003,6 +1003,77 @@ export const TOOL_HANDLERS = {
 
     return buildSuccessResponse(result, 'tool_updatePerson', { policy: 'write' });
   },
+  // Deleting a person is not the same act as recording that they left, and the
+  // two get confused constantly. Somebody who worked here and moved on keeps
+  // their tasks, notes and history: they get left:true. This is for a row that
+  // should never have existed — a duplicate from an import, a test entry — so
+  // it refuses by default when anything still points at the person, rather than
+  // leaving staffing rows and situation actors hanging on a dead id.
+  async tool_deletePerson(args, memory) {
+    const personId = String(args?.personId || '').trim();
+    if (!personId) {
+      return buildErrorResponse('personId is required', 'tool_deletePerson', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide personId parameter. Use tool_peopleList to find the correct personId'
+      });
+    }
+
+    const userId = getMCPUserId();
+    const { PeopleCollection } = await import('/imports/api/people/collections');
+    const person = await PeopleCollection.findOneAsync(
+      { _id: personId, userId },
+      { fields: { _id: 1, name: 1, lastName: 1, left: 1 } }
+    );
+
+    if (!person) {
+      console.warn(`[tool_deletePerson] Person not found: ${personId}`);
+      return buildErrorResponse(`Person not found: "${personId}"`, 'tool_deletePerson', {
+        code: 'NOT_FOUND',
+        suggestion: 'Use tool_peopleList to find the correct personId'
+      });
+    }
+
+    const [{ StaffingCollection }, { SituationActorsCollection }] = await Promise.all([
+      import('/imports/api/staffing/collections'),
+      import('/imports/api/situationActors/collections')
+    ]);
+    const [staffing, actors] = await Promise.all([
+      StaffingCollection.find({ personId }).countAsync(),
+      SituationActorsCollection.find({ personId }).countAsync()
+    ]);
+
+    if ((staffing > 0 || actors > 0) && !args?.force) {
+      const parts = [];
+      if (staffing > 0) parts.push(`${staffing} staffing row(s)`);
+      if (actors > 0) parts.push(`${actors} situation actor(s)`);
+      return buildErrorResponse(
+        `Still referenced by ${parts.join(' and ')}`,
+        'tool_deletePerson',
+        {
+          code: 'STILL_REFERENCED',
+          suggestion: 'If this person really worked here, mark them as left with tool_updatePerson({personId, left: true}) instead of deleting. Pass force:true only to delete anyway and leave those rows orphaned.'
+        }
+      );
+    }
+
+    try {
+      await callMethodAs('people.remove', userId, personId);
+
+      const label = [person.name, person.lastName].filter(Boolean).join(' ');
+      console.log(`[tool_deletePerson] Successfully deleted person: ${personId} (${label})`);
+
+      const result = { deleted: true, personId, name: label, staffingRows: staffing, situationActors: actors };
+      if (memory) {
+        memory.ids = memory.ids || {};
+        memory.ids.personId = personId;
+      }
+
+      return buildSuccessResponse(result, 'tool_deletePerson', { policy: 'write' });
+    } catch (error) {
+      console.error(`[tool_deletePerson] Error deleting person ${personId}:`, error);
+      return buildErrorResponse(error, 'tool_deletePerson');
+    }
+  },
   async tool_personContext(args, memory) {
     const rawName = String(args?.name || '').trim();
     const personId = String(args?.personId || '').trim();

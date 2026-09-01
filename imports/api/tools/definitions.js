@@ -301,6 +301,20 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_deletePerson',
+    description: 'Permanently delete a person. This is for a record that should never have existed — a duplicate, a test entry, a wrong import. Somebody who really worked here and left is NOT deleted: set left:true with tool_updatePerson, because their tasks, notes and history stay meaningful. Refuses when the person is still referenced by staffing rows or situation actors unless force is set, and says how many of each.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        personId: { type: 'string', description: 'Person ID (required). Get it from tool_peopleList.' },
+        force: { type: 'boolean', description: 'Delete even though staffing rows or situation actors still point at this person, leaving those rows orphaned. Default false (optional)' }
+      },
+      required: ['personId']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_personContext',
     description: 'Everything Panorama knows about one person, in a single call: their record, the tasks and notes that mention them, their emails, and the calendar events they take part in. Use when the user asks "what do we have on X", "X is contacting me", or before a meeting with someone.',
     parameters: {
