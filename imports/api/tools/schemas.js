@@ -26,10 +26,4 @@ export const TOOL_SCHEMAS = {
   tool_appendToNote: { required: ['noteId', 'block'], readOnly: false },
   tool_editNote: { required: ['noteId', 'oldText', 'newText'], readOnly: false },
   tool_userLogsFilter: { required: [], readOnly: true },
-  tool_claudeProjectsList: { required: [], readOnly: true },
-  tool_claudeSessionsByProject: { required: ['projectId'], readOnly: true },
-  tool_claudeSessionStats: { required: ['sessionId'], readOnly: true },
-  tool_claudeMessagesBySession: { required: ['sessionId'], readOnly: true },
-  tool_claudeMessagesSearch: { required: ['query'], readOnly: true },
-  tool_claudeSessionsList: { required: [], readOnly: true }
 };

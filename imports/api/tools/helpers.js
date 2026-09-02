@@ -146,16 +146,6 @@ export const bindArgsWithMemory = (toolName, rawArgs, memory) => {
       args.query = mem.params.userQuery;
     }
   }
-  if (toolName === 'tool_claudeSessionsByProject' && !args.projectId) {
-    args.projectId = mem.ids?.claudeProjectId || mem.ids?.projectId;
-  }
-  if (toolName === 'tool_claudeSessionStats' && !args.sessionId) {
-    args.sessionId = mem.ids?.claudeSessionId;
-  }
-  if (toolName === 'tool_claudeMessagesBySession' && !args.sessionId) {
-    args.sessionId = mem.ids?.claudeSessionId;
-  }
-
   return args;
 };
 
@@ -226,10 +216,7 @@ export const FIELD_ALLOWLIST = {
   userLogs: ['_id', 'content', 'createdAt'],
   emails: ['_id', 'id', 'threadId', 'from', 'to', 'subject', 'snippet', 'body', 'gmailDate', 'labelIds', 'createdAt'],
   notionIntegrations: ['_id', 'name', 'databaseId', 'description', 'filters', 'ownerMapping', 'pageSize', 'enabled', 'lastSyncAt', 'syncInProgress', 'syncProgress', 'syncCancelRequested', 'createdAt'],
-  notionTickets: ['_id', 'integrationId', 'notionId', 'id', 'title', 'owners', 'age', 'priority', 'lifecycle', 'nextStep', 'url', 'syncedAt', 'createdAt', 'updatedAt'],
-  claudeProjects: ['_id', 'name', 'cwd', 'model', 'permissionMode', 'appendSystemPrompt', 'createdAt', 'updatedAt'],
-  claudeSessions: ['_id', 'projectId', 'name', 'cwd', 'model', 'permissionMode', 'status', 'totalCostUsd', 'totalDurationMs', 'claudeCodeVersion', 'activeModel', 'createdAt', 'updatedAt'],
-  claudeMessages: ['_id', 'sessionId', 'role', 'type', 'contentText', 'toolName', 'costUsd', 'durationMs', 'model', 'createdAt']
+  notionTickets: ['_id', 'integrationId', 'notionId', 'id', 'title', 'owners', 'age', 'priority', 'lifecycle', 'nextStep', 'url', 'syncedAt', 'createdAt', 'updatedAt']
 };
 
 // Map collection name to lists.* memory key
@@ -250,10 +237,7 @@ export const getListKeyForCollection = (collection) => {
     emails: 'emails',
     mcpServers: 'mcpServers',
     notionIntegrations: 'notionIntegrations',
-    notionTickets: 'notionTickets',
-    claudeProjects: 'claudeProjects',
-    claudeSessions: 'claudeSessions',
-    claudeMessages: 'claudeMessages'
+    notionTickets: 'notionTickets'
   };
   return map[c] || c;
 };
@@ -407,29 +391,6 @@ export const COMMON_QUERIES = {
     collection: 'notes',
     where: {},
     sort: { updatedAt: -1 },
-    limit: 20
-  },
-
-  // Claude Code: all open sessions (any status - idle, running, or error)
-  activeSessions: {
-    collection: 'claudeSessions',
-    where: {},
-    sort: { updatedAt: -1 }
-  },
-
-  // Claude Code: recent sessions
-  recentSessions: {
-    collection: 'claudeSessions',
-    where: {},
-    sort: { createdAt: -1 },
-    limit: 20
-  },
-
-  // Claude Code: sessions sorted by cost
-  costlySessions: {
-    collection: 'claudeSessions',
-    where: { totalCostUsd: { gt: 0 } },
-    sort: { totalCostUsd: -1 },
     limit: 20
   }
 };

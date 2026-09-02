@@ -399,7 +399,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_collectionQuery',
-    description: 'Generic read-only query with sort/limit/select and a validated where DSL. The first choice for any list-style read: "recent notes", "recent tasks", "tasks since X", "people created last week", etc. — before reaching for a more specialized tool. userId scoping is applied automatically (no need to filter by user).\n\nSupported collections: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets, claudeProjects, claudeSessions, claudeMessages.\n\nwhere DSL — operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Dates accept ISO 8601 strings (auto-converted) on fields: createdAt, updatedAt, deadline, when, snoozedUntilAt, arrivalDate. Unknown fields are silently dropped (allowlist per collection).\n\nExamples:\n• Recent notes across all projects: {collection:"notes", sort:{updatedAt:-1}, limit:20}\n• Notes updated since a date: {collection:"notes", where:{updatedAt:{gt:"2026-01-01T00:00:00Z"}}, sort:{updatedAt:-1}}\n• Recent tasks in a project: {collection:"tasks", where:{projectId:{eq:"abc"}}, sort:{updatedAt:-1}, limit:50}\n• Urgent open tasks: {collection:"tasks", where:{and:[{status:{ne:"done"}},{isUrgent:{eq:true}}]}}\n• People in a team: {collection:"people", where:{teamId:{eq:"xyz"}}, sort:{name:1}}\n\nPre-baked patterns are exposed in COMMON_QUERIES (helpers.js): recentNotes, recentSessions, costlySessions, tasksWithDeadline, urgentTasks, importantTasks, overdueTasks, todoTasks, inProgressTasks, activeTasks, activeSessions.',
+    description: 'Generic read-only query with sort/limit/select and a validated where DSL. The first choice for any list-style read: "recent notes", "recent tasks", "tasks since X", "people created last week", etc. — before reaching for a more specialized tool. userId scoping is applied automatically (no need to filter by user).\n\nSupported collections: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets.\n\nwhere DSL — operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Dates accept ISO 8601 strings (auto-converted) on fields: createdAt, updatedAt, deadline, when, snoozedUntilAt, arrivalDate. Unknown fields are silently dropped (allowlist per collection).\n\nExamples:\n• Recent notes across all projects: {collection:"notes", sort:{updatedAt:-1}, limit:20}\n• Notes updated since a date: {collection:"notes", where:{updatedAt:{gt:"2026-01-01T00:00:00Z"}}, sort:{updatedAt:-1}}\n• Recent tasks in a project: {collection:"tasks", where:{projectId:{eq:"abc"}}, sort:{updatedAt:-1}, limit:50}\n• Urgent open tasks: {collection:"tasks", where:{and:[{status:{ne:"done"}},{isUrgent:{eq:true}}]}}\n• People in a team: {collection:"people", where:{teamId:{eq:"xyz"}}, sort:{name:1}}\n\nPre-baked patterns are exposed in COMMON_QUERIES (helpers.js): recentNotes, tasksWithDeadline, urgentTasks, importantTasks, overdueTasks, todoTasks, inProgressTasks, activeTasks.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -795,70 +795,6 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
-    name: 'tool_claudeProjectsList',
-    description: 'List all Claude Code projects (sorted by updatedAt desc). Use when the user asks about Claude Code projects, workspaces, or coding sessions.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {}
-    }
-  },
-  {
-    type: 'function',
-    name: 'tool_claudeSessionsByProject',
-    description: 'Return Claude Code sessions for a specific Claude project. Use when the user asks about sessions or coding activity within a Claude project.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        projectId: { type: 'string', description: 'Claude project ID' }
-      },
-      required: ['projectId']
-    }
-  },
-  {
-    type: 'function',
-    name: 'tool_claudeSessionStats',
-    description: 'Get detailed statistics for a Claude Code session: message counts by role/type, cost, duration. Use when the user asks about session details or metrics.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        sessionId: { type: 'string', description: 'Claude session ID' }
-      },
-      required: ['sessionId']
-    }
-  },
-  {
-    type: 'function',
-    name: 'tool_claudeMessagesBySession',
-    description: 'Return messages for a Claude Code session (sorted chronologically). Use when the user wants to see the conversation history of a session.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        sessionId: { type: 'string', description: 'Claude session ID' },
-        limit: { type: 'number', description: 'Max messages to return (default 50, max 200)' }
-      },
-      required: ['sessionId']
-    }
-  },
-  {
-    type: 'function',
-    name: 'tool_claudeMessagesSearch',
-    description: 'Search Claude Code messages by text content (case-insensitive regex). Use when the user wants to find specific messages across sessions.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        query: { type: 'string', description: 'Text to search in message content' },
-        limit: { type: 'number', description: 'Max results to return (default 20, max 200)' }
-      },
-      required: ['query']
-    }
-  },
-  {
-    type: 'function',
     name: 'tool_readFile',
     description: 'Read the contents of a file from the local filesystem. Supports text files (markdown, JSON, JavaScript, etc.). Use when the user wants to read or examine file contents.',
     parameters: {
@@ -876,33 +812,6 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ['filePath']
-    }
-  },
-  {
-    type: 'function',
-    name: 'tool_claudeSessionsList',
-    description: 'List all Claude Code sessions across all projects. Use when the user asks about Claude sessions, running processes, or wants an overview of Claude activity.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        limit: {
-          type: 'number',
-          description: 'Max sessions to return (default 50, max 200)'
-        },
-        status: {
-          type: 'string',
-          description: 'Filter by status: idle, running, error, interrupted'
-        },
-        sortBy: {
-          type: 'string',
-          description: 'Sort field: updatedAt (default), createdAt, totalCostUsd'
-        },
-        sortOrder: {
-          type: 'string',
-          description: 'Sort direction: asc, desc (default)'
-        }
-      }
     }
   },
   {
