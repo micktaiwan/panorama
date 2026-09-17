@@ -136,10 +136,20 @@ set +m
 # coup — sans toucher une autre instance Meteor lancée hors de ces groupes
 # (ex: un `meteor test` en parallèle, qui a son propre groupe).
 
-# --- INSTRUMENTATION TEMPORAIRE (à retirer après diagnostic) ---
-QLOG=/tmp/panorama-quit.log
-qlog() { echo "$(date '+%H:%M:%S') $*" | tee -a "$QLOG"; }
-: > "$QLOG"
+# --- Journal de cycle de vie ---
+# Garde l'historique des lancements et des arrêts d'une session à l'autre, pour
+# savoir après coup pourquoi l'app s'est arrêtée (quel process est mort, avec quel
+# code, sur quel signal, et ce que le watchdog a fait). Avant, le fichier vivait
+# dans /tmp et était vidé à chaque lancement : la trace de l'arrêt précédent
+# disparaissait au moment précis où on en avait besoin.
+QLOG_DIR="$HOME/Library/Logs/Panorama"
+QLOG="$QLOG_DIR/lifecycle.log"
+QLOG_MAX_LINES=5000
+mkdir -p "$QLOG_DIR"
+qlog() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" | tee -a "$QLOG"; }
+if [ -f "$QLOG" ] && [ "$(wc -l < "$QLOG")" -gt "$QLOG_MAX_LINES" ]; then
+  tail -n "$QLOG_MAX_LINES" "$QLOG" > "$QLOG.tmp" && mv "$QLOG.tmp" "$QLOG"
+fi
 qlog "START electron=$ELECTRON_PID meteor=$METEOR_PID (pid script=$$)"
 
 # Quoi qu'il arrive (quit Electron, Ctrl+C, arrêt de Meteor) → tout s'arrête.
@@ -155,7 +165,9 @@ cleanup() {
   kill -KILL -"$METEOR_PID" 2>/dev/null
   qlog "CLEANUP done"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'qlog "SIGNAL INT reçu par le script"; exit 130' INT
+trap 'qlog "SIGNAL TERM reçu par le script"; exit 143' TERM
 
 # --- Watchdog de reprise ---
 #
@@ -232,6 +244,7 @@ while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; 
     # Retour à la normale : on repart d'une ardoise vierge, y compris le quota.
     if [ "$restart_count" -gt 0 ] || [ "$crash_seconds" -gt 0 ]; then
       echo "[watchdog] l'app répond de nouveau."
+      qlog "WATCHDOG app healthy again"
     fi
     crash_seconds=0
     restart_count=0
@@ -250,6 +263,7 @@ while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; 
 
   if [ "$restart_count" -ge "$WATCHDOG_MAX_RESTARTS" ]; then
     echo "[watchdog] serveur toujours mort après $WATCHDOG_MAX_RESTARTS relances — j'arrête d'insister, la cause n'est pas le réseau."
+    qlog "WATCHDOG gave up after $WATCHDOG_MAX_RESTARTS restarts"
     last_restart_epoch=$now
     continue
   fi
@@ -267,10 +281,19 @@ while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; 
   restart_count=$((restart_count + 1))
   if touch_restart_trigger; then
     echo "[watchdog] serveur mort depuis ${crash_seconds}s et Mongo répond — relance ($restart_count/$WATCHDOG_MAX_RESTARTS) via $TRIGGER_FILE"
+    qlog "WATCHDOG server crashed for ${crash_seconds}s, restart $restart_count/$WATCHDOG_MAX_RESTARTS"
   else
     echo "[watchdog] échec de réécriture de $TRIGGER_FILE — relance impossible."
   fi
   last_restart_epoch=$now
   crash_seconds=0
 done
-qlog "LOOP EXIT electron alive=$(kill -0 "$ELECTRON_PID" 2>/dev/null && echo yes || echo no) meteor alive=$(kill -0 "$METEOR_PID" 2>/dev/null && echo yes || echo no)"
+# `wait` sur un process déjà terminé rend son code de sortie (>128 = tué par le
+# signal code-128). Ne s'appelle que sur le process mort : l'autre est encore vivant.
+exit_desc() {
+  local pid="$1" code
+  if kill -0 "$pid" 2>/dev/null; then echo "alive"; return; fi
+  wait "$pid" 2>/dev/null; code=$?
+  if [ "$code" -gt 128 ]; then echo "dead code=$code (signal $((code - 128)))"; else echo "dead code=$code"; fi
+}
+qlog "LOOP EXIT electron=$(exit_desc "$ELECTRON_PID") meteor=$(exit_desc "$METEOR_PID")"

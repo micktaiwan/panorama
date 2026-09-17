@@ -3,6 +3,7 @@ import { getQdrantUrl, getAIConfigAsync, getOpenAiApiKeyAsync } from '/imports/a
 import { embed as llmEmbed } from '/imports/api/_shared/llmProxy';
 import { ErrorsCollection } from '/imports/api/errors/collections';
 import crypto from 'crypto';
+import { retryKey, enqueueIndexRetry, recordIndexSuccess, dropIndexRetries } from './retryQueue';
 
 export const COLLECTION = () => {
   const baseName = String(Meteor.settings?.qdrantCollectionName || 'panorama');
@@ -135,7 +136,34 @@ const ensureCollectionIfNeeded = async () => {
   collectionEnsured = true;
 };
 
-export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {} }) => {
+// Runs one index write; on failure queues it for retryWorker.js, then rethrows so
+// callers keep reporting the failure. Queue bookkeeping errors never mask the write error.
+const withIndexRetry = async ({ kind, id, op, args, userId = null }, run) => {
+  const key = retryKey(kind, id);
+  const startedAt = Date.now();
+  try {
+    await run();
+  } catch (e) {
+    try {
+      await enqueueIndexRetry({ key, op, args, userId, startedAt, error: e });
+    } catch (queueErr) {
+      console.error('[search][retry] failed to queue index retry', key, queueErr);
+    }
+    throw e;
+  }
+  try {
+    await recordIndexSuccess(key, startedAt);
+  } catch (queueErr) {
+    console.error('[search][retry] failed to clear index retry', key, queueErr);
+  }
+};
+
+export const upsertDoc = async (args) => withIndexRetry(
+  { kind: args.kind, id: args.id, op: 'upsert', args, userId: args.userId ?? null },
+  () => upsertDocNow(args)
+);
+
+export const upsertDocNow = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {} }) => {
   if (!(await isEmbeddingConfigured(userId))) {
     return;
   }
@@ -158,24 +186,32 @@ export const upsertDoc = async ({ kind, id, text, projectId = null, sessionId = 
   await client.upsert(COLLECTION(), { points: [{ id: pointId, vector: Array.from(vector), payload }] });
 };
 
-export const deleteDoc = async (kind, id) => {
+export const deleteDoc = async (kind, id) => withIndexRetry(
+  { kind, id, op: 'delete', args: { kind, id } },
+  () => deleteDocNow(kind, id)
+);
+
+export const deleteDocNow = async (kind, id) => {
   const client = await getQdrantClient();
   const pointId = toPointId(kind, id);
   await client.delete(COLLECTION(), { points: [pointId] });
 };
 
 export const deleteByProjectId = async (projectId) => {
+  await dropIndexRetries({ 'args.projectId': projectId });
   const client = await getQdrantClient();
   await client.delete(COLLECTION(), { filter: { must: [{ key: 'projectId', match: { value: projectId } }] } });
 };
 
 export const deleteBySessionId = async (sessionId) => {
+  await dropIndexRetries({ 'args.sessionId': sessionId });
   const client = await getQdrantClient();
   await client.delete(COLLECTION(), { filter: { must: [{ key: 'sessionId', match: { value: sessionId } }] } });
 };
 
 // Delete all points for a given kind (e.g. 'task', 'project', 'note', 'userlog', ...)
 export const deleteByKind = async (kind) => {
+  await dropIndexRetries({ 'args.kind': String(kind) });
   const client = await getQdrantClient();
   await client.delete(COLLECTION(), { filter: { must: [{ key: 'kind', match: { value: String(kind) } }] } });
 };
@@ -270,8 +306,19 @@ export const splitIntoChunks = (text, minChars = 800, maxChars = 1200, overlap =
   return chunks;
 };
 
-// Upsert multiple chunks for one logical document
-export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {}, minChars = 800, maxChars = 1200, overlap = 150 }) => {
+// Upsert multiple chunks for one logical document.
+// replace: first drop every existing point of the document (stale chunks when the
+// text shrank, legacy single point). Done inside the same retried unit so a failed
+// delete is replayed together with the upsert instead of leaving the doc unindexed.
+export const upsertDocChunks = async (args) => withIndexRetry(
+  { kind: args.kind, id: args.id, op: 'upsertChunks', args, userId: args.userId ?? null },
+  () => upsertDocChunksNow(args)
+);
+
+export const upsertDocChunksNow = async ({ kind, id, text, projectId = null, sessionId = null, userId = null, extraPayload = {}, minChars = 800, maxChars = 1200, overlap = 150, replace = false }) => {
+  if (replace) {
+    await deleteByDocIdNow(kind, id);
+  }
   if (!(await isEmbeddingConfigured(userId))) {
     return;
   }
@@ -325,7 +372,12 @@ export const upsertDocChunks = async ({ kind, id, text, projectId = null, sessio
 };
 
 // Delete all points for a logical document by payload.docId
-export const deleteByDocId = async (kind, id) => {
+export const deleteByDocId = async (kind, id) => withIndexRetry(
+  { kind, id, op: 'deleteByDocId', args: { kind, id } },
+  () => deleteByDocIdNow(kind, id)
+);
+
+export const deleteByDocIdNow = async (kind, id) => {
   const client = await getQdrantClient();
   const docId = `${kind}:${id}`;
   await client.delete(COLLECTION(), { filter: { must: [{ key: 'docId', match: { value: docId } }] } });

@@ -133,9 +133,8 @@ Meteor.methods({
       (async () => {
         try {
           const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
-          const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
-          await deleteByDocId('note', noteId);
-          await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId, minChars: 800, maxChars: 1200, overlap: 150 });
+          const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+          await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId, minChars: 800, maxChars: 1200, overlap: 150, replace: true });
         } catch (e) {
           console.error('[search][notes.update] upsert failed', e);
         }
@@ -196,9 +195,8 @@ Meteor.methods({
     (async () => {
       try {
         const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
-        const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
-        await deleteByDocId('note', noteId);
-        await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId, minChars: 800, maxChars: 1200, overlap: 150 });
+        const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
+        await upsertDocChunks({ kind: 'note', id: noteId, text: `${next?.title || ''} ${next?.content || ''}`.trim(), projectId: next?.projectId || null, userId, minChars: 800, maxChars: 1200, overlap: 150, replace: true });
       } catch (e) {
         console.error('[search][notes.updateContentCAS] upsert failed', e);
       }

@@ -10,9 +10,8 @@ const updateNoteIndex = async (noteId, userId) => {
   const { NotesCollection } = await import('/imports/api/notes/collections');
   const next = await NotesCollection.findOneAsync(noteId, { fields: { title: 1, content: 1, projectId: 1 } });
   // Same indexing scheme as notes.update: drop all existing points for this
-  // doc (chunked note:<id>#i and legacy single note:<id>) then re-chunk
-  const { deleteByDocId, upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
-  await deleteByDocId('note', noteId);
+  // doc (chunked note:<id>#i and legacy single note:<id>) then re-chunk (replace)
+  const { upsertDocChunks } = await import('/imports/api/search/vectorStore.js');
   await upsertDocChunks({
     kind: 'note',
     id: noteId,
@@ -21,7 +20,8 @@ const updateNoteIndex = async (noteId, userId) => {
     userId,
     minChars: 800,
     maxChars: 1200,
-    overlap: 150
+    overlap: 150,
+    replace: true
   });
   if (next?.projectId) {
     const { ProjectsCollection } = await import('/imports/api/projects/collections');

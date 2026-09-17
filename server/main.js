@@ -234,6 +234,7 @@ import '/imports/api/diskFiles/methods';
 // Search & AI
 import '/imports/api/search/qdrantInit';
 import '/imports/api/search/methods';
+import '/imports/api/search/retryWorker';
 import '/imports/api/searchQuality/collections';
 import '/imports/api/searchQuality/publications';
 import '/imports/api/searchQuality/methods';
