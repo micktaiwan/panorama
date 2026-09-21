@@ -9,6 +9,7 @@ import { NotesSearch } from '../components/NotesSearch.jsx';
 import { NotesList } from '../components/NotesList.jsx';
 import { NotesTabs } from '../components/NotesTabs.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
+import { DeletedNotesModal } from '../components/DeletedNotes/DeletedNotesModal.jsx';
 import { DiskFileEditor } from '/imports/ui/components/DiskFileEditor/DiskFileEditor.jsx';
 import './NotesPanel.css';
 
@@ -99,6 +100,9 @@ export const NotesPanel = forwardRef(({
   useTracker(() => {
     if (openNoteIds.length > 0) Meteor.subscribe('notes.content', openNoteIds);
   }, [openNoteIds.join(',')]);
+
+  // ---- Deleted notes (orphan version histories) ----
+  const [showDeletedNotes, setShowDeletedNotes] = useState(false);
 
   // ---- Search match info (from ProseMirror search plugin) ----
   const [searchMatchInfo, setSearchMatchInfo] = useState({ count: 0, currentIndex: -1 });
@@ -208,6 +212,13 @@ export const NotesPanel = forwardRef(({
         >
           {isCreatingNote ? 'Creating...' : '+ New note'}
         </button>
+        <button
+          className="sidebar-deleted-notes-btn"
+          onClick={() => setShowDeletedNotes(true)}
+          type="button"
+        >
+          Deleted notes
+        </button>
         <NotesList
           notes={notes}
           isLoading={notesLoading}
@@ -279,6 +290,12 @@ export const NotesPanel = forwardRef(({
           </div>
         )}
       </div>
+
+      <DeletedNotesModal
+        open={showDeletedNotes}
+        onClose={() => setShowDeletedNotes(false)}
+        onRestored={(noteId) => { pendingOpenRef.current = noteId; }}
+      />
     </div>
   );
 });

@@ -150,6 +150,9 @@ import '/imports/api/notes/collections';
 import '/imports/api/notes/publications';
 import '/imports/api/notes/methods';
 import '/imports/api/notes/aiMethods';
+import '/imports/api/noteRevisions/collections';
+import '/imports/api/noteRevisions/publications';
+import '/imports/api/noteRevisions/methods';
 import '/imports/api/noteSessions/collections';
 import '/imports/api/noteSessions/publications';
 import '/imports/api/noteSessions/methods';
@@ -453,6 +456,7 @@ Meteor.startup(async () => {
   const { ProjectsCollection } = await import('/imports/api/projects/collections');
   const { TasksCollection } = await import('/imports/api/tasks/collections');
   const { NotesCollection } = await import('/imports/api/notes/collections');
+  const { NoteRevisionsCollection } = await import('/imports/api/noteRevisions/collections');
   const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
   const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
   const { LinksCollection } = await import('/imports/api/links/collections');
@@ -466,6 +470,9 @@ Meteor.startup(async () => {
   TasksCollection.rawCollection().createIndex({ userId: 1, tags: 1 }).catch(() => {});
   NotesCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   NotesCollection.rawCollection().createIndex({ userId: 1, updatedAt: -1 }).catch(() => {});
+  NoteRevisionsCollection.rawCollection().createIndex({ noteId: 1, createdAt: -1 }).catch(() => {});
+  NoteRevisionsCollection.rawCollection().createIndex({ noteUserId: 1 }).catch(() => {});
+  NoteRevisionsCollection.rawCollection().createIndex({ noteProjectId: 1 }, { sparse: true }).catch(() => {});
   NoteSessionsCollection.rawCollection().createIndex({ userId: 1, projectId: 1 }).catch(() => {});
   NoteLinesCollection.rawCollection().createIndex({ userId: 1, sessionId: 1 }).catch(() => {});
   NoteLinesCollection.rawCollection().createIndex({ projectId: 1 }).catch(() => {});

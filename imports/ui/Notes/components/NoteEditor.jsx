@@ -10,8 +10,10 @@ import { ProseMirrorEditor } from './ProseMirrorEditor/ProseMirrorEditor.jsx';
 import { AskAiSidebar } from './AskAiSidebar/AskAiSidebar.jsx';
 import { NoteToc } from './NoteToc/NoteToc.jsx';
 import { NoteAIActions } from './NoteAIActions/NoteAIActions.jsx';
+import { NoteHistorySidebar } from './NoteHistorySidebar/NoteHistorySidebar.jsx';
 import { useNoteAI } from '../hooks/useNoteAI.js';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { notify } from '/imports/ui/utils/notify.js';
 import './NoteEditor.css';
 
 const EMPTY_ARRAY = [];
@@ -34,6 +36,7 @@ export const NoteEditor = forwardRef(({
   onSearchInfo,
 }, ref) => {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [docVersion, setDocVersion] = useState(0);
   const editorRef = useRef(null);
 
@@ -56,6 +59,16 @@ export const NoteEditor = forwardRef(({
     onContentUpdate: onContentChange,
     getCurrentContent: () => noteContents[activeTabId] || '',
   });
+
+  // Restoring is an ordinary save: it goes through notes.update, which appends
+  // a revision of the body being replaced before writing.
+  const handleRestoreRevision = async (content) => {
+    if (!activeTabId) return;
+    editorRef.current?.setContent(content);
+    onContentChange(activeTabId, content);
+    await onSave(activeTabId);
+    notify({ message: 'Version restored', kind: 'success' });
+  };
 
   const handleDuplicateNote = () => {
     if (!activeTabId || !onDuplicate) return;
@@ -208,6 +221,16 @@ export const NoteEditor = forwardRef(({
               />
             )}
 
+            <Tooltip content="Version history">
+              <button
+                className={`action-button history-button${showHistory ? ' active' : ''}`}
+                onClick={() => setShowHistory(v => !v)}
+                disabled={!activeTabId}
+              >
+                History
+              </button>
+            </Tooltip>
+
             <Tooltip content="Duplicate note">
               <button
                 className="action-button duplicate-button"
@@ -251,6 +274,15 @@ export const NoteEditor = forwardRef(({
       </div>
 
       <NoteToc editorRef={editorRef} docVersion={docVersion} noteId={activeTabId} />
+
+      {showHistory && (
+        <NoteHistorySidebar
+          noteId={activeTabId}
+          onClose={() => setShowHistory(false)}
+          onRestore={handleRestoreRevision}
+          canWrite={!isLockedByOther}
+        />
+      )}
 
       {askAiSessionId && (
         <AskAiSidebar

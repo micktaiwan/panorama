@@ -3,6 +3,7 @@ import { check } from 'meteor/check';
 import { NotesCollection } from './collections';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { ensureLoggedIn, ensureProjectAccess } from '/imports/api/_shared/auth';
+import { recordNoteRevision, resolveWriteSource } from '/imports/api/noteRevisions/record';
 
 // Fields a client may set through notes.update — everything else
 // (userId, lockedBy, createdAt, …) is server-managed
@@ -120,6 +121,14 @@ Meteor.methods({
     const contentChanged = ('title' in sanitized && sanitized.title !== note?.title)
       || ('content' in sanitized && sanitized.content !== note?.content);
 
+    // Append-only history: keep the body as it stands right now, before it is
+    // overwritten. Only a real content change is worth a revision — a title or
+    // project move leaves the body untouched.
+    const bodyChanged = 'content' in sanitized && sanitized.content !== note?.content;
+    if (bodyChanged) {
+      await recordNoteRevision({ note, userId: this.userId, source: resolveWriteSource(this) });
+    }
+
     // If updatedAt is explicitly provided (for reordering), use it as-is
     // Otherwise, only update updatedAt if content has changed
     const updateDoc = modifier.updatedAt
@@ -168,7 +177,7 @@ Meteor.methods({
     check(newContent, String);
     check(expectedContent, String);
     ensureLoggedIn(this.userId);
-    const note = await NotesCollection.findOneAsync(noteId, { fields: { userId: 1, projectId: 1, lockedBy: 1 } });
+    const note = await NotesCollection.findOneAsync(noteId, { fields: { userId: 1, projectId: 1, lockedBy: 1, title: 1, content: 1 } });
     if (!note) throw new Meteor.Error('not-found', 'Note not found');
     if (note.projectId) {
       await ensureProjectAccess(note.projectId, this.userId);
@@ -188,6 +197,17 @@ Meteor.methods({
       { $set: { content: newContent, updatedAt: new Date() } }
     );
     if (res === 0) return 0;
+
+    // The CAS succeeded, so `expectedContent` was the body it replaced: record
+    // it. Written after the update on purpose — a failed CAS must leave no
+    // revision behind.
+    if (newContent !== expectedContent) {
+      await recordNoteRevision({
+        note: { ...note, content: expectedContent },
+        userId: this.userId,
+        source: resolveWriteSource(this),
+      });
+    }
 
     // Fire-and-forget side effects, same as notes.update: Qdrant re-indexing,
     // own-lock release, project timestamp
@@ -247,6 +267,12 @@ Meteor.methods({
     } else if (note.userId !== this.userId) {
       throw new Meteor.Error('not-found', 'Note not found');
     }
+    // This is a hard delete with no trash, so the history becomes the only
+    // remaining copy of the text. Revisions hold the body BEFORE each write,
+    // which means the final body was never captured by any of them: record it
+    // here, or deleting the note would lose its last version for good.
+    await recordNoteRevision({ note, userId: this.userId, source: resolveWriteSource(this) });
+
     const res = await NotesCollection.removeAsync(noteId);
     try { const { deleteByDocId } = await import('/imports/api/search/vectorStore.js'); await deleteByDocId('note', noteId); } catch (e) { console.error('[search][notes.remove] delete failed', e); }
     if (note?.projectId) {

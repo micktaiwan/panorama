@@ -4,6 +4,7 @@ import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 import { DEFAULT_CLEAN_PROMPT } from '/imports/api/notes/cleanPrompt';
 import { ensureLoggedIn } from '/imports/api/_shared/auth';
+import { recordNoteRevision, resolveWriteSource } from '/imports/api/noteRevisions/record';
 
 // Helper function to update note index and project timestamp
 const updateNoteIndex = async (noteId, userId) => {
@@ -62,7 +63,11 @@ Meteor.methods({
       });
       const cleaned = result.text;
 
-      // Persist cleaned content
+      // Persist cleaned content — same append-only history as notes.update,
+      // since this method writes the body directly
+      if (cleaned !== original) {
+        await recordNoteRevision({ note, userId: this.userId, source: resolveWriteSource(this) });
+      }
       await NotesCollection.updateAsync(noteId, { $set: { content: cleaned, updatedAt: new Date() } });
 
       // Update search vector and project updatedAt
@@ -113,7 +118,11 @@ Meteor.methods({
       });
       const summarized = result.text;
 
-      // Persist summarized content
+      // Persist summarized content — same append-only history as notes.update,
+      // since this method writes the body directly
+      if (summarized !== original) {
+        await recordNoteRevision({ note, userId: this.userId, source: resolveWriteSource(this) });
+      }
       await NotesCollection.updateAsync(noteId, { $set: { content: summarized, updatedAt: new Date() } });
 
       // Update search vector and project updatedAt
