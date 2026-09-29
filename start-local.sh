@@ -226,6 +226,32 @@ touch_restart_trigger() {
     && rm -f "$TRIGGER_TMP"
 }
 
+# --- Suivi mémoire de l'outil meteor ---
+#
+# Le 18/07 puis le 29/09/2026, l'outil meteor (le process node fils direct de npm,
+# pas le serveur de l'app) est mort en OOM V8 après ~18 h de session, 2 min après
+# une relance au réveil. Hypothèse non prouvée : chaque rebuild lui laisse de la
+# mémoire. On journalise son RSS à intervalle fixe et à chaque rebuild déclenché
+# (watchdog ou wake-recovery), pour voir si la courbe monte par marches.
+# RSS != tas V8 (plafonné à 8 Go par TOOL_NODE_FLAGS), mais il suit la même pente.
+MEM_LOG_EVERY_S=900
+meteor_mem() {
+  ps -A -o pid=,ppid=,rss= | awk -v root="$METEOR_PID" '
+    { ppid[$1] = $2; rss[$1] = $3 }
+    END {
+      tool = 0
+      for (p in ppid) if (ppid[p] == root) tool = p
+      total = 0
+      for (p in ppid) {
+        q = p
+        while (q != "" && q != 0 && q != 1) { if (q == root) { total += rss[p]; break } q = ppid[q] }
+      }
+      printf "tool_pid=%s tool_rss=%dMB tree_rss=%dMB", tool, (tool ? rss[tool] : 0) / 1024, total / 1024
+    }'
+}
+trigger_marker() { grep '^// last wake-recovery restart:' "$TRIGGER_FILE" 2>/dev/null; }
+last_trigger_marker=$(trigger_marker)
+
 crash_seconds=0
 restart_count=0
 last_restart_epoch=0
@@ -238,6 +264,14 @@ while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; 
   sleep 1
   tick=$((tick + 1))
   [ $((tick % WATCHDOG_CHECK_EVERY_S)) -eq 0 ] || continue
+
+  # tick compte des secondes éveillées : la veille ne le fait pas avancer.
+  [ $((tick % MEM_LOG_EVERY_S)) -eq 0 ] && qlog "MEM $(meteor_mem)"
+  marker=$(trigger_marker)
+  if [ "$marker" != "$last_trigger_marker" ]; then
+    last_trigger_marker=$marker
+    qlog "REBUILD wake-recovery rewrote trigger, $(meteor_mem)"
+  fi
 
   state=$(app_state)
   if [ "$state" = "healthy" ]; then
@@ -281,7 +315,8 @@ while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; 
   restart_count=$((restart_count + 1))
   if touch_restart_trigger; then
     echo "[watchdog] serveur mort depuis ${crash_seconds}s et Mongo répond — relance ($restart_count/$WATCHDOG_MAX_RESTARTS) via $TRIGGER_FILE"
-    qlog "WATCHDOG server crashed for ${crash_seconds}s, restart $restart_count/$WATCHDOG_MAX_RESTARTS"
+    qlog "WATCHDOG server crashed for ${crash_seconds}s, restart $restart_count/$WATCHDOG_MAX_RESTARTS, $(meteor_mem)"
+    last_trigger_marker=$(trigger_marker)
   else
     echo "[watchdog] échec de réécriture de $TRIGGER_FILE — relance impossible."
   fi
