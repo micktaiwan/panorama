@@ -13,7 +13,13 @@ function normalizeLineBreaks(md) {
   return parts.map((part, i) => {
     if (i % 2 === 1) return part; // code blocks — don't touch
 
-    return part.replace(/\n+/g, (match) => {
+    // A paragraph starting with a Tab (typed in the editor outside a list) is
+    // saved as a raw leading "\t", which CommonMark reads back as an indented
+    // code block. Encode those tabs as entities so they stay paragraph text.
+    // Tab-indented list markers are left alone (nested lists).
+    const escaped = part.replace(/^\t+(?![-*+]\s|\d+[.)]\s)(?=\S)/gm, (tabs) => '&#9;'.repeat(tabs.length));
+
+    return escaped.replace(/\n+/g, (match) => {
       const count = match.length;
       if (count <= 2) {
         // 1 or 2 newlines → single paragraph break

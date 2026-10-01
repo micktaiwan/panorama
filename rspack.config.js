@@ -18,5 +18,12 @@ module.exports = defineConfig(Meteor => {
     // one on this laptop. `meteor run --port 127.0.0.1:<port>` does the same for
     // the app and its proxy, and this covers the third listener they open.
     devServer: { host: '127.0.0.1' },
+    // googleapis ships every Google API: bundled, it was 32 of the 36 MB of
+    // sources in server-rspack.js (46 MB source map). The meteor tool re-reads
+    // and re-links that bundle and its map on every server rebuild, which spiked
+    // it to several GB and OOM-killed it on wake-recovery rebuilds (see
+    // CLAUDE.md, "Local Crash Diagnosis"). Left external, Meteor loads it from
+    // node_modules at runtime instead.
+    ...(Meteor.isServer ? Meteor.compileWithMeteor(['googleapis']) : {}),
   };
 });
