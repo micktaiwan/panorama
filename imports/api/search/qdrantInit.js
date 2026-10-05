@@ -17,7 +17,7 @@ Meteor.startup(async () => {
 
   try {
     const { QdrantClient } = await import('@qdrant/js-client-rest');
-    const client = new QdrantClient({ url });
+    const client = new QdrantClient({ url, apiKey: process.env.QDRANT_API_KEY || undefined });
 
     // Check health (best-effort)
     try {

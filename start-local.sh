@@ -79,6 +79,7 @@ MONGO_URL="mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}/panorama?${MONGO_
 
 export MONGO_URL
 export QDRANT_URL="http://localhost:${QDRANT_TUNNEL_PORT}"
+export QDRANT_API_KEY="${PANORAMA_QDRANT_API_KEY:?Définir PANORAMA_QDRANT_API_KEY dans ~/.env.secrets}"
 # Le port du dev server rspack n'est pas choisi : le plugin meteor le derive du
 # --port de meteor en additionnant ses CHIFFRES (8077 + somme, soit 8081 pour
 # 4000). Depuis que le script npm passe `--port 127.0.0.1:4000`, les points et

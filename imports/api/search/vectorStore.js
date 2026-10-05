@@ -68,7 +68,7 @@ export const getQdrantClient = async () => {
   // Bound every request: without this the client defaults to a 300s timeout,
   // so an unreachable Qdrant (e.g. tunnel down at boot) makes calls hang for
   // minutes and freezes the caller's DDP method queue.
-  singletonClient = new QdrantClient({ url, timeout: 15000 });
+  singletonClient = new QdrantClient({ url, apiKey: process.env.QDRANT_API_KEY || undefined, timeout: 15000 });
   return singletonClient;
 };
 

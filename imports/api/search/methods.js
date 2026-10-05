@@ -583,6 +583,9 @@ Meteor.methods({
       }
     } catch (e) {
       out.error = e?.message || String(e);
+      out.httpStatus = e?.status ?? null;
+      // Only a 404 proves the collection is absent; any other failure (401, timeout) leaves it unknown.
+      out.exists = e?.status === 404 ? false : null;
     }
     return out;
   },

@@ -6,6 +6,11 @@ import { DDPRateLimiter } from 'meteor/ddp-rate-limiter';
 
 // Password min length is validated client-side in Signup.jsx (Meteor 3 does not support passwordMinLength in Accounts.config)
 
+// Closed by default (2026-10-05): the first account is the admin, nobody else
+// needs to sign up from the web. Set PANORAMA_REGISTRATION_OPEN=true to reopen.
+const registrationOpen = process.env.PANORAMA_REGISTRATION_OPEN === 'true';
+Accounts.config({ forbidClientAccountCreation: !registrationOpen });
+
 Accounts.validateNewUser((user) => {
   if (!user.emails?.[0]?.address) {
     throw new Meteor.Error('no-email', 'Email is required');

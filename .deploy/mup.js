@@ -32,6 +32,14 @@ module.exports = {
     },
   },
 
+  // mup re-uploads env.list group/world-readable (0664) on every deploy; it holds
+  // the Mongo URL with its password. Put it back to owner-only (2026-10-05).
+  hooks: {
+    'post.deploy': {
+      remoteCommand: 'chmod 600 /opt/panorama/config/env.list',
+    },
+  },
+
   app: {
     name: 'panorama',
     path: '../',
@@ -53,6 +61,7 @@ module.exports = {
       PANORAMA_MODE: 'remote',
       PANORAMA_FILES_DIR: '/var/www/panorama/files',
       QDRANT_URL: 'http://organizer-qdrant:6333',
+      QDRANT_API_KEY: process.env.PANORAMA_QDRANT_API_KEY,
       PANORAMA_FILES_API_KEY: process.env.PANORAMA_FILES_API_KEY,
       ...(MAIL_USER && MAIL_PASS ? {
         MAIL_URL: `smtp://${encodeURIComponent(MAIL_USER)}:${encodeURIComponent(MAIL_PASS)}@mail.mickaelfm.me:587`,

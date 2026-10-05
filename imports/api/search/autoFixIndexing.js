@@ -31,11 +31,14 @@ export const autoFixIndexing = async (opts = {}) => {
     // Check if collection exists
     try {
       await client.getCollection(collectionName);
-    } catch (_err) {
-      report.errors.push({
+    } catch (err) {
+      report.errors.push(err?.status === 404 ? {
         type: 'collection_not_found',
         message: `Qdrant collection "${collectionName}" does not exist. Run full reindex.`,
         action: 'Meteor.call("qdrant.indexStart")'
+      } : {
+        type: 'qdrant_unreachable',
+        message: `Qdrant unreachable (${err?.status ?? 'no status'} ${err?.message}). Fix connectivity or QDRANT_API_KEY; do not reindex.`
       });
       return report;
     }

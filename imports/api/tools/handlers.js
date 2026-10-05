@@ -507,7 +507,7 @@ export const TOOL_HANDLERS = {
       );
     }
     try {
-      const client = new QdrantClient({ url });
+      const client = new QdrantClient({ url, apiKey: process.env.QDRANT_API_KEY || undefined });
       const vector = await embedQuery(q);
       const filter = { must: [{ key: 'userId', match: { value: userId } }] };
       const searchRes = await client.search(COLLECTION(), { vector, limit, filter, with_payload: true });
@@ -2053,7 +2053,7 @@ export const TOOL_HANDLERS = {
   });
         }
 
-        const client = new QdrantClient({ url });
+        const client = new QdrantClient({ url, apiKey: process.env.QDRANT_API_KEY || undefined });
         const vector = await embedQuery(query);
 
         const searchRes = await client.search(COLLECTION(), {
@@ -2997,7 +2997,9 @@ export const TOOL_HANDLERS = {
       const health = await callMethodAs('qdrant.health', userId);
       const summary = health?.disabled
         ? 'Qdrant is not configured (semantic search disabled)'
-        : `Qdrant collection ${health?.collection}: ${health?.exists ? `${health?.count ?? '?'} points` : 'missing'}${health?.incompatible ? ' — VECTOR SIZE MISMATCH' : ''}`;
+        : health?.exists === null
+          ? `Qdrant unreachable (${health?.httpStatus ?? 'no status'} ${health?.error}): collection ${health?.collection} state unknown, do not reindex`
+          : `Qdrant collection ${health?.collection}: ${health?.exists ? `${health?.count ?? '?'} points` : 'missing'}${health?.incompatible ? ' — VECTOR SIZE MISMATCH' : ''}`;
       return buildSuccessResponse({ health }, 'tool_searchHealth', { source: 'qdrant', customSummary: summary });
     } catch (error) {
       return buildErrorResponse(error, 'tool_searchHealth');

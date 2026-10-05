@@ -48,7 +48,9 @@ export const diagnoseIndexing = async ({ userId = null } = {}) => {
     } catch (e) {
       diagnosis.qdrant = {
         collection: collectionName,
-        exists: false,
+        // Only a 404 proves the collection is absent; 401 or a timeout leaves it unknown.
+        exists: e?.status === 404 ? false : null,
+        httpStatus: e?.status ?? null,
         error: e.message
       };
     }
@@ -150,7 +152,13 @@ export const diagnoseIndexing = async ({ userId = null } = {}) => {
     }
 
     // 4. Generate recommendations
-    if (!diagnosis.qdrant.exists) {
+    if (diagnosis.qdrant.exists === null) {
+      diagnosis.recommendations.push({
+        priority: 'critical',
+        issue: `Qdrant unreachable (${diagnosis.qdrant.httpStatus ?? 'no status'} ${diagnosis.qdrant.error})`,
+        action: 'Fix Qdrant connectivity or credentials (QDRANT_URL, QDRANT_API_KEY); do not reindex'
+      });
+    } else if (!diagnosis.qdrant.exists) {
       diagnosis.recommendations.push({
         priority: 'critical',
         issue: 'Qdrant collection does not exist',

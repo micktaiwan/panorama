@@ -302,7 +302,7 @@ async tool_semanticSearch(args, memory) {
   const { embedText } = await import('/imports/api/search/vectorStore');
   const vector = await embedText(query);
 
-  const client = new QdrantClient({ url });
+  const client = new QdrantClient({ url, apiKey: process.env.QDRANT_API_KEY || undefined });
   const searchRes = await client.search('panorama', { vector, limit });
 
   const results = searchRes.map(r => ({
