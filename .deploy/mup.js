@@ -47,7 +47,7 @@ module.exports = {
       image: 'zodern/meteor:root',
       stopAppDuringPrepareBundle: false,
       args: [
-        '--network=server_organizer-network',
+        '--network=net-panorama',
         '-v', '/var/www/panorama/files:/var/www/panorama/files',
       ],
     },
