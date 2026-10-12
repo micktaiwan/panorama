@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Meteor } from 'meteor/meteor';
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
@@ -8,6 +8,10 @@ import { formatDate } from '/imports/ui/utils/date.js';
 import { ClearableInput } from '/imports/ui/components/ClearableInput/ClearableInput.jsx';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
 import './PanoramaPage.css';
+
+// The overview is a single method call: without a bound, a reply that never comes
+// (stuck DDP session, wedged Mongo) leaves the loading bar spinning forever.
+const OVERVIEW_TIMEOUT_MS = 20000;
 
 // Utility functions to reduce code duplication
 const sortInactiveLast = (a, b) => {
@@ -205,21 +209,39 @@ export const PanoramaPage = () => {
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    // Only the latest request may update the page; a late reply to it still wins
+    // over its own timeout (the data arrives, the error goes away).
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
+    const timer = setTimeout(() => {
+      if (requestId !== requestIdRef.current) return;
+      console.error(`panorama.getOverview: no answer after ${OVERVIEW_TIMEOUT_MS} ms (DDP status: ${Meteor.status().status})`);
+      setLoadError(`the server did not answer within ${OVERVIEW_TIMEOUT_MS / 1000} s`);
+      setLoading(false);
+    }, OVERVIEW_TIMEOUT_MS);
     Meteor.call('panorama.getOverview', { periodDays }, (err, res) => {
+      clearTimeout(timer);
+      if (requestId !== requestIdRef.current) return;
       if (err) {
-         
+        // Keep the last good data on screen: an error must not look like "0 projects".
         console.error('panorama.getOverview failed', err);
-        setData([]);
+        setLoadError(err.reason || err.message || 'unknown error');
         setLoading(false);
         return;
       }
       setData(Array.isArray(res) ? res : []);
+      setLoadError(null);
       setLoading(false);
     });
-  }, [periodDays]);
+    return () => clearTimeout(timer);
+  }, [periodDays, reloadKey]);
   const filtered = useMemo(() => {
     return filterByActivity(filterByQuery(data, query), activityFilter);
   }, [data, query, activityFilter]);
@@ -378,6 +400,13 @@ export const PanoramaPage = () => {
 
       {loading && <div className="loadingBar"><div className="loadingProgress" /></div>}
 
+      {loadError && (
+        <div className="overviewError" role="alert">
+          <span>Could not load projects: {loadError}.</span>
+          <button type="button" className="btn btn-sm" onClick={() => setReloadKey((k) => k + 1)}>Retry</button>
+        </div>
+      )}
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           <div className="ProjectGrid">
@@ -388,7 +417,7 @@ export const PanoramaPage = () => {
         </SortableContext>
       </DndContext>
 
-      {!loading && sorted.length === 0 && (
+      {!loading && !loadError && sorted.length === 0 && (
         <div className="emptyState">No projects match your filters</div>
       )}
     </div>

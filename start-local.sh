@@ -39,8 +39,13 @@ tunnel() {
     exit 1
   fi
   echo "→ Démarrage du tunnel SSH ($name)..."
+  # ExitOnForwardFailure : un ssh qui n'arrive pas a ouvrir son -L sort au lieu
+  # de rester vivant sans tunnel (autossh le relance). ServerAlive 10 s x 3 : un
+  # lien mort (bascule de Wi-Fi, portail captif) est vu en ~30 s au lieu de ~90 s.
   autossh -M 0 -f -N \
-    -o "ServerAliveInterval=30" \
+    -o "ExitOnForwardFailure=yes" \
+    -o "ConnectTimeout=10" \
+    -o "ServerAliveInterval=10" \
     -o "ServerAliveCountMax=3" \
     -L ${local_port}:localhost:${remote_port} \
     $VPS_HOST
@@ -115,16 +120,35 @@ echo "  QDRANT_URL       = $QDRANT_URL"
 # descendance de npm et laissait Meteor orphelin après Ctrl+C.
 set -m
 
+# --- Logs des process ---
+# Le 12/10/2026, la page Panorama est restee en chargement des heures apres deux
+# bascules de Wi-Fi, et la seule trace qui aurait tranche (stdout du serveur,
+# console de la fenetre) n'existait que dans ce terminal : elle a disparu a la
+# fermeture. Les deux sorties vont maintenant aussi dans ~/Library/Logs/Panorama/,
+# horodatees ; la console du renderer y est ecrite par electron/main.js.
+QLOG_DIR="$HOME/Library/Logs/Panorama"
+mkdir -p "$QLOG_DIR"
+SERVER_LOG="$QLOG_DIR/server.log"
+ELECTRON_LOG="$QLOG_DIR/electron.log"
+LOG_MAX_BYTES=$((20 * 1024 * 1024))
+for f in "$SERVER_LOG" "$ELECTRON_LOG" "$QLOG_DIR/renderer.log"; do
+  if [ -f "$f" ] && [ "$(stat -f %z "$f")" -gt "$LOG_MAX_BYTES" ]; then mv "$f" "$f.1"; fi
+done
+# Prefixe chaque ligne de la date et l'ajoute au fichier, en gardant l'affichage terminal.
+stamp_to() {
+  /usr/bin/perl -MPOSIX -ne 'BEGIN { $| = 1 } print POSIX::strftime("%Y-%m-%d %H:%M:%S ", localtime), $_' | tee -a "$1"
+}
+
 # Lancer Electron immédiatement en background (le splash apparaît tout de suite,
 # pendant que Meteor compile et se connecte). Electron poll Meteor et bascule
 # sur l'URL réelle quand le serveur répond.
-METEOR_PORT=$METEOR_PORT ./node_modules/.bin/electron . &
+METEOR_PORT=$METEOR_PORT ./node_modules/.bin/electron . > >(stamp_to "$ELECTRON_LOG") 2>&1 &
 ELECTRON_PID=$!
 
 # Meteor en background aussi, pour pouvoir surveiller les deux process.
 # (auparavant Meteor tournait au premier plan : quitter Electron laissait
 #  Meteor orphelin car rien ne reliait la mort d'Electron à l'arrêt du script)
-npm run dev:meteor:4000 &
+npm run dev:meteor:4000 > >(stamp_to "$SERVER_LOG") 2>&1 &
 METEOR_PID=$!
 
 # Les deux process groups sont créés ; on coupe le monitor mode (évite les
@@ -143,10 +167,8 @@ set +m
 # code, sur quel signal, et ce que le watchdog a fait). Avant, le fichier vivait
 # dans /tmp et était vidé à chaque lancement : la trace de l'arrêt précédent
 # disparaissait au moment précis où on en avait besoin.
-QLOG_DIR="$HOME/Library/Logs/Panorama"
 QLOG="$QLOG_DIR/lifecycle.log"
 QLOG_MAX_LINES=5000
-mkdir -p "$QLOG_DIR"
 qlog() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" | tee -a "$QLOG"; }
 if [ -f "$QLOG" ] && [ "$(wc -l < "$QLOG")" -gt "$QLOG_MAX_LINES" ]; then
   tail -n "$QLOG_MAX_LINES" "$QLOG" > "$QLOG.tmp" && mv "$QLOG.tmp" "$QLOG"
@@ -193,6 +215,8 @@ WATCHDOG_CHECK_EVERY_S=5    # cadence des sondes HTTP
 WATCHDOG_GRACE_S=20         # durée d'erreur continue avant d'agir
 WATCHDOG_COOLDOWN_S=180     # attente minimale entre deux relances (rebuild + boot)
 WATCHDOG_MAX_RESTARTS=3     # au-delà sans retour à la normale, on arrête d'insister
+HEALTHZ_EVERY_S=15          # cadence de l'aller-retour Mongo (une ecriture par sonde)
+WEDGED_GRACE_S=60           # duree d'echec continu de /healthz avant de relancer
 TRIGGER_FILE="$(dirname "$0")/server/devRestartTrigger.js"
 
 # healthy : l'app sert ses pages · crashed : le serveur est mort, meteor attend
@@ -214,6 +238,23 @@ app_state() {
 # watchdog, dont la question est « le reseau est-il revenu ? ».
 mongo_is_reachable() {
   nc -z -G 3 "${MONGO_HOST%%:*}" "${MONGO_HOST##*:}" >/dev/null 2>&1
+}
+
+# Le VPS repond-il depuis cette machine ? Sonde le port SSH public, hors tunnel :
+# c'est la question « le reseau est-il revenu ? » quand le tunnel lui-meme est
+# suspect (un ssh -L vivant accepte les connexions locales meme si l'autre bout est mort).
+vps_is_reachable() {
+  nc -z -G 3 "${VPS_HOST#*@}" 22 >/dev/null 2>&1
+}
+
+# Le serveur fait-il un vrai aller-retour Mongo ? server/healthCheck.js ecrit un
+# document et attend que son propre change stream le voie. Detecte ce que le curl
+# sur la page d'accueil ne voit pas : un serveur qui sert son HTML mais dont les
+# appels pendent (12/10/2026, page en chargement des heures, watchdog muet).
+mongo_roundtrip_ok() {
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "http://127.0.0.1:${METEOR_PORT}/healthz" 2>/dev/null)
+  [ "$code" = "200" ]
 }
 
 # Réécrit la ligne marqueur (au lieu de l'ajouter) pour que le fichier ne grossisse pas.
@@ -255,6 +296,9 @@ last_trigger_marker=$(trigger_marker)
 
 crash_seconds=0
 restart_count=0
+wedged_since=0              # epoch du premier echec de /healthz (0 = sain) ; en secondes
+                            # reelles, car une sonde qui expire bloque la boucle 15 s
+wedged_restarts=0
 last_restart_epoch=0
 last_wait_log_epoch=0
 tick=0
@@ -271,6 +315,7 @@ while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; 
   marker=$(trigger_marker)
   if [ "$marker" != "$last_trigger_marker" ]; then
     last_trigger_marker=$marker
+    last_restart_epoch=$(date +%s)  # le watchdog laisse a ce rebuild le temps d'aboutir
     qlog "REBUILD wake-recovery rewrote trigger, $(meteor_mem)"
   fi
 
@@ -283,6 +328,41 @@ while kill -0 "$ELECTRON_PID" 2>/dev/null && kill -0 "$METEOR_PID" 2>/dev/null; 
     fi
     crash_seconds=0
     restart_count=0
+
+    [ $((tick % HEALTHZ_EVERY_S)) -eq 0 ] || continue
+    if mongo_roundtrip_ok; then
+      if [ "$wedged_since" -gt 0 ] || [ "$wedged_restarts" -gt 0 ]; then
+        qlog "WATCHDOG Mongo round-trip OK again"
+      fi
+      wedged_since=0
+      wedged_restarts=0
+      continue
+    fi
+    now=$(date +%s)
+    if [ "$wedged_since" -eq 0 ]; then
+      wedged_since=$now
+      qlog "WATCHDOG Mongo round-trip failing (page served, /healthz not 200)"
+    fi
+    wedged_seconds=$((now - wedged_since))
+    [ "$wedged_seconds" -ge "$WEDGED_GRACE_S" ] || continue
+    [ $((now - last_restart_epoch)) -ge "$WATCHDOG_COOLDOWN_S" ] || continue
+    if [ "$wedged_restarts" -ge "$WATCHDOG_MAX_RESTARTS" ]; then
+      continue  # deja signale au moment ou le quota a ete atteint
+    fi
+    if ! vps_is_reachable; then
+      # Reseau absent : relancer rejouerait le crash de demarrage, on attend.
+      continue
+    fi
+    wedged_restarts=$((wedged_restarts + 1))
+    if touch_restart_trigger; then
+      qlog "WATCHDOG Mongo round-trip failing for ${wedged_seconds}s while the VPS answers, restart $wedged_restarts/$WATCHDOG_MAX_RESTARTS, $(meteor_mem)"
+      last_trigger_marker=$(trigger_marker)
+      [ "$wedged_restarts" -ge "$WATCHDOG_MAX_RESTARTS" ] && qlog "WATCHDOG wedge restart quota reached, giving up until /healthz answers"
+    else
+      echo "[watchdog] échec de réécriture de $TRIGGER_FILE — relance impossible."
+    fi
+    last_restart_epoch=$now
+    wedged_since=0
     continue
   fi
   if [ "$state" != "crashed" ]; then

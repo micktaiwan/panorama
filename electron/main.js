@@ -7,6 +7,42 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const os = require('os');
+
+// Renderer warnings/errors and window failures, kept on disk. On 2026-10-12 the
+// Panorama page stayed on its loading bar for hours after two Wi-Fi switches; the
+// renderer console (DDP status, failed calls) was the data that would have
+// explained it, and it lived only in DevTools. start-local.sh rotates this file.
+const RENDERER_LOG = path.join(os.homedir(), 'Library', 'Logs', 'Panorama', 'renderer.log');
+function logRenderer(line) {
+  const stamp = new Date().toISOString();
+  fs.mkdir(path.dirname(RENDERER_LOG), { recursive: true }, () => {
+    fs.appendFile(RENDERER_LOG, `${stamp} ${line}\n`, (err) => {
+      if (err) console.error('[renderer-log] write failed:', err.message);
+    });
+  });
+}
+
+function attachRendererLogging(win, label) {
+  const wc = win.webContents;
+  wc.on('console-message', (event, legacyLevel, legacyMessage, legacyLine, legacySource) => {
+    // Electron >= 35 passes one event object; older versions passed positional args.
+    const level = event?.level ?? ['verbose', 'info', 'warning', 'error'][legacyLevel] ?? String(legacyLevel);
+    if (level !== 'warning' && level !== 'error') return;
+    const message = event?.message ?? legacyMessage;
+    const source = event?.sourceId ?? legacySource ?? '';
+    const lineNumber = event?.lineNumber ?? legacyLine ?? '';
+    logRenderer(`[${label}] ${level} ${message} (${source}:${lineNumber})`);
+  });
+  wc.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (isMainFrame) logRenderer(`[${label}] did-fail-load ${errorCode} ${errorDescription} ${validatedURL}`);
+  });
+  wc.on('render-process-gone', (_e, details) => {
+    logRenderer(`[${label}] render-process-gone reason=${details?.reason} exitCode=${details?.exitCode}`);
+  });
+  win.on('unresponsive', () => logRenderer(`[${label}] window unresponsive`));
+  win.on('responsive', () => logRenderer(`[${label}] window responsive again`));
+}
 
 const SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8" />
 <title>Panorama</title>
@@ -460,6 +496,7 @@ function createWindow(savedState) {
 
   const win = new BrowserWindow(windowOptions);
   mainWindow = win; // Track main window reference
+  attachRendererLogging(win, 'main');
   const port = process.env.METEOR_PORT || 3000;
   const meteorUrl = `http://localhost:${port}`;
 

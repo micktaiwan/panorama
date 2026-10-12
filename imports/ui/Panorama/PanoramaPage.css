@@ -470,6 +470,22 @@
   background: var(--muted-2);
 }
 
+/* ─── Load error ─── */
+
+.overviewError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 14px;
+}
+
 /* ─── Empty state ─── */
 
 .emptyState {

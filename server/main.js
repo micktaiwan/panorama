@@ -129,6 +129,9 @@ process.on('uncaughtException', (err) => {
 // Liveness probe answering the client-side zombie-DDP detector (ddpKeepAlive.js).
 import '/server/ddpPing';
 
+// Mongo round-trip probe for the start-local.sh watchdog (dev only).
+import '/server/healthCheck';
+
 // Accounts configuration (auth, rate limiting, email templates)
 import '/server/accounts';
 
