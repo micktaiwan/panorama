@@ -191,6 +191,10 @@ export const TOOL_DEFINITIONS = [
         query: {
           type: 'string',
           description: 'Keyword or search term to find in note titles or content'
+        },
+        wholeWord: {
+          type: 'boolean',
+          description: 'Match the query as a whole word only (default false). Use for short names: "Tom" would otherwise match "tombe", "automatique".'
         }
       },
       required: ['query']

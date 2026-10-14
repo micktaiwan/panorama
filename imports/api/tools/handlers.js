@@ -691,17 +691,23 @@ export const TOOL_HANDLERS = {
       });
     }
 
-    // Helper to extract context around a match
-    const extractContext = (text, searchTerm) => {
-      const lowerText = text.toLowerCase();
-      const lowerTerm = searchTerm.toLowerCase();
-      const index = lowerText.indexOf(lowerTerm);
+    // Escape regex special chars
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // wholeWord: a short name ("Tom") otherwise matches inside "tombe", "automatique"
+    // and floods the result. Letters and digits (accents included) count as word chars.
+    const wholeWord = args?.wholeWord === true;
+    const pattern = wholeWord ? `(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])` : escaped;
+    const jsRegex = new RegExp(pattern, 'iu');
 
-      if (index === -1) return null;
+    // Helper to extract context around a match
+    const extractContext = (text) => {
+      const m = jsRegex.exec(text);
+      if (!m) return null;
+      const index = m.index;
 
       const contextLength = 150;
       const start = Math.max(0, index - contextLength);
-      const end = Math.min(text.length, index + searchTerm.length + contextLength);
+      const end = Math.min(text.length, index + m[0].length + contextLength);
 
       let snippet = text.slice(start, end);
 
@@ -712,9 +718,7 @@ export const TOOL_HANDLERS = {
       return snippet;
     };
 
-    // Escape regex special chars
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = { $regex: escaped, $options: 'i' };
+    const regex = { $regex: pattern, $options: 'i' };
 
     // Search in title OR content, scoped by userId
     const userId = getMCPUserId();
@@ -736,8 +740,8 @@ export const TOOL_HANDLERS = {
       const title = n.title || '';
       const content = n.content || '';
 
-      const titleMatch = title.toLowerCase().includes(query.toLowerCase());
-      const contentMatch = content.toLowerCase().includes(query.toLowerCase());
+      const titleMatch = jsRegex.test(title);
+      const contentMatch = jsRegex.test(content);
 
       const result = {
         id: n._id,
@@ -749,7 +753,7 @@ export const TOOL_HANDLERS = {
 
       // Add snippet if content matches
       if (contentMatch) {
-        const snippet = extractContext(content, query);
+        const snippet = extractContext(content);
         if (snippet) {
           result.snippet = clampText(snippet, 350);
         }
