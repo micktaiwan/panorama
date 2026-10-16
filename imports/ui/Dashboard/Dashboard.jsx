@@ -8,6 +8,7 @@ import { NotesCollection } from '/imports/api/notes/collections';
 import './Dashboard.css';
 import { formatDateTime, deadlineSeverity, isSnoozed } from '/imports/ui/utils/date.js';
 import { ProjectsOverview } from '/imports/ui/Dashboard/ProjectsOverview.jsx';
+import { FocusPanel } from '/imports/ui/Dashboard/FocusPanel/FocusPanel.jsx';
 import { ProjectFilters } from '/imports/ui/components/ProjectFilters/ProjectFilters.jsx';
 import { TagFilters, applyTagFilters, collectTags } from '/imports/ui/components/TagFilters/TagFilters.jsx';
 import { TaskRow } from '/imports/ui/components/TaskRow/TaskRow.jsx';
@@ -72,16 +73,10 @@ export const Dashboard = () => {
     });
   }, [rawTasks]);
 
-  const stats = useMemo(() => {
-    const total = allTasks.length;
-    const open = allTasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo')).length;
-    const closed = total - open;
-    const withDeadline = allTasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo') && !!t.deadline).length;
-    // Overdue counts only open tasks due today or earlier
-    const overdue = allTasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo') && t.deadline && deadlineSeverity(t.deadline) === 'dueNow').length;
-    return { total, open, closed, withDeadline, overdue };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(allTasks.map(t => [(t.status || 'todo') !== 'done' ? 'o' : 'c', t.deadline ? new Date(t.deadline).toDateString() : ''].join(':')))]);
+  const openCount = useMemo(
+    () => allTasks.filter(t => !CLOSED_TASK_STATUSES.includes(t.status || 'todo')).length,
+    [allTasks]
+  );
 
   const recentDone = useMemo(() => {
     const done = allTasks.filter(t => ['done','cancelled'].includes(t.status || 'todo') && t.statusChangedAt);
@@ -123,7 +118,24 @@ export const Dashboard = () => {
 
   // Snoozed tasks and tasks under validation are pulled out of the main list
   // into their own collapsed sections
-  const activeTasks = useMemo(() => filteredTasks.filter(t => !isSnoozed(t, now) && (t.status || 'todo') !== 'testing'), [filteredTasks, now]);
+  // "N overdue" in the stats line toggles the main list down to overdue tasks
+  const [overdueOnly, setOverdueOnly] = useState(() => (
+    typeof localStorage !== 'undefined' && localStorage.getItem('dashboard_overdue_only') === '1'
+  ));
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('dashboard_overdue_only', overdueOnly ? '1' : '0');
+    }
+  }, [overdueOnly]);
+  const isOverdue = (t) => !!t.deadline && deadlineSeverity(t.deadline) === 'dueNow';
+  const overdueCount = useMemo(() => filteredTasks.filter(t => (
+    !isSnoozed(t, now) && (t.status || 'todo') !== 'testing' && isOverdue(t)
+  )).length, [filteredTasks, now]);
+  const activeTasks = useMemo(() => filteredTasks.filter(t => (
+    !isSnoozed(t, now)
+    && (t.status || 'todo') !== 'testing'
+    && (!overdueOnly || isOverdue(t))
+  )), [filteredTasks, now, overdueOnly]);
   const testingTasks = useMemo(() => (
     filteredTasks
       .filter(t => (t.status || 'todo') === 'testing')
@@ -145,7 +157,7 @@ export const Dashboard = () => {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem('dashboard_recent_done_open') : null;
     if (v === '0') return false;
     if (v === '1') return true;
-    return true;
+    return false;
   });
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -173,6 +185,20 @@ export const Dashboard = () => {
     }
   }, [showTesting]);
 
+  // Items without a project (tasks, notes, note sessions) live in one section,
+  // collapsed unless explicitly opened
+  const [showUnsorted, setShowUnsorted] = useState(() => (
+    typeof localStorage !== 'undefined' && localStorage.getItem('dashboard_unsorted_open') === '1'
+  ));
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('dashboard_unsorted_open', showUnsorted ? '1' : '0');
+    }
+  }, [showUnsorted]);
+  const unsortedCount = standaloneSessions.length
+    + unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).length
+    + unassignedNotes.length;
+
   // Trash section stays collapsed unless explicitly opened
   const [showTrash, setShowTrash] = useState(() => (
     typeof localStorage !== 'undefined' && localStorage.getItem('dashboard_trash_open') === '1'
@@ -185,25 +211,24 @@ export const Dashboard = () => {
 
   return (
     <div className="dashboard">
-      <div className="dashboardHeader">
-        <h2>Overview</h2>
-      </div>
-      
+      <FocusPanel />
       <ProjectsOverview />
-      <h2>Tasks</h2>
-      <div className="tasksStats">
-        <span><span className="statLabel">Total</span> <span className="statValue">{stats.total}</span></span>
-        <span className="dot">·</span>
-        <span><span className="statLabel">Open</span> <span className="statValue">{stats.open}</span></span>
-        <span className="dot">·</span>
-        <span><span className="statLabel">Closed</span> <span className="statValue">{stats.closed}</span></span>
-        <span className="dot">·</span>
-        <span><span className="statLabel">With deadline</span> <span className="statValue">{stats.withDeadline}</span></span>
-        <span className="dot">·</span>
-        <span><span className="statLabel">Overdue (incl. today)</span> <span className="statValue dueNow">{stats.overdue}</span></span>
+      <div className="dashboardTasksHeader">
+        <h2>Tasks</h2>
+        <div className="tasksStats">
+          <span><span className="statLabel">Open</span> <span className="statValue">{openCount}</span></span>
+          {(overdueCount > 0 || overdueOnly) && (
+            <button
+              type="button"
+              className={`attentionChip danger${overdueOnly ? ' active' : ''}`}
+              onClick={() => setOverdueOnly(v => !v)}
+              aria-pressed={overdueOnly}
+            >{overdueOnly ? `${overdueCount} overdue only · show all` : `${overdueCount} overdue`}</button>
+          )}
         {!showRecent ? (
           <button className="reopenLink" onClick={() => setShowRecent(true)}>Recently done</button>
         ) : null}
+        </div>
       </div>
       {showRecent && (recentDone.today.length > 0 || recentDone.yesterday.length > 0) && (
         <div className="recentDone">
@@ -384,72 +409,81 @@ export const Dashboard = () => {
           </ul>
         </Collapsible>
       )}
-      {standaloneSessions.length > 0 && (
-        <div className="standaloneSessions">
-          <h2>Standalone Note Sessions ({standaloneSessions.length})</h2>
-          <ul className="sessionList">
-            {standaloneSessions.map(s => (
-              <li key={s._id} className="sessionItem">
-                <Tooltip content={s.name?.trim() ? s.name : '(untitled session)'}>
-                  <a href={`#/sessions/${s._id}`} className="sessionTitle">
-                    {s.name?.trim() ? s.name : '(untitled session)'}
-                  </a>
-                </Tooltip>
-                <span className="sessionMeta"> · {formatDateTime(s.createdAt)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).length > 0 && (
-        <div className="unassignedTasks" style={{ marginTop: 24 }}>
-          <h2>Tasks without project ({unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).length})</h2>
-          <ul className="taskList">
-            {unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
-              <TaskRow
-                key={`u-${t._id}`}
-                task={t}
-                showProject={true}
-                allowProjectChange
-                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
-                onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
-                projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
-                projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
-                projectColor={(projects.find(p => p._id === t.projectId)?.colorLabel) || '#6b7280'}
-                showStatusSelect
-                showDeadline
-                showClearDeadline
-                showDelete
-                showSnooze
-                onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
-                onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
-                onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}
-                onRemove={() => removeTask(t._id)}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-      {unassignedNotes.length > 0 && (
-        <div className="unassignedNotes" style={{ marginTop: 24 }}>
-          <h2>Notes without project ({unassignedNotes.length})</h2>
-          <ul className="notesList">
-            {unassignedNotes.map(n => (
-              <NoteRow
-                key={n._id}
-                note={n}
-                showProject={true}
-                allowProjectChange
-                projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
-                onMoveProject={(projectId) => Meteor.call('notes.update', n._id, { projectId })}
-                onUpdateTitle={(title) => Meteor.call('notes.update', n._id, { title })}
-                projectName={n.projectId ? (projectById[n.projectId] || 'Open project') : '—'}
-                projectHref={n.projectId ? `#/projects/${n.projectId}` : undefined}
-                projectColor={(projects.find(p => p._id === n.projectId)?.colorLabel) || '#6b7280'}
-              />
-            ))}
-          </ul>
-        </div>
+      {unsortedCount > 0 && (
+        <Collapsible
+          className="unsortedItems"
+          title={`Without project (${unsortedCount})`}
+          open={showUnsorted}
+          onToggle={setShowUnsorted}
+        >
+        {standaloneSessions.length > 0 && (
+          <div className="standaloneSessions">
+            <h3>Note sessions without project ({standaloneSessions.length})</h3>
+            <ul className="sessionList">
+              {standaloneSessions.map(s => (
+                <li key={s._id} className="sessionItem">
+                  <Tooltip content={s.name?.trim() ? s.name : '(untitled session)'}>
+                    <a href={`#/sessions/${s._id}`} className="sessionTitle">
+                      {s.name?.trim() ? s.name : '(untitled session)'}
+                    </a>
+                  </Tooltip>
+                  <span className="sessionMeta"> · {formatDateTime(s.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).length > 0 && (
+          <div className="unassignedTasks">
+            <h3>Tasks without project ({unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).length})</h3>
+            <ul className="taskList">
+              {unassignedTasks.filter(t => !hiddenTaskIds.has(t._id)).map(t => (
+                <TaskRow
+                  key={`u-${t._id}`}
+                  task={t}
+                  showProject={true}
+                  allowProjectChange
+                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
+                  onMoveProject={(projectId) => Meteor.call('tasks.update', t._id, { projectId })}
+                  projectName={t.projectId ? (projectById[t.projectId] || 'Open project') : '—'}
+                  projectHref={t.projectId ? `#/projects/${t.projectId}` : undefined}
+                  projectColor={(projects.find(p => p._id === t.projectId)?.colorLabel) || '#6b7280'}
+                  showStatusSelect
+                  showDeadline
+                  showClearDeadline
+                  showDelete
+                  showSnooze
+                  onUpdateStatus={(next) => Meteor.call('tasks.update', t._id, { status: next })}
+                  onUpdateTitle={(title) => Meteor.call('tasks.update', t._id, { title })}
+                  onClearDeadline={() => Meteor.call('tasks.update', t._id, { deadline: null })}
+                  onRemove={() => removeTask(t._id)}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+        {unassignedNotes.length > 0 && (
+          <div className="unassignedNotes">
+            <h3>Notes without project ({unassignedNotes.length})</h3>
+            <ul className="notesList">
+              {unassignedNotes.map(n => (
+                <NoteRow
+                  key={n._id}
+                  note={n}
+                  showProject={true}
+                  allowProjectChange
+                  projectOptions={projects.map(p => ({ value: p._id, label: p.name || '(untitled project)' })).sort((a, b) => a.label.localeCompare(b.label))}
+                  onMoveProject={(projectId) => Meteor.call('notes.update', n._id, { projectId })}
+                  onUpdateTitle={(title) => Meteor.call('notes.update', n._id, { title })}
+                  projectName={n.projectId ? (projectById[n.projectId] || 'Open project') : '—'}
+                  projectHref={n.projectId ? `#/projects/${n.projectId}` : undefined}
+                  projectColor={(projects.find(p => p._id === n.projectId)?.colorLabel) || '#6b7280'}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+        </Collapsible>
       )}
     </div>
   );

@@ -1,0 +1,93 @@
+.focusPanel { margin-bottom: 16px; }
+.focusPanel > h2 { margin-top: 0; }
+.focusEmpty { color: var(--muted); }
+
+.focusGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+/* Each workstream gets its own accent color, by position */
+.focusCard { --accent-rgb: var(--primary-rgb); }
+.focusCard:nth-child(2) { --accent-rgb: var(--purple-rgb); }
+.focusCard:nth-child(3) { --accent-rgb: var(--success-rgb); }
+
+.focusCard {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.14) 0%, rgba(var(--accent-rgb), 0.03) 60%),
+    var(--surface-raised);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-top: 4px solid rgb(var(--accent-rgb));
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.focusCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.18);
+}
+
+.focusCardHeader { display: flex; align-items: center; gap: 12px; }
+.focusIndex {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(var(--accent-rgb));
+  color: rgb(var(--white-rgb));
+  font-size: 12px;
+  font-weight: 700;
+}
+.focusTitle { margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: rgb(var(--accent-rgb)); }
+
+.focusNext {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(var(--accent-rgb), 0.08);
+  border-left: 3px solid rgb(var(--accent-rgb));
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+.focusNextTitle { color: var(--text-bright); font-size: 17px; font-weight: 600; line-height: 1.35; text-decoration: none; }
+a.focusNextTitle:hover { text-decoration: underline; }
+.focusNextNone { color: var(--warning); font-weight: 500; }
+.focusNextMeta { display: flex; gap: 8px; font-size: 12px; }
+.focusInProgress { color: var(--success-text); font-weight: 600; }
+.focusDeadline { color: var(--muted); }
+.focusDeadline.dueSoon { color: var(--warning); font-weight: 600; }
+.focusDeadline.dueNow { color: var(--danger); font-weight: 600; }
+
+.focusMeta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 12px; }
+.focusMeta > span {
+  background: var(--surface-sunken);
+  border-radius: 12px;
+  padding: 2px 8px;
+}
+.focusMeta > .focusOverdue {
+  color: var(--danger);
+  background: var(--danger-bg);
+  font-weight: 600;
+}
+
+.focusProjects { display: flex; flex-wrap: wrap; gap: 8px; }
+.focusProject {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgb(var(--accent-rgb));
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 12px;
+  padding: 2px 8px;
+  text-decoration: none;
+}
+.focusProject:hover { background: rgba(var(--accent-rgb), 0.2); }

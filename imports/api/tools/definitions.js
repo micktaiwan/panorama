@@ -666,6 +666,42 @@ export const TOOL_DEFINITIONS = [
   },
   {
     type: 'function',
+    name: 'tool_focusGet',
+    description: 'Get the user\'s focus: the (max 3) workstreams shown at the top of the Overview page, each with its computed next action (pinned task first, else the most urgent open task of its projects), open and overdue task counts, and last activity. Use when the user asks what they should work on, their priorities, their "chantiers", or what the Overview shows.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {}
+    }
+  },
+  {
+    type: 'function',
+    name: 'tool_focusSet',
+    description: 'Replace the user\'s focus workstreams (max 3) shown at the top of the Overview page. The whole list is replaced, so pass every item to keep. Read tool_focusGet first. Use when the user decides or changes their priorities / "3 chantiers".',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        items: {
+          type: 'array',
+          description: 'Ordered focus items (0 to 3). An empty array clears the focus.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              title: { type: 'string', description: 'Workstream title, in the user\'s words (required)' },
+              projectIds: { type: 'array', items: { type: 'string' }, description: 'Projects whose open tasks feed this workstream (optional)' },
+              taskIds: { type: 'array', items: { type: 'string' }, description: 'Tasks pinned as next actions, in order; they win over project tasks (optional)' }
+            },
+            required: ['title']
+          }
+        }
+      },
+      required: ['items']
+    }
+  },
+  {
+    type: 'function',
     name: 'tool_emailsRead',
     description: 'Read the full content of one or more emails by their ID. Use when the user wants to see the complete message body and details.',
     parameters: {

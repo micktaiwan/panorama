@@ -183,7 +183,7 @@ volumes:
 
 ### Dashboard structure
 
-- Dashboard is an umbrella component and renders two sections:
+- Dashboard is an umbrella component. On top, `FocusPanel` (since 2026-10-14): the user's max 3 workstreams (`userPreferences.focus`, `[{ title, projectIds, taskIds }]`), one card each with its next action (first open pinned task, else the most urgent open task of its projects: in progress first, then deadline, then priorityRank), open/overdue counts and last activity. The logic lives in `imports/api/_shared/focus.js`, shared with the MCP tools `tool_focusGet` / `tool_focusSet` (there is no edit UI: Claude sets the focus). Then two sections:
   - `ProjectsOverview` (primary, full-width): Signals strip and projects table (status, progress, target severity, risk, open tasks, last update, quick open action).
   - `TasksOverview` (secondary): cross-project tasks list (due soon/overdue by default).
 - Legacy `ProjectsList` sidebar is deprecated and removed from Home (kept in codebase for potential reuse/documentation).

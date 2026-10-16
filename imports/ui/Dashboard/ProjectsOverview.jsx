@@ -1,89 +1,123 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useSubscribe, useFind } from 'meteor/react-meteor-data';
 import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
-import { timeAgo } from '/imports/ui/utils/date.js';
+import { CLOSED_TASK_STATUSES } from '/imports/api/_shared/taskStatus';
+import { timeAgo, isSnoozed, deadlineSeverity } from '/imports/ui/utils/date.js';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { useNow } from '/imports/ui/hooks/useNow.js';
 
-const withinDays = (date, n) => {
-  if (!date) return false;
-  const d = date instanceof Date ? date : new Date(date);
-  const diff = d.getTime() - Date.now();
-  return diff <= n * 24 * 60 * 60 * 1000;
+const COLLAPSED_ROWS = 10;
+const HEALTH_RANK = { red: 0, orange: 1, green: 2 };
+const HEALTH_LABEL = { red: 'Red', orange: 'Orange', green: 'Green' };
+
+const readStored = (key) => (typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null);
+const writeStored = (key, value) => {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
 };
 
+// Projects that need attention first: overdue work, then red/orange health,
+// then the most recently active. Only fields that are actually filled are
+// shown (target dates and risk levels are never set in practice).
 export const ProjectsOverview = () => {
   const subP = useSubscribe('projects');
   const subT = useSubscribe('tasks');
-  const projectsRaw = useFind(() => ProjectsCollection.find({}, { sort: { updatedAt: -1 } }));
-  
-  const projects = useMemo(() => {
-    return [...projectsRaw].sort((a, b) => {
-      const aHas = !!a.targetDate;
-      const bHas = !!b.targetDate;
-      if (aHas !== bHas) return bHas - aHas; // items with targetDate first
-      const at = a.targetDate ? new Date(a.targetDate).getTime() : 0;
-      const bt = b.targetDate ? new Date(b.targetDate).getTime() : 0;
-      if (at !== bt) return at - bt; // ASC by targetDate
-      const au = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const bu = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      return bu - au; // fallback to recent update
-    });
-  }, [projectsRaw]);
-  const tasks = useFind(() => TasksCollection.find({ deletedAt: { $exists: false }, $or: [ { status: { $exists: false } }, { status: { $nin: ['done', 'idea'] } } ] }));
+  const projectsRaw = useFind(() => ProjectsCollection.find({}));
+  const tasks = useFind(() => TasksCollection.find(
+    { deletedAt: { $exists: false } },
+    { fields: { projectId: 1, status: 1, deadline: 1, snoozedUntil: 1, updatedAt: 1, createdAt: 1 } }
+  ));
+  const now = useNow();
 
-  const byProjectOpenTasks = useMemo(() => {
+  const [filter, setFilter] = useState(() => readStored('dashboard_projects_filter') || '');
+  const [showAll, setShowAll] = useState(() => readStored('dashboard_projects_show_all') === '1');
+  useEffect(() => { writeStored('dashboard_projects_filter', filter); }, [filter]);
+  useEffect(() => { writeStored('dashboard_projects_show_all', showAll ? '1' : '0'); }, [showAll]);
+
+  const statsByProject = useMemo(() => {
     const acc = {};
     tasks.forEach(t => {
       if (!t.projectId) return;
-      acc[t.projectId] = (acc[t.projectId] || 0) + 1;
+      const s = acc[t.projectId] || (acc[t.projectId] = { open: 0, overdue: 0, lastActivity: 0 });
+      const touched = new Date(t.updatedAt || t.createdAt || 0).getTime();
+      if (touched > s.lastActivity) s.lastActivity = touched;
+      if (CLOSED_TASK_STATUSES.includes(t.status || 'todo') || isSnoozed(t, now)) return;
+      s.open += 1;
+      if (t.deadline && deadlineSeverity(t.deadline) === 'dueNow') s.overdue += 1;
     });
     return acc;
-  }, [tasks]);
+  }, [tasks, now]);
 
-  const signals = useMemo(() => {
-    const now = Date.now();
-    const staleThreshold = 14 * 24 * 60 * 60 * 1000;
-    let active = 0, blocked = 0, dueSoon = 0, stale = 0;
-    projects.forEach(p => {
-      if ((p.status || '').toLowerCase() === 'blocked') blocked += 1;
-      if ((p.status || '').toLowerCase() === 'active') active += 1;
-      if (p.targetDate && withinDays(p.targetDate, 7)) dueSoon += 1;
-      const lu = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
-      if (lu > 0 && now - lu > staleThreshold) stale += 1;
-    });
-    return { active, blocked, dueSoon, stale };
-  }, [projects]);
+  const rows = useMemo(() => projectsRaw.map(p => {
+    const s = statsByProject[p._id] || { open: 0, overdue: 0, lastActivity: 0 };
+    const projectTouched = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+    return {
+      project: p,
+      health: HEALTH_RANK[p.panoramaStatus] !== undefined ? p.panoramaStatus : '',
+      open: s.open,
+      overdue: s.overdue,
+      lastActivity: Math.max(s.lastActivity, projectTouched),
+    };
+  }).sort((a, b) => {
+    if (a.overdue !== b.overdue) return b.overdue - a.overdue;
+    const ah = a.health ? HEALTH_RANK[a.health] : 3;
+    const bh = b.health ? HEALTH_RANK[b.health] : 3;
+    if (ah !== bh) return ah - bh;
+    return b.lastActivity - a.lastActivity;
+  }), [projectsRaw, statsByProject]);
 
-  if (subP() || subT()) return <div>Loading...</div>;
+  const attention = useMemo(() => ({
+    overdueTasks: rows.reduce((n, r) => n + r.overdue, 0),
+    overdueProjects: rows.filter(r => r.overdue > 0).length,
+    red: rows.filter(r => r.health === 'red').length,
+    orange: rows.filter(r => r.health === 'orange').length,
+  }), [rows]);
+
+  const filtered = useMemo(() => {
+    if (filter === 'overdue') return rows.filter(r => r.overdue > 0);
+    if (filter === 'red' || filter === 'orange') return rows.filter(r => r.health === filter);
+    return rows;
+  }, [rows, filter]);
+  const visible = showAll || filter ? filtered : filtered.slice(0, COLLAPSED_ROWS);
+
+  if (subP() || subT()) return <div className="projectsOverview muted">Loading…</div>;
+
+  const toggleFilter = (key) => setFilter(prev => (prev === key ? '' : key));
+  const chip = (key, label, tone) => (
+    <button
+      type="button"
+      className={`attentionChip ${tone}${filter === key ? ' active' : ''}`}
+      onClick={() => toggleFilter(key)}
+      aria-pressed={filter === key}
+    >{label}</button>
+  );
 
   return (
-    <div className="projectsOverview">
-      <div className="signalsStrip">
-        <div className="signalBox"><div className="signalLabel">Active</div><div className="signalValue">{signals.active}</div></div>
-        <div className="signalBox"><div className="signalLabel">Blocked</div><div className="signalValue">{signals.blocked}</div></div>
-        <div className="signalBox"><div className="signalLabel">Due ≤7d</div><div className="signalValue">{signals.dueSoon}</div></div>
-        <div className="signalBox"><div className="signalLabel">Stale</div><div className="signalValue">{signals.stale}</div></div>
+    <section className="projectsOverview">
+      <div className="projectsHeader">
+        <h2>Projects</h2>
+        <div className="attentionLine">
+          {attention.overdueTasks > 0 && chip('overdue', `${attention.overdueTasks} overdue in ${attention.overdueProjects} project${attention.overdueProjects !== 1 ? 's' : ''}`, 'danger')}
+          {attention.red > 0 && chip('red', `${attention.red} red`, 'danger')}
+          {attention.orange > 0 && chip('orange', `${attention.orange} orange`, 'warning')}
+          {filter && (
+            <button type="button" className="attentionClear" onClick={() => setFilter('')}>Clear filter</button>
+          )}
+        </div>
       </div>
-      <div className="projectsScroll scrollArea">
       <table className="projectsTable">
         <thead>
           <tr>
             <th>Project</th>
-            <th>Status</th>
-            <th>Target</th>
-            <th>Risk</th>
-            <th className="alignCenter">Open tasks</th>
-            <th className="alignRight">Last update</th>
+            <th className="alignCenter">Health</th>
+            <th className="alignRight">Overdue</th>
+            <th className="alignRight">Open</th>
+            <th className="alignRight">Last activity</th>
           </tr>
         </thead>
         <tbody>
-          {projects.map(p => {
-            const status = (p.status || 'n/a').toLowerCase();
-            const sev = p.targetDate ? (withinDays(p.targetDate, 0) ? 'dueNow' : withinDays(p.targetDate, 7) ? 'dueSoon' : '') : '';
-            const lastUpd = p.updatedAt ? timeAgo(p.updatedAt) : '—';
-            const open = byProjectOpenTasks[p._id] || 0;
+          {visible.map(({ project: p, health, open, overdue, lastActivity }) => {
             const color = (typeof p.colorLabel === 'string' && /^#[0-9a-fA-F]{6}$/.test(p.colorLabel)) ? p.colorLabel : '#6b7280';
             return (
               <tr key={p._id}>
@@ -113,34 +147,30 @@ export const ProjectsOverview = () => {
                     {p.name || '(untitled project)'}
                   </a>
                 </td>
-                <td><span className={`statusBadge ${status}`}>{p.status || 'n/a'}</span></td>
-                <td className={sev}>
-                  {p.targetDate ? (
-                    <Tooltip content={new Date(p.targetDate).toLocaleString()}>
-                      {new Date(p.targetDate).toLocaleDateString()}
-                      <span className="muted"> · {timeAgo(p.targetDate)}</span>
+                <td className="alignCenter">
+                  {health ? (
+                    <Tooltip content={HEALTH_LABEL[health]}>
+                      <span className={`healthDot ${health}`} aria-label={HEALTH_LABEL[health]} />
                     </Tooltip>
-                  ) : '—'}
+                  ) : null}
                 </td>
-                <td>
-                  {p.riskLevel ? (
-                    <span className={`riskBadge ${String(p.riskLevel).toLowerCase()}`}>{p.riskLevel}</span>
+                <td className={`alignRight${overdue > 0 ? ' overdueCell' : ''}`}>{overdue > 0 ? overdue : ''}</td>
+                <td className="alignRight mutedCell">{open > 0 ? open : ''}</td>
+                <td className="alignRight mutedCell">
+                  {lastActivity > 0 ? (
+                    <Tooltip content={new Date(lastActivity).toLocaleString()}>{timeAgo(new Date(lastActivity))}</Tooltip>
                   ) : '—'}
-                </td>
-                <td className="alignCenter">{open}</td>
-                <td className="alignRight">
-                  {p.updatedAt ? (
-                    <Tooltip content={new Date(p.updatedAt).toLocaleString()}>{lastUpd}</Tooltip>
-                  ) : lastUpd}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      </div>
-    </div>
+      {!filter && filtered.length > COLLAPSED_ROWS && (
+        <button type="button" className="showAllBtn" onClick={() => setShowAll(v => !v)}>
+          {showAll ? 'Show less' : `Show all ${filtered.length} projects`}
+        </button>
+      )}
+    </section>
   );
 };
-
-

@@ -3,6 +3,7 @@ import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
 import { UserPreferencesCollection } from './collections';
 import { ensureLoggedIn } from '/imports/api/_shared/auth';
+import { normalizeFocusItems } from '/imports/api/_shared/focus';
 
 Meteor.methods({
   /**
@@ -164,6 +165,29 @@ Meteor.methods({
     }
     await UserPreferencesCollection.updateAsync(doc._id, { $set: set });
     return true;
+  },
+
+  /**
+   * Replace the user's focus workstreams (max 3), shown at the top of the
+   * Overview page. Each item: { title, projectIds?, taskIds? }.
+   */
+  async 'userPreferences.setFocus'(items) {
+    check(items, Array);
+    ensureLoggedIn(this.userId);
+    let focus;
+    try {
+      focus = normalizeFocusItems(items);
+    } catch (e) {
+      throw new Meteor.Error('invalid-focus', e.message);
+    }
+    const now = new Date();
+    const doc = await UserPreferencesCollection.findOneAsync({ userId: this.userId });
+    if (!doc) {
+      await UserPreferencesCollection.insertAsync({ userId: this.userId, focus, focusUpdatedAt: now, createdAt: now, updatedAt: now });
+      return focus;
+    }
+    await UserPreferencesCollection.updateAsync(doc._id, { $set: { focus, focusUpdatedAt: now, updatedAt: now } });
+    return focus;
   },
 
   /**

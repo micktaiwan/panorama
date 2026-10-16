@@ -78,6 +78,56 @@ const canAccessDoc = async (doc, userId) => {
   return canAccessProject(doc.projectId, userId);
 };
 
+// Focus workstreams of `userId` with their computed state (same logic as the
+// Overview page, see imports/api/_shared/focus.js). Only reads tasks the user
+// can see: their own, or tasks of projects they are a member of.
+const buildFocusView = async (userId) => {
+  const { UserPreferencesCollection } = await import('/imports/api/userPreferences/collections');
+  const { ProjectsCollection } = await import('/imports/api/projects/collections');
+  const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
+  const { computeFocusState } = await import('/imports/api/_shared/focus');
+  const prefs = await UserPreferencesCollection.findOneAsync({ userId }, { fields: { focus: 1 } });
+  const focus = Array.isArray(prefs?.focus) ? prefs.focus : [];
+  if (focus.length === 0) return [];
+
+  const wantedProjectIds = [...new Set(focus.flatMap(f => f.projectIds || []))];
+  const wantedTaskIds = [...new Set(focus.flatMap(f => f.taskIds || []))];
+  const projects = await ProjectsCollection.find(
+    { _id: { $in: wantedProjectIds }, memberIds: userId }, { fields: { name: 1 } }
+  ).fetchAsync();
+  const memberProjectIds = (await ProjectsCollection.find(
+    { memberIds: userId }, { fields: { _id: 1 } }
+  ).fetchAsync()).map(p => p._id);
+  const tasks = await TasksCollection.find({
+    ...NOT_DELETED,
+    $and: [
+      { $or: [{ projectId: { $in: projects.map(p => p._id) } }, { _id: { $in: wantedTaskIds } }] },
+      { $or: [{ userId }, { projectId: { $in: memberProjectIds } }] },
+    ],
+  }).fetchAsync();
+  const nameById = Object.fromEntries(projects.map(p => [p._id, p.name || '(untitled project)']));
+
+  return focus.map((f) => {
+    const state = computeFocusState(f, tasks);
+    const next = state.nextAction;
+    return {
+      title: f.title,
+      projects: (f.projectIds || []).map(id => ({ id, name: nameById[id] || null })),
+      taskIds: f.taskIds || [],
+      nextAction: next ? {
+        id: next._id,
+        title: next.title || '(untitled task)',
+        status: next.status || 'todo',
+        deadline: next.deadline || null,
+        projectId: next.projectId || null,
+      } : null,
+      openCount: state.openCount,
+      overdueCount: state.overdueCount,
+      lastActivityAt: state.lastActivityAt,
+    };
+  });
+};
+
 // Validate projectId exists and is accessible (owned or shared) before querying
 const validateProjectId = async (projectId) => {
   if (!projectId) return { valid: false, error: 'projectId is required' };
@@ -491,6 +541,43 @@ export const TOOL_HANDLERS = {
       }, 'tool_projectsOverview');
     } catch (error) {
       return buildErrorResponse(error, 'tool_projectsOverview');
+    }
+  },
+  async tool_focusGet(_args, memory) {
+    try {
+      const userId = getMCPUserId();
+      const focusView = await buildFocusView(userId);
+      if (memory) {
+        memory.lists = memory.lists || {};
+        memory.lists.focus = focusView;
+      }
+      return buildSuccessResponse(
+        { focus: focusView, total: focusView.length },
+        'tool_focusGet',
+        { customSummary: `${focusView.length} focus workstream${focusView.length !== 1 ? 's' : ''}` }
+      );
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_focusGet');
+    }
+  },
+  async tool_focusSet(args, _memory) {
+    if (!Array.isArray(args?.items)) {
+      return buildErrorResponse('items is required', 'tool_focusSet', {
+        code: 'MISSING_PARAMETER',
+        suggestion: 'Provide items, e.g., {items: [{title: "SCIM", projectIds: ["abc"]}]}'
+      });
+    }
+    try {
+      const userId = getMCPUserId();
+      await callMethodAs('userPreferences.setFocus', userId, args.items);
+      const focusView = await buildFocusView(userId);
+      return buildSuccessResponse(
+        { focus: focusView, total: focusView.length },
+        'tool_focusSet',
+        { policy: 'write', customSummary: `Focus set: ${focusView.length} workstream${focusView.length !== 1 ? 's' : ''}` }
+      );
+    } catch (error) {
+      return buildErrorResponse(error, 'tool_focusSet');
     }
   },
   async tool_semanticSearch(args, memory) {
