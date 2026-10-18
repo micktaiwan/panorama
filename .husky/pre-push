@@ -1,0 +1,4 @@
+# Optional local guard: refuse to push personal content into this public repo.
+PATH="$PATH:$HOME/.local/bin"
+command -v public-repo-guard >/dev/null 2>&1 && exec public-repo-guard --hook "$(git rev-parse --show-toplevel)"
+exit 0

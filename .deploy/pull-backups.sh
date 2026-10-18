@@ -18,7 +18,9 @@
 # Local retention is deliberately longer than the server's: the point of holding
 # a second copy is also to hold a longer history.
 #
-# Cron: launchd, ~/Library/LaunchAgents/com.panorama.pullbackups.plist (12:05)
+# Cron: launchd, ~/Library/LaunchAgents/com.panorama.pullbackups.plist (04:30 and
+# 12:05; 04:30 added 2026-10-17 so the 02:00 UTC dump, 04:00 Paris in summer and
+# 03:00 in winter, leaves the server 30 to 90 minutes after it ran)
 set -uo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
 

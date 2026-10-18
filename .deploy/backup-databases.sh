@@ -24,6 +24,60 @@ DATE=$(date +%Y-%m-%d)
 
 mkdir -p "$BACKUP_DIR"
 
+backup_dir_tar() {  # <name> <directory>
+  # Written to .part then renamed: the Mac pull (*.gz) never sees a half-written
+  # archive, and pull-backups.sh would freeze the first copy it saw (cp -n).
+  local name="$1" dir="$2" out="$BACKUP_DIR/files-$1-${DATE}.tar.gz"
+  if [ ! -d "$dir" ]; then echo "[$(date -Iseconds)] WARN: $dir missing, skipping $name"; return; fi
+  # timeout: a stuck tar must not hold every backup after it hostage. It cannot
+  # help against a process blocked in disk I/O (uninterruptible), which no signal kills.
+  if timeout 1800 tar -C "$(dirname "$dir")" -czf "$out.part" "$(basename "$dir")" 2>/dev/null && mv -f "$out.part" "$out"; then
+    chown ubuntu:ubuntu "$out"; chmod 600 "$out"
+    echo "[$(date -Iseconds)] files $name done ($(( $(stat -c%s "$out") / 1024 )) KB)"
+  else
+    echo "[$(date -Iseconds)] WARN: tar failed for $name"; rm -f "$out.part"
+  fi
+}
+
+# --- Claudia: Postula (job hunt) and Oficina (Empanadas Clau), added 2026-10-17 ---
+# Mickael runs both sites for her and answers for her data: her applications and
+# their replies (postula.db), her clients, orders and costs (oficina.db), her CV
+# and her business papers. Before this date none of it was copied anywhere.
+# Both databases are SQLite in WAL mode with a live writer, so the copy is made
+# inside each container, by a node process running as the app's own uid, with SQLite's backup
+# API (better-sqlite3 `.backup()`); same idea as Pharos below, which uses
+# VACUUM INTO from its own binary. Opening them from
+# the host as root is what NOT to do: if the -wal/-shm files are absent at that
+# moment, root creates them, and the app (uid 10000) can no longer write.
+# A missing container or file is a WARN, so Pharos raises `backup_failed`.
+# This section runs FIRST, before the Mongo part: under `set -e` a Mongo failure
+# ends the script, and her data must not depend on another app's database.
+backup_sqlite_in() {  # <name> <container> <db path in container> <data dir on host>
+  local name="$1" ctr="$2" src="$3" hostdir="$4"
+  local tmp="backup-${name}-${DATE}.db" out="$BACKUP_DIR/${name}-${DATE}.db.gz"
+  if ! timeout 30 docker ps --format '{{.Names}}' | grep -qx "$ctr"; then
+    echo "[$(date -Iseconds)] WARN: the $ctr container is not running, $name NOT backed up"; return
+  fi
+  rm -f "$hostdir/$tmp"
+  # timeout: this section runs first, so a hung container would otherwise stall
+  # every other app's backup behind it.
+  if timeout 600 docker exec -w /app "$ctr" node --input-type=module -e \
+       "import Database from 'better-sqlite3'; const s = new Database(process.argv[1], { readonly: true, fileMustExist: true }); await s.backup(process.argv[2]); s.close()" \
+       "$src" "/app/data/$tmp" >/dev/null 2>&1 \
+     && [ -s "$hostdir/$tmp" ] && gzip -c "$hostdir/$tmp" > "$out.part" && mv -f "$out.part" "$out"; then
+    chown ubuntu:ubuntu "$out"; chmod 600 "$out"
+    echo "[$(date -Iseconds)] $name done ($(( $(stat -c%s "$out") / 1024 )) KB)"
+  else
+    echo "[$(date -Iseconds)] WARN: the $name backup failed"; rm -f "$out.part"
+  fi
+  rm -f "$hostdir/$tmp"
+}
+backup_sqlite_in postula postula /app/data/postula.db /home/ubuntu/postula/data
+backup_sqlite_in oficina oficina /app/data/oficina.db /home/ubuntu/postula/data
+backup_dir_tar claudia-cv /home/ubuntu/postula/data/cv
+backup_dir_tar oficina-papeles /home/ubuntu/postula/data/papeles
+
+
 # --- organizer-mongodb (shared instance: back up every app DB) ---
 # Enumerate all databases except the internal ones (admin/config/local).
 DBS=$(docker exec "$CONTAINER" mongosh --quiet \
@@ -156,16 +210,7 @@ fi
 # *.gz so the purge below and the Mac pull (pull-backups.sh) pick them up as is.
 # The ASL corpus is ~400 MB and mostly already-compressed PDFs and images, so it
 # goes weekly (Sunday) instead of daily; the rest is small and goes every night.
-backup_dir_tar() {  # <name> <directory>
-  local name="$1" dir="$2" out="$BACKUP_DIR/files-$1-${DATE}.tar.gz"
-  if [ ! -d "$dir" ]; then echo "[$(date -Iseconds)] WARN: $dir missing, skipping $name"; return; fi
-  if tar -C "$(dirname "$dir")" -czf "$out" "$(basename "$dir")" 2>/dev/null; then
-    chown ubuntu:ubuntu "$out"; chmod 600 "$out"
-    echo "[$(date -Iseconds)] files $name done ($(( $(stat -c%s "$out") / 1024 )) KB)"
-  else
-    echo "[$(date -Iseconds)] WARN: tar failed for $name"; rm -f "$out"
-  fi
-}
+# (backup_dir_tar is defined at the top, before the Mongo part.)
 backup_dir_tar loc /home/ubuntu/loc/data
 backup_dir_tar codraw /home/ubuntu/codraw-data
 backup_dir_tar mail-data /var/www/mailserver/mail-data
@@ -194,6 +239,8 @@ find "$BACKUP_DIR" -type f \( -name "*.gz" -o -name "*.snapshot" \) -exec chown 
 # Purge old backups (Mongo dumps, Qdrant snapshots and the Pharos database alike:
 # `pharos-<date>.db.gz` is matched by the *.gz pattern below, so it ages out with the rest)
 find "$BACKUP_DIR" \( -name "*.gz" -o -name "*.snapshot" \) -mtime +"$RETENTION_DAYS" -delete
+# A .part is left only by a run killed mid-write; never a backup, gone after a day.
+find "$BACKUP_DIR" -maxdepth 1 -name "*.part" -mtime +0 -delete
 REMAINING=$(find "$BACKUP_DIR" \( -name "*.gz" -o -name "*.snapshot" \) | wc -l)
 echo "[$(date -Iseconds)] Cleanup done. $REMAINING backup files remaining."
 [ "$QDRANT_FAILED" -eq 0 ] || echo "[$(date -Iseconds)] WARN: the Qdrant part was incomplete, see above"
