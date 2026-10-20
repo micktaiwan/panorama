@@ -59,6 +59,7 @@ const SortableTab = ({ tab, isActive, isDirty, lockInfo, onClick, onDoubleClick,
       ref={setNodeRef}
       style={style}
       key={tab.id}
+      data-tab-id={tab.id}
       className={`note-tab ${isActive ? 'active' : ''} ${isFileTab ? 'file-tab' : ''} ${tab.note?.claudeProjectId ? 'claude-project' : ''} ${lockInfo?.self ? 'locked-self' : ''} ${lockInfo && !lockInfo.self ? 'locked-other' : ''}`}
       onClick={handleClick}
       onDoubleClick={!isFileTab ? onDoubleClick : undefined}
@@ -146,6 +147,7 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmClose, setConfirmClose] = useState(null); // { type: 'others'|'all', tabId?: string, dirtyCount: number }
   const inputRef = useRef(null);
+  const stripRef = useRef(null);
   const [order, setOrder] = useState([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }));
 
@@ -246,6 +248,24 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
     if (typeof onTabsReorder === 'function') onTabsReorder(next);
   };
 
+  // Keep the active tab visible in the horizontal strip. Scroll the strip only
+  // (not scrollIntoView, which would also scroll ancestors) and never move DOM focus
+  // away from the editor.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || !activeTabId) return;
+    const el = strip.querySelector(`[data-tab-id="${window.CSS.escape(activeTabId)}"]`);
+    if (!el) return;
+    const stripRect = strip.getBoundingClientRect();
+    const tabRect = el.getBoundingClientRect();
+    const margin = 24;
+    if (tabRect.left < stripRect.left) {
+      strip.scrollBy({ left: tabRect.left - stripRect.left - margin, behavior: 'smooth' });
+    } else if (tabRect.right > stripRect.right) {
+      strip.scrollBy({ left: tabRect.right - stripRect.right + margin, behavior: 'smooth' });
+    }
+  }, [activeTabId, openTabs.length]);
+
   useEffect(() => {
     if (editingTab && inputRef.current) {
       inputRef.current.focus();
@@ -270,7 +290,7 @@ export const NotesTabs = ({ openTabs, activeTabId, onTabClick, onTabClose, onTab
     <>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order} strategy={horizontalListSortingStrategy}>
-          <div className="notes-tabs">
+          <div className="notes-tabs" ref={stripRef}>
             {onBackToList && (
               <Tooltip content="Back to notes list">
                 <button className="notes-back-button" onClick={onBackToList} aria-label="Back to notes list" type="button">
