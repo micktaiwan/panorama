@@ -41,6 +41,19 @@ const summarizeQualityRun = (run) => {
   return `Top-10 ${pct(run.summary?.successRate_top10)}, top-3 ${pct(run.summary?.successRate_top3)}, MRR ${(run.summary?.mrr ?? 0).toFixed(3)} over ${run.counts?.testedQueries ?? 0} queries — ${issues} issue(s) flagged`;
 };
 
+// A note lock means an editor tab holds unsaved changes: the UI takes it on the
+// first keystroke and releases it on save (useNoteTabs.updateNoteContent). The
+// editor saves its whole buffer, so a tool write landing in between would be
+// silently erased by the next Save — even when the tool acts as the same user,
+// which notes.update's own lock guard lets through. Refuse instead.
+const unsavedEditsError = (note, toolName) => {
+  if (!note?.lockedBy) return null;
+  return buildErrorResponse('Note has unsaved changes in an open editor tab (nothing was written)', toolName, {
+    code: 'NOTE_HAS_UNSAVED_EDITS',
+    suggestion: 'Ask the user to save or close the note in Panorama, then retry'
+  });
+};
+
 // Utility functions
 const clampText = (s, max = 300) => {
   const str = String(s || '');
@@ -1704,7 +1717,7 @@ export const TOOL_HANDLERS = {
     // Validate that the note exists and is accessible (owned or shared project)
     const userId = getMCPUserId();
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { userId: 1, projectId: 1 } });
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { userId: 1, projectId: 1, lockedBy: 1 } });
 
     if (!existingNote || !(await canAccessDoc(existingNote, userId))) {
       console.warn(`[tool_updateNote] Note not found: ${noteId}`);
@@ -1721,7 +1734,11 @@ export const TOOL_HANDLERS = {
     // OVERWRITES the entire note body — anything not included is lost. Callers
     // wanting to add or modify without resending the body should use
     // tool_appendToNote (insert) or tool_editNote (anchored find-replace).
-    if (args?.content !== undefined) modifier.content = String(args.content || '');
+    if (args?.content !== undefined) {
+      const unsaved = unsavedEditsError(existingNote, 'tool_updateNote');
+      if (unsaved) return unsaved;
+      modifier.content = String(args.content || '');
+    }
 
     // Validate projectId if provided
     if (args?.projectId !== undefined) {
@@ -1798,7 +1815,7 @@ export const TOOL_HANDLERS = {
     // to be resent by the caller. This is what makes append safe on large notes.
     const userId = getMCPUserId();
     const { NotesCollection } = await import('/imports/api/notes/collections');
-    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { content: 1, userId: 1, projectId: 1 } });
+    const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { content: 1, userId: 1, projectId: 1, lockedBy: 1 } });
 
     if (!existingNote || !(await canAccessDoc(existingNote, userId))) {
       console.warn(`[tool_appendToNote] Note not found: ${noteId}`);
@@ -1807,6 +1824,8 @@ export const TOOL_HANDLERS = {
         suggestion: 'Use tool_notesByTitleOrContent or tool_noteById to find the correct noteId'
       });
     }
+    const unsaved = unsavedEditsError(existingNote, 'tool_appendToNote');
+    if (unsaved) return unsaved;
 
     const currentContent = String(existingNote.content || '');
 
@@ -1921,7 +1940,7 @@ export const TOOL_HANDLERS = {
     // cheap and the caller never resends anything.
     const MAX_CAS_RETRIES = 3;
     for (let attempt = 0; attempt <= MAX_CAS_RETRIES; attempt++) {
-      const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { content: 1, userId: 1, projectId: 1 } });
+      const existingNote = await NotesCollection.findOneAsync({ _id: noteId }, { fields: { content: 1, userId: 1, projectId: 1, lockedBy: 1 } });
 
       if (!existingNote || !(await canAccessDoc(existingNote, userId))) {
         console.warn(`[tool_editNote] Note not found: ${noteId}`);
@@ -1930,6 +1949,8 @@ export const TOOL_HANDLERS = {
           suggestion: 'Use tool_notesByTitleOrContent or tool_noteById to find the correct noteId'
         });
       }
+      const unsaved = unsavedEditsError(existingNote, 'tool_editNote');
+      if (unsaved) return unsaved;
 
       const currentContent = String(existingNote.content || '');
       const occurrences = countOccurrences(currentContent, oldText);

@@ -141,6 +141,10 @@ Run with: `meteor test --once --driver-package meteortesting:mocha`. Test files:
 - Use `chatComplete()` or `embed()` from `llmProxy.js` — do NOT call OpenAI directly
 - Handle both streaming and non-streaming responses
 
+### When Writing Note Content From a Tool
+- A note lock (`lockedBy`) means an editor tab holds unsaved changes: the UI takes it on the first keystroke and releases it on save. The editor saves its whole buffer, so a tool write in between is erased by the next Save, even for the same user (whom `notes.update` lets through). Tool handlers refuse with `NOTE_HAS_UNSAVED_EDITS` via `unsavedEditsError` (`imports/api/tools/handlers.js`); guarded by `editNote.server.test.js` § "tool writes into a note with unsaved editor changes".
+- Tool descriptions in `definitions.js` are single-quoted strings: an English contraction (`editor's`, `anyone's`) ends the string and breaks the whole server. Rephrase without the apostrophe, then `node --input-type=module --check < imports/api/tools/definitions.js`.
+
 ### MCP-First Policy (When Working with Panorama Data)
 
 **Always use MCP tools first** to access Panorama data. Never bypass to mongosh without exhausting MCP options. MCP tools support partial updates, batch operations, and specialized filters. Use `tool_collectionQuery` with `COMMON_QUERIES` from `imports/api/tools/helpers.js` for advanced patterns. If no tool fits, create one (see `docs/panorama_mcp_tool_creation.md`).

@@ -104,14 +104,58 @@ describe('tool_editNote', function () {
     }
   });
 
-  it('fails with note-locked when the note is locked by another user, content untouched', async function () {
+  it('refuses with NOTE_HAS_UNSAVED_EDITS when the note is locked by another user, content untouched', async function () {
     const noteId = await createNote('locked TARGET body');
     await NotesCollection.updateAsync(noteId, { $set: { lockedBy: OTHER_USER_ID, lockedAt: new Date() } });
-    await assert.rejects(
-      asUser(() => TOOL_HANDLERS.tool_editNote({ noteId, oldText: 'TARGET', newText: 'X' }, {})),
-      (err) => err?.error === 'note-locked'
-    );
+    const parsed = JSON.parse((await asUser(() => TOOL_HANDLERS.tool_editNote({ noteId, oldText: 'TARGET', newText: 'X' }, {}))).output);
+    assert.strictEqual(parsed.error?.code, 'NOTE_HAS_UNSAVED_EDITS');
     assert.strictEqual(await getContent(noteId), 'locked TARGET body');
+  });
+});
+
+// The editor takes the lock on the first keystroke and saves its whole buffer,
+// so a tool write into a note the SAME user has dirty in a tab would be erased
+// by their next Save. notes.update lets same-user writes through; the tools must not.
+describe('tool writes into a note with unsaved editor changes', function () {
+  afterEach(async function () {
+    await NotesCollection.removeAsync({ userId: USER_ID });
+  });
+
+  const lockedBySelf = async (content) => {
+    const noteId = await createNote(content);
+    await NotesCollection.updateAsync(noteId, { $set: { lockedBy: USER_ID, lockedAt: new Date() } });
+    return noteId;
+  };
+
+  it('tool_appendToNote refuses and writes nothing', async function () {
+    const noteId = await lockedBySelf('dirty body');
+    const parsed = JSON.parse((await asUser(() => TOOL_HANDLERS.tool_appendToNote({ noteId, block: 'added' }, {}))).output);
+    assert.strictEqual(parsed.error?.code, 'NOTE_HAS_UNSAVED_EDITS');
+    assert.strictEqual(await getContent(noteId), 'dirty body');
+  });
+
+  it('tool_editNote refuses and writes nothing', async function () {
+    const noteId = await lockedBySelf('dirty TARGET body');
+    const parsed = JSON.parse((await asUser(() => TOOL_HANDLERS.tool_editNote({ noteId, oldText: 'TARGET', newText: 'X' }, {}))).output);
+    assert.strictEqual(parsed.error?.code, 'NOTE_HAS_UNSAVED_EDITS');
+    assert.strictEqual(await getContent(noteId), 'dirty TARGET body');
+  });
+
+  it('tool_updateNote refuses a content write but still allows a title change', async function () {
+    const noteId = await lockedBySelf('dirty body');
+    const refused = JSON.parse((await asUser(() => TOOL_HANDLERS.tool_updateNote({ noteId, content: 'replaced' }, {}))).output);
+    assert.strictEqual(refused.error?.code, 'NOTE_HAS_UNSAVED_EDITS');
+    assert.strictEqual(await getContent(noteId), 'dirty body');
+    const renamed = JSON.parse((await asUser(() => TOOL_HANDLERS.tool_updateNote({ noteId, title: 'new title' }, {}))).output);
+    assert.strictEqual(renamed.error, undefined);
+    assert.strictEqual((await NotesCollection.findOneAsync(noteId)).title, 'new title');
+  });
+
+  it('tool_appendToNote writes once the lock is released (after Save)', async function () {
+    const noteId = await createNote('saved body');
+    const parsed = JSON.parse((await asUser(() => TOOL_HANDLERS.tool_appendToNote({ noteId, block: 'added' }, {}))).output);
+    assert.strictEqual(parsed.data?.appended, true);
+    assert.strictEqual(await getContent(noteId), 'saved body\n\nadded');
   });
 });
 
