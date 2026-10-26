@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { unknownArgs } from '/imports/api/mcp/server/handlers/args';
+import { unknownArgs, unknownArgsMessage } from '/imports/api/mcp/server/handlers/args';
 import { PANORAMA_MCP_TOOLS } from '/imports/api/mcp/server/handlers/index';
 
 describe('MCP tools/call argument check', function () {
@@ -13,6 +13,12 @@ describe('MCP tools/call argument check', function () {
     assert.deepStrictEqual(unknownArgs(tasksFilter.inputSchema, { status: 'todo', projectId: 'x' }), []);
     assert.deepStrictEqual(unknownArgs(tasksFilter.inputSchema, {}), []);
     assert.deepStrictEqual(unknownArgs(tasksFilter.inputSchema, undefined), []);
+  });
+
+  it('points id arguments to the generic by-id read', function () {
+    assert.match(unknownArgsMessage('tool_tasksFilter', tasksFilter.inputSchema, ['ids']), /tool_collectionQuery/);
+    assert.match(unknownArgsMessage('tool_tasksFilter', tasksFilter.inputSchema, ['taskId']), /tool_collectionQuery/);
+    assert.doesNotMatch(unknownArgsMessage('tool_tasksFilter', tasksFilter.inputSchema, ['text']), /tool_collectionQuery/);
   });
 
   it('leaves open schemas alone', function () {

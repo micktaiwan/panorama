@@ -4,7 +4,7 @@
 
 import { PANORAMA_MCP_TOOLS } from './handlers/index';
 import { callPanoramaTool } from './handlers/adapter';
-import { unknownArgs } from './handlers/args';
+import { unknownArgs, unknownArgsMessage } from './handlers/args';
 import {
   detectInfiniteLoop,
   logToolCall
@@ -155,8 +155,7 @@ async function handleToolsCall(params) {
 
   const unknown = unknownArgs(toolExists.inputSchema, args);
   if (unknown.length) {
-    const accepted = Object.keys(toolExists.inputSchema.properties || {});
-    throw new Error(`Unknown argument(s) for ${name}: ${unknown.join(', ')}. Accepted: ${accepted.join(', ') || '(none)'}`);
+    throw new Error(unknownArgsMessage(name, toolExists.inputSchema, unknown));
   }
 
   let success = false;
