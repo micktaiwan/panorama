@@ -170,12 +170,12 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_noteById',
-    description: 'Fetch a single note by ID with full content (title, content, projectId, createdAt, updatedAt). Use when you need to read the content of a specific note and assess its freshness.',
+    description: 'Fetch a single note by ID with full content (title, content, projectId, createdAt, updatedAt). Use when you need to read the content of a specific note and assess its freshness.\n\nThe argument is `noteId`, NOT `id`: listings and search results return a field named `id`, but every Panorama tool takes the id under an entity-suffixed name, so pass that value as `noteId`. Sending `id` fails schema validation before the request is sent.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        noteId: { type: 'string', description: 'Note ID' }
+        noteId: { type: 'string', description: 'Note ID, taken from the `id` field of a note (required)' }
       },
       required: ['noteId']
     }
