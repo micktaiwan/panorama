@@ -23,6 +23,7 @@ import {
   buildFilterSelector,
   compileWhere,
   getListKeyForCollection,
+  dedupeSearchHits,
   FIELD_ALLOWLIST
 } from '/imports/api/tools/helpers';
 import {
@@ -610,9 +611,14 @@ export const TOOL_HANDLERS = {
       const client = new QdrantClient({ url, apiKey: process.env.QDRANT_API_KEY || undefined });
       const vector = await embedQuery(q);
       const filter = { must: [{ key: 'userId', match: { value: userId } }] };
-      const searchRes = await client.search(COLLECTION(), { vector, limit, filter, with_payload: true });
+      // A note is indexed as several chunks, so search one slot per chunk fills
+      // `limit` with a couple of documents. Over-fetch, then collapse to one hit
+      // per document so the page holds `limit` distinct documents.
+      const searchLimit = Math.min(50, limit * 3);
+      const searchRes = await client.search(COLLECTION(), { vector, limit: searchLimit, filter, with_payload: true });
       const items = Array.isArray(searchRes) ? searchRes : (searchRes?.result || []);
-      const out = await Promise.all(items.map(async (it) => {
+      const hits = dedupeSearchHits(items, limit);
+      const out = await Promise.all(hits.map(async (it) => {
         const p = it?.payload || {};
         const prev = await fetchPreview(p.kind, p.docId);
         return { kind: p.kind, id: p.docId, title: prev.title, url: prev.url || null, score: it?.score || 0 };
@@ -2170,7 +2176,7 @@ export const TOOL_HANDLERS = {
 
         const searchRes = await client.search(COLLECTION(), {
           vector,
-          limit,
+          limit: Math.min(50, limit * 3),
           with_payload: true,
           filter: {
             must: [{ key: 'kind', match: { value: 'email' } }]
@@ -2178,7 +2184,12 @@ export const TOOL_HANDLERS = {
         });
 
         const items = Array.isArray(searchRes) ? searchRes : (searchRes?.result || []);
-        const emailIds = items.map(it => it?.payload?.docId).filter(Boolean);
+        // One email is indexed as several chunks: without the collapse, `limit`
+        // slots hold a handful of emails repeated. And payload.docId carries the
+        // kind prefix (`email:<id>`), which never matches the Mongo `id` field.
+        const emailIds = dedupeSearchHits(items, limit)
+          .map(it => String(it?.payload?.docId || '').split(':').pop())
+          .filter(Boolean);
 
         // Fetch full email data from MongoDB
         emails = await GmailMessagesCollection.find(

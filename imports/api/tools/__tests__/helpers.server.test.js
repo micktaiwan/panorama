@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { buildFilterSelector, bindArgsWithMemory, buildProjectByNameSelector } from '/imports/api/tools/helpers';
+import { buildFilterSelector, bindArgsWithMemory, buildProjectByNameSelector, dedupeSearchHits } from '/imports/api/tools/helpers';
 
 describe('Tool helpers (TDD - nouvelle structure)', function () {
   it('buildFilterSelector should support all filter types', function () {
@@ -65,5 +65,41 @@ describe('Tool helpers (TDD - nouvelle structure)', function () {
   it('buildProjectByNameSelector should return empty for empty name', function () {
     const sel = buildProjectByNameSelector('');
     assert.deepStrictEqual(sel, {}, 'Should return empty object');
+  });
+
+  it('dedupeSearchHits should keep one hit per document, best score first', function () {
+    // Shape of a real answer: the same note comes back once per matching chunk
+    // docId is stored as `${kind}:${id}`, see vectorStore.upsertDocChunks
+    const hits = [
+      { score: 0.586, payload: { kind: 'note', docId: 'note:journees' } },
+      { score: 0.565, payload: { kind: 'note', docId: 'note:armature' } },
+      { score: 0.536, payload: { kind: 'note', docId: 'note:instantly' } },
+      { score: 0.535, payload: { kind: 'note', docId: 'note:journees' } },
+      { score: 0.534, payload: { kind: 'note', docId: 'note:aixedr' } },
+      { score: 0.533, payload: { kind: 'note', docId: 'note:journees' } },
+      { score: 0.532, payload: { kind: 'note', docId: 'note:aixedr' } }
+    ];
+    const out = dedupeSearchHits(hits, 10);
+    assert.strictEqual(out.length, 4, 'Should collapse to the 4 distinct documents');
+    assert.deepStrictEqual(
+      out.map(h => h.payload.docId),
+      ['note:journees', 'note:armature', 'note:instantly', 'note:aixedr'],
+      'Should keep score order and each document once'
+    );
+    assert.strictEqual(out[0].score, 0.586, 'Should keep the best score of a document');
+  });
+
+  it('dedupeSearchHits should cut to limit and drop hits without a docId', function () {
+    const hits = [
+      { score: 0.9, payload: { kind: 'task', docId: 'a' } },
+      { score: 0.8, payload: { kind: 'note', docId: 'a' } },
+      { score: 0.7, payload: { kind: 'note', docId: 'b' } },
+      { score: 0.6, payload: {} }
+    ];
+    const out = dedupeSearchHits(hits, 2);
+    assert.strictEqual(out.length, 2, 'Should cut to limit');
+    assert.deepStrictEqual(out.map(h => h.payload.docId), ['a', 'b'], 'Should not merge across kinds');
+    assert.deepStrictEqual(dedupeSearchHits([], 5), [], 'Should handle an empty page');
+    assert.deepStrictEqual(dedupeSearchHits(undefined, 5), [], 'Should handle a missing page');
   });
 });

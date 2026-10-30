@@ -143,13 +143,13 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_semanticSearch',
-    description: 'Semantic search over workspace items (projects, tasks, notes, links). Returns top matches with titles and optional URLs.',
+    description: 'Semantic search over workspace items (projects, tasks, notes, links). Returns the best-matching documents, one entry per document (the chunks of a long note are collapsed), with title and optional URL. It matches passages, not exact words or figures: for a keyword, a person or an amount, use tool_notesByTitleOrContent or tool_collectionQuery instead.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         query: { type: 'string', description: 'User query for semantic retrieval' },
-        limit: { type: 'number', description: 'Max results (default 8)' }
+        limit: { type: 'number', description: 'Max documents returned (default 20, max 50)' }
       },
       required: ['query']
     }
@@ -183,14 +183,14 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_notesByTitleOrContent',
-    description: 'Search notes by keyword in title or content (case-insensitive, exact text match without semantic search). Returns notes with contextual snippets around the keyword. Use when you need to find notes containing specific keywords.',
+    description: 'Search notes by title or content. The search term goes in the `query` parameter, never `keyword`. Case-insensitive exact text match, no semantic search; returns notes with contextual snippets around the term. Use when you need notes containing a specific string, name or amount.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         query: {
           type: 'string',
-          description: 'Keyword or search term to find in note titles or content'
+          description: 'Search term to look for in note titles or content (parameter name: `query`)'
         },
         wholeWord: {
           type: 'boolean',

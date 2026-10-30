@@ -410,3 +410,30 @@ export const COMMON_QUERIES = {
 export const getCommonQuery = (queryName) => {
   return COMMON_QUERIES[queryName] || null;
 };
+
+/**
+ * Collapse vector-search hits to one per document.
+ *
+ * A long note is indexed as several chunks, so a raw search returns the same
+ * document once per matching chunk and a handful of documents can fill every
+ * result slot. Keep the best score per (kind, docId), best first, and cut to
+ * `limit`. Hits without a payload docId are dropped: nothing can be read from
+ * them anyway.
+ *
+ * @param {Array<{score: number, payload: {kind: string, docId: string}}>} items
+ * @param {number} limit
+ * @returns {Array<object>} at most `limit` hits, one per document
+ */
+export const dedupeSearchHits = (items = [], limit = 20) => {
+  const best = new Map();
+  for (const it of items || []) {
+    const payload = it?.payload || {};
+    if (!payload.docId) continue;
+    const key = `${payload.kind}:${payload.docId}`;
+    const kept = best.get(key);
+    if (!kept || (it?.score || 0) > (kept?.score || 0)) best.set(key, it);
+  }
+  return [...best.values()]
+    .sort((a, b) => (b?.score || 0) - (a?.score || 0))
+    .slice(0, Math.max(1, limit));
+};
