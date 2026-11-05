@@ -17,7 +17,12 @@ module.exports = defineConfig(Meteor => {
     // machine ever needs it: the browser that loads the hot-reload socket is the
     // one on this laptop. `meteor run --port 127.0.0.1:<port>` does the same for
     // the app and its proxy, and this covers the third listener they open.
-    devServer: { host: '127.0.0.1' },
+    //
+    // The app is loaded from http://localhost:<port> while the socket reaches
+    // 127.0.0.1, and the dev server refuses that Origin/Host mismatch ("Invalid
+    // Host/Origin header"), which made the client reconnect in a loop, once a
+    // second. Allowing only `localhost` keeps refusing any other site's origin.
+    devServer: { host: '127.0.0.1', allowedHosts: ['localhost'] },
     // googleapis ships every Google API: bundled, it was 32 of the 36 MB of
     // sources in server-rspack.js (46 MB source map). The meteor tool re-reads
     // and re-links that bundle and its map on every server rebuild, which spiked

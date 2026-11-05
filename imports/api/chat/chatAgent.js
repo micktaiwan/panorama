@@ -1,14 +1,14 @@
-// Claude Agent with streaming and real-time tool call feedback
-// Uses @anthropic-ai/sdk with manual tool loop for full control
+// Chat agent on DeepSeek with real-time tool call feedback
+// Manual tool loop over the LLM proxy, in the OpenAI function-calling format
 
-import Anthropic from '@anthropic-ai/sdk';
-import { getAnthropicApiKey } from '/imports/api/_shared/config';
+import { getDeepSeekConfig } from '/imports/api/_shared/config';
+import { chatComplete } from '/imports/api/_shared/llmProxy';
 import { TOOL_HANDLERS } from '/imports/api/tools/handlers';
 import { TOOL_DEFINITIONS } from '/imports/api/tools/definitions';
 import { buildUserContextBlock } from '/imports/api/_shared/userContext';
 
-const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
 const DEFAULT_MAX_TOKENS = 4096;
+const REQUEST_TIMEOUT_MS = 120000;
 const MAX_ITERATIONS = 30;
 const MAX_HISTORY_MESSAGES = 40; // Limit history to control token usage
 
@@ -16,7 +16,7 @@ const MAX_HISTORY_MESSAGES = 40; // Limit history to control token usage
 let cachedTools = null;
 
 /**
- * Build and cache tool definitions for Claude
+ * Build and cache tool definitions
  */
 function getToolDefinitions() {
   if (cachedTools) return cachedTools;
@@ -25,17 +25,20 @@ function getToolDefinitions() {
     .map((toolDef) => {
       const handler = TOOL_HANDLERS[toolDef.name];
       if (!handler) {
-        console.warn(`[claudeAgent] No handler found for tool: ${toolDef.name}`);
+        console.warn(`[chatAgent] No handler found for tool: ${toolDef.name}`);
         return null;
       }
 
       return {
-        name: toolDef.name,
-        description: toolDef.description || '',
-        input_schema: {
-          type: 'object',
-          properties: toolDef.parameters?.properties || {},
-          required: toolDef.parameters?.required || []
+        type: 'function',
+        function: {
+          name: toolDef.name,
+          description: toolDef.description || '',
+          parameters: {
+            type: 'object',
+            properties: toolDef.parameters?.properties || {},
+            required: toolDef.parameters?.required || []
+          }
         }
       };
     })
@@ -45,7 +48,7 @@ function getToolDefinitions() {
 }
 
 /**
- * Build system prompt for Claude agent
+ * Build system prompt for the chat agent
  */
 function buildSystemPrompt(pageContext) {
   const now = new Date();
@@ -107,7 +110,7 @@ function buildSystemPrompt(pageContext) {
 }
 
 /**
- * Build messages array for Claude from query and history
+ * Build messages array from query and history
  * Limits history to MAX_HISTORY_MESSAGES to control token usage
  */
 function buildMessages(query, history = []) {
@@ -149,13 +152,13 @@ async function executeTool(toolName, args) {
 
     // DEBUG: Log tool execution for tool_peopleList
     if (toolName === 'tool_peopleList') {
-      console.log(`[claudeAgent] ${toolName} executed, output size:`, output.length, 'chars');
-      console.log(`[claudeAgent] ${toolName} output preview:`, output.substring(0, 500) + '...');
+      console.log(`[chatAgent] ${toolName} executed, output size:`, output.length, 'chars');
+      console.log(`[chatAgent] ${toolName} output preview:`, output.substring(0, 500) + '...');
     }
 
     return output;
   } catch (error) {
-    console.error(`[claudeAgent] Tool ${toolName} error:`, error);
+    console.error(`[chatAgent] Tool ${toolName} error:`, error);
     return JSON.stringify({
       error: {
         code: 'TOOL_ERROR',
@@ -169,18 +172,33 @@ async function executeTool(toolName, args) {
 /**
  * Execute multiple tools in parallel
  */
-async function executeToolsInParallel(toolUseBlocks) {
+async function executeToolsInParallel(toolCalls) {
   const results = await Promise.all(
-    toolUseBlocks.map(async (toolUse) => {
-      const result = await executeTool(toolUse.name, toolUse.input);
+    toolCalls.map(async (toolCall) => {
+      const result = await executeTool(toolCall.name, toolCall.input);
       return {
-        type: 'tool_result',
-        tool_use_id: toolUse.id,
+        role: 'tool',
+        tool_call_id: toolCall.id,
         content: result
       };
     })
   );
   return results;
+}
+
+/**
+ * Normalize the model's tool calls: arguments arrive as a JSON string
+ */
+function parseToolCalls(rawToolCalls = []) {
+  return rawToolCalls.map((toolCall) => {
+    let input = {};
+    try {
+      input = JSON.parse(toolCall.function?.arguments || '{}');
+    } catch (e) {
+      console.error('[chatAgent] Failed to parse tool input:', e);
+    }
+    return { id: toolCall.id, name: toolCall.function?.name, input };
+  });
 }
 
 /**
@@ -207,7 +225,7 @@ function extractActions(text) {
         });
       }
     } catch (e) {
-      console.warn('[claudeAgent] Failed to parse navigation action:', e.message);
+      console.warn('[chatAgent] Failed to parse navigation action:', e.message);
     }
   }
 
@@ -229,30 +247,25 @@ function extractCitations(messages) {
   const citations = [];
 
   for (const msg of messages) {
-    if (msg.role !== 'user') continue;
+    if (msg.role !== 'tool') continue;
 
-    const content = Array.isArray(msg.content) ? msg.content : [];
-    for (const block of content) {
-      if (block.type !== 'tool_result') continue;
-
-      try {
-        const parsed = JSON.parse(block.content || '{}');
-        const results = parsed?.data?.results || parsed?.results || [];
-        if (Array.isArray(results)) {
-          for (const item of results) {
-            if (item.id && item.title) {
-              citations.push({
-                id: item.id,
-                title: item.title,
-                kind: item.kind || 'unknown',
-                url: item.url || null
-              });
-            }
+    try {
+      const parsed = JSON.parse(msg.content || '{}');
+      const results = parsed?.data?.results || parsed?.results || [];
+      if (Array.isArray(results)) {
+        for (const item of results) {
+          if (item.id && item.title) {
+            citations.push({
+              id: item.id,
+              title: item.title,
+              kind: item.kind || 'unknown',
+              url: item.url || null
+            });
           }
         }
-      } catch {
-        // Ignore parse errors
       }
+    } catch {
+      // Ignore parse errors
     }
   }
 
@@ -290,118 +303,57 @@ function formatToolArgs(toolName, args) {
 }
 
 /**
- * Run the Claude agent with streaming and real-time feedback
+ * Run the chat agent with real-time feedback
  *
  * @param {string} query - User's question
  * @param {Array} history - Previous chat messages
  * @param {object} options - Optional configuration
  * @param {Function} options.onToolStart - Called when tool execution starts
  * @param {Function} options.onToolEnd - Called when tool execution ends
- * @param {Function} options.onText - Called with text chunks during streaming
  * @param {object} options.context - Page the user is currently looking at (see buildPageContext)
  * @returns {Promise<{text: string, citations: Array}>}
  */
 export async function runChatAgent(query, history = [], options = {}) {
-  const apiKey = getAnthropicApiKey();
-
-  if (!apiKey) {
-    throw new Error('Clé API Anthropic non configurée. Ajoutez-la dans les Préférences.');
+  if (!isChatAgentAvailable()) {
+    throw new Error('Clé API DeepSeek non configurée (settings.deepseek.apiKey ou OPENROUTER_API_KEY).');
   }
 
-  const client = new Anthropic({ apiKey });
   const tools = getToolDefinitions();
-  const model = options.model || DEFAULT_MODEL;
   const maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS;
   const system = buildSystemPrompt(options.context);
   const messages = buildMessages(query, history);
 
-  const { onToolStart, onToolEnd, onText } = options;
+  const { onToolStart, onToolEnd } = options;
 
-  console.log(`[claudeAgent] Starting agent - model: ${model}, tools: ${tools.length}, history: ${messages.length - 1} msgs`);
+  console.log(`[chatAgent] Starting agent - tools: ${tools.length}, history: ${messages.length - 1} msgs`);
 
-  const conversationHistory = [...messages];
   let totalToolCalls = 0;
-  let finalText = '';
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-    // Use streaming for real-time feedback
-    const stream = client.messages.stream({
-      model,
-      max_tokens: maxTokens,
+    const response = await chatComplete({
       system,
       messages,
-      tools
+      tools,
+      maxTokens,
+      model: options.model,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      route: 'deepseek'
     });
 
-    const textChunks = [];
-    const toolUseBlocks = [];
-    let currentToolUse = null;
-
-    // Process stream events
-    for await (const event of stream) {
-      if (event.type === 'content_block_start') {
-        if (event.content_block?.type === 'text') {
-          // Text block starting
-        } else if (event.content_block?.type === 'tool_use') {
-          // Tool use block starting
-          currentToolUse = {
-            type: 'tool_use',
-            id: event.content_block.id,
-            name: event.content_block.name,
-            input: {}
-          };
-        }
-      } else if (event.type === 'content_block_delta') {
-        if (event.delta?.type === 'text_delta' && event.delta.text) {
-          textChunks.push(event.delta.text);
-          // Stream text to callback
-          if (onText) {
-            try {
-              await onText(event.delta.text);
-            } catch (e) {
-              console.error('[claudeAgent] onText callback error:', e);
-            }
-          }
-        } else if (event.delta?.type === 'input_json_delta' && currentToolUse) {
-          // Accumulate tool input JSON
-          if (!currentToolUse._inputJson) currentToolUse._inputJson = '';
-          currentToolUse._inputJson += event.delta.partial_json || '';
-        }
-      } else if (event.type === 'content_block_stop') {
-        if (currentToolUse) {
-          // Parse accumulated JSON input
-          if (currentToolUse._inputJson) {
-            try {
-              currentToolUse.input = JSON.parse(currentToolUse._inputJson);
-            } catch (e) {
-              console.error('[claudeAgent] Failed to parse tool input:', e);
-              currentToolUse.input = {};
-            }
-            delete currentToolUse._inputJson;
-          }
-          toolUseBlocks.push(currentToolUse);
-          currentToolUse = null;
-        }
-      }
-    }
-
-    // Get final response for stop_reason
-    const response = await stream.finalMessage();
-    const stopReason = response.stop_reason;
-    const iterationText = textChunks.join('');
+    const toolUseBlocks = parseToolCalls(response.tool_calls);
 
     // If no tool calls, we're done
-    if (stopReason === 'end_turn' || toolUseBlocks.length === 0) {
-      finalText = iterationText;
-      const citations = extractCitations(conversationHistory);
+    if (toolUseBlocks.length === 0) {
+      const finalText = response.text;
+      const citations = extractCitations(messages);
       const actions = extractActions(finalText);
       const cleanText = cleanNavigationBlocks(finalText);
-      console.log(`[claudeAgent] Agent completed. Total tool calls: ${totalToolCalls}, actions: ${actions.length}`);
+      console.log(`[chatAgent] Agent completed. Total tool calls: ${totalToolCalls}, actions: ${actions.length}`);
       return { text: cleanText, citations, actions };
     }
 
     // Execute tool calls in parallel
     totalToolCalls += toolUseBlocks.length;
-    console.log(`[claudeAgent] Iteration ${iteration + 1}: ${toolUseBlocks.length} tool call(s) in parallel`);
+    console.log(`[chatAgent] Iteration ${iteration + 1}: ${toolUseBlocks.length} tool call(s) in parallel`);
 
     // Notify about tool execution start
     const toolNames = toolUseBlocks.map(t => ({
@@ -414,49 +366,29 @@ export async function runChatAgent(query, history = [], options = {}) {
       try {
         await onToolStart(toolNames);
       } catch (e) {
-        console.error('[claudeAgent] onToolStart callback error:', e);
+        console.error('[chatAgent] onToolStart callback error:', e);
       }
     }
 
     // Execute all tools in parallel
     const toolResults = await executeToolsInParallel(toolUseBlocks);
 
-    // DEBUG: Log tool results being sent to Claude
-    if (toolUseBlocks.some(t => t.name === 'tool_peopleList')) {
-      const peopleResult = toolResults.find(r =>
-        toolUseBlocks.find(b => b.id === r.tool_use_id && b.name === 'tool_peopleList')
-      );
-      if (peopleResult) {
-        console.log('[claudeAgent] Sending tool_peopleList result to Claude:', peopleResult.content.substring(0, 500) + '...');
-      }
-    }
-
     // Notify about tool execution end
     if (onToolEnd) {
       try {
         await onToolEnd(toolNames, toolResults);
       } catch (e) {
-        console.error('[claudeAgent] onToolEnd callback error:', e);
+        console.error('[chatAgent] onToolEnd callback error:', e);
       }
     }
 
-    // Add assistant message with tool calls to conversation
-    messages.push({
-      role: 'assistant',
-      content: response.content
-    });
-
-    // Add tool results as user message
-    const toolResultMessage = {
-      role: 'user',
-      content: toolResults
-    };
-    messages.push(toolResultMessage);
-    conversationHistory.push(toolResultMessage);
+    // The assistant turn must precede its tool results, with its raw tool_calls
+    messages.push({ role: 'assistant', content: response.text, tool_calls: response.tool_calls });
+    messages.push(...toolResults);
   }
 
   // Safety: max iterations reached
-  console.warn('[claudeAgent] Max iterations reached');
+  console.warn('[chatAgent] Max iterations reached');
   return {
     text: "J'ai atteint la limite d'itérations. Peux-tu reformuler ta question ?",
     citations: [],
@@ -465,8 +397,8 @@ export async function runChatAgent(query, history = [], options = {}) {
 }
 
 /**
- * Check if Claude agent is available (API key configured)
+ * Check if the chat agent is available (DeepSeek key configured)
  */
-export function isClaudeAgentAvailable() {
-  return !!getAnthropicApiKey();
+export function isChatAgentAvailable() {
+  return !!getDeepSeekConfig().apiKey;
 }

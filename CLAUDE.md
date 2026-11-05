@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Panorama is a **multi-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (local Ollama or remote OpenAI), budget imports, in-app alarms, and Electron desktop support.
+Panorama is a **multi-user** project management and notes application built with **Meteor 3** and **React 18**. It features semantic search via Qdrant, AI integration (DeepSeek chat, OpenAI embeddings, optional local Ollama), budget imports, in-app alarms, and Electron desktop support.
 
 **Stack**: Meteor standard structure (imports/api for server, imports/ui for client, server/main.js, client/main.jsx, electron/ for desktop, docs/ for documentation). Commands: see package.json.
 
@@ -51,7 +51,7 @@ source ~/.env.secrets; mongosh "mongodb://$PANORAMA_MONGO_USER:$PANORAMA_MONGO_P
 
 ### AI Integration
 
-Uses a **proxy pattern** — import from `imports/api/_shared/llmProxy.js`: `chatComplete({system, messages, temperature, maxTokens})`, `embed([texts])`. Do NOT call OpenAI directly. See `docs/ai-proxy.md` for details on providers, config resolution, and health checks.
+Uses a **proxy pattern** — import from `imports/api/_shared/llmProxy.js`: `chatComplete({system, messages, temperature, maxTokens})`, `embed([texts])`. Do NOT call a provider directly. Providers live in `imports/api/_shared/aiCore.js` (`providers`: `ollama`, `openai`, `deepseek`), config resolution in `imports/api/_shared/config.js`, health-check/fallback routing in `llmProxy.js`. All chat goes to DeepSeek (`deepseek/deepseek-v4.1-flash-1017`, same model as the omp config via OpenRouter; key from `settings.deepseek.apiKey` or `OPENROUTER_API_KEY`), including the chat agent (`imports/api/chat/chatAgent.js`), unless the mode is local (Ollama). Embeddings stay on OpenAI (`text-embedding-3-large`). The Web page stays on Perplexity (`sonar-pro`), because it needs live web search.
 
 ### Semantic Search (Qdrant)
 
@@ -129,6 +129,22 @@ Deploy via `./deploy.sh` (Meteor Up). First-time setup: `source ~/.env.secrets &
 
 Run with: `meteor test --once --driver-package meteortesting:mocha`. Test files: `**/__tests__/**/*.js` or `**/*.test.js`
 
+### Verifying a UI Change in the Running Client
+
+Grepping the client bundle is a dead end: `client-rspack.js` — at `/__rspack__/client-rspack.js` on the app and
+`/client-rspack.js` on the rspack dev server (:8081) — serves the same ~196 KB "No code generated" stub, and
+`_build/main-dev/client-*` are entry files that keep the date of the last full build. Client code lives in the
+dev server's memory, so neither a file on disk nor a fetched URL carries a component's text.
+
+Two things that do measure a UI change:
+
+- **Render the component itself**: bundle it with the app's own `@rspack/core` (there is no babel/esbuild binary in
+  `node_modules/.bin`), aliasing `/imports` to `imports/` and stubbing `meteor/meteor` and `meteor/mongo`, then print
+  `renderToStaticMarkup(...)`. That runs the real JSX through the project's own React.
+- **Look at the window after a reload**: `screencapture -x -o -l <windowid>` (window id from
+  `CGWindowListCopyWindowInfo`), then crop the region with PIL. The Electron app runs without a remote-debugging
+  port, so CDP is not an option there.
+
 ## Common Patterns and Gotchas
 
 ### When Adding a New Collection
@@ -138,7 +154,7 @@ Run with: `meteor test --once --driver-package meteortesting:mocha`. Test files:
 4. If searchable: register in `vectorStore.js` and call `upsertDoc`/`deleteDoc` in methods
 
 ### When Adding AI Features
-- Use `chatComplete()` or `embed()` from `llmProxy.js` — do NOT call OpenAI directly
+- Use `chatComplete()` or `embed()` from `llmProxy.js` — do NOT call a provider directly
 - Handle both streaming and non-streaming responses
 
 ### When Writing Note Content From a Tool

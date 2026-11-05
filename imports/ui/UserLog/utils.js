@@ -6,6 +6,13 @@ export function formatHms(dateLike) {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+// Moves `since` back by whole days until `entryDate` falls inside the visible range
+export function sinceCoveringEntry(since, entryDate) {
+  const dayMs = 24 * 3600 * 1000;
+  const days = Math.max(1, Math.ceil((since.getTime() - entryDate.getTime()) / dayMs));
+  return new Date(since.getTime() - days * dayMs);
+}
+
 export function hourKey(dateLike) {
   const d = dateLike instanceof Date ? dateLike : new Date(dateLike);
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}`;

@@ -1391,13 +1391,12 @@ Labels: ${emailContext.labels.join(', ')}
 Snippet: ${emailContext.snippet}
 Body preview: ${emailContext.bodyPreview}`;
 
-    // Call LLM - always use remote (OpenAI) for cron-based analysis
+    // Call LLM
     const response = await chatComplete({
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
       temperature: 0.1,
-      maxTokens: 200,
-      route: 'remote'  // Force remote LLM for automatic email analysis
+      maxTokens: 200
     });
 
     let suggestion;

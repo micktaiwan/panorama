@@ -30,9 +30,10 @@ Meteor.methods({
     const user = `${instructions}\n\nOriginal entry:\n\n\`\`\`\n${original}\n\`\`\``;
 
     try {
-      const result = await chatComplete({ 
-        system, 
-        messages: [{ role: 'user', content: user }] 
+      const result = await chatComplete({
+        system,
+        messages: [{ role: 'user', content: user }],
+        maxTokens: 2000
       });
       const cleaned = result.text;
 

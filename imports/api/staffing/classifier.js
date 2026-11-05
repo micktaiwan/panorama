@@ -125,7 +125,6 @@ export const rankCommitsBatch = async ({ commits, opportunities }, userId) => {
       messages: [{ role: 'user', content: user }],
       responseFormat: 'json',
       schema,
-      temperature: 0,
       timeoutMs: 90000,
       route: 'classify',
       userId
@@ -225,7 +224,6 @@ export const rankCommitDeep = async ({ message, files, opportunities }, userId) 
     messages: [{ role: 'user', content: user }],
     responseFormat: 'json',
     schema,
-    temperature: 0,
     timeoutMs: 45000,
     route: 'classify',
     userId

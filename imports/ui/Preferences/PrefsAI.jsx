@@ -271,15 +271,6 @@ export const PrefsAI = ({ pref: _pref, userPref }) => {
           </div>
         </div>
         <div className="prefsRow">
-          <div className="prefsLabel">Chat Model</div>
-          <div className="prefsValue">
-            <InlineEditable value={aiRemoteChatModel} fullWidth onSubmit={(next) => setAiRemoteChatModel(next)} />
-            <div className="muted mt4" style={{ fontSize: '12px' }}>
-              OpenAI model for summaries, analysis, and all chat-based AI features in remote mode
-            </div>
-          </div>
-        </div>
-        <div className="prefsRow">
           <div className="prefsLabel">Embedding Model</div>
           <div className="prefsValue">
             <InlineEditable value={aiRemoteEmbeddingModel} fullWidth onSubmit={(next) => setAiRemoteEmbeddingModel(next)} />

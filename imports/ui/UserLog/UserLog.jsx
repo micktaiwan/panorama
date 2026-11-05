@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { Tooltip } from '/imports/ui/components/Tooltip/Tooltip.jsx';
+import { Modal } from '/imports/ui/components/Modal/Modal.jsx';
 import './UserLog.css';
 import { useTracker } from 'meteor/react-meteor-data';
 import { UserLogsCollection } from '/imports/api/userLogs/collections';
@@ -10,7 +11,7 @@ import { ProjectsCollection } from '/imports/api/projects/collections';
 import { TasksCollection } from '/imports/api/tasks/collections';
 import { InlineTasksHeader } from './components/InlineTasksHeader.jsx';
 import { InlineTasksList } from './components/InlineTasksList.jsx';
-import { formatHms, hourKey, formatHourLabel } from './utils';
+import { formatHms, hourKey, formatHourLabel, sinceCoveringEntry } from './utils';
 import { HourHeader } from './components/HourHeader/HourHeader.jsx';
 import { EntryRow } from './components/EntryRow/EntryRow.jsx';
 
@@ -20,9 +21,10 @@ export default function UserLog() {
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
-  // Visible range for entries list: default last 24h; load more adds one day
-  const [visibleDays, setVisibleDays] = useState(1);
-  const sinceDate = useMemo(() => new Date(Date.now() - (visibleDays * 24 * 3600 * 1000)), [visibleDays]);
+  // Visible range for entries list: default last 24h; load more goes back by whole days to the next older entry
+  const [sinceDate, setSinceDate] = useState(() => new Date(Date.now() - (24 * 3600 * 1000)));
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [noOlderEntries, setNoOlderEntries] = useState(false);
   // Subscribe, but do not gate rendering on readiness to avoid empty flicker/scroll jumps
   useTracker(() => { Meteor.subscribe('userLogs.since', sinceDate); return null; }, [sinceDate]);
   const entries = useTracker(
@@ -38,6 +40,7 @@ export default function UserLog() {
   const [summarizing, setSummarizing] = useState(false);
   const [summaryModal, setSummaryModal] = useState(null);
   const [summaryWindow, setSummaryWindow] = useState(3);
+  const [entryToDelete, setEntryToDelete] = useState(null);
   const [summaryPrompt, setSummaryPrompt] = useState('');
   const [hasSavedSummary, setHasSavedSummary] = useState(() => {
     if (typeof localStorage === 'undefined') return false;
@@ -72,6 +75,21 @@ export default function UserLog() {
   // Focus input on page mount
   useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
+  }, []);
+  // On open, extend the visible range so the newest entry shows even when it is older than 24h
+  useEffect(() => {
+    Meteor.call('userLogs.latestDateBefore', new Date(), (err, newestDate) => {
+      if (err) {
+        console.error('userLogs.latestDateBefore failed', err);
+        notify({ message: 'Could not load older entries', kind: 'error' });
+        return;
+      }
+      if (!newestDate) {
+        setNoOlderEntries(true);
+        return;
+      }
+      setSinceDate(since => (newestDate < since ? sinceCoveringEntry(since, newestDate) : since));
+    });
   }, []);
   // Persist hideExisting toggle
   useEffect(() => {
@@ -267,6 +285,22 @@ export default function UserLog() {
     });
   }, []);
 
+  const closeDeleteModal = useCallback(() => setEntryToDelete(null), []);
+
+  const handleConfirmDelete = useCallback(() => {
+    const entry = entryToDelete;
+    if (!entry) return;
+    setEntryToDelete(null);
+    Meteor.call('userLogs.remove', entry._id, (err) => {
+      if (err) {
+        console.error('userLogs.remove failed', err);
+        notify({ message: 'Delete failed', kind: 'error' });
+        return;
+      }
+      notify({ message: 'Entry deleted', kind: 'success' });
+    });
+  }, [entryToDelete]);
+
   const handleUpdateContent = useCallback((entry, content) => {
     Meteor.call('userLogs.update', entry._id, { content }, (err) => {
       if (err) {
@@ -315,7 +349,22 @@ export default function UserLog() {
     return fetched.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [projectsReady]);
   // Note: we only need project names to populate the select options below; no separate map needed.
-  const handleLoadMore = useCallback(() => { setVisibleDays(d => (Number(d) || 1) + 1); }, []);
+  const handleLoadMore = useCallback(() => {
+    setLoadingOlder(true);
+    Meteor.call('userLogs.latestDateBefore', sinceDate, (err, olderDate) => {
+      setLoadingOlder(false);
+      if (err) {
+        console.error('userLogs.latestDateBefore failed', err);
+        notify({ message: 'Could not load older entries', kind: 'error' });
+        return;
+      }
+      if (!olderDate) {
+        setNoOlderEntries(true);
+        return;
+      }
+      setSinceDate(sinceCoveringEntry(sinceDate, olderDate));
+    });
+  }, [sinceDate]);
 
   return (
     <div className="UserLog__page" aria-live="polite">
@@ -437,6 +486,7 @@ export default function UserLog() {
                       entry={e}
                       isCleaning={!!cleaningIds[e._id]}
                       onClean={handleClean}
+                      onDelete={setEntryToDelete}
                       onUpdateContent={handleUpdateContent}
                       formatHms={formatHms}
                       timeAgo={timeAgo}
@@ -451,9 +501,26 @@ export default function UserLog() {
             )}
           </div>
           <div className="UserLog__loadMore">
-            <button type="button" className="btn" onClick={handleLoadMore}>Load more (older 1 day)</button>
+            <button
+              type="button"
+              className="btn"
+              disabled={loadingOlder || noOlderEntries}
+              onClick={handleLoadMore}
+            >{noOlderEntries ? 'No older entries' : 'Load more'}</button>
             <span className="ml8 muted">since {timeAgo(sinceDate)}</span>
           </div>
+          <Modal
+            open={!!entryToDelete}
+            onClose={closeDeleteModal}
+            title="Delete this line?"
+            icon={false}
+            actions={[
+              <button key="cancel" type="button" className="btn" onClick={closeDeleteModal}>Cancel</button>,
+              <button key="delete" type="button" className="btn btn-danger ml8" onClick={handleConfirmDelete}>Delete</button>
+            ]}
+          >
+            <p>{entryToDelete?.content || '(empty)'}</p>
+          </Modal>
     </div>
   );
 }

@@ -49,6 +49,17 @@ export const getOpenAiApiKey = () => {
   return fromPrefs || process.env.OPENAI_API_KEY || Meteor.settings?.openai?.apiKey || null;
 };
 
+// DeepSeek chat, served through OpenRouter: there is no direct DeepSeek key on
+// this machine, and OpenRouter exposes the same model ids behind the same
+// /chat/completions shape. Override via settings.deepseek or the env vars.
+export const getDeepSeekConfig = () => {
+  const settings = Meteor.settings?.deepseek || {};
+  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENROUTER_API_KEY || settings.apiKey?.trim() || null;
+  const baseUrl = (settings.baseUrl || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+  const chatModel = settings.chatModel || 'deepseek/deepseek-v4.1-flash-1017';
+  return { apiKey, baseUrl, chatModel };
+};
+
 export const getAnthropicApiKey = () => {
   const pref = getPrefs();
   const fromPrefs = pref?.anthropicApiKey?.trim() || null;

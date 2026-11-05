@@ -62,6 +62,7 @@ module.exports = {
       PANORAMA_FILES_DIR: '/var/www/panorama/files',
       QDRANT_URL: 'http://organizer-qdrant:6333',
       QDRANT_API_KEY: process.env.PANORAMA_QDRANT_API_KEY,
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
       PANORAMA_FILES_API_KEY: process.env.PANORAMA_FILES_API_KEY,
       ...(MAIL_USER && MAIL_PASS ? {
         MAIL_URL: `smtp://${encodeURIComponent(MAIL_USER)}:${encodeURIComponent(MAIL_PASS)}@mail.mickaelfm.me:587`,

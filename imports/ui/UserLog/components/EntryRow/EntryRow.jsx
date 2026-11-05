@@ -8,6 +8,7 @@ export const EntryRow = ({
   entry,
   isCleaning,
   onClean,
+  onDelete,
   onUpdateContent,
   formatHms,
   timeAgo,
@@ -23,6 +24,14 @@ export const EntryRow = ({
           onClick={() => onClean(entry)}
           aria-label={isCleaning ? 'Fixing' : 'Fix this line'}
         >{isCleaning ? '⏳' : '🪄'}</button>
+      </Tooltip>
+      <Tooltip content="Delete this line">
+        <button
+          type="button"
+          className="iconButton UserLog__action"
+          onClick={() => onDelete(entry)}
+          aria-label="Delete this line"
+        >🗑</button>
       </Tooltip>
       <div className="UserLog__entryBody">
         <div className="UserLog__entryClock">
@@ -60,6 +69,7 @@ EntryRow.propTypes = {
   }).isRequired,
   isCleaning: PropTypes.bool,
   onClean: PropTypes.func.isRequired,
+  onDelete: PropTypes.func.isRequired,
   onUpdateContent: PropTypes.func.isRequired,
   formatHms: PropTypes.func.isRequired,
   timeAgo: PropTypes.func.isRequired,

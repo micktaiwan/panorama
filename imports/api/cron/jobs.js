@@ -85,7 +85,6 @@ ${JSON.stringify(tasksContext, null, 2)}`;
         role: 'user',
         content: 'Generate a reminder question based on my urgent tasks.'
       }],
-      route: 'local',
       temperature: 0.7,
       maxTokens: 150
     });

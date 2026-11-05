@@ -1,9 +1,9 @@
 // Chat methods - with streaming and real-time tool feedback
-// Uses Claude SDK with callbacks for live status updates
+// Uses the DeepSeek chat agent with callbacks for live status updates
 
 import { Meteor } from 'meteor/meteor';
 import { ChatsCollection } from '/imports/api/chats/collections';
-import { runChatAgent, isClaudeAgentAvailable } from './claudeAgent';
+import { runChatAgent, isChatAgentAvailable } from './chatAgent';
 import { ensureLoggedIn } from '/imports/api/_shared/auth';
 import { mcpRequestContext } from '/imports/api/mcp/server/requestContext';
 
@@ -43,18 +43,18 @@ Meteor.methods({
       throw new Meteor.Error('bad-request', 'query is required');
     }
 
-    // Check if Claude agent is available
-    if (!isClaudeAgentAvailable()) {
+    // Check if the chat agent is available
+    if (!isChatAgentAvailable()) {
       await ChatsCollection.insertAsync({
         role: 'assistant',
-        content: 'Clé API Anthropic non configurée. Ajoutez-la dans Préférences → Secrets → Anthropic API Key.',
+        content: 'Clé API DeepSeek non configurée (settings.deepseek.apiKey ou OPENROUTER_API_KEY).',
         error: true,
         userId,
         createdAt: new Date()
       });
       throw new Meteor.Error(
         'config-error',
-        'Clé API Anthropic non configurée. Ajoutez-la dans les Préférences.'
+        'Clé API DeepSeek non configurée (settings.deepseek.apiKey ou OPENROUTER_API_KEY).'
       );
     }
 
@@ -71,7 +71,7 @@ Meteor.methods({
     });
 
     try {
-      // Run the Claude agent with callbacks for real-time feedback
+      // Run the chat agent with callbacks for real-time feedback
       const { text, citations, actions } = await mcpRequestContext.run({ userId }, () => runChatAgent(query, history, {
         context,
         // Called when tool execution starts
@@ -120,12 +120,6 @@ Meteor.methods({
             createdAt: new Date()
           });
         },
-
-        // Called with text chunks during streaming (optional - for future use)
-        onText: async (_chunk) => {
-          // Could be used to stream partial responses
-          // For now, we wait for complete response
-        }
       }));
 
       // Remove the last "analyzing" status message

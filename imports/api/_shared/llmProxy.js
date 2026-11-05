@@ -16,6 +16,9 @@ const HEALTH_CACHE = {
 
 const HEALTH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Long answers exceed the 30 s AI preference (83 s measured for 1500 words on deepseek-v3.2).
+const DEEPSEEK_TIMEOUT_MS = 180000;
+
 /**
  * Get cached health check result or perform fresh check
  */
@@ -61,19 +64,32 @@ async function selectProvider(routeOverride = null, userId = null) {
 }
 
 /**
+ * Chat provider: DeepSeek, unless local mode (or route: 'local') asks for Ollama.
+ * Embeddings keep selectProvider: DeepSeek has no embedding model, and the Qdrant
+ * index was built with an OpenAI one.
+ */
+async function selectChatProvider(routeOverride = null, userId = null) {
+  if (routeOverride === 'deepseek') return 'deepseek';
+  if (routeOverride === 'local') return 'ollama';
+  const config = userId ? await getAIConfigAsync(userId) : getAIConfig();
+  return config.mode === 'local' ? 'ollama' : 'deepseek';
+}
+
+/**
  * Chat completion with automatic provider selection
  */
 export async function chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs, route, tools, tool_choice, responseFormat, schema, userId } = {}) {
   const config = userId ? await getAIConfigAsync(userId) : getAIConfig();
-  const provider = await selectProvider(route, userId);
+  const provider = await selectChatProvider(route, userId);
+  const defaultTimeoutMs = provider === 'deepseek' ? DEEPSEEK_TIMEOUT_MS : config.timeoutMs;
 
   const options = {
     system,
     messages,
     model,
-    temperature: temperature || config.temperature,
-    maxTokens: maxTokens || config.maxTokens,
-    timeoutMs: timeoutMs || config.timeoutMs,
+    temperature: temperature ?? config.temperature,
+    maxTokens: maxTokens ?? config.maxTokens,
+    timeoutMs: timeoutMs || defaultTimeoutMs,
     tools,
     tool_choice,
     responseFormat,

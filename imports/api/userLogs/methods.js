@@ -68,6 +68,16 @@ Meteor.methods({
     }
     return res;
   },
+  // Date of the newest entry strictly older than `beforeDate`, or null when there is none
+  async 'userLogs.latestDateBefore'(beforeDate) {
+    check(beforeDate, Date);
+    ensureLoggedIn(this.userId);
+    const entry = await UserLogsCollection.findOneAsync(
+      { userId: this.userId, createdAt: { $lt: beforeDate } },
+      { sort: { createdAt: -1 }, fields: { createdAt: 1 } }
+    );
+    return entry?.createdAt ?? null;
+  },
   async 'userLogs.clear'() {
     ensureLoggedIn(this.userId);
     const ids = await UserLogsCollection.find({ userId: this.userId }, { fields: { _id: 1 } }).fetchAsync();

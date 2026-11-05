@@ -1,11 +1,10 @@
 import { Meteor } from 'meteor/meteor';
-import { getOpenAiApiKey, getAIConfig, getOpenAiApiKeyAsync } from '/imports/api/_shared/config';
+import { getOpenAiApiKey, getAIConfig, getOpenAiApiKeyAsync, getDeepSeekConfig } from '/imports/api/_shared/config';
 
 // Normalize multi-line text to a single line
 export const toOneLine = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
 // Shared helpers for AI calls
-export const OPENAI_MODEL = 'o4-mini';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -352,6 +351,78 @@ export const providers = {
       
       const data = await response.json();
       return { ok: true, details: data };
+    }
+  },
+
+  // DeepSeek chat, routed through OpenRouter (see getDeepSeekConfig). Chat only:
+  // embeddings stay on the OpenAI provider, because the Qdrant index was built
+  // with text-embedding-3-large.
+  deepseek: {
+    async chatComplete({ system, messages, model, temperature, maxTokens, timeoutMs = 60000, tools, tool_choice, responseFormat, schema } = {}) {
+      const { apiKey, baseUrl, chatModel } = getDeepSeekConfig();
+      if (!apiKey) throw new Meteor.Error('config-missing', 'DeepSeek API key missing (settings.deepseek.apiKey or OPENROUTER_API_KEY)');
+
+      const config = getAIConfig();
+      const modelName = model || chatModel;
+
+      const { default: fetch } = await import('node-fetch');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      const allMessages = system ? [{ role: 'system', content: system }, ...messages] : messages;
+
+      const payload = {
+        model: modelName,
+        messages: allMessages,
+        // `||` would turn an explicit 0 (deterministic) into the global default.
+        temperature: Number.isFinite(temperature) ? temperature : config.temperature,
+        max_tokens: maxTokens ?? config.maxTokens,
+        // Reasoning counts against max_tokens: a 200-token call came back with no content.
+        reasoning: { enabled: false }
+      };
+
+      if (tools && tools.length > 0) {
+        payload.tools = tools;
+        if (tool_choice) payload.tool_choice = tool_choice;
+      }
+
+      if (responseFormat === 'json') {
+        payload.response_format = schema
+          ? { type: 'json_schema', json_schema: { name: 'structured_output', strict: false, schema } }
+          : { type: 'json_object' };
+      }
+
+      try {
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://panorama.mickaelfm.me',
+            'X-Title': 'Panorama'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Meteor.Error('deepseek-failed', `DeepSeek request failed: ${response.status} ${errorText}`);
+        }
+
+        const data = await response.json();
+        const choice = data.choices?.[0];
+        return {
+          text: choice?.message?.content || '',
+          content: choice?.message?.content || '', // Alias for compatibility
+          tool_calls: choice?.message?.tool_calls || [],
+          usage: data.usage || null,
+          model: data.model || modelName,
+          finishReason: choice?.finish_reason || 'stop'
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
   }
 };

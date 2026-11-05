@@ -15,11 +15,11 @@ export const AIStatusIndicator = () => {
     return null;
   }
 
-  const { mode, local, remote } = ai;
+  const { mode, local } = ai;
 
   const statusText = mode === 'local'
     ? `Local (${local?.chatModel || 'Unknown'})`
-    : `Remote (${remote?.chatModel || 'Unknown'})`;
+    : 'Remote (DeepSeek)';
 
   return (
     <span className="ai-status-indicator">
