@@ -33,14 +33,16 @@ export const NoteAIActions = ({
       </button>
     </Tooltip>
 
-    <Tooltip content={undoAvailable ? 'Undo last AI action' : 'No undo data available'}>
-      <button
-        className="action-button undo-button"
-        onClick={onUndo}
-        disabled={!noteId || !undoAvailable}
-      >
-        Undo
-      </button>
-    </Tooltip>
+    {undoAvailable && (
+      <Tooltip content="Undo last AI action">
+        <button
+          className="action-button undo-button"
+          onClick={onUndo}
+          disabled={!noteId}
+        >
+          Undo
+        </button>
+      </Tooltip>
+    )}
   </>
 );

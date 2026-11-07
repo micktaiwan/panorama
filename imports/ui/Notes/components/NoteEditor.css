@@ -24,7 +24,7 @@
 }
 
 .notes-actions {
-  padding: 12px 20px;
+  padding: 8px 16px;
   background: var(--notes-panel);
   border-top: 1px solid var(--notes-border);
   display: flex;
@@ -38,37 +38,57 @@
 
 .notes-actions-left {
   display: flex;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .notes-actions-center {
   flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: center;
+
+  align-items: center;
 }
 
 .notes-actions-right {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.notes-actions-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--notes-border-strong);
+  margin: 0 4px;
+}
+
+/* One shape for every toolbar control: same height, never wraps */
+.notes-actions .save-button,
+.notes-actions .save-all-button,
+.notes-actions .action-button,
+.notes-actions .project-select {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: 6px;
 }
 
 .save-button,
 .save-all-button {
-  padding: 8px 16px;
   border: 1px solid var(--notes-border-strong);
-  border-radius: 6px;
   background: var(--notes-surface);
   color: var(--text);
-  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.save-button:hover,
-.save-all-button:hover {
+.save-all-button:hover:not(:disabled) {
   background: var(--notes-surface-hover);
-  border-color: var(--notes-border-strong);
 }
 
 .save-button:disabled,
@@ -77,6 +97,7 @@
   cursor: not-allowed;
 }
 
+/* Save is the only primary action of the bar */
 .save-button {
   background: var(--info);
   color: white;
@@ -89,11 +110,23 @@
 }
 
 /* Metadata styles */
+/* When the date does not fit, it wraps to a second line that is clipped:
+   it disappears whole instead of being squeezed to a few letters */
 .note-metadata {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  height: 16px;
+  line-height: 16px;
+  overflow: hidden;
+  min-width: 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+.note-metadata::before {
+  content: '';
+  height: 16px;
 }
 
 .metadata-item {
@@ -101,13 +134,18 @@
 }
 
 /* Project select styles */
+span.project-select {
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .project-select {
-  padding: 6px 12px;
   border: 1px solid var(--notes-border-strong);
-  border-radius: 6px;
   background: var(--notes-surface);
   color: var(--text);
-  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -123,44 +161,34 @@
   box-shadow: 0 0 0 2px rgba(var(--info-rgb), 0.2);
 }
 
-/* Duplicate button (NoteEditor-specific) */
-.duplicate-button {
-  background: var(--purple);
-  color: white;
-  border-color: var(--purple);
+/* Secondary actions stay neutral in the editor footer: color is reserved for Save */
+.notes-actions .clean-button,
+.notes-actions .duplicate-button,
+.notes-actions .go-to-project-button,
+.notes-actions .claude-project-button {
+  background: var(--notes-surface);
+  color: var(--text);
+  border-color: var(--notes-border-strong);
 }
 
-.duplicate-button:hover:not(:disabled) {
-  background: var(--purple-600);
-  border-color: var(--purple-600);
+.notes-actions .clean-button:hover:not(:disabled),
+.notes-actions .duplicate-button:hover:not(:disabled),
+.notes-actions .go-to-project-button:hover:not(:disabled),
+.notes-actions .claude-project-button:hover:not(:disabled) {
+  background: var(--notes-surface-hover);
+  border-color: var(--notes-border-strong);
 }
 
-/* Go to project button */
-.go-to-project-button {
-  background: rgba(var(--info-rgb), 0.15);
-  color: var(--info);
-  border-color: rgba(var(--info-rgb), 0.3);
-}
-
-.go-to-project-button:hover:not(:disabled) {
-  background: rgba(var(--info-rgb), 0.25);
-}
-
-/* Claude Code project button */
-.claude-project-button {
-  background: rgba(var(--purple-rgb), 0.15);
-  color: var(--purple);
-  border-color: rgba(var(--purple-rgb), 0.3);
-}
-
-.claude-project-button:hover:not(:disabled) {
-  background: rgba(var(--purple-rgb), 0.25);
+/* Undo only shows right after an AI action: make it noticeable */
+.notes-actions .undo-button {
+  color: var(--warning);
+  border-color: var(--warning);
 }
 
 @media (max-width: 768px) {
   .notes-actions { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
-  .notes-actions-center { display: none; }
-  .save-button, .save-all-button { padding: 6px 12px; font-size: 13px; }
+  .notes-actions-right { flex-wrap: wrap; }
+  .notes-actions-sep { display: none; }
 }
 
 /* Loading state while the note content subscription delivers */

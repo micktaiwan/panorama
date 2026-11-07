@@ -67,7 +67,16 @@ COUNT=$(find "$LOCAL_DIR" -maxdepth 1 \( -name '*.gz' -o -name '*.snapshot' \) |
 # the whole 7-day window; those folders age out below like any old file.
 KEEP_DIR="$LOCAL_DIR/history"
 mkdir -p "$KEEP_DIR"
-find "$LOCAL_DIR" -maxdepth 1 \( -name '*.gz' -o -name '*.snapshot' \) -exec cp -pn {} "$KEEP_DIR/" \;
+# Hard links, not copies: until 2026-11-06 this was `cp -pn`, which stored the
+# server's rolling window twice on disk (~4 GB) despite the claim above. A link
+# shares the inode (so the mtime too); when rsync later replaces a top-level
+# file it writes a new inode, and the history entry keeps the first version,
+# exactly as cp -n did.
+for f in "$LOCAL_DIR"/*.gz "$LOCAL_DIR"/*.snapshot; do
+  [ -e "$f" ] || continue
+  dest="$KEEP_DIR/$(basename "$f")"
+  [ -e "$dest" ] || ln "$f" "$dest"
+done
 
 find "$KEEP_DIR" -type f -mtime +"$RETENTION_DAYS" -delete 2>/dev/null
 find "$KEEP_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null

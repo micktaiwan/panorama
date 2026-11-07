@@ -161,15 +161,14 @@ export const NoteEditor = forwardRef(({
 
           <div className="notes-actions-center">
             {activeNote && (
-              <div className="note-metadata">
+              <div
+                className="note-metadata"
+                title={`Created ${formatDateTime(activeNote.createdAt)}${activeNote.updatedAt ? ` · Updated ${formatDateTime(activeNote.updatedAt)}` : ''}`}
+              >
                 <span className="metadata-item">
-                  Created: {formatDateTime(activeNote.createdAt)}
+                  {activeNote.updatedAt && activeNote.updatedAt !== activeNote.createdAt ? 'Updated' : 'Created'}{' '}
+                  {formatDateTime(activeNote.updatedAt || activeNote.createdAt)}
                 </span>
-                {activeNote.updatedAt && activeNote.updatedAt !== activeNote.createdAt && (
-                  <span className="metadata-item">
-                    Updated: {formatDateTime(activeNote.updatedAt)}
-                  </span>
-                )}
               </div>
             )}
           </div>
@@ -208,6 +207,8 @@ export const NoteEditor = forwardRef(({
               </Tooltip>
             )}
 
+            <span className="notes-actions-sep" aria-hidden="true" />
+
             {!isLockedByOther && (
               <NoteAIActions
                 noteId={activeTabId}
@@ -220,6 +221,8 @@ export const NoteEditor = forwardRef(({
                 onUndo={handleUndo}
               />
             )}
+
+            <span className="notes-actions-sep" aria-hidden="true" />
 
             <Tooltip content="Version history">
               <button
