@@ -28,6 +28,13 @@ let observerPromise = null;
 // The watchdog polls every 15 s: log state changes only, not every failed probe
 // (a night offline would otherwise fill the errors collection).
 let failing = false;
+// console.error feeds the errors collection, which the client turns into a toast and a
+// native notification. On a flaky network (train Wi-Fi) the round-trip drops for
+// 15-70 s and recovers alone, so only escalate once the failure lasts as long as the
+// watchdog's own restart grace (WEDGED_GRACE_S in start-local.sh).
+const ALERT_AFTER_MS = 60000;
+let failingSince = 0;
+let alerted = false;
 
 function notify(fields) {
   const seen = fields?.at ? new Date(fields.at).getTime() : 0;
@@ -95,15 +102,23 @@ if (Meteor.isDevelopment) {
     try {
       const result = await roundTrip();
       if (failing) {
+        const downMs = Date.now() - failingSince;
         failing = false;
-        console.warn(`[healthz] Mongo round-trip OK again (${result.ms} ms)`);
+        alerted = false;
+        failingSince = 0;
+        console.warn(`[healthz] Mongo round-trip OK again (${result.ms} ms, down ${Math.round(downMs / 1000)} s)`);
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     } catch (error) {
+      const message = error?.message || error;
       if (!failing) {
         failing = true;
-        console.error('[healthz] Mongo round-trip failed:', error?.message || error);
+        failingSince = Date.now();
+        console.warn('[healthz] Mongo round-trip failed:', message);
+      } else if (!alerted && Date.now() - failingSince >= ALERT_AFTER_MS) {
+        alerted = true;
+        console.error(`[healthz] Mongo round-trip failing for ${Math.round((Date.now() - failingSince) / 1000)} s:`, message);
       }
       res.writeHead(503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: error?.message || String(error) }));
