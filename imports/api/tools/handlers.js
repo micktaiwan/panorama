@@ -299,10 +299,10 @@ export const TOOL_HANDLERS = {
     const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
     const userId = getMCPUserId();
     const selector = { ...buildFilterSelector(args || {}), userId, ...NOT_DELETED };
-    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
+    const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1, tags: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
-    const mapped = (tasks || []).map(t => ({ id: t._id, projectId: t.projectId, title: clampText(t.title || ''), notes: t.notes || '', status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    const mapped = (tasks || []).map(t => ({ id: t._id, projectId: t.projectId || null, tags: Array.isArray(t.tags) ? t.tags : [], title: clampText(t.title || ''), notes: t.notes || '', status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
     if (memory) {
       memory.tasks = tasks || [];
       memory.lists = memory.lists || {};
