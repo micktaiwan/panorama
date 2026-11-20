@@ -7,3 +7,4 @@ import '/imports/api/tools/__tests__/helpers.server.test.js';
 import '/imports/api/tools/__tests__/editNote.server.test.js';
 import '/imports/api/projects/__tests__/sharing.server.test.js';
 import '/imports/api/mcp/__tests__/args.server.test.js';
+import '/imports/api/tools/__tests__/appendToNote.server.test.js';

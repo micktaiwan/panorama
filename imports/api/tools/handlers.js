@@ -1492,7 +1492,18 @@ export const TOOL_HANDLERS = {
     const modifier = {};
 
     if (args?.title) modifier.title = String(args.title);
+    if (args?.notes !== undefined && args?.appendNotes !== undefined) {
+      return buildErrorResponse('Pass either notes (replace) or appendNotes (append), not both', 'tool_updateTask', {
+        code: 'INVALID_PARAMETER',
+        suggestion: 'Use appendNotes to add a section without resending the existing notes'
+      });
+    }
     if (args?.notes !== undefined) modifier.notes = String(args.notes || '');
+    if (args?.appendNotes !== undefined && String(args.appendNotes) !== '') {
+      const current = await TasksCollection.findOneAsync({ _id: taskId }, { fields: { notes: 1 } });
+      const base = String(current?.notes || '');
+      modifier.notes = base ? `${base}\n\n${String(args.appendNotes)}` : String(args.appendNotes);
+    }
     if (args?.status) modifier.status = String(args.status);
     if (args?.deadline !== undefined) modifier.deadline = args.deadline ? String(args.deadline) : null;
 
@@ -1889,7 +1900,10 @@ export const TOOL_HANDLERS = {
 
     console.log(`[tool_appendToNote] Appended ${block.length} chars (${position}) to note: ${noteId}`);
 
-    const result = { appended: true, noteId, position, blockLength: block.length, newLength: newContent.length };
+    // Report where the block really went: afterMarker wins over position, and an
+    // empty note ignores both (the block becomes the whole body).
+    const appliedPosition = currentContent === '' ? 'whole-body' : (afterMarker ? 'afterMarker' : position);
+    const result = { appended: true, noteId, position: appliedPosition, blockLength: block.length, newLength: newContent.length };
     if (memory) {
       memory.ids = memory.ids || {};
       memory.ids.noteId = noteId;

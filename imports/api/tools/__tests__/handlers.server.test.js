@@ -68,6 +68,22 @@ describe('Tool handlers (TDD - nouvelle structure)', function () {
     assert.strictEqual(parsed.taskId, taskId, 'Should return taskId');
   });
 
+  it('tool_updateTask appendNotes should append without replacing existing notes', async function () {
+    const createResult = await TOOL_HANDLERS.tool_createTask(
+      { title: `Task to append ${Date.now()}`, notes: 'first section' },
+      {}
+    );
+    const { taskId } = JSON.parse(createResult.output);
+
+    await TOOL_HANDLERS.tool_updateTask({ taskId, appendNotes: 'second section' }, {});
+    const { TasksCollection } = await import('/imports/api/tasks/collections');
+    const task = await TasksCollection.findOneAsync({ _id: taskId });
+    assert.strictEqual(task.notes, 'first section\n\nsecond section');
+
+    const both = await TOOL_HANDLERS.tool_updateTask({ taskId, notes: 'x', appendNotes: 'y' }, {});
+    assert.ok(/not both/.test(both.output), 'notes + appendNotes must be rejected');
+  });
+
   it('tool_semanticSearch should search workspace', async function () {
     const result = await TOOL_HANDLERS.tool_semanticSearch(
       { query: 'project management', limit: 5 },
