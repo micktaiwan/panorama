@@ -11,6 +11,11 @@ import { getQdrantClient, COLLECTION, toPointId, upsertDoc, upsertDocChunks } fr
  * @param {number} opts.sampleSize - Number of documents per kind to check (default: 100, 0 = all)
  * @returns {Object} Report of what was fixed
  */
+// Kinds that exist in the search index model but are deliberately left out.
+const NOT_COVERED = {
+  alarm: 'alarms are never indexed by design (qdrant.indexKind and the full reindex skip them)'
+};
+
 export const autoFixIndexing = async (opts = {}) => {
   const dryRun = !!opts.dryRun;
   const userId = opts.userId || null;
@@ -48,8 +53,14 @@ export const autoFixIndexing = async (opts = {}) => {
     const { TasksCollection, NOT_DELETED } = await import('/imports/api/tasks/collections');
     const { NotesCollection } = await import('/imports/api/notes/collections');
     const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+    const { NoteSessionsCollection } = await import('/imports/api/noteSessions/collections');
+    const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
+    const { LinksCollection } = await import('/imports/api/links/collections');
+    const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
 
-    // Check and fix each kind
+    // Check and fix each kind. The text and point id of each kind must match
+    // what its write path indexes (noteSessions/, noteLines/, links/, userLogs/
+    // methods and qdrant.indexKind): a mismatch reports every doc as missing.
     const kindConfigs = [
       {
         kind: 'project',
@@ -84,11 +95,43 @@ export const autoFixIndexing = async (opts = {}) => {
         getText: (doc) => `${doc.from || ''} ${doc.to || ''} ${doc.subject || ''} ${doc.snippet || ''} ${doc.body || ''}`,
         chunked: true,
         idField: 'id' // Use Gmail message ID instead of MongoDB _id
+      },
+      {
+        kind: 'session',
+        collection: NoteSessionsCollection,
+        fields: { name: 1, aiSummary: 1, projectId: 1, _id: 1 },
+        sort: { createdAt: -1 },
+        getText: (doc) => `${doc.name || ''} ${doc.aiSummary || ''}`.trim()
+      },
+      {
+        kind: 'line',
+        collection: NoteLinesCollection,
+        fields: { content: 1, sessionId: 1, _id: 1 },
+        sort: { createdAt: -1 },
+        getText: (doc) => doc.content || '',
+        // Lines carry their session, not a project: search filters on it.
+        payloadFor: (doc) => ({ sessionId: doc.sessionId || null })
+      },
+      {
+        kind: 'link',
+        collection: LinksCollection,
+        fields: { name: 1, url: 1, projectId: 1, _id: 1 },
+        sort: { createdAt: -1 },
+        getText: (doc) => `${doc.name || ''} ${doc.url || ''}`.trim()
+      },
+      {
+        kind: 'userlog',
+        collection: UserLogsCollection,
+        fields: { content: 1, _id: 1 },
+        sort: { createdAt: -1 },
+        getText: (doc) => doc.content || ''
       }
     ];
+    report.coveredKinds = kindConfigs.map((c) => c.kind);
+    report.notCovered = NOT_COVERED;
 
     for (const config of kindConfigs) {
-      const { kind, collection, fields, getText, chunked, idField = '_id', sort, extraSelector } = config;
+      const { kind, collection, fields, getText, chunked, idField = '_id', sort, extraSelector, payloadFor } = config;
 
       // Get documents from database. Every collection is userId-partitioned:
       // without this filter the fix walks other users' documents and reindexes
@@ -146,10 +189,11 @@ export const autoFixIndexing = async (opts = {}) => {
             const docId = doc[idField];
             const extraPayload = doc.threadId ? { threadId: doc.threadId } : {};
 
+            const extraArgs = payloadFor ? payloadFor(doc) : {};
             if (chunked) {
-              await upsertDocChunks({ kind, id: docId, text, projectId: doc.projectId || null, userId, extraPayload });
+              await upsertDocChunks({ kind, id: docId, text, projectId: doc.projectId || null, userId, extraPayload, ...extraArgs });
             } else {
-              await upsertDoc({ kind, id: docId, text, projectId: doc.projectId || null, userId, extraPayload });
+              await upsertDoc({ kind, id: docId, text, projectId: doc.projectId || null, userId, extraPayload, ...extraArgs });
             }
             fixedCount++;
           } catch (e) {
@@ -173,6 +217,8 @@ export const autoFixIndexing = async (opts = {}) => {
     const totalChecked = Object.values(report.checked).reduce((sum, count) => sum + count, 0);
 
     report.summary = {
+      // Without this, "N documents checked" reads as a total of the index.
+      scope: `Kinds checked: ${(report.coveredKinds || []).join(', ')}. Not checked: ${Object.keys(NOT_COVERED).join(', ')} (${Object.values(NOT_COVERED).join('; ')}).${sampleSize > 0 ? ` Sampled: newest ${sampleSize} per kind, not the whole collection.` : ''}`,
       totalChecked,
       totalMissing,
       percentageMissing: totalChecked > 0 ? ((totalMissing / totalChecked) * 100).toFixed(1) : '0.0',

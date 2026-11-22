@@ -5,8 +5,9 @@ import { getQdrantClient, COLLECTION, toPointId } from './vectorStore';
 
 // Notes and emails are indexed as chunks: the point for the first chunk is
 // `<id>#0`, never the bare id. Checking the bare id reports every note and
-// every email as missing.
-const CHUNKED_KINDS = new Set(['note', 'email', 'line']);
+// every email as missing. Lines are NOT chunked: noteLines/methods.js and
+// qdrant.indexKind index them with upsertDoc under the bare id.
+const CHUNKED_KINDS = new Set(['note', 'email']);
 
 const pointIdFor = (kind, docId) => (
   CHUNKED_KINDS.has(kind) ? toPointId(kind, `${docId}#0`) : toPointId(kind, docId)
@@ -63,6 +64,7 @@ export const diagnoseIndexing = async ({ userId = null } = {}) => {
     const { LinksCollection } = await import('/imports/api/links/collections');
     const { UserLogsCollection } = await import('/imports/api/userLogs/collections');
     const { GmailMessagesCollection } = await import('/imports/api/emails/collections');
+    const { NoteLinesCollection } = await import('/imports/api/noteLines/collections');
 
     const projectCount = await ProjectsCollection.find(sel).countAsync();
     const taskCount = await TasksCollection.find({ ...sel, ...NOT_DELETED }).countAsync();
@@ -71,6 +73,7 @@ export const diagnoseIndexing = async ({ userId = null } = {}) => {
     const linkCount = await LinksCollection.find(sel).countAsync();
     const userLogCount = await UserLogsCollection.find(sel).countAsync();
     const emailCount = await GmailMessagesCollection.find(sel).countAsync();
+    const lineCount = await NoteLinesCollection.find(sel).countAsync();
 
     diagnosis.database = {
       projects: projectCount,
@@ -80,8 +83,12 @@ export const diagnoseIndexing = async ({ userId = null } = {}) => {
       links: linkCount,
       userLogs: userLogCount,
       emails: emailCount,
-      total: projectCount + taskCount + noteCount + sessionCount + linkCount + userLogCount + emailCount
+      lines: lineCount,
+      total: projectCount + taskCount + noteCount + sessionCount + linkCount + userLogCount + emailCount + lineCount
     };
+    // Alarms are never indexed by design, so they are neither counted nor sampled.
+    diagnosis.sampledKinds = ['project', 'task', 'note', 'email', 'session', 'line', 'link', 'userlog'];
+    diagnosis.notSampled = { alarm: 'never indexed by design' };
 
     // 3. If Qdrant exists, check for missing documents
     if (diagnosis.qdrant.exists) {
@@ -145,6 +152,35 @@ export const diagnoseIndexing = async ({ userId = null } = {}) => {
           collection: GmailMessagesCollection, kind: 'email', idField: 'id',
           fields: { subject: 1, snippet: 1, body: 1 }, sort: { gmailDate: -1 },
           getText: (d) => `${d.subject || ''} ${d.snippet || ''} ${d.body || ''}`
+        });
+      }
+
+      if (sessionCount > 0) {
+        missing.sessions = await checkKind({
+          collection: NoteSessionsCollection, kind: 'session',
+          fields: { name: 1, aiSummary: 1 }, sort: { createdAt: -1 },
+          getText: (d) => `${d.name || ''} ${d.aiSummary || ''}`
+        });
+      }
+      if (lineCount > 0) {
+        missing.lines = await checkKind({
+          collection: NoteLinesCollection, kind: 'line',
+          fields: { content: 1 }, sort: { createdAt: -1 },
+          getText: (d) => d.content || ''
+        });
+      }
+      if (linkCount > 0) {
+        missing.links = await checkKind({
+          collection: LinksCollection, kind: 'link',
+          fields: { name: 1, url: 1 }, sort: { createdAt: -1 },
+          getText: (d) => `${d.name || ''} ${d.url || ''}`
+        });
+      }
+      if (userLogCount > 0) {
+        missing.userlogs = await checkKind({
+          collection: UserLogsCollection, kind: 'userlog',
+          fields: { content: 1 }, sort: { createdAt: -1 },
+          getText: (d) => d.content || ''
         });
       }
 
