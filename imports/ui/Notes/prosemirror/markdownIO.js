@@ -17,10 +17,19 @@ function normalizeLineBreaks(md) {
     // saved as a raw leading "\t", which CommonMark reads back as an indented
     // code block. Encode those tabs as entities so they stay paragraph text.
     // Tab-indented list markers are left alone (nested lists).
-    const escaped = part.replace(/^\t+(?![-*+]\s|\d+[.)]\s)(?=\S)/gm, (tabs) => '&#9;'.repeat(tabs.length));
+    const tabsEscaped = part.replace(/^\t+(?![-*+]\s|\d+[.)]\s)(?=\S)/gm, (tabs) => '&#9;'.repeat(tabs.length));
 
-    return escaped.replace(/\n+/g, (match) => {
+    // Blockquotes: an empty ">" line between two quote lines only separates
+    // paragraphs of the same quote. Drop it, then keep consecutive quote lines
+    // in ONE blockquote (one paragraph per line) instead of splitting each line
+    // into its own blockquote, which rendered as a stack of bars with empty ones.
+    const escaped = tabsEscaped.replace(/^>[ \t]*\n(?=>)/gm, '');
+
+    return escaped.replace(/\n+/g, (match, offset, str) => {
       const count = match.length;
+      if (count === 1 && str[offset + 1] === '>' && str[str.lastIndexOf('\n', offset - 1) + 1] === '>') {
+        return '\n>\n';
+      }
       if (count <= 2) {
         // 1 or 2 newlines → single paragraph break
         return '\n\n';

@@ -51,6 +51,7 @@ rsync -az --delete --max-delete=60 --timeout=120 \
   --exclude 'panorama/' \
   --exclude 'history/' \
   --exclude 'launchd.log' \
+  --exclude 'pharos-*' \
   -e "ssh -o BatchMode=yes -o ConnectTimeout=20" \
   "$SERVER_USER@$SERVER_HOST:$REMOTE_DIR/" "$LOCAL_DIR/" \
   || fail "rsync from $SERVER_HOST"

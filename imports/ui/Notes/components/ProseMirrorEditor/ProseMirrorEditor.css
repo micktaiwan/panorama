@@ -50,6 +50,10 @@
   color: var(--muted);
 }
 
+.prosemirror-editor blockquote > * + * {
+  margin-top: 0.4em;
+}
+
 /* Code block */
 .prosemirror-editor pre {
   background: var(--code-bg);
