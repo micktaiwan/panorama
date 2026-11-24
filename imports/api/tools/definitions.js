@@ -31,7 +31,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_tasksFilter',
-    description: 'List and filter tasks by any combination of: deadline, status, project, tags, urgency, importance. Examples: {} (all tasks), {dueBefore:"2025-01-30"} (due before date), {important:true} (important only), {urgent:true,projectId:"abc"} (urgent in project), {status:"done"} (completed), {tag:"home"} (tagged home), {dueBefore:"2025-01-27",urgent:true} (due soon and urgent). Leave empty for no filtering.',
+    description: 'List and filter tasks by any combination of: deadline, status, project, tags, urgency, importance. Examples: {} (all tasks), {dueBefore:"2025-01-30"} (due before date), {important:true} (important only), {urgent:true,projectId:"abc"} (urgent in project), {status:"done"} (completed), {tag:"home"} (tagged home), {dueBefore:"2025-01-27",urgent:true} (due soon and urgent). Leave empty for no filtering (unscoped calls return every note in full: pass compact:true and/or limit).',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -41,7 +41,9 @@ export const TOOL_DEFINITIONS = [
         tag: { type: 'string', description: 'Tag value to filter' },
         projectId: { type: 'string', description: 'Optional project id to scope the filter' },
         important: { type: 'boolean', description: 'Filter by importance flag (true for important tasks only)' },
-        urgent: { type: 'boolean', description: 'Filter by urgency flag (true for urgent tasks only)' }
+        urgent: { type: 'boolean', description: 'Filter by urgency flag (true for urgent tasks only)' },
+        compact: { type: 'boolean', description: 'Omit the notes field (it dominates the payload: an unscoped call can exceed 400 KB). Use it for listings, then read a task by id when needed' },
+        limit: { type: 'integer', minimum: 1, description: 'Return at most this many tasks; total still reports the full match count' }
       }
     }
   },

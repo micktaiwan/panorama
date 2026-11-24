@@ -15,6 +15,15 @@ describe('Tool handlers (TDD - nouvelle structure)', function () {
     assert.ok(parsed.tasks.every(t => t.isImportant === true), 'All tasks should be important');
   });
 
+  it('tool_tasksFilter compact omits notes and limit caps rows but keeps the full total', async function () {
+    const full = JSON.parse((await TOOL_HANDLERS.tool_tasksFilter({}, {})).output);
+    const result = await TOOL_HANDLERS.tool_tasksFilter({ compact: true, limit: 2 }, {});
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.tasks.length <= 2, 'limit should cap rows');
+    assert.strictEqual(parsed.total, full.total, 'total should report the full match count');
+    assert.ok(parsed.tasks.every(t => !('notes' in t)), 'compact should omit notes');
+  });
+
   it('tool_projectsList should return projects', async function () {
     const result = await TOOL_HANDLERS.tool_projectsList({}, {});
     const parsed = JSON.parse(result.output);
