@@ -244,6 +244,7 @@ export const getListKeyForCollection = (collection) => {
 
 // Compile a safe where object (mini-DSL) into a Mongo selector using allowlist
 // Supported ops: eq, ne, lt, lte, gt, gte, in, nin, and/or (arrays)
+const WHERE_OPS = ['eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'in', 'nin'];
 export const compileWhere = (collection, where = {}) => {
   const allowed = FIELD_ALLOWLIST[String(collection)];
   const isAllowedField = (f) => Array.isArray(allowed) && allowed.includes(String(f));
@@ -282,12 +283,18 @@ export const compileWhere = (collection, where = {}) => {
     // Field comparisons
     Object.keys(node).forEach((k) => {
       if (k === 'and' || k === 'or') return;
-      if (!isAllowedField(k)) return;
+      if (!isAllowedField(k)) {
+        throw new Error(`Unknown where field "${k}" for collection "${collection}". Allowed: ${(allowed || []).join(', ') || '(unknown collection)'}`);
+      }
       const v = node[k];
       const isDateField = dateFields.includes(k);
 
       if (v && typeof v === 'object' && !Array.isArray(v)) {
         const ops = {};
+        const badOps = Object.keys(v).filter(o => !WHERE_OPS.includes(o) && !(o === '$date' && isDateField));
+        if (badOps.length > 0) {
+          throw new Error(`Unknown where operator(s) on "${k}": ${badOps.join(', ')}. Use ${WHERE_OPS.join(', ')} without a "$" prefix, e.g. {"${k}": {"in": [...]}}`);
+        }
         if (Object.hasOwn(v, 'eq')) ops.$eq = isDateField ? convertDateValue(v.eq) : v.eq;
         if (Object.hasOwn(v, 'ne')) ops.$ne = isDateField ? convertDateValue(v.ne) : v.ne;
         if (Object.hasOwn(v, 'lt')) ops.$lt = isDateField ? convertDateValue(v.lt) : v.lt;

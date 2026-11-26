@@ -284,14 +284,21 @@ export const TOOL_HANDLERS = {
     const fields = { fields: { title: 1, projectId: 1, status: 1, deadline: 1, isUrgent: 1, isImportant: 1, notes: 1 } };
     const tasks = await TasksCollection.find(selector, fields).fetchAsync();
     // Include IDs for MCP clients to chain tool calls
-    const mapped = (tasks || []).map(t => ({ id: t._id, projectId: t.projectId, title: clampText(t.title || ''), notes: t.notes || '', status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant }));
+    const compact = args?.compact === true;
+    const limit = Number.isInteger(args?.limit) && args.limit > 0 ? args.limit : null;
+    const all = (tasks || []).map(t => {
+      const row = { id: t._id, projectId: t.projectId, title: clampText(t.title || ''), status: t.status || 'todo', deadline: t.deadline || null, isUrgent: !!t.isUrgent, isImportant: !!t.isImportant };
+      if (!compact) row.notes = t.notes || '';
+      return row;
+    });
+    const mapped = limit ? all.slice(0, limit) : all;
     if (memory && Array.isArray(tasks)) {
       memory.tasks = tasks;
       memory.lists = memory.lists || {};
       memory.lists.tasks = mapped;
     }
     return buildSuccessResponse(
-      { tasks: mapped, total: mapped.length },
+      { tasks: mapped, total: all.length },
       'tool_tasksByProject'
     );
   },

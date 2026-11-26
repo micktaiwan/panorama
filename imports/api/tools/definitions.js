@@ -23,7 +23,9 @@ export const TOOL_DEFINITIONS = [
       type: 'object',
       additionalProperties: false,
       properties: {
-        projectId: { type: 'string' }
+        projectId: { type: 'string' },
+        compact: { type: 'boolean', description: 'Omit the notes field (it dominates the payload). Use it for listings, then read a task by id when needed' },
+        limit: { type: 'integer', minimum: 1, description: 'Return at most this many tasks; total still reports the full match count' }
       },
       required: ['projectId']
     }
@@ -405,7 +407,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     name: 'tool_collectionQuery',
-    description: 'Generic read-only query with sort/limit/select and a validated where DSL. The first choice for any list-style read: "recent notes", "recent tasks", "tasks since X", "people created last week", etc. — before reaching for a more specialized tool. userId scoping is applied automatically (no need to filter by user).\n\nSupported collections: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets.\n\nwhere DSL — operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Dates accept ISO 8601 strings (auto-converted) on fields: createdAt, updatedAt, deadline, when, snoozedUntilAt, arrivalDate. Unknown fields are silently dropped (allowlist per collection).\n\nExamples:\n• Recent notes across all projects: {collection:"notes", sort:{updatedAt:-1}, limit:20}\n• Notes updated since a date: {collection:"notes", where:{updatedAt:{gt:"2026-01-01T00:00:00Z"}}, sort:{updatedAt:-1}}\n• Recent tasks in a project: {collection:"tasks", where:{projectId:{eq:"abc"}}, sort:{updatedAt:-1}, limit:50}\n• Urgent open tasks: {collection:"tasks", where:{and:[{status:{ne:"done"}},{isUrgent:{eq:true}}]}}\n• People in a team: {collection:"people", where:{teamId:{eq:"xyz"}}, sort:{name:1}}\n\nPre-baked patterns are exposed in COMMON_QUERIES (helpers.js): recentNotes, tasksWithDeadline, urgentTasks, importantTasks, overdueTasks, todoTasks, inProgressTasks, activeTasks.',
+    description: 'Generic read-only query with sort/limit/select and a validated where DSL. The first choice for any list-style read: "recent notes", "recent tasks", "tasks since X", "people created last week", etc. — before reaching for a more specialized tool. userId scoping is applied automatically (no need to filter by user).\n\nSupported collections: tasks, projects, notes, noteSessions, noteLines, links, people, teams, files, alarms, userLogs, emails, mcpServers, notionIntegrations, notionTickets.\n\nwhere DSL — operators: eq, ne, lt, lte, gt, gte, in, nin, and (array), or (array). Dates accept ISO 8601 strings (auto-converted) on fields: createdAt, updatedAt, deadline, when, snoozedUntilAt, arrivalDate. Unknown fields and operators are rejected with an error (allowlist per collection; no "$" prefix).\n\nExamples:\n• Recent notes across all projects: {collection:"notes", sort:{updatedAt:-1}, limit:20}\n• Notes updated since a date: {collection:"notes", where:{updatedAt:{gt:"2026-01-01T00:00:00Z"}}, sort:{updatedAt:-1}}\n• Recent tasks in a project: {collection:"tasks", where:{projectId:{eq:"abc"}}, sort:{updatedAt:-1}, limit:50}\n• Urgent open tasks: {collection:"tasks", where:{and:[{status:{ne:"done"}},{isUrgent:{eq:true}}]}}\n• People in a team: {collection:"people", where:{teamId:{eq:"xyz"}}, sort:{name:1}}\n\nPre-baked patterns are exposed in COMMON_QUERIES (helpers.js): recentNotes, tasksWithDeadline, urgentTasks, importantTasks, overdueTasks, todoTasks, inProgressTasks, activeTasks.',
     parameters: {
       type: 'object',
       additionalProperties: false,
